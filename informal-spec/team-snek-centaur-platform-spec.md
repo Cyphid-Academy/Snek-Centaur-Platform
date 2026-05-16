@@ -53,7 +53,7 @@ A single Convex instance manages all persistent state:
 **Per-Centaur-Team state:**
 - Snake config (per-snake: selection state, manual mode, temperature, live stateMap, worst-case worlds, annotations, heuristic outputs)
 - Active Drives per snake (type, target, weight — editable by the snake's current selector)
-- Bot parameters (global temperature, operator mode, time allocations)
+- Bot parameters (global temperature, time allocations)
 - Interaction logs (`centaur_action_log` — high-resolution time series of all human and bot actions for training replay)
 
 ### Snek Centaur Servers
@@ -243,7 +243,7 @@ Cancellation removes active effects only. If a teammate collects a new potion of
 Each team has a **time budget** that depletes while that team's turn clock is running. The turn proceeds as follows:
 
 1. The turn begins. Each team's clock starts at `min(maxTurnTime, remainingBudget)`.
-2. A team's clock stops when that team **declares turn over** — either explicitly via a SpacetimeDB reducer call (from the Centaur Server's automatic submission or the timekeeper's manual override), or implicitly when the clock runs out. Turn declaration is a direct SpacetimeDB call, not mediated by Convex — Convex handles configuration actions that span turns, not real-time actions within a turn.
+2. A team's clock stops when that team **declares turn over** — either explicitly via a SpacetimeDB reducer call (from the Centaur Server's automatic submission pipeline or a Captain turn-submit override), or implicitly when the clock runs out. Turn declaration is a direct SpacetimeDB call, not mediated by Convex — Convex handles configuration actions that span turns, not real-time actions within a turn.
 3. The turn resolves when all teams have declared turn over (or exhausted their clocks).
 
 **Time budget mechanics:**
@@ -254,12 +254,12 @@ Each team has a **time budget** that depletes while that team's turn clock is ru
 - **Max turn time** (default 10s) caps the per-turn clock regardless of budget.
 - **First turn time** (default 60s) overrides the max turn time for turn 0 only.
 
-**Turn expiry during interactions**: When a team's clock expires, SpacetimeDB resolves the turn with whatever is currently staged. All client UI interactions are reactively generated from current game state and refresh automatically on turn progression — a turn advancing mid-interaction simply refreshes the UI to the new turn. The timekeeper override is available on all turns including turn 0.
+**Turn expiry during interactions**: When a team's clock expires, SpacetimeDB resolves the turn with whatever is currently staged. All client UI interactions are reactively generated from current game state and refresh automatically on turn progression — a turn advancing mid-interaction simply refreshes the UI to the new turn. The Captain's turn-submit override is available on all turns including turn 0.
 
 **Centaur Server affordances:**
 - The Centaur Server library exposes a `declareTurnOver()` function that stops the team's clock and triggers turn resolution (if all teams are done).
-- **Operator mode** (Centaur or Automatic) determines when `declareTurnOver()` is called — see Section 7.2 for details.
-- A **timekeeper** role (assigned to a team member by the Captain) has shortcut keys to toggle operator mode and to immediately submit the turn.
+- The library calls `declareTurnOver()` automatically only once **every connected member operator has toggled their per-operator ready-state to ready** for the current turn (see Section 7.5). Per-operator ready-state resets to not-ready at the start of each turn.
+- The **Captain** holds a single **turn-submit override** that immediately calls `declareTurnOver()` regardless of other operators' ready-state. There is no team-wide manual-vs-automatic submission-mode toggle and no separate per-member submission role — the per-operator ready-state plus Captain override model replaces both.
 
 ### Effect Immutability Principle
 
@@ -521,8 +521,7 @@ Changes here set defaults for future games — they do not retroactively modify 
 A persistent configuration page for team-wide bot settings. Editable by any team member. Configures:
 
 - **Global temperature**: Softmax temperature for bot move selection (see Section 6.9).
-- **Default operator mode**: Centaur or Automatic (see Section 7.6 for mode semantics).
-- **Automatic time allocation**: Maximum compute time before auto-submitting in Automatic mode.
+- **Automatic submission time allocation**: Maximum compute time before the bot framework's automatic submission pipeline calls `declareTurnOver()`, applied once the per-operator ready-state unanimity precondition is met (see Section 7.5).
 - **Turn-0 automatic time allocation**: Separate allocation for turn 0, which typically has a longer max turn time.
 
 These are stored in Convex per team and read by the Centaur Server at game start.
@@ -547,12 +546,10 @@ Lists completed games the logged-in user participated in, showing room name, dat
 - Turn number
 - **Team clock**: countdown showing time remaining for this team this turn (seconds to one decimal; red when < 0.5s; shows "Turn Submitted" once declared over)
 - **Time budget**: remaining team time budget
-- **Operator mode indicator**: displays "CENTAUR MODE" or "AUTOMATIC MODE"
 - Network ping to SpacetimeDB
-- Connected operators shown as coloured dots with nicknames
-- **Timekeeper controls** (visible only to the designated timekeeper):
-  - Mode toggle shortcut key: switches between Centaur and Automatic mode
-  - Submit shortcut key: immediately declares the team's turn over, submitting all currently staged moves
+- **Presence display**: connected operators shown as coloured dots with nicknames, each annotated with their current per-operator **ready / not-ready** state for this turn. Coaches and admins observing via implicit-coach permission appear with a visual marker that distinguishes them from member operators and have no ready-state.
+- **Per-operator ready toggle**: every connected member operator owns a binary `ready` / `not-ready` toggle for the current turn (shortcut key, also click-to-toggle on their own presence dot). No one else — not even the Captain — can toggle it on their behalf. Ready-state resets to not-ready at the start of each turn. Selection, Drive edits, and move staging remain available regardless of ready-state.
+- **Captain turn-submit override** (visible only to the Captain): a shortcut key that immediately declares the team's turn over, submitting all currently staged moves regardless of others' ready-state.
 
 **Board display:**
 - Full live board with grid lines
@@ -579,13 +576,17 @@ Lists completed games the logged-in user participated in, showing room name, dat
 
 **Decision breakdown table:** Per-direction heuristic breakdown showing component name, raw value, weight, weighted contribution, relative impact.
 
-**Operator mode** determines turn submission behaviour:
+**Turn submission** is coordinated through per-operator ready-state and a Captain override:
 
-- **Automatic mode**: The Centaur Server runs bot computation and declares the turn over after the sooner of: clearing the compute queue, or reaching the configured **automatic mode time allocation** (see Section 7.2). Players can still select snakes, configure Drives, and stage manual moves during this window, but the automatic turn submission timer proceeds independently of their UI interactions.
+- **Per-operator ready-state**: Each connected member operator owns a binary `ready` / `not-ready` toggle for the current turn. Ready-state resets to not-ready at the start of every turn. Selection, Drive edits, and move staging remain possible regardless — readiness is a coordination signal, not a freeze.
 
-- **Centaur mode**: The Centaur Server waits for the timekeeper to manually submit the turn (or for the team's clock to expire). This mode spends into the team's time budget to allow strategically significant decisions at human-scale time.
+- **Automatic submission pipeline**: The Centaur Server library's bot computation continuously stages moves for all automatic-mode snakes. It declares the team's turn over automatically only when **every connected member operator has toggled ready for the current turn**, and additionally subject to the bot framework's own scheduling cadence and the configured **automatic submission time allocation** (see Section 7.2). Coaches and admins observing via implicit-coach permission have no ready-state and do not affect the unanimity precondition.
 
-The timekeeper toggles between modes via a shortcut key. The starting mode is configured in bot parameters (Section 7.2). A separate **turn-0 automatic time allocation** parameter (also in Section 7.2) controls the automatic mode duration on turn 0, which typically has a longer max turn time from the engine.
+- **Captain turn-submit override**: The Captain holds a single override action — a shortcut key that immediately declares the team's turn over regardless of others' ready-state. This is the only manual path to ending the team's turn before clock expiry.
+
+- **Clock expiry**: Independently of the above, expiry of the team's chess-clock for the turn declares the team's turn over with whatever is currently staged.
+
+A separate **turn-0 automatic time allocation** parameter (also in Section 7.2) controls the automatic-submission window on turn 0, which typically has a longer max turn time from the engine.
 
 ### 7.6 Live Operator Interface — Drive Management
 
@@ -607,7 +608,7 @@ Any authenticated user can create a Centaur Team, becoming its Captain. The team
 
 - **Team identity**: Set team name and display colour.
 - **Server nomination**: Enter the Snek Centaur Server domain. The platform pings `/healthcheck` to verify reachability. Health status is displayed with last-checked timestamp. No acceptance from the server is required.
-- **Member management**: Add members by email (must have Google OAuth accounts on the platform). Remove members. Assign the timekeeper role to one member.
+- **Member management**: Add members by email (must have Google OAuth accounts on the platform). Remove members. Transfer the Captain designation to another current member. Every member is an operator; there are no per-member roles beyond the structural Captain.
 
 Any team member can view the team page. Only the Captain can modify team identity, server nomination, and membership.
 
@@ -711,7 +712,7 @@ A **Centaur Team** is the unit of competition. Each team has a name, display col
 **Centaur Team management** (separate from game setup): The Captain manages the team's platform-level configuration:
 - Nominate/update the Snek Centaur Server domain
 - Add/remove human members (Google OAuth accounts) who can connect as operators
-- Assign the timekeeper role to a team member
+- Transfer the Captain designation to another current member
 
 Bot parameters, heuristic configuration, and Drive management are configured through the team-internal pages of the Snek Centaur Server web application (Section 7), not through the team management page.
 
@@ -823,7 +824,7 @@ At game end, Convex reads all tables from SpacetimeDB in one batch. The complete
 
 **centaur_teams**: id, name, colour, nominatedServerDomain, captainUserId
 
-**centaur_team_members**: userId, centaurTeamId, role (captain | timekeeper | operator)
+**centaur_team_members**: userId, centaurTeamId. Membership carries no per-member role enum — the Captain is structural via `centaur_teams.captainUserId`, and every other member is an operator.
 
 **admin_users**: userId (references `users`). Platform-level admin designation. Admins can browse all Centaur Teams, see all game history, and view all replay within-turn actions regardless of privacy.
 
@@ -835,7 +836,7 @@ At game end, Convex reads all tables from SpacetimeDB in one batch. The complete
 
 **snake_drives**: gameId, snakeId, driveType, targetType (snake | cell), targetId (snakeId or serialized cell coords), portfolioWeight
 
-**bot_params**: centaurTeamId, globalTemperature, defaultOperatorMode (centaur | automatic), automaticTimeAllocationMs, turn0AutomaticTimeAllocationMs
+**bot_params**: centaurTeamId, globalTemperature, automaticTimeAllocationMs, turn0AutomaticTimeAllocationMs
 
 **heuristic_config**: centaurTeamId, heuristicType (drive | preference), heuristicName, defaultWeight, activeByDefault (boolean, preferences only), dropdownOrder (integer, drives only)
 
@@ -852,7 +853,7 @@ At game end, Convex reads all tables from SpacetimeDB in one batch. The complete
 - `drive_added`: `{snakeId, driveType, targetType, targetId, weight}`
 - `drive_removed`: `{snakeId, driveType, targetId}`
 - `weight_changed`: `{snakeId, heuristicName, oldWeight, newWeight}`
-- `mode_toggled`: `{mode: centaur | automatic}`
+- `operator_ready_toggled`: `{operatorUserId, ready: bool}` (per-operator ready-state change for the current turn)
 - `turn_submitted`: `{}`
 - `statemap_updated`: `{snakeId, stateMap, worstCaseWorlds, annotations, heuristicOutputs}` — full state snapshots (not deltas) to enable reconstruction at any timestamp during replay
 - `temperature_changed`: `{snakeId, temperature}`
@@ -955,7 +956,7 @@ There is a single unified replay viewer (see Section 7.12), not separate "platfo
 - Heuristic output evolution as Drives were added/removed and weights adjusted
 - Move staging events (both human and bot)
 - Manual mode toggles
-- Operator mode changes and turn submission timing
+- Per-operator ready-state changes and turn submission timing
 
 These are reconstructed from the `centaur_action_log`, which provides timestamped snapshots at each state-changing event. Entries with action type `statemap_updated` capture full state snapshots (stateMap, worst-case worlds, annotations, heuristic outputs with weights) so that any point in time can be reconstructed by loading the most recent snapshot prior to the scrubber position.
 

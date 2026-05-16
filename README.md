@@ -1,18 +1,200 @@
 # Team Snek Centaur Platform
 
-Team Snek is a team-based multiplayer snake game and the first title on Cyphid Academy's **Battle Bunker educational program** — a system designed to train players to collaborate with one another and AI. Each team is assigned a **Centaur Server**: a bot that controls all the team's snakes by default, with human operators selectively overriding individual snakes when their judgment adds value. There are no purely human teams.
+Team Snek is a team-based multiplayer snake game and the first title on Cyphid Academy's Battle Bunker educational program. This repository is the formal specification for the platform — nothing is implemented yet. Nine numbered modules in `specs/` are the source of truth for what will be built.
 
-## Architecture
+---
 
-The platform has three runtime layers:
+## Cyphid Academy and Battle Bunker
 
-- **SpacetimeDB** (per-game, transient): runs authoritative game logic as a TypeScript module. Turn resolution is simultaneous and ACID-transactional. A chess-timer system drives turn advancement. Real-time state sync to all clients happens via subscription queries; row-level security enforces snake invisibility.
-- **Convex** (global, persistent): manages user accounts, rooms, game history, replays, Centaur Server registration, and per-team bot state (snake config, drives, heuristic parameters, interaction logs).
-- **Centaur Servers** (per-team): subscribe to live game state, run bot computation, stage moves, and serve the operator UI to human teammates. Teams implement custom AI behaviour by plugging in **Drives** (goal weights) and **Preferences** into a provided bot framework.
+Cyphid Academy is an educational program for gifted children built around a single pedagogical thesis: **discrete test-based education is dead in the age of AI.** Any static-rubric task — a standardised test, a homework assignment, a coding challenge — can be commoditised by AI. A gifted child who learns to excel at such tasks learns a skill that is structurally obsolete.
 
-The game engine (turn resolution, move validation, game state types) is a single TypeScript codebase shared across SpacetimeDB, Centaur Server, and web client.
+The Cyphid thesis does not ask kids to compete against AI or to avoid it. It asks them to learn to operate *above* it: to guide the priorities of AI micromanagers at strategic altitude, overrule them when human judgment adds value, and otherwise leave them to execute. The analogy is modern warfare, where the scarcest human skill is no longer triggering weapons but directing attention across an AI-saturated battlefield.
+
+Battle Bunker is the games arm of Cyphid Academy. It trains children to collaborate with AI and with each other in novel competitive games where both human and AI strengths offer genuine marginal value even when access to AI is fully unrestricted. The design constraint is strict: there must be no ceiling on how helpful your AI can be, and yet a team that uses it better still wins. The game design has to make that true.
+
+### Cooperation as a Load-Bearing Design Criterion
+
+Gifted children tend to learn individualism. In most school environments they discover early that they can outperform their peers on assignments by working alone — the social cost of coordinating with a slower collaborator exceeds the benefit. Over time they optimise away from collaboration and toward solo excellence. This is rational, and it produces adults who are much worse at working with other capable people than their raw ability would suggest.
+
+Cyphid's countervailing aim is to create conditions under which such kids have **viscerally rewarding experiences of cooperation with worthy teammates** — experiences that are memorable and repeatable, so they start to become intrinsically motivated to *become* more worthy teammates themselves. The mechanism is game design, not exhortation. No amount of telling a high-IQ kid that teamwork matters will rewire their incentives. Giving them a mechanic that makes them desperately *need* a capable partner, and then delivering on that need, can.
+
+Cyphid games are designed so that the highest-value play is substantially easier to execute through coordination than solo. The strong-play affordances are structured to require split attention across two or more operators at the same time. A player who tries to capture the full benefit alone does both jobs worse than a coordinated team does each job well. The game does not penalise solo play with artificial handicaps — it rewards coordination through the arithmetic of divided labour on genuinely parallel tasks.
+
+Team Snek implements this through its potion mechanic, described in the game rules section below.
+
+---
+
+## Game Rules and Mechanics
+
+### The Board
+
+The board is a rectangular grid bordered by an impassable wall on all sides, available in several named sizes from Small to Giant. Inner cells are Normal by default. Optional **Hazard** cells deal damage per turn to any snake whose head enters them. Optional **Fertile** cells are the only eligible spawn sites for food when fertile-ground mode is active; their layout is generated by Perlin noise seeded per-game, producing organic blobs or scattered patches depending on a clustering parameter.
+
+Each team fields an equal number of snakes, named by team and letter (Red.A, Red.B, Blue.A, Blue.B, and so on). At game start every snake has its segments stacked on its starting cell and full health. Starting positions are distributed across team-specific territory sectors and constrained to a single board parity so that any two snakes can potentially collide head-to-head.
+
+### What a Turn Looks Like
+
+Turns are simultaneous. Every turn, every team submits one direction (Up, Right, Down, Left) per alive snake. When all teams have submitted — or their time runs out — the turn resolves atomically in eleven phases: move all snakes simultaneously, detect collisions, apply health and hazard damage, process food and potion collection, spawn new food and potions, apply and expire potion effects, check win conditions, and emit events.
+
+A snake dies if its head hits a wall, hits a snake body of equal or greater invulnerability level, loses a head-to-head collision, or runs out of health. A snake that reaches zero health from the passive per-turn health tick or hazard damage is eliminated. Food restores health to its maximum and grows the snake by one segment the following turn.
+
+**Collisions use invulnerability levels.** Each snake has an invulnerability level derived from active potion effects. When a snake's head enters a non-head body segment of another snake, the attacker dies unless its invulnerability level exceeds the victim's, in which case the victim is **severed** — all segments from the contact point to the tail are removed — and the attacker survives. In head-to-head collisions, snakes below the maximum invulnerability level among the colliding snakes die; among those at the maximum, the shorter snake dies (ties kill all).
+
+**The chess timer** governs turn deadlines. Each team has a time budget that persists across turns. At the start of each turn, a budget increment is added and the per-turn clock is capped at the smaller of a configured maximum and the team's current budget (the first turn allows a longer one-time clock for setup). A team can declare turn over early, returning unused clock time to its budget. A team that consistently moves fast accumulates surplus time for turns where deliberation matters. When a team's budget depletes, their per-turn clock drops to the increment alone — enough for automated play but not for human deliberation. Turn submission for a team is a direct SpacetimeDB call; Convex is not in the timing path.
+
+### Potions and Why They Elicit Cooperation
+
+Two potion types exist: **(in)vulnerability** and **invisibility**. Both follow the same collection pattern:
+
+- The snake that collects the potion (the **collector**) receives a short debuff of that family.
+- Every alive teammate immediately receives a short buff of that family.
+- The collector is the **weak link**: if it suffers any disruption during the debuff window — death, severing, being severed, receiving a body collision, or entering a hazard — the entire team's active buffs for that family cancel instantly.
+
+The invulnerability buff lets a snake sever opponents' bodies on contact instead of dying. The invisibility buff hides a snake from all opponent views; opponents see neither its position nor any derived state, though all game mechanics (collisions, severing) continue to apply to it on the server.
+
+This mechanic is the cooperation engine. A team that has just collected an invulnerability potion holds a powerful attack window: their buffed snakes can cut through opponent bodies without dying. To capture full value from that window, someone needs to shepherd the collector snake safely through its debuff window while the rest of the team positions their buffed snakes for aggression. Those are genuinely parallel tasks that demand split attention. A solo operator trying to manage the collector and position the attackers simultaneously does both jobs worse than two operators each focused on one. The mechanic creates a moment where needing a worthy teammate is not a motivational message but an arithmetic reality.
+
+---
+
+## The Centaur Play Pattern
+
+Every team in Team Snek is a **Centaur Team**: the bot controls all snakes by default. There are no purely human teams. The bot cannot be turned off.
+
+Human operators direct the bot at two altitudes, and the higher-altitude one is where most of the leverage lives:
+
+- **Strategic altitude — live Drive and Preference configuration.** Each snake carries a portfolio of Drives (directed motivations toward or away from a target — a specific opponent, a potion, a region of the board) and Preferences (time-invariant board-state heuristics). Operators add, remove, and reweight these per snake during the game. A single Drive change — telling Red.A to chase the opponent that just collected an invulnerability potion, or shifting Red.B's portfolio to favour shepherding the team's own collector through its debuff window — propagates instantly into the bot's evaluation and steers that snake's behaviour over the rest of the game without the operator ever picking a direction. This is multi-turn, high-leverage guidance: one configuration act shapes many subsequent moves.
+- **Tactical altitude — per-turn manual overrides.** When the bot is about to make a specific move that human judgment can clearly improve on, an operator selects that snake, switches it to manual mode, and stages the better direction directly. Selection is exclusive (one operator per snake, one snake per operator) so two teammates can't fight over the same snake.
+
+The metaphor is the centaur: the bot is the body executing the low-level work, and the human operators are the rider. Most riding is done with the reins — Drive and Preference configuration that biases the body's own decisions — not by grabbing the body's limbs directly. Learning when each altitude is appropriate, and how to divide that attention across teammates and across snakes, is the primary skill being trained. The architecture enforces the default: all snakes start each turn staged to the bot's best computed move under the current portfolio. If no operator intervenes at either altitude, the bot's move stands.
+
+This play pattern is the load-bearing rule around which the entire platform architecture is shaped. The identity model, the Convex schema, the bot framework, the operator interface, the replay format — all of them exist to make centaur play tractable, legible, and trainable.
+
+---
+
+## Architecture at a Glance
+
+The platform runs across three distinct runtime kinds. Each has a different lifecycle and data ownership scope.
+
+### SpacetimeDB: The Game Runtime
+
+One SpacetimeDB instance is provisioned per started game and torn down after it ends. The TypeScript module deployed into it is the authoritative executor of Team Snek game logic. A scheduled reducer fires at the turn interval and runs all eleven phases of turn resolution as a single ACID transaction — either the entire turn commits and becomes visible to all subscribers simultaneously, or none of it does.
+
+SpacetimeDB provides real-time state synchronization to connected clients via subscription queries; clients observe committed state changes without polling. The complete game state is retained as an append-only historical record keyed by turn, so any past board state is directly queryable without re-executing prior turns. Invisible snakes are filtered at the data layer: connections belonging to opponent teams cannot observe a buffed snake's existence, position, or any derived state, while all game mechanics continue to apply to it server-side.
+
+Staged moves are also written to SpacetimeDB — from both human operator connections and the Centaur Server's bot process — using last-write-wins semantics per snake. At the turn deadline, the resolver atomically consumes whatever is currently staged.
+
+### Convex: The Persistent Platform
+
+A single Convex deployment holds all state that must outlive any individual game. This includes user accounts, Centaur Team records, rooms, game configuration, game history, replay data imported at game end, API keys, and the entire per-team Centaur subsystem: snake portfolio configuration, active Drives, selection locks, bot parameters, computed display state (the `stateMap`), and the fine-grained `centaur_action_log` that records every operator and bot action within each turn.
+
+Convex also orchestrates game lifecycle: it generates the initial board state before provisioning STDB, provisions and tears down SpacetimeDB instances, sends game invitations to participating Centaur Servers, and transitions game status. It acts as the OIDC issuer for SpacetimeDB access tokens — Convex signs JWTs that SpacetimeDB validates at connection time via OIDC discovery.
+
+### Snek Centaur Servers: The Client and Bot Tier
+
+Snek Centaur Servers serve the unified SvelteKit web application and, during games, run bot computation. Outside of active games, a server is a pure static web host with no Convex credentials and no active backend connections of its own. All data users see comes from their own direct Convex client connection authenticated by their Google identity.
+
+When a game starts, Convex sends each participating team's nominated server a game invitation via `POST /.well-known/snek-game-invite`. The invitation payload contains a **per-Centaur-Team game credential** scoped to that team and that game, sufficient for the server to write Centaur subsystem state to Convex and obtain SpacetimeDB access tokens for its bot participant connection. The server must accept; if any server rejects or times out, the game launch fails and the game returns to `not-started`. A server hosting multiple teams in the same game maintains separate isolated bot compute contexts and separate SpacetimeDB connections per team.
+
+After a game ends, the credentials expire and the server returns to static host mode.
+
+### Shared Engine Codebase
+
+The game engine — domain types, turn resolution logic, collision detection, move validation — is a single TypeScript codebase shared across the SpacetimeDB module, the Snek Centaur Server library, and web clients. No runtime implements a parallel version of [01]'s game rules. SpacetimeDB uses it authoritatively; the Centaur Server uses it for bot simulation; clients use it for pre-validation and rendering. This is the contract that prevents game-logic drift across runtimes.
+
+### Identity Model
+
+The platform recognises two persistent identity types and one derived type. **Human identities** are Google OAuth accounts, identified canonically by email address. **Centaur Team identities** are platform-assigned records that persist across games; a team's nominated Snek Centaur Server domain is a configuration field on the team record, not an identity. **Game-participant identities** are derived per-game: operator participants (humans), bot participants (acting on behalf of a Centaur Team), spectator participants, and coach participants. Each connection's identity is established at `client_connected` time by parsing the JWT `sub` claim; the resulting `Agent` value is attached to every staged move in the historical record.
+
+A team's captain nominates a Snek Centaur Server domain unilaterally — no acceptance from the server is required. This means trust is the team's responsibility: a malicious server can exfiltrate everything the user's Convex identity can read. The spec states this explicitly and treats it as an accepted trade-off, analogous to logging into any third-party web application.
+
+### Bot Framework: Drives, Preferences, and Anytime Evaluation
+
+Each Centaur Server runs a bot framework that continuously computes and stages moves for all snakes not currently in manual mode.
+
+Teams customise the bot by plugging in two kinds of heuristic:
+
+- **Drives** are directed motivations parameterised on a target — a specific snake or a specific cell. The target names *what the Drive cares about*; it does not constrain the Drive to "move toward" or "move away from" that target. A Drive implements a reward function over the simulated board configuration, a distance function (in any author-defined sense — turns to reach a configuration, not necessarily grid distance to the target), a combiner that yields a motivation scalar, a satisfaction predicate, and nomination functions that surface the self-move directions and foreign-snake directions the Drive considers relevant. This generality means a single Drive abstraction expresses chase, flee, trap (head for and block a target's escape routes), and deny (head off access routes to a target potion) goals uniformly. Goal versus Fear is author convention only — Fears return negative rewards in typical configurations — and the framework treats both identically at runtime.
+- **Preferences** are time-invariant board-state heuristics: scalar functions `evaluate(self, board)` that express a tendency toward or away from measurable board properties, independent of any specific target.
+
+Every snake carries a **portfolio** of active Drives and Preferences, each with a portfolio weight. The framework evaluates candidate moves by simulating partial next-turn board states — one self-direction crossed with combinations of foreign object actions. Foreign action combinations are explored in descending combined-priority order via a Dijkstra traversal of the rank lattice, an anytime algorithm: the bot continuously refines its evaluation and the best answer computed so far is what gets staged when the turn deadline arrives.
+
+For each candidate self-direction, the bot tracks a **worst-case score** — the minimum weighted score across all foreign-action combinations evaluated so far. This conservative-by-design minimax preference means the bot chooses the direction with the best worst-case outcome, not the best average outcome. The resulting per-direction worst-case scores form the **stateMap**, which is written to Convex after each evaluation pass so operators can see it live.
+
+For automatic snakes, the bot samples a move from the stateMap using a **softmax** distribution. A configurable per-snake temperature parameter controls how deterministic or exploratory the sampling is. A team's captain sets team-wide temperature defaults; individual operators can override per-snake during a game.
+
+### Operator Interface
+
+The operator interface is the SvelteKit board view served by the Centaur Server. Its commitments are specific:
+
+All snakes are bot-controlled by default. The interface offers two distinct snake-focusing affordances with deliberately different names:
+
+- **Selection** is the **rivalrous, exclusive-lock control affordance.** It grants the selecting operator the right to stage moves and toggle manual mode for that snake and surfaces the snake's diagnostic overlays (stateMap, worst-case world, decision breakdown). Persisted in Convex and enforced server-side: one operator per snake, one snake per operator, displacement requires explicit confirmation. Selection alone does not switch a snake out of automatic mode.
+- **Inspection** is the **non-rivalrous, client-local view-only affordance** used by replay viewers and live-game coach clients. It picks which snake's diagnostic surfaces to display in the inspector's own UI — nothing persisted, nothing locked, any number of inspectors can focus on the same snake, no control rights conferred.
+
+**Manual mode is an explicit toggle**, separate from selection. The current selector can check it explicitly, or it auto-activates when the selector picks a direction for the snake. In manual mode, the automatic submission pipeline is suspended for that snake — the bot no longer stages moves for it. The operator's staged move stands.
+
+Turn submission is coordinated through **per-operator ready-state**. Each operator owns a binary `ready` / `not-ready` toggle for the current turn; no one else — not even the captain — can toggle it on their behalf. Unanimous readiness across currently-connected member operators is a necessary precondition for the bot's automatic turn-submission pipeline to call SpacetimeDB's turn-over reducer. Ready-state resets to `not-ready` each turn, and selection, Drive edits, and move staging remain possible regardless — readiness is a coordination signal, not a freeze. The captain holds one override: a **turn-submit** action that immediately declares the team's turn over regardless of others' ready-state. Team-clock expiry also declares the turn over independently.
+
+A **Presence Display** in the header shows which teammates are connected and each one's ready-state. Coaches and admins observing via implicit-coach permission have no ready-state and are visually distinguished so they cannot be mistaken for member operators contributing to the quorum.
+
+### Replay Viewer and Coach Mode
+
+Replays are the union of two data sources: SpacetimeDB's turn-level game log (board state, events, move attribution) and Convex's `centaur_action_log` (per-team sub-turn actions, stateMap snapshots, selection changes, Drive mutations, per-operator ready-state toggles). The viewer reuses the same live operator UI components against a read-only data source, so it renders the board identically to the live game. Snake focus in the replay viewer uses the **inspection** affordance described above — non-rivalrous and client-local — since the selection lock would be meaningless on a finished game. A scrubber operates in two modes: per-turn (discrete step through turns) and timeline (millisecond-precise within a turn), enabling coaches to replay exactly what the bot was computing and what operators were doing at any instant.
+
+**Coach mode** reuses the same abstraction for live observation during an in-progress game. A designated coach — an authorised non-team-member — receives a coach SpacetimeDB access token that grants the same team-filtered read view as a team member, with no move-staging privileges. Any authenticated user can spectate a game (opponent-perspective, invisible snakes filtered); the coach role adds team-perspective visibility.
+
+### Game Lifecycle, Rooms, and Tournaments
+
+Rooms are persistent lobbies that host sequential games. A room has an owner, an enrolled set of Centaur Teams, and a current `not-started` game record. The room owner configures game parameters (board size, snake count, hazard percentage, fertile ground, food and potion spawn rates, clock parameters), optionally previews the generated board before launch, and optionally locks in a specific board layout. At launch, configuration is frozen: no parameters change after the game enters `playing` status.
+
+A game cannot start until at least two teams are enrolled and all team captains have declared their team ready. On launch, Convex generates the initial board state, provisions a fresh SpacetimeDB instance, delivers game invitations to all nominated servers, initialises Centaur subsystem state for each team, and transitions the game record to `playing`.
+
+At game end, SpacetimeDB posts a game-end notification (including the complete replay record) to a Convex HTTP action endpoint. Convex persists the replay, tears down the SpacetimeDB instance, auto-creates a successor `not-started` game record inheriting the room configuration, and resets team ready flags.
+
+**Tournament mode** chains a configured number of rounds with a configurable interlude between them and a scheduled start time. The orchestration is identical per round; tournament mode adds the scheduling and chaining logic on top of the same provisioning path.
+
+### Platform HTTP API and Webhooks
+
+The platform exposes a REST API for external programmatic access to teams, rooms, and games, authenticated by bearer API keys. Keys are created and revoked by admin users via the web application and stored hashed. Two webhook event types exist: `game_start` and `game_end`, delivered to subscriber URLs with at-least-once semantics. This surface enables external systems — tournament organisers, analytics pipelines, third-party leaderboards — to integrate with the platform without scraping the web application.
+
+---
+
+## Reading Guide
+
+### Module Index
+
+Read `specs/02-platform-architecture.md` first — it establishes the three-runtime topology, lifecycle, ownership boundaries, and shared engine contract that every other module assumes. Then read the backend modules: `specs/04-stdb-engine.md` and `specs/05-convex-platform.md` for the two persistence runtimes, and `specs/03-auth-and-identity.md` for the identity model and credential flows. The Centaur-specific surface follows naturally: `specs/06-centaur-state.md` for the Convex schema that backs the bot and operator interface, `specs/07-bot-framework.md` for the evaluation logic, and `specs/08-centaur-server-app.md` for the full web application. Read `specs/01-game-rules.md` at any point — it is self-contained and is the source of truth for all game mechanics.
+
+| Module | One-line gloss |
+|--------|----------------|
+| [`specs/01-game-rules.md`](specs/01-game-rules.md) | Board layout, snake state, items, the 11-phase atomic turn pipeline, chess timer, win conditions, and deterministic board generation with bounded retry. |
+| [`specs/02-platform-architecture.md`](specs/02-platform-architecture.md) | Three-runtime topology, runtime responsibilities, lifecycle, data ownership boundaries, game invitation flow, shared engine contract, and Snek Centaur Server library. |
+| [`specs/03-auth-and-identity.md`](specs/03-auth-and-identity.md) | Identity types (human, Centaur Team, game-participant), OIDC issuance, per-team game credentials, SpacetimeDB admission tickets, and the `Agent` value attached to every staged move. |
+| [`specs/04-stdb-engine.md`](specs/04-stdb-engine.md) | SpacetimeDB module schema, connection admission, staged-moves log, chess timer implementation, turn resolution execution, visibility filtering (RLS), turn event emission, and replay export. |
+| [`specs/05-convex-platform.md`](specs/05-convex-platform.md) | Convex platform schema (users, teams, rooms, games, replays), game lifecycle orchestration, HTTP API and webhooks, board generation, replay persistence, and archive semantics. |
+| [`specs/06-centaur-state.md`](specs/06-centaur-state.md) | Per-team Centaur state in Convex: snake portfolios (Drives, Preferences, weights), selection locks, manual-mode flags, computed display state (`stateMap`, worst-case worlds), and the fine-grained `centaur_action_log`. |
+| [`specs/07-bot-framework.md`](specs/07-bot-framework.md) | Drive and Preference interfaces, candidate action nomination, the Dijkstra-on-lattice foreign-combination traversal, anytime worst-case minimax evaluation, softmax decision, and human-selection move preview. |
+| [`specs/08-centaur-server-app.md`](specs/08-centaur-server-app.md) | The unified SvelteKit web app: live operator board view, Drive management, per-operator ready-state and captain turn-submit override, replay viewer with sub-turn timeline scrubbing, coach mode, lobby and room browser, team management, profiles, leaderboard, and API key management. |
+| [`specs/09-platform-ui.md`](specs/09-platform-ui.md) | Redirect stub. All content previously scoped here has been absorbed into Module 08. |
+
+### Recommended Reading Order
+
+1. **`specs/02-platform-architecture.md`** — establishes the topology every other module builds on.
+2. **`specs/04-stdb-engine.md`** and **`specs/05-convex-platform.md`** — the two persistence runtimes, their schemas, and their responsibilities.
+3. **`specs/03-auth-and-identity.md`** — credential flows, OIDC issuance, and the `Agent` attribution model that links the two runtimes.
+4. **`specs/06-centaur-state.md`** → **`specs/07-bot-framework.md`** → **`specs/08-centaur-server-app.md`** — the Centaur-specific surface: state schema, evaluation logic, and the full web application.
+5. **`specs/01-game-rules.md`** — can be read at any point; it is self-contained and prerequisites nothing from the other modules.
+
+### Decision Logs and Authoring Process
+
+Each module has a sibling `.review.md` file in `specs/` (for example, `specs/02-platform-architecture.review.md`) that records the open questions and resolved decisions that shaped the module. If you encounter a requirement and want to understand why it is the way it is, the `.review.md` file is the first place to look.
+
+`SPEC-INSTRUCTIONS.md` describes the modular authoring discipline: how modules reference each other, how requirements are numbered, how the review files are structured, and how the formal spec relates to the upstream informal sources in `informal-spec/`.
+
+---
 
 ## This Repository
 
-This repo contains the **formal specification** for the platform, developed in a modular authoring process. Nine specification modules (in `specs/`) cover game rules, platform architecture, authentication, the SpacetimeDB engine, Convex platform, Centaur state, the bot framework, the Centaur Server web app, and the platform UI. The informal source spec lives in `informal-spec/`. See `SPEC-INSTRUCTIONS.md` for the authoring process and module dependency graph.
+`informal-spec/` contains the upstream informal sources from which the modular spec was derived: `informal-spec/general-centaur-game-engine-spec.md` covers the broader Centaur platform thesis and bot framework design, and `informal-spec/team-snek-centaur-platform-spec.md` covers the full integrated Team Snek platform vision and game rules. These documents contain the narrative motivation and design rationale that the modular spec is intentionally stripped of. When a requirement seems arbitrary, the informal spec is the place to find the reasoning behind it.
 
+`AGENTS.md` contains agent context for the spec-authoring process. `server.js` is a minimal Node/Express server that renders the markdown files for browsing in a local preview.
