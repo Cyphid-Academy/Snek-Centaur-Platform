@@ -485,3 +485,14 @@ The frontend's behaviour:
 - **05-REVIEW-014**: historical-note footer extended for the same reason as 06-REVIEW-008.
 - **No [07] amendments**: the bot framework's [07-REQ-044] / [07-REQ-045] reference the precondition's shape and not its underlying schema or naming; they remain correct verbatim under the tempo model. [07] §3.7's flush-suppression coordination note continues to describe the Captain turn-submit override path; the Captain boot affordance does not interact with flush suppression because boot affects the unanimity precondition's *participant set*, not the precondition's truth value at any given instant.
 - **No [04] amendments**: SpacetimeDB's `declare_turn_over` reducer is unaffected; the precondition lives entirely above it.
+
+---
+
+### 08-REVIEW-025: Board-size widget shape — pointer to 01-REVIEW-018 — **RESOLVED (pointer)**
+
+**Type**: Pointer
+**Phase**: Design
+
+**Decision**: See resolved **01-REVIEW-018** in Module 01's decision log. That item is the source of truth for the cross-module decision to collapse `BoardSize` to a raw integer. Module 08's board-size control is specified as a bespoke preset-dropdown-plus-custom widget per **08-REQ-027d1**, with the preset table (Small=11, Medium=13, Large=17, Giant=21) living exclusively in [08] §2.13. The widget auto-derives its displayed selection from the stored integer; the persisted value is always the raw integer `boardSize`; the authoritative range enforcement is [05-REQ-023].
+
+**Affected requirements/design elements**: 08-REQ-027d1 (new requirement); [08] §2.13 Configuration region (preset table and widget description).

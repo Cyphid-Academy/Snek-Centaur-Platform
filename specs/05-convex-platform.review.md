@@ -179,3 +179,14 @@ Two corrections were identified:
 **Affected requirements/design elements**: 05-REQ-032 step 4 amended (token not stored in Convex). 05-REQ-032a amended (no stored-token comparison). 05-REQ-037 amended (teardown integrated into game-end HTTP action). 05-REQ-038 amended (replay data bundled in notification; teardown integrated). Schema: `gameEndCallbackToken` field removed from `games` table. Section 2.3.2 game-end HTTP action rewritten (no stored-token check; inline replay processing and teardown). Section 2.13 replay persistence rewritten (inline processing of bundled data, not Convex-pull). Module 04 amended: `GameEndNotification` interface gains `replayData` field; §2.10 procedure updated to read and bundle replay tables; §2.11 rewritten from "Replay Export Mechanism" to "Replay Data Bundling"; 04-REVIEW-019 updated.
 
 ---
+
+### 05-REVIEW-017: `boardSize` field type — pointer to 01-REVIEW-018 — **RESOLVED (pointer)**
+
+**Type**: Pointer
+**Phase**: Design
+
+**Decision**: See resolved **01-REVIEW-018** in Module 01's decision log. That item is the source of truth for the cross-module decision to collapse `BoardSize` to a raw integer `number`. Module 05's Convex schema and parameter table have been updated accordingly: `boardSizeV` validator removed; `boardSize: v.number()` used directly in `gameOrchestrationConfigV`; the `config.orchestration.boardSize` row in the §5.5 parameter table updated to Integer type with default 13 and range 7–32; 05-REQ-032b updated to also reject `boardSize` values outside `[7, 32]` at the preview mutation boundary.
+
+**Affected requirements/design elements**: 05-REQ-023 (`boardSize` row), 05-REQ-032b (board-size bound added to preview mutation), [05] §2.1 Convex schema (`gameOrchestrationConfigV`).
+
+---

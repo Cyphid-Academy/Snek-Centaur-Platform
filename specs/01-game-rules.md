@@ -8,14 +8,7 @@
 
 **01-REQ-002**: The system shall define a `CellType` with values: `Normal`, `Wall`, `Hazard`, `Fertile`.
 
-**01-REQ-003**: The system shall define four named board sizes with the following properties:
-
-| Label  | Total Grid | Playable Area |
-|--------|-----------|---------------|
-| Small  | 11×11     | 9×9 (81 cells)  |
-| Medium | 13×13     | 11×11 (121 cells) |
-| Large  | 17×17     | 15×15 (225 cells) |
-| Giant  | 21×21     | 19×19 (361 cells) |
+**01-REQ-003**: The board shall be a square of edge length `boardSize` cells, where `boardSize` is a positive integer. See resolved **01-REVIEW-018**.
 
 **01-REQ-004**: The system shall define a `SnakeState` type with the following fields:
 - `snakeId`: unique identifier
@@ -43,7 +36,7 @@
 
 **01-REQ-008**: The board shall be a rectangular grid of the configured size. All cells on the outermost 1-cell-thick border shall be `Wall` type. All remaining cells are inner cells.
 
-**01-REQ-009**: The playable area for each board size is the inner cells as defined in 01-REQ-003 (total grid minus the 1-cell wall border on each side).
+**01-REQ-009**: The playable area is the inner cells of the `boardSize × boardSize` grid: the `(boardSize − 2) × (boardSize − 2)` cells not on the 1-cell-thick border.
 
 **01-REQ-010**: If the configured hazard percentage H > 0, `floor(inner_cell_count × H / 100)` inner cells shall be designated `Hazard`, chosen using randomness seeded from the game seed. Hazard placement shall guarantee that all non-Hazard, non-Wall inner cells form a single connected region.
 
@@ -234,7 +227,7 @@ Item collection (food, InvulnPotion, InvisPotion) is explicitly *not* a disrupti
 
 ### 1.11 Game Configuration Parameter Ranges
 
-**01-REQ-063 (Board size range)**: `boardSize` shall be one of `Small`, `Medium`, `Large`, or `Giant` as defined by the `BoardSize` enum (01-REQ-003). No additional constraint beyond the type is required.
+**01-REQ-063 (Board size range)**: `boardSize` shall be a positive integer. The `[7, 32]` bound is enforced by user-facing surfaces only: the Convex configuration mutation per [05-REQ-023] and the room-lobby board-size widget per [08] §2.13. See resolved **01-REVIEW-018**.
 
 **01-REQ-064 (Snakes per team range)**: `snakesPerTeam` shall be an integer in the range 1–10, default 5 (consistent with 01-REQ-019).
 
@@ -349,35 +342,23 @@ export interface ItemState {
 
 ### 2.2 Board Geometry
 
-Implements 01-REQ-003, 01-REQ-008, 01-REQ-009.
+Implements 01-REQ-003, 01-REQ-008, 01-REQ-009. See resolved **01-REVIEW-018**.
 
 ```typescript
-export const enum BoardSize { Small = 0, Medium = 1, Large = 2, Giant = 3 }
-
-// Fixed per 01-REQ-003
-export const BOARD_DIMENSIONS: Readonly<Record<BoardSize, { total: number; playable: number }>> = {
-  [BoardSize.Small]:  { total: 11, playable: 9  },
-  [BoardSize.Medium]: { total: 13, playable: 11 },
-  [BoardSize.Large]:  { total: 17, playable: 15 },
-  [BoardSize.Giant]:  { total: 21, playable: 19 },
-}
-
 // Flat row-major cell array. Flat layout chosen over nested arrays for
 // cache locality — collision detection and hazard lookup are the hot path.
 export interface Board {
-  readonly size: BoardSize
-  readonly width: number                       // = total
-  readonly height: number                      // = total (boards are square)
-  readonly cells: ReadonlyArray<CellType>      // length = width * height
+  readonly boardSize: number                   // edge length in cells (01-REQ-003)
+  readonly cells: ReadonlyArray<CellType>      // length = boardSize * boardSize
 }
 
 export function cellIndex(board: Board, cell: Cell): number {
-  return cell.y * board.width + cell.x
+  return cell.y * board.boardSize + cell.x
 }
 
 export function isInner(board: Board, cell: Cell): boolean {
-  return cell.x > 0 && cell.x < board.width - 1
-      && cell.y > 0 && cell.y < board.height - 1
+  return cell.x > 0 && cell.x < board.boardSize - 1
+      && cell.y > 0 && cell.y < board.boardSize - 1
 }
 
 export function parityOf(cell: Cell): 0 | 1 {
@@ -975,13 +956,12 @@ This section is the minimal contract module 01 exposes to downstream modules. An
 
 ### 3.1 Enums and Branded Types
 
-Motivated by 01-REQ-001, 01-REQ-002, 01-REQ-003, 01-REQ-005, 01-REQ-006.
+Motivated by 01-REQ-001, 01-REQ-002, 01-REQ-005, 01-REQ-006.
 
 ```typescript
 export const enum Direction { Up = 0, Right = 1, Down = 2, Left = 3 }
 export const enum CellType  { Normal = 0, Wall = 1, Hazard = 2, Fertile = 3 }
 export const enum ItemType  { Food = 0, InvulnPotion = 1, InvisPotion = 2 }
-export const enum BoardSize { Small = 0, Medium = 1, Large = 2, Giant = 3 }
 
 // 01-REQ-006. Potion effect taxonomy: two independent families, each with
 // two states. At most one active effect per family per snake (01-REQ-028).
@@ -1007,8 +987,6 @@ export type UserId    = string & { readonly __brand: 'UserId' }
 export type Agent =
   | { readonly kind: 'centaur_team'; readonly centaurTeamId: CentaurTeamId }
   | { readonly kind: 'operator';    readonly operatorUserId: UserId }
-
-export const BOARD_DIMENSIONS: Readonly<Record<BoardSize, { total: number; playable: number }>>
 
 // Derived values over `SnakeState.activeEffects`. Defined per 01-REQ-022
 // and 01-REQ-023. These are pure functions with no side effects and no
@@ -1052,10 +1030,8 @@ export interface ItemState {
 }
 
 export interface Board {
-  readonly size: BoardSize
-  readonly width: number
-  readonly height: number
-  readonly cells: ReadonlyArray<CellType>
+  readonly boardSize: number                   // edge length in cells (01-REQ-003)
+  readonly cells: ReadonlyArray<CellType>      // length = boardSize * boardSize
 }
 
 export interface CentaurTeamClockState {
@@ -1072,7 +1048,7 @@ Motivated by 01-REQ-003, 01-REQ-010, 01-REQ-013, 01-REQ-019, 01-REQ-034–040, 0
 
 ```typescript
 export interface GameOrchestrationConfig {
-  readonly boardSize: BoardSize                  // 01-REQ-003, 01-REQ-063
+  readonly boardSize: number                     // positive integer, 01-REQ-003, 01-REQ-063 (See resolved 01-REVIEW-018.)
   readonly snakesPerTeam: number                 // 1–10, default 5, 01-REQ-019, 01-REQ-064
   readonly hazardPercentage: number              // 0–30, default 0, 01-REQ-010, 01-REQ-067
   readonly fertileGround: {
@@ -1105,7 +1081,7 @@ export interface GameConfig {
 }
 ```
 
-**Schema-mirroring constraints**. The three types above are the canonical TypeScript schema. To make the same shape declarable in both SpacetimeDB (`@type` classes mirroring each interface) and Convex (`v.object({…})` validators with `Infer<typeof v> ≡ GameConfig`) without translation, the following constraints hold throughout: every numeric field is `number` (no `bigint`/`Int64`); no field is `null` or absent in value position (sentinels — `maxTurns: 0`, `fertileGround.density: 0`, `foodSpawnRate: 0`, `invulnPotionSpawnRate: 0`, `invisPotionSpawnRate: 0` — encode "disabled"); enums are string-literal unions (`BoardSize`); time values are milliseconds; nested object grouping carries semantic meaning rather than syntactic optionality (e.g., `fertileGround` bundles the two board-gen knobs that parameterise one feature; `clock` bundles the four chess-timer knobs). See resolved **01-REVIEW-017**.
+**Schema-mirroring constraints**. The three types above are the canonical TypeScript schema. To make the same shape declarable in both SpacetimeDB (`@type` classes mirroring each interface) and Convex (`v.object({…})` validators with `Infer<typeof v> ≡ GameConfig`) without translation, the following constraints hold throughout: every numeric field is `number` (no `bigint`/`Int64`); no field is `null` or absent in value position (sentinels — `maxTurns: 0`, `fertileGround.density: 0`, `foodSpawnRate: 0`, `invulnPotionSpawnRate: 0`, `invisPotionSpawnRate: 0` — encode "disabled"); enums are string-literal unions (`EffectFamily`, `EffectState`); time values are milliseconds; nested object grouping carries semantic meaning rather than syntactic optionality (e.g., `fertileGround` bundles the two board-gen knobs that parameterise one feature; `clock` bundles the four chess-timer knobs). See resolved **01-REVIEW-017**.
 
 ### 3.4 Game Outcome
 
@@ -1213,7 +1189,7 @@ export interface GameState {
 ### 3.9 Invariants and Constants
 
 - Wall border is exactly 1 cell thick on every side (01-REQ-008).
-- Playable area dimensions per `BoardSize` are fixed by `BOARD_DIMENSIONS` (01-REQ-003).
+- The playable area is `(boardSize − 2) × (boardSize − 2)` inner cells (01-REQ-003, 01-REQ-009).
 - Snake starting length is exactly 3 segments, all stacked on the starting cell (01-REQ-020).
 - `PotionEffect.expiryTurn` is the last turn on which the effect is active; Phase 9 removes when `currentTurn >= expiryTurn` (resolved 01-REVIEW-003).
 - A snake holds at most one active and at most one pending effect per family (01-REQ-028, 01-REQ-047). Stacking is not supported.
@@ -1228,7 +1204,7 @@ export interface GameState {
 
 2. **Effect schema is `PotionEffect { family, state, expiryTurn }`, no source attribution.** Module 04's schema must carry exactly these three fields. Adding back per-stack attribution would require reintroducing stacking. See resolved 01-REVIEW-010 and 01-REVIEW-015.
 
-3. **Board cell encoding is specified, not delegated.** Flat `ReadonlyArray<CellType>` with `y * width + x` indexing is fixed here so that the shared engine codebase (per module 02's principles) is binary-compatible across SpacetimeDB, Convex, and the web clients. Downstream modules must not redefine this.
+3. **Board cell encoding is specified, not delegated.** Flat `ReadonlyArray<CellType>` with `y * boardSize + x` indexing is fixed here so that the shared engine codebase (per module 02's principles) is binary-compatible across SpacetimeDB, Convex, and the web clients. Downstream modules must not redefine this.
 
 4. **Sub-seed derivation uses BLAKE3 keyed hashing specifically.** Any consumer of `subSeed()` must import the same BLAKE3 implementation; switching hash algorithms breaks replay reproducibility. This is a hard dependency, not a "pick your favourite hash" situation.
 

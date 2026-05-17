@@ -422,3 +422,33 @@ Option A was rejected because it retains the exact asymmetry and reducer problem
 
 **Revisit if**: a future rule change decouples "feature exists on this board" from "spawn rate is positive" — for instance, if a fertile-ground variant were introduced that places Fertile cells but suppresses their food-eligibility effect, the `density > 0` sentinel would no longer be a faithful proxy and an explicit feature flag would return.
 
+**Note (post-authorship)**: The schema-mirror constraint in [01] §3.3's trailing paragraph originally cited `BoardSize` as the canonical string-literal-union example. That example is now stale — `BoardSize` has been collapsed to a raw integer `number` per **01-REVIEW-018**, and the §3.3 example has been updated to cite `EffectFamily` / `EffectState` instead. This review item's body is otherwise unchanged; the boundary-split decision it records is unaffected.
+
+---
+
+### 01-REVIEW-018: `BoardSize` enum collapsed to raw integer `boardSize` — **RESOLVED**
+
+**Type**: Amendment
+**Phase**: Design
+
+**Prior text**: Module 01 defined `BoardSize` as a numeric `const enum` (`Small = 0, Medium = 1, Large = 2, Giant = 3`) in §3.1 and exported a companion `BOARD_DIMENSIONS` lookup table mapping each enum member to `{ total, playable }` cell counts. The `Board` interface in §2.2 / §3.2 carried three fields — `size: BoardSize`, `width: number`, `height: number`. `GameOrchestrationConfig.boardSize` in §3.3 was typed as `BoardSize`, and §3.3's schema-mirror prose cited `BoardSize` as the canonical string-literal-union example (which was also incidentally inconsistent with the §3.1 `const enum` declaration and with Module 05's Convex validator). Downstream consequences: [02] re-exported both `BoardSize` and `BOARD_DIMENSIONS`; [04] `BoardStateRow` and `InitializeGameParams.board` carried `boardSize`, `width`, `height`; [05]'s Convex validator declared `boardSizeV` as a string-literal union; [08] had no bespoke board-size UI affordance specified.
+
+**Amendment**: Collapse `BoardSize` to a raw positive integer `boardSize: number` everywhere — the canonical TypeScript type, the SpacetimeDB row type, and the Convex validator all use `number`. Remove the `BoardSize` enum and the `BOARD_DIMENSIONS` lookup table. The `Board` interface drops `size`, `width`, and `height`; only `boardSize` and `cells` remain (boards are always square per 01-REQ-003, so `boardSize` determines both dimensions). The four named sizes (Small=11, Medium=13, Large=17, Giant=21) become purely cosmetic UI presets defined exclusively in Module 08's room-lobby board-size widget (08-REQ-027d1, [08] §2.13). The `[7, 32]` bound is enforced only at user-facing surfaces — the Convex configuration mutation per [05-REQ-023] and the room-lobby widget per [08-REQ-027d1] — not in the engine or schema, consistent with the existing pattern for other bounded parameters (01-REQ-064 through 01-REQ-077). Indexing prose updated from `y * width + x` to `y * boardSize + x` throughout.
+
+**Rationale**: The original `BoardSize` enum modelled a closed-set choice over four named sizes, but the human's intent has shifted toward supporting arbitrary square boards in `[7, 32]`. Under that intent, the nominal category labels carry no semantic value beyond their integer counterparts — every consumer immediately translates them to an integer via `BOARD_DIMENSIONS` — and the redundant `width` / `height` fields on `Board` invite inconsistency. Custom sizes become first-class without schema changes; the four named labels survive as cosmetic UI presets in the lobby widget, where named recall is genuinely useful, but they carry no type-level significance and no downstream module needs to know about them.
+
+**Affected requirements/design elements**:
+- 01-REQ-003 (restated: `boardSize` is a positive integer; see resolved **01-REVIEW-018**).
+- 01-REQ-009 (restated in terms of `boardSize × boardSize` grid).
+- 01-REQ-063 (`boardSize` is a positive integer; `[7, 32]` bound is user-facing-surface-only).
+- Section 2.2 (`BoardSize` enum and `BOARD_DIMENSIONS` removed; `Board` interface rewritten to `{ boardSize, cells }`; `cellIndex` and `isInner` helpers restated using `boardSize`).
+- Section 3.1 (`BoardSize` enum export and `BOARD_DIMENSIONS` export removed).
+- Section 3.2 (`Board` interface: `size`, `width`, `height` removed; `boardSize: number` added).
+- Section 3.3 (`GameOrchestrationConfig.boardSize: number`; schema-mirror example updated from `BoardSize` to `EffectFamily` / `EffectState`).
+- [02] §2.17 and §3.5 re-export lists (`BoardSize` and `BOARD_DIMENSIONS` removed).
+- [04] `BoardStateRow` (`width`, `height` removed; `boardSize` comment updated); `InitializeGameParams.board` (same); structural validation cell-count check updated to `boardSize * boardSize === cells.length`; `board_state` row write updated.
+- [05] §2.1 Convex schema (`boardSizeV` removed; `boardSize: v.number()`); §5.5 parameter table (`boardSize` row updated to Integer, default 13, range 7–32); 05-REQ-032b (preview mutation also rejects `boardSize` outside `[7, 32]`).
+- [08] 08-REQ-027d1 (new requirement pinning the bespoke board-size widget shape); §2.13 Configuration region (preset table and widget description added).
+- [01-REVIEW-017]: post-authorship note appended (see above).
+- Corresponding pointer entries: [05-REVIEW-017], [08-REVIEW-025].
+

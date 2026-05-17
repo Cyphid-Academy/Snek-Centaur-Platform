@@ -436,9 +436,9 @@ Satisfies 02-REQ-034 through 02-REQ-037.
 
 ```typescript
 export {
-  Direction, CellType, ItemType, BoardSize, EffectFamily, EffectState,
+  Direction, CellType, ItemType, EffectFamily, EffectState,
   Cell, SnakeId, CentaurTeamId, ItemId, TurnNumber, UserId,
-  Agent, BOARD_DIMENSIONS, invulnerabilityLevel, isVisible, fertileGroundEnabled,
+  Agent, invulnerabilityLevel, isVisible, fertileGroundEnabled,
   PotionEffect, SnakeState, ItemState, Board, CentaurTeamClockState,
   GameConfig, GameOrchestrationConfig, GameRuntimeConfig,
   GameOutcome, TurnEvent, DeathCause,
@@ -460,7 +460,7 @@ export {
 - Use only ECMAScript standard library APIs (no Node.js-specific APIs, no browser-specific APIs).
 - Export pure functions with no side effects beyond the `Rng` state parameter.
 - Use the specified BLAKE3 implementation for `subSeed()` (per Module 01 DOWNSTREAM IMPACT note 4), which must be available as a dependency in all three environments.
-- Use the flat `ReadonlyArray<CellType>` board encoding with `y * width + x` indexing (per Module 01 DOWNSTREAM IMPACT note 3).
+- Use the flat `ReadonlyArray<CellType>` board encoding with `y * boardSize + x` indexing (per Module 01 DOWNSTREAM IMPACT note 3).
 
 ### 2.18 Human Client Topology Design
 
@@ -633,9 +633,9 @@ The shared engine codebase re-exports all of Module 01's exported interfaces (Se
 ```typescript
 export {
   // Enums and branded types (01 §3.1)
-  Direction, CellType, ItemType, BoardSize, EffectFamily, EffectState,
+  Direction, CellType, ItemType, EffectFamily, EffectState,
   Cell, SnakeId, CentaurTeamId, ItemId, TurnNumber, UserId, Agent,
-  BOARD_DIMENSIONS, invulnerabilityLevel, isVisible, fertileGroundEnabled,
+  invulnerabilityLevel, isVisible, fertileGroundEnabled,
 
   // State shapes (01 §3.2)
   PotionEffect, SnakeState, ItemState, Board, CentaurTeamClockState,
@@ -849,7 +849,7 @@ export interface UnifiedWebApplicationScope {
 
 5. **Selection state lives in Convex, not SpacetimeDB.** Module [04] must not include operator-to-snake mapping in its schema. Module [06] owns the selection tables and invariant enforcement. SpacetimeDB authorization is team-scoped only (02-REQ-017).
 
-6. **Shared engine codebase must be ECMAScript-portable.** The codebase consumed by [04] (SpacetimeDB), [07]/[08] (Snek Centaur Server), must not use runtime-specific APIs. The BLAKE3 dependency must be available in all three environments. Flat board encoding (`y * width + x`) is mandated by Module 01 DOWNSTREAM IMPACT note 3.
+6. **Shared engine codebase must be ECMAScript-portable.** The codebase consumed by [04] (SpacetimeDB), [07]/[08] (Snek Centaur Server), must not use runtime-specific APIs. The BLAKE3 dependency must be available in all three environments. Flat board encoding (`y * boardSize + x`) is mandated by Module 01 DOWNSTREAM IMPACT note 3.
 
 7. **WebSocket is the transport between clients and SpacetimeDB.** Modules [04] and [08] must design their client connection code around WebSocket. HTTP fallback or alternative transports are not supported by SpacetimeDB's client protocol.
 

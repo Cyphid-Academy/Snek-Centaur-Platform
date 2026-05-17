@@ -316,31 +316,34 @@ When the agent identifies ambiguities, contradictions, or gaps during authoring,
 **Informal spec reference**: [Section/paragraph in the informal spec, if applicable]
 ```
 
-### Correction items (human-initiated)
+### Human-initiated items (Correction and Amendment)
 
 The four Types above all share an origin pattern: the **agent** noticed something while authoring (an ambiguity it couldn't resolve, a contradiction between sources, a gap in the informal spec, or a worthwhile addition) and surfaced it to the human for resolution. That is what the Context / Question / Options / Decision / Rationale shape is built for: it records the option space the agent could see and which option the human picked.
 
-A second, equally legitimate origin pattern exists: the **human** reviews already-written spec text and directs a change — the prior text was wrong, over-engineered, under-specified, or otherwise not what the human meant — without there being any real option space for the agent to have surfaced. The Correction Type records this pattern honestly: the prior text and the corrected text are both stated plainly, and the change is attributed to direction-from-human rather than choice-among-alternatives.
+A second, equally legitimate origin pattern exists: the **human** directs a change to already-written spec text without there being any real option space for the agent to have surfaced. Two sub-variants exist, distinguished by whether the prior text was wrong or merely superseded:
 
-For this case, use **Type: Correction**, which omits Question / Options entirely:
+- **Type: Correction** — the prior text was *wrong*: a mistake, over-engineered, under-specified, contradictory with sibling text, or otherwise not what the human meant when it was written. The correction restores the spec to what it should have said all along.
+- **Type: Amendment** — the prior text was a faithful expression of the human's intent *at the time it was written*, and the human has since changed their mind about what they want. Nothing was mistaken; the requirement itself has moved. Amendments most commonly follow design re-evaluation, downstream lessons that propagate back upstream, or scope changes.
+
+Both sub-variants omit Question / Options entirely, both are first-raised already-resolved, and both are attributed to direction-from-human rather than choice-among-alternatives. The distinction matters because future readers reason differently about the two: a Correction signals "the earlier formulation was a defect — do not regress to it", while an Amendment signals "the earlier formulation was valid under the prior intent — if the intent shifts back, the earlier formulation is once again on the table."
+
+Use the shape below, swapping `Correction` ↔ `Amendment` in the Type field and (for Amendments) replacing the `Correction:` block label with `Amendment:`:
 
 ```markdown
 ### [MODULE_ID]-REVIEW-[NNN]: [Short title] — **RESOLVED**
 
-**Type**: Correction
+**Type**: Correction | Amendment
 **Phase**: Requirements | Design
-**Prior text**: [What the spec body said before the correction — quoted or tightly paraphrased, with citations to the originating REVIEW item(s) if the prior text was itself the resolution of an earlier item. This is the analogue of Context: it captures the state the spec was in when the correction landed, so future readers can see what the correction is against.]
-**Correction**: [What the human directed, and what the spec body now says. This is the analogue of Decision but framed as direction-from-human, not choice-among-options.]
-**Rationale**: [Optional, brief. Why the prior text was wrong / over-engineered / under-specified / unclear. Skip if self-evident from Prior text → Correction.]
+**Prior text**: [What the spec body said before the change — quoted or tightly paraphrased, with citations to the originating REVIEW item(s) if the prior text was itself the resolution of an earlier item. This is the analogue of Context: it captures the state the spec was in when the change landed, so future readers can see what the change is against.]
+**Correction** (or **Amendment**): [What the human directed, and what the spec body now says. This is the analogue of Decision but framed as direction-from-human, not choice-among-options.]
+**Rationale**: [Optional, brief. For Correction: why the prior text was wrong / over-engineered / under-specified / unclear. For Amendment: why the human's intent shifted — what new consideration, downstream lesson, or re-evaluation prompted the change. Skip if self-evident from Prior text → Correction/Amendment.]
 **Informal spec reference**: [If applicable.]
-**Affected requirements/design elements**: [IDs of items updated as part of this correction.]
+**Affected requirements/design elements**: [IDs of items updated as part of this change.]
 ```
 
-Correction items are first raised already-resolved (the human's direction *is* the resolution); they do not go through an open-then-resolved lifecycle.
+**Anti-pattern — do not dress up a Correction or Amendment as an agent-surfaced item.** If you (the agent) did not actually surface a question and weigh options before the human directed the change, do not retroactively reach for Type: Ambiguity / Contradiction / Gap / Proposed Addition and invent a Question and Options to fill those slots. In particular, do not invent an Option A that paraphrases the now-rejected prior draft just to make Option B look chosen-among-alternatives. Use Type: Correction (if the prior text was wrong) or Type: Amendment (if the human changed their mind).
 
-**Anti-pattern — do not dress up a Correction as an agent-surfaced item.** If you (the agent) did not actually surface a question and weigh options before the human directed the change, do not retroactively reach for Type: Ambiguity / Contradiction / Gap / Proposed Addition and invent a Question and Options to fill those slots. In particular, do not invent an Option A that paraphrases the now-rejected prior draft just to make Option B look chosen-among-alternatives. Use Type: Correction.
-
-The same provenance rules apply: write the spec body as if the corrected text were the only version ever written (per AGENTS.md §"No Journey Narration"), and place an opaque pointer in the body (e.g. `*(See resolved [MODULE_ID]-REVIEW-NNN.)*`) where the load-bearing prose lives.
+The same provenance rules apply: write the spec body as if the new text were the only version ever written (per AGENTS.md §"No Journey Narration"), and place an opaque pointer in the body (e.g. `*(See resolved [MODULE_ID]-REVIEW-NNN.)*`) where the load-bearing prose lives.
 
 ### Resolution
 

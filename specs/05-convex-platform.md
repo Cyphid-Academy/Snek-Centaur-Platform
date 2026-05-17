@@ -72,7 +72,7 @@ Game-rules parameters (`config` subtrees):
 
 | Path | Type | Default | Range | Notes |
 |------|------|---------|-------|-------|
-| `config.orchestration.boardSize` | `BoardSize` enum | `"medium"` | `"small" \| "medium" \| "large" \| "giant"` | Domain enum owned by [01] |
+| `config.orchestration.boardSize` | Integer | 13 | 7–32 | Edge length in cells; Convex enforces the `[7, 32]` bound at the mutation boundary (see [01-REQ-063] and resolved [01-REVIEW-018]) |
 | `config.orchestration.snakesPerTeam` | Integer | 5 | 1–10 | Consumed by Convex during board generation; not sent to STDB |
 | `config.orchestration.hazardPercentage` | Integer | 0 | 0–30 | Consumed by Convex during board generation |
 | `config.orchestration.fertileGround.density` | Integer % | 30 | 0–90 | `0` disables fertile ground ([01-REQ-069]) |
@@ -142,7 +142,7 @@ Successful completion of this sequence shall transition the game's status to `pl
 
 **05-REQ-032a**: Convex's interactions with the SpacetimeDB hosting platform and with a provisioned instance during the orchestration of [05-REQ-032] shall be authenticated per [03-REQ-048]. As part of the same orchestration, Convex shall register itself as a subscriber to the provisioned instance's game-end notification mechanism ([04-REQ-061a]) no later than the successful completion of that orchestration. The game-outcome callback token and callback URL included in the `initialize_game` payload (05-REQ-032 step 4) serve as the registration — the STDB module stores these values and uses them to POST the game-end notification (with bundled replay data) to Convex when a terminal outcome is detected. Convex does not persist the callback token in its own database; it validates the token on receipt by JWT signature verification and claims checking. *(See resolved 05-REVIEW-015.)*
 
-**05-REQ-032b**: Convex shall provide a **board-generation preview mutation**. When the administrative actor edits board-affecting configuration parameters on the current not-started game (board dimensions, hazard %, fertile ground density/clustering, snake count per team, or any other parameter that is an input to `generateBoardAndInitialState()`), a Convex mutation shall re-run `generateBoardAndInitialState()` from the shared engine codebase ([02-REQ-035]) as pure TypeScript to produce a board preview. This mutation runs bounded-retry feasibility logic ([01-REQ-061]) and produces either a valid board state or a structured `BoardGenerationFailure` error ([01] Section 3.6) surfaced reactively to the web client via Convex's reactive query model. **The board preview is persisted on the game record on every regeneration** — every successful run of the preview mutation overwrites the starting state stored on the not-yet-started game record's configuration document, regardless of lock-in status. A separate `boardPreviewLocked: boolean` flag on the same game record governs whether [05-REQ-032] step 2 reuses the persisted starting state (when `true`) or regenerates from a fresh seed at game-launch initiation (when `false`, in which case the regenerated state is also persisted onto the game record but is not surfaced to any configuration-mode UI). The administrative actor may:
+**05-REQ-032b**: Convex shall provide a **board-generation preview mutation**. When the administrative actor edits board-affecting configuration parameters on the current not-started game (board size, hazard %, fertile ground density/clustering, snake count per team, or any other parameter that is an input to `generateBoardAndInitialState()`), a Convex mutation shall re-run `generateBoardAndInitialState()` from the shared engine codebase ([02-REQ-035]) as pure TypeScript to produce a board preview. This mutation runs bounded-retry feasibility logic ([01-REQ-061]) and produces either a valid board state or a structured `BoardGenerationFailure` error ([01] Section 3.6) surfaced reactively to the web client via Convex's reactive query model. The mutation shall also reject any `boardSize` value outside `[7, 32]`, treating it as an out-of-range parameter equivalent to the rejection behaviour of [05-REQ-023]. **The board preview is persisted on the game record on every regeneration** — every successful run of the preview mutation overwrites the starting state stored on the not-yet-started game record's configuration document, regardless of lock-in status. A separate `boardPreviewLocked: boolean` flag on the same game record governs whether [05-REQ-032] step 2 reuses the persisted starting state (when `true`) or regenerates from a fresh seed at game-launch initiation (when `false`, in which case the regenerated state is also persisted onto the game record but is not surfaced to any configuration-mode UI). The administrative actor may:
 - **Lock in** the current preview by setting `boardPreviewLocked = true` (via a UI affordance per [08]) so that [05-REQ-032] step 2 reuses the persisted starting state at game-launch initiation.
 - **Leave it unlocked** (`boardPreviewLocked = false`), in which case [05-REQ-032] step 2 regenerates a fresh board from a fresh seed at game-launch initiation and overwrites the persisted starting state with the result; that result is not displayed to any participant until the game enters `playing` status and reaches operators via SpacetimeDB.
 
@@ -288,13 +288,8 @@ import { v, type Infer } from "convex/values"
 // matches the canonical TypeScript declaration in Module 01. A compile-time
 // assertion at the bottom of this block turns any drift into a build error.
 
-const boardSizeV = v.union(
-  v.literal("small"), v.literal("medium"),
-  v.literal("large"), v.literal("giant"),
-)
-
 const gameOrchestrationConfigV = v.object({
-  boardSize: boardSizeV,
+  boardSize: v.number(),
   snakesPerTeam: v.number(),
   hazardPercentage: v.number(),
   fertileGround: v.object({
