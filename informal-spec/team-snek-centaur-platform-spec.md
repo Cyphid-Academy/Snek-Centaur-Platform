@@ -258,8 +258,8 @@ Each team has a **time budget** that depletes while that team's turn clock is ru
 
 **Centaur Server affordances:**
 - The Centaur Server library exposes a `declareTurnOver()` function that stops the team's clock and triggers turn resolution (if all teams are done).
-- The library calls `declareTurnOver()` automatically only once **every connected member operator has toggled their per-operator ready-state to ready** for the current turn (see Section 7.5). Per-operator ready-state resets to not-ready at the start of each turn.
-- The **Captain** holds a single **turn-submit override** that immediately calls `declareTurnOver()` regardless of other operators' ready-state. There is no team-wide manual-vs-automatic submission-mode toggle and no separate per-member submission role — the per-operator ready-state plus Captain override model replaces both.
+- The library calls `declareTurnOver()` automatically only while **all of the team's active operators are in `flow`** (see Section 7.5). The team's **active operators** are its currently-connected member operators; an operator that the network detects as disconnected leaves the active set, and the Captain's boot action (below) leaves the active set by the same mechanism (boot is a manual forced disconnect). Per-operator tempo is a **durable per-operator status** (`flow` / `thinking`) that does not reset on turn boundaries — once an operator is in `flow` they stay there until they themselves toggle to `thinking`, and vice versa. Every (re)connect — first-ever join, after a network drop, or after a Captain boot — starts the operator back in `flow`.
+- The **Captain** holds two override affordances: a **turn-submit** action that immediately calls `declareTurnOver()` regardless of other operators' tempo, and an **operator-boot** action that evicts an unresponsive teammate from the team's game session by severing their connection identically to a network disconnect (no sticky lockout — the booted operator may reconnect at any time and rejoins the active set in `flow`; boot is intended as a nuclear option for an operator who is unlikely to immediately reconnect in practice). There is no team-wide manual-vs-automatic submission-mode toggle and no separate per-member submission role — the per-operator tempo plus Captain override model replaces both.
 
 ### Effect Immutability Principle
 
@@ -521,7 +521,7 @@ Changes here set defaults for future games — they do not retroactively modify 
 A persistent configuration page for team-wide bot settings. Editable by any team member. Configures:
 
 - **Global temperature**: Softmax temperature for bot move selection (see Section 6.9).
-- **Automatic submission time allocation**: Maximum compute time before the bot framework's automatic submission pipeline calls `declareTurnOver()`, applied once the per-operator ready-state unanimity precondition is met (see Section 7.5).
+- **Automatic submission time allocation**: Maximum compute time before the bot framework's automatic submission pipeline calls `declareTurnOver()`, applied once the per-operator tempo unanimity precondition is met (see Section 7.5).
 - **Turn-0 automatic time allocation**: Separate allocation for turn 0, which typically has a longer max turn time.
 
 These are stored in Convex per team and read by the Centaur Server at game start.
@@ -547,9 +547,10 @@ Lists completed games the logged-in user participated in, showing room name, dat
 - **Team clock**: countdown showing time remaining for this team this turn (seconds to one decimal; red when < 0.5s; shows "Turn Submitted" once declared over)
 - **Time budget**: remaining team time budget
 - Network ping to SpacetimeDB
-- **Presence display**: connected operators shown as coloured dots with nicknames, each annotated with their current per-operator **ready / not-ready** state for this turn. Coaches and admins observing via implicit-coach permission appear with a visual marker that distinguishes them from member operators and have no ready-state.
-- **Per-operator ready toggle**: every connected member operator owns a binary `ready` / `not-ready` toggle for the current turn (shortcut key, also click-to-toggle on their own presence dot). No one else — not even the Captain — can toggle it on their behalf. Ready-state resets to not-ready at the start of each turn. Selection, Drive edits, and move staging remain available regardless of ready-state.
-- **Captain turn-submit override** (visible only to the Captain): a shortcut key that immediately declares the team's turn over, submitting all currently staged moves regardless of others' ready-state.
+- **Presence display**: the team's active operators shown as coloured dots with nicknames, each annotated with their current per-operator **tempo** (`In Flow` / `Thinking…`). Coaches and admins observing via implicit-coach permission appear with a visual marker that distinguishes them from member operators and have no tempo. Operators that are not in the active set (network-disconnected, or just booted by the Captain — same mechanism) do not appear in the display at all.
+- **Per-operator tempo toggle**: every active member operator owns a binary `flow` / `thinking` toggle that they can flip at any moment in the game (shortcut key, also click-to-toggle on their own presence dot). No one else — not even the Captain — can toggle it on their behalf. **Tempo is durable across turns**: the start of a new turn does *not* reset the toggle. Every (re)connect (first-ever join, after a network drop, or after a Captain boot) starts the operator in `flow`. Selection, Drive edits, and move staging remain available regardless of tempo.
+- **Captain turn-submit override** (visible only to the Captain): a shortcut key that immediately declares the team's turn over, submitting all currently staged moves regardless of others' tempo.
+- **Captain operator-boot affordance** (visible only to the Captain): an inline "Boot" button next to each active operator's presence-display entry, with a confirmation step, that evicts an unresponsive teammate from the team's game session by severing their connection identically to a network disconnect. There is no separate "revoke boot" affordance — boot writes no persistent state, and the booted operator may reconnect at any time (rejoining the active set in `flow`).
 
 **Board display:**
 - Full live board with grid lines
@@ -576,13 +577,13 @@ Lists completed games the logged-in user participated in, showing room name, dat
 
 **Decision breakdown table:** Per-direction heuristic breakdown showing component name, raw value, weight, weighted contribution, relative impact.
 
-**Turn submission** is coordinated through per-operator ready-state and a Captain override:
+**Turn submission** is coordinated through per-operator tempo and Captain overrides:
 
-- **Per-operator ready-state**: Each connected member operator owns a binary `ready` / `not-ready` toggle for the current turn. Ready-state resets to not-ready at the start of every turn. Selection, Drive edits, and move staging remain possible regardless — readiness is a coordination signal, not a freeze.
+- **Per-operator tempo**: Each active member operator owns a binary `flow` / `thinking` toggle that names their mental stance toward pacing. **Tempo is durable across turns** — the arrival of a new turn does not modify any operator's tempo; once an operator is in `flow` they remain in `flow` until they themselves toggle to `thinking`, and vice versa. Every (re)connect — first-ever join, after a network drop, or after a Captain boot — starts the operator in `flow`, so an operator who toggled to `thinking` and then dropped off the network does not silently leave the team paused once they come back. Selection, Drive edits, and move staging remain possible regardless — tempo is a coordination signal, not a freeze.
 
-- **Automatic submission pipeline**: The Centaur Server library's bot computation continuously stages moves for all automatic-mode snakes. It declares the team's turn over automatically only when **every connected member operator has toggled ready for the current turn**, and additionally subject to the bot framework's own scheduling cadence and the configured **automatic submission time allocation** (see Section 7.2). Coaches and admins observing via implicit-coach permission have no ready-state and do not affect the unanimity precondition.
+- **Automatic submission pipeline**: The Centaur Server library's bot computation continuously stages moves for all automatic-mode snakes. It declares the team's turn over automatically only while **all of the team's active operators are in `flow`** (an operator opting in to slow time by toggling to `thinking` pauses the pipeline until they toggle back), and additionally subject to the bot framework's own scheduling cadence and the configured **automatic submission time allocation** (see Section 7.2). The team's active-operator set is defined once (currently-connected member operators); operators leave it on disconnect (whether network-detected or by Captain boot, which acts as a forced disconnect) and rejoin it on (re)connect. Coaches and admins observing via implicit-coach permission are not member operators and so are not in the active set.
 
-- **Captain turn-submit override**: The Captain holds a single override action — a shortcut key that immediately declares the team's turn over regardless of others' ready-state. This is the only manual path to ending the team's turn before clock expiry.
+- **Captain turn-submit override**: The Captain holds two override affordances. The first is a shortcut key that immediately declares the team's turn over regardless of others' tempo — the only manual path to ending the team's turn before clock expiry. The second is an **operator-boot** affordance that evicts an unresponsive teammate from the team's game session; boot is a manual forced disconnect that severs the target's connection identically to a network drop, with no persistent state — the booted operator simply leaves the active set, and may reconnect at any time (rejoining in `flow`). Boot is intended as a nuclear option for an operator who is asleep at the keyboard or otherwise non-responsive and therefore unlikely to immediately reconnect.
 
 - **Clock expiry**: Independently of the above, expiry of the team's chess-clock for the turn declares the team's turn over with whatever is currently staged.
 
@@ -853,7 +854,8 @@ At game end, Convex reads all tables from SpacetimeDB in one batch. The complete
 - `drive_added`: `{snakeId, driveType, targetType, targetId, weight}`
 - `drive_removed`: `{snakeId, driveType, targetId}`
 - `weight_changed`: `{snakeId, heuristicName, oldWeight, newWeight}`
-- `operator_ready_toggled`: `{operatorUserId, ready: bool}` (per-operator ready-state change for the current turn)
+- `operator_tempo_changed`: `{operatorUserId, tempo: "thinking" | "flow"}` (per-operator tempo change; durable across turns; the event carries the action log's standard wall-clock timestamp so replay reconstruction is time-precise)
+- `operator_booted`: `{operatorUserId, byCaptainUserId}` (Captain evicted an operator from the team's game session; the operator's connection is severed identically to a network disconnect, with no persistent state — this event appears in the action log as the manual analogue of a connection-loss event)
 - `turn_submitted`: `{}`
 - `statemap_updated`: `{snakeId, stateMap, worstCaseWorlds, annotations, heuristicOutputs}` — full state snapshots (not deltas) to enable reconstruction at any timestamp during replay
 - `temperature_changed`: `{snakeId, temperature}`
@@ -956,7 +958,7 @@ There is a single unified replay viewer (see Section 7.12), not separate "platfo
 - Heuristic output evolution as Drives were added/removed and weights adjusted
 - Move staging events (both human and bot)
 - Manual mode toggles
-- Per-operator ready-state changes and turn submission timing
+- Per-operator tempo changes, Captain operator-boot events, and turn submission timing — all recorded as time-based events (not turn-keyed), so the replay viewer can reconstruct the per-operator tempo and boot state at any scrubbed `t` regardless of turn boundaries
 
 These are reconstructed from the `centaur_action_log`, which provides timestamped snapshots at each state-changing event. Entries with action type `statemap_updated` capture full state snapshots (stateMap, worst-case worlds, annotations, heuristic outputs with weights) so that any point in time can be reconstructed by loading the most recent snapshot prior to the scrubber position.
 

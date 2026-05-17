@@ -148,7 +148,8 @@ Read access shall be scoped as follows. During a live (in-progress) game, a memb
 - Manual-mode toggling (snake, new value).
 - Drive addition and removal (snake, Drive type, target type, target, weight).
 - Heuristic weight and activation changes (snake, heuristic, old weight, new weight, old active state, new active state).
-- **Per-operator ready-state changes** (`operator_ready_toggled`: operator user identity, turn, new ready value).
+- **Per-operator tempo changes** (`operator_tempo_changed`: operator user identity, new tempo value — `thinking` or `flow`). The action log's standard wall-clock timestamp ([06-REQ-034]) is the per-event time anchor; tempo events are not turn-keyed.
+- **Captain boot events** (`operator_booted`: target operator user identity, Captain user identity).
 - Team-side turn submission events.
 - Computed display state snapshots (snake, stateMap, worst-case worlds, heuristic outputs), written as full snapshots per [06-REQ-028].
 - Temperature override changes (snake, new value).
@@ -170,7 +171,19 @@ All other event categories may be written by either the Snek Centaur Server or a
 
 **06-REQ-040a**: For each game, the subsystem shall persist a **game-scoped team state record** per CentaurTeam, containing at minimum `globalTemperature`, `automaticTimeAllocationMs`, `scheduledSubmissionIntervalMs`, and `imminentThresholdMs`. All fields are initialised from the team's `global_centaur_params` defaults at game start and are independently mutable during the game. This record is the live source of truth for the effective parameter values during gameplay; downstream readers ([07], [08]) read it directly. (See resolved 06-REVIEW-008.)
 
-**06-REQ-040b**: For each game, the subsystem shall persist a **per-operator ready-state record** in a dedicated table `operator_ready_state`. Each record is keyed by `(gameId, operatorUserId)` and carries at minimum a boolean `ready` flag, the `turn` for which the ready signal applies, and an `updatedAt` timestamp. Records are written exclusively by the operator they describe via the `setOperatorReady` mutation defined in §2.2.3. At the start of each turn (publish of the next authoritative pre-turn board state per [04]), every operator's `ready` flag for that game shall be reset to `false` (whether by explicit batch reset or by the contract that readers treat any record whose `turn` differs from the current turn as `not-ready`). Coaches and admins acting via implicit-coach permission ([05-REQ-066], [05-REQ-067]) shall not have records in this table — they have no ready-state per [08-REQ-064a]. The `setOperatorReady` mutation transactionally writes an `operator_ready_toggled` action-log entry per [06-REQ-036].
+**06-REQ-040b**: For each game, the subsystem shall persist a **per-operator tempo record** in a dedicated table `operator_tempo`. Each record is keyed by `(gameId, operatorUserId)` and carries at minimum a `tempo` enum (`thinking` or `flow`) and an `updatedAt` wall-clock timestamp. The `tempo` field is written exclusively by the operator the record describes via the `setOperatorTempo` mutation (§2.2.3).
+
+**Tempo is durable across turns.** The arrival of a new turn does not modify any operator's tempo — only an explicit operator action changes it. `tempo` does *not* carry a `turn` field and is not turn-keyed. The two values name the operator's mental stance toward pacing: `flow` ("I am comfortable with the bot's automatic submission cadence") and `thinking` ("I need the team to slow time so I can think hard about this decision"). `flow` is the value that allows the team's unanimity precondition ([08-REQ-062]) to hold; `thinking` is the explicit pause signal that withdraws an operator's consent from the unanimity until they choose to switch back. An operator may toggle between the two freely at any moment in the game.
+
+**Initial value on row creation, and on every (re)connect.** The operator's client shall call `setOperatorTempo({ tempo: "flow" })` as part of its (re)connect sequence — on first-ever join in a game, on reconnect after a network drop, and on reconnect after a Captain boot. This single rule covers every path by which an operator joins the team's active-operator set ([08-REQ-062]), and is the only automatic write to tempo. A first-join call creates the row; a reconnect call upserts in place.
+
+Coaches and admins acting via implicit-coach permission ([05-REQ-066], [05-REQ-067]) shall not have records in this table — they have no tempo per [08-REQ-064a].
+
+**Captain boot affordance.** The Captain of a Centaur Team may, as a nuclear option for an operator who is unresponsive (asleep at the keyboard, AFK, etc.), evict that operator from the team's game session via the `bootOperator` mutation (§2.2.3). Boot is a **manual forced disconnect**: the mutation severs the booted operator's game-session connection on the server side identically to a network disconnect. The booted operator therefore leaves the active-operator set of [08-REQ-062] by the same mechanism a disconnected operator does. **Boot writes no persistent "is booted" state** on the operator — there is no sticky lockout, no `bootedByCaptain` field, no revoke mutation. A booted operator who becomes available may reconnect at any time and rejoins the active set in `flow` like any other (re)connecting operator. Boot emits an `operator_booted` action-log entry per [06-REQ-036], carrying the action-log's standard wall-clock timestamp ([06-REQ-034]) so replay reconstruction is time-precise.
+
+The `setOperatorTempo` mutation transactionally writes an `operator_tempo_changed` action-log entry per [06-REQ-036]. The action log's wall-clock timestamp is the per-event time anchor; tempo and boot events are recorded as time-based events (not turn-based), so the team-perspective replay viewer can reconstruct the active-operator set and per-operator tempo at any scrubbed position `t` regardless of turn boundaries by reading the time-stamped tempo events together with the team's connection events (boot events appear in this stream as the manual analogue of a connection-loss event).
+
+*(See resolved 08-REVIEW-024.)*
 
 ---
 
@@ -333,15 +346,14 @@ game_centaur_state: defineTable({
 - All fields are initialised from `global_centaur_params` at game start: `globalTemperature` from `defaultGlobalTemperature`, `automaticTimeAllocationMs` from `defaultAutomaticTimeAllocationMs`, `scheduledSubmissionIntervalMs` from `defaultScheduledSubmissionIntervalMs`, `imminentThresholdMs` from `defaultImminentThresholdMs`. Once initialised, each field is independently mutable during the game without affecting the team defaults.
 - **Uniqueness invariant**: at most one document per `(gameId, centaurTeamId)` pair; enforced by `initializeGameCentaurState` (creates exactly one) and game-scoped mutations (query `by_game_team` and patch in place).
 
-**`operator_ready_state`** — Game-scoped per-operator ready-state record [06-REQ-040b]. One document per `(gameId, operatorUserId)`.
+**`operator_tempo`** — Game-scoped per-operator tempo record [06-REQ-040b]. One document per `(gameId, operatorUserId)`.
 
 ```typescript
-operator_ready_state: defineTable({
+operator_tempo: defineTable({
   gameId: v.id("games"),
   centaurTeamId: v.id("centaur_teams"),
   operatorUserId: v.id("users"),
-  ready: v.boolean(),
-  turn: v.number(),
+  tempo: v.union(v.literal("thinking"), v.literal("flow")),
   updatedAt: v.number(),
 })
   .index("by_game", ["gameId"])
@@ -349,10 +361,12 @@ operator_ready_state: defineTable({
   .index("by_game_team", ["gameId", "centaurTeamId"])
 ```
 
-- Written exclusively by the operator the record describes via `setOperatorReady` (§2.2.3).
-- A reader treats any record whose `turn` differs from the current turn as `not-ready`; this avoids requiring an explicit batch-reset transaction at the start of every turn while still satisfying the per-turn reset semantics of [06-REQ-040b].
+- The `tempo` field is written exclusively by the operator the record describes via `setOperatorTempo` (§2.2.3).
+- **Tempo is durable across turns** per [06-REQ-040b]; the row has no `turn` column and no per-turn reset semantics. The arrival of a new turn does not touch any row in this table.
+- A row is created lazily on the first `setOperatorTempo` call from a given operator in a given game. The initial value written by that first call is `flow` per [06-REQ-040b] — every (re)connect issues `setOperatorTempo({ tempo: "flow" })` as its automatic call.
 - Coaches and admins acting via implicit-coach permission have no records in this table per [08-REQ-064a].
-- **Uniqueness invariant**: at most one document per `(gameId, operatorUserId)` pair; enforced by `setOperatorReady` (queries `by_game_operator` and upserts in place).
+- Captain-issued boots (§2.2.3, `bootOperator`) do *not* write to this table — boot is a forced disconnect with no persistent state. The booted operator's row (if any) is left untouched.
+- **Uniqueness invariant**: at most one document per `(gameId, operatorUserId)` pair; enforced by `setOperatorTempo` (queries `by_game_operator` and upserts in place).
 
 #### 2.1.6 Centaur Action Log
 
@@ -517,17 +531,27 @@ Authorization: caller must be a member of the CentaurTeam that owns the snake. W
 
 #### 2.2.3 Game-Scoped Team Mutations
 
-**Per-operator ready-state toggle** — `setOperatorReady` [06-REQ-040b].
+**Per-operator tempo toggle** — `setOperatorTempo` [06-REQ-040b].
 
 ```
-mutation setOperatorReady(args: {
+mutation setOperatorTempo(args: {
   gameId: Id<"games">,
-  ready: boolean,
-  turn: number,
+  tempo: "thinking" | "flow",
 }): void
 ```
 
-Authorization: caller must be a member of one of the CentaurTeams participating in the game (looked up against the game's participating-teams snapshot per [05-REQ-029]); the caller writes only their own `(gameId, operatorUserId = callerId)` record. The mutation looks up the caller's CentaurTeam in the game and stamps `centaurTeamId` on the row. Coaches and admins acting via implicit-coach permission ([05-REQ-066], [05-REQ-067]) shall be rejected per [08-REQ-064a]. The supplied `turn` is sanity-checked against the game's current turn (read from the game's STDB-replicated current-turn cursor or the latest seen turn snapshot in Convex); a stale `turn` shall be rejected. Upserts the `(gameId, operatorUserId)` row in `operator_ready_state` and writes an `operator_ready_toggled` action-log entry transactionally per [06-REQ-036].
+Authorization: caller must be a member of one of the CentaurTeams participating in the game (looked up against the game's participating-teams snapshot per [05-REQ-029]); the caller writes only their own `(gameId, operatorUserId = callerId)` record. The mutation looks up the caller's CentaurTeam in the game and stamps `centaurTeamId` on the row. Coaches and admins acting via implicit-coach permission ([05-REQ-066], [05-REQ-067]) shall be rejected per [08-REQ-064a]. Upserts the `(gameId, operatorUserId)` row in `operator_tempo` and writes an `operator_tempo_changed` action-log entry transactionally per [06-REQ-036]. The mutation is idempotent: writing the operator's existing `tempo` is a harmless no-op (the action-log entry is still emitted so replay reconstruction sees the intent).
+
+**Captain operator-boot** — `bootOperator` [06-REQ-040b].
+
+```
+mutation bootOperator(args: {
+  gameId: Id<"games">,
+  operatorUserId: Id<"users">,
+}): void
+```
+
+Authorization: caller must be the Captain ([05-REQ-011]) of the CentaurTeam that owns the target operator's membership in the game (looked up against the game's participating-teams snapshot per [05-REQ-029] and against `centaur_team_members`); non-Captain callers are rejected per [06-REQ-031]. The target operator must be a member of the same CentaurTeam as the Captain; a Captain cannot boot operators from other teams in the game. The mutation writes an `operator_booted` action-log entry transactionally per [06-REQ-036]. The mutation writes nothing to `operator_tempo` — boot has no persistent state. [08] is responsible for terminating the target operator's game-session connection on the next reactive update (the manual analogue of a network-detected disconnect, per [08-REQ-068a]); the booted operator's UI shall transition to a read-only "you have been removed from this game session by your Captain" state. The booted operator may reconnect at any time and rejoins the team's active-operator set in `flow` per [08-REQ-064].
 
 **Game-level parameter overrides** — `setGameParamOverrides`.
 
@@ -630,7 +654,7 @@ Called by [05]'s game-start orchestration. This mutation:
 3. For each snake, creates a `snake_bot_state` document with empty/default serialised fields.
 4. For each snake, creates `snake_heuristic_overrides` entries for all Preferences marked `activeByDefault = true` in the team's heuristic config, each with the default weight and `active = true`. No Drives are initialised ([06-REQ-014]).
 5. Creates a `game_centaur_state` document with all fields initialised from `global_centaur_params`: `globalTemperature` from `defaultGlobalTemperature`, `automaticTimeAllocationMs` from `defaultAutomaticTimeAllocationMs`, `scheduledSubmissionIntervalMs` from `defaultScheduledSubmissionIntervalMs`, `imminentThresholdMs` from `defaultImminentThresholdMs`.
-6. No `operator_ready_state` rows are created at game-start — they are upserted lazily on the first `setOperatorReady` call from each operator per [06-REQ-040b].
+6. No `operator_tempo` rows are created at game-start — they are upserted lazily on the first `setOperatorTempo` call from each operator per [06-REQ-040b]. The first call from each operator is the `setOperatorTempo({ tempo: "flow" })` call issued by [08] as part of the operator's (re)connect sequence.
 
 Authorization: platform-level (called by Convex internal action during game-start orchestration).
 
@@ -684,7 +708,7 @@ All five writes (up to three `snake_operator_state` updates plus corresponding a
 
 Satisfies 06-REQ-033, 06-REQ-034, 06-REQ-036.
 
-The `action` field of `centaur_action_log` is a discriminated union with 10 event types. Staged moves are recorded in the SpacetimeDB append-only log, where authoritativeness is guaranteed. (See resolved 06-REVIEW-004.)
+The `action` field of `centaur_action_log` is a discriminated union with 12 event types. Staged moves are recorded in the SpacetimeDB append-only log, where authoritativeness is guaranteed. (See resolved 06-REVIEW-004.)
 
 ```typescript
 const centaurActionEvent = v.union(
@@ -706,10 +730,14 @@ const centaurActionEvent = v.union(
     oldActive: v.boolean(), newActive: v.boolean(),
   }),
   v.object({
-    type: v.literal("operator_ready_toggled"),
+    type: v.literal("operator_tempo_changed"),
     operatorUserId: v.id("users"),
-    turn: v.number(),
-    ready: v.boolean(),
+    tempo: v.union(v.literal("thinking"), v.literal("flow")),
+  }),
+  v.object({
+    type: v.literal("operator_booted"),
+    operatorUserId: v.id("users"),
+    byCaptainUserId: v.id("users"),
   }),
   v.object({ type: v.literal("turn_submitted") }),
   v.object({
@@ -730,7 +758,7 @@ The `statemap_updated` event stores full snapshots (not deltas) per [06-REQ-028]
 
 The `turn_submitted` event records when the team's Captain submits the turn, which is distinct from SpacetimeDB's `declare_turn_over` — the Centaur action log records the operator-interface-level intent, not the STDB confirmation.
 
-The `operator_ready_toggled` event records each per-operator ready-state transition per [06-REQ-040b]. Replaying this event stream alongside the team's connection events allows the team-perspective replay viewer to reconstruct, at any scrubbed `t`, which operators were `ready` at that moment and therefore why the turn-over declaration of [08-REQ-062] either did or did not fire.
+The `operator_tempo_changed` event records each per-operator tempo transition (between `thinking` and `flow`) per [06-REQ-040b]. The `operator_booted` event records Captain boot actions targeting individual operators per [06-REQ-040b]; boot is a forced disconnect that produces the same departure-from-active-set effect as a connection-loss event, so it appears in the action log as the manual analogue of the team's connection-event stream rather than as a state-mutation event. Because tempo is durable across turns (no per-turn reset), both events are recorded as time-based events anchored to the action-log's wall-clock `timestamp` rather than turn-keyed. Replaying these event streams alongside the team's connection events allows the team-perspective replay viewer to reconstruct, at any scrubbed `t`, the active-operator set and each active operator's tempo at that exact moment — and therefore why the turn-over declaration of [08-REQ-062] either did or did not fire.
 
 ---
 
@@ -752,7 +780,7 @@ The `initializeGameCentaurState` mutation (§2.2.6) is called by [05]'s game-sta
 
 5. **Seed game-scoped team state**: Create a `game_centaur_state` document with all fields copied from `global_centaur_params`: `globalTemperature` from `defaultGlobalTemperature`, `automaticTimeAllocationMs` from `defaultAutomaticTimeAllocationMs`, `scheduledSubmissionIntervalMs` from `defaultScheduledSubmissionIntervalMs`, `imminentThresholdMs` from `defaultImminentThresholdMs`.
 
-6. **Operator ready-state**: No `operator_ready_state` rows are seeded; they are upserted lazily on the first `setOperatorReady` call from each operator per [06-REQ-040b].
+6. **Operator tempo**: No `operator_tempo` rows are seeded; they are upserted lazily on the first `setOperatorTempo` call from each operator per [06-REQ-040b]. The first call is always `setOperatorTempo({ tempo: "flow" })`, issued by [08] as part of the operator's (re)connect sequence.
 
 ---
 
@@ -803,10 +831,14 @@ const centaurActionEvent = v.union(
     oldActive: v.boolean(), newActive: v.boolean(),
   }),
   v.object({
-    type: v.literal("operator_ready_toggled"),
+    type: v.literal("operator_tempo_changed"),
     operatorUserId: v.id("users"),
-    turn: v.number(),
-    ready: v.boolean(),
+    tempo: v.union(v.literal("thinking"), v.literal("flow")),
+  }),
+  v.object({
+    type: v.literal("operator_booted"),
+    operatorUserId: v.id("users"),
+    byCaptainUserId: v.id("users"),
   }),
   v.object({ type: v.literal("turn_submitted") }),
   v.object({
@@ -890,12 +922,11 @@ export default defineSchema({
     imminentThresholdMs: v.number(),
   }).index("by_game_team", ["gameId", "centaurTeamId"]),
 
-  operator_ready_state: defineTable({
+  operator_tempo: defineTable({
     gameId: v.id("games"),
     centaurTeamId: v.id("centaur_teams"),
     operatorUserId: v.id("users"),
-    ready: v.boolean(),
-    turn: v.number(),
+    tempo: v.union(v.literal("thinking"), v.literal("flow")),
     updatedAt: v.number(),
   })
     .index("by_game", ["gameId"])
@@ -1003,12 +1034,15 @@ interface CentaurStateMutations {
     temperature: number | null
   }): void
 
-  setOperatorReady(args: {
+  setOperatorTempo(args: {
     gameId: Id<"games">
-    centaurTeamId: Id<"centaur_teams">
-    turn: number
-    ready: boolean
+    tempo: "thinking" | "flow"
   }): void   // Per [06-REQ-040b].
+
+  bootOperator(args: {
+    gameId: Id<"games">
+    operatorUserId: Id<"users">
+  }): void   // Captain-only; forced disconnect with no persistent state. Per [06-REQ-040b] / [08-REQ-068a].
 
   setGameParamOverrides(args: {
     gameId: Id<"games">
@@ -1070,13 +1104,12 @@ interface CentaurStateQueries {
     toTurn?: number
   }): ReadonlyArray<CentaurActionLogDoc>
 
-  getOperatorReadyState(args: {
+  getOperatorTempo(args: {
     gameId: Id<"games">
     centaurTeamId: Id<"centaur_teams">
   }): ReadonlyArray<{
     readonly operatorUserId: Id<"users">
-    readonly ready: boolean
-    readonly turn: number
+    readonly tempo: "thinking" | "flow"
     readonly updatedAt: number
   }>   // Per [06-REQ-040b].
 }
@@ -1104,10 +1137,9 @@ interface GameCentaurStateView {
   readonly automaticTimeAllocationMs: number
   readonly scheduledSubmissionIntervalMs: number
   readonly imminentThresholdMs: number
-  readonly operatorReady: ReadonlyArray<{
+  readonly operatorTempo: ReadonlyArray<{
     readonly operatorUserId: Id<"users">
-    readonly ready: boolean
-    readonly turn: number
+    readonly tempo: "thinking" | "flow"
     readonly updatedAt: number
   }>
   readonly snakes: ReadonlyArray<{
@@ -1153,7 +1185,7 @@ interface GameCentaurStateInitContract {
     readonly snakeBotState: "one document per snake, empty state"
     readonly snakeHeuristicOverrides: "seeded from team heuristic_config activeByDefault entries"
     readonly gameCentaurState: "one document per team, all fields initialised from global_centaur_params defaults"
-    readonly operatorReadyState: "no rows seeded; upserted lazily on first setOperatorReady call per [06-REQ-040b]"
+    readonly operatorTempo: "no rows seeded; upserted lazily on first setOperatorTempo call from each operator per [06-REQ-040b]"
   }
 }
 ```
@@ -1166,7 +1198,7 @@ interface GameCentaurStateInitContract {
 
 2. **[07] must write computed display state via `updateSnakeBotState`.** The bot framework is the sole writer of `snake_bot_state` documents, authenticated via the per-CentaurTeam game credential. Each write is a full snapshot (not a delta) per [06-REQ-028]. The mutation transactionally writes a `statemap_updated` action log entry.
 
-3. **[08] must implement the operator mutation interface.** The live operator interface calls `selectSnake`, `deselectSnake`, `toggleManualMode`, `addDrive`, `removeDrive`, `setHeuristicOverride`, `setTemperatureOverride`, and `setOperatorReady` via the Convex client, authenticated via Google OAuth. Each mutation transactionally writes its corresponding action log entry — the client does not need to write log entries separately.
+3. **[08] must implement the operator mutation interface.** The live operator interface calls `selectSnake`, `deselectSnake`, `toggleManualMode`, `addDrive`, `removeDrive`, `setHeuristicOverride`, `setTemperatureOverride`, `setOperatorTempo`, and (for Captains only) `bootOperator` via the Convex client, authenticated via Google OAuth. Each mutation transactionally writes its corresponding action log entry — the client does not need to write log entries separately. As part of every (re)connect sequence (first-ever join, reconnect after network drop, reconnect after Captain boot), [08] shall call `setOperatorTempo({ tempo: "flow" })` per [06-REQ-040b].
 
 4. **[08] must subscribe to `getGameCentaurState` for live updates.** The Convex reactive query system delivers updates when any underlying document changes (operator state, bot state, drives, overrides, or game-level state).
 
@@ -1174,7 +1206,7 @@ interface GameCentaurStateInitContract {
 
 6. **[05] must coordinate game-start initialization.** [05] calls `initializeGameCentaurState` for each CentaurTeam participating in a game, passing the team's snake IDs. [05] also calls `cleanupGameCentaurState` at game end.
 
-7. **Single Convex namespace coordination.** Module 06's table names (`heuristic_config`, `global_centaur_params`, `snake_operator_state`, `snake_bot_state`, `snake_drives`, `snake_heuristic_overrides`, `game_centaur_state`, `operator_ready_state`, `centaur_action_log`) must not collide with Module 05's table names. `global_centaur_params` stores team-level defaults; `game_centaur_state` is initialised from those defaults at game start and holds the effective values for each game. Per [02] §3.11 DOWNSTREAM IMPACT note 1, [05] should load [06]'s exported interfaces when authoring its schema.
+7. **Single Convex namespace coordination.** Module 06's table names (`heuristic_config`, `global_centaur_params`, `snake_operator_state`, `snake_bot_state`, `snake_drives`, `snake_heuristic_overrides`, `game_centaur_state`, `operator_tempo`, `centaur_action_log`) must not collide with Module 05's table names. `global_centaur_params` stores team-level defaults; `game_centaur_state` is initialised from those defaults at game start and holds the effective values for each game. Per [02] §3.11 DOWNSTREAM IMPACT note 1, [05] should load [06]'s exported interfaces when authoring its schema.
 
 ---
 
