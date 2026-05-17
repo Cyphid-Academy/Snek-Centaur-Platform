@@ -146,6 +146,20 @@ Resolved REVIEW items from [`specs/05-convex-platform.md`](05-convex-platform.md
 
 ---
 
+### 05-REVIEW-016: Tournament forfeit-on-invitation-refusal — orchestration reordering — **RESOLVED**
+
+**Type**: Behavioural correction / orchestration reordering
+**Phase**: Requirements / Design
+**Context**: Resolving 03-REVIEW-012 (forfeit-on-invitation-refusal for tournament games) required the game-start orchestration in [05-REQ-032] and §2.3.1 to be reordered. Previously, `initialize_game` was called (step 4 / §2.3.1 step 5) before invitations were sent (step 5 / §2.3.1 step 6). With forfeit semantics, the snake roster passed to `initialize_game` must be restricted to accepting teams, so `initialize_game` must be called *after* invitations resolve. Additionally, the state machine must permit a new `not-started → finished` transition for tournament walkover (1 acceptance) and no-contest (0 acceptances) cases, and the game record must carry a forfeited-team list.
+
+**Decision**: (a) Reorder `initialize_game` to follow the invitation step; the orchestration prepares the payload before invitations but defers the reducer call until after the accepted/forfeited partition is known. (b) Add a structured branching step ([05-REQ-032] step 5a, §2.3.1 step 6 branching) that handles tournament-game outcomes by `|acceptedTeamIds|`. (c) Add `forfeitedTeamIds` to the `games` row (05-REQ-027, 05-REQ-027a). (d) Permit `not-started → finished` as an additional state transition for tournament walkover/no-contest (05-REQ-028). (e) Non-tournament games retain all-or-nothing semantics.
+
+**Rationale**: Reordering `initialize_game` is unavoidable once forfeits are possible — the STDB instance must not be initialised with snakes for teams that will not participate. The structured branching makes the tournament partitioning testable and explicit rather than buried in error-handling prose. The new direct `not-started → finished` transition is the cleanest way to represent walkovers and no-contests: the existing tournament round-chaining handler (Section 2.10) already fires off the `finished` transition, so chaining works unchanged.
+
+**Affected requirements/design elements**: 05-REQ-027 amended (game record carries `forfeitedTeamIds` for tournament games). 05-REQ-027a added (field shape, scoring/ranking semantics). 05-REQ-028 amended (additional `not-started → finished` transition for tournament walkover/no-contest). 05-REQ-032 rewritten: step 4 prepares payload but defers call; step 5 sends invitations with 10s timeout and partitions teams; step 5a branches by tournament mode and `|acceptedTeamIds|`; step 6 calls `initialize_game` with restricted roster; step 7 calls `initializeGameCentaurState`. §2.3.1 game-start orchestration rewritten with matching step structure. See also 03-REVIEW-012 for the upstream behavioural rationale and 03-REQ-056 for the cross-module contract.
+
+---
+
 ### 05-REVIEW-015: Callback token storage elimination and replay data bundling — **RESOLVED**
 
 **Type**: Simplification / Architecture

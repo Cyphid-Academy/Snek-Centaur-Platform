@@ -46,7 +46,17 @@
 
 **03-REQ-055**: Custom Snek Centaur Servers may **reject** invitations. The reference implementation shall include a server-side configuration file that allows whitelisting by player email or Centaur Team ID. The default configuration shall have no restrictions (accept all).
 
-**03-REQ-056**: If any participating Centaur Team's nominated server rejects the invitation or fails to respond within a timeout, the game start shall fail. The game shall return to `not-started` with an error indicating which server(s) declined or timed out.
+**03-REQ-056**: Invitation refusal behaviour depends on whether the game is a tournament round.
+
+For **non-tournament games**: if any participating Centaur Team's nominated server rejects the invitation or fails to respond within the timeout, the game start shall fail and the game shall return to `not-started` with an error indicating which server(s) declined or timed out.
+
+For **tournament games**: a server that rejects the invitation or fails to respond within the timeout shall cause its Centaur Team to **forfeit** the round, rather than failing the game start as a whole. The orchestration shall then resolve as follows based on the number of teams whose servers accepted:
+
+- **Two or more acceptances**: the game shall proceed with the accepting teams only. The forfeiting teams' snakes shall not be spawned — Convex shall pass only the accepting teams' snake rosters to the SpacetimeDB instance at initialization time. The forfeit shall be recorded on the game record for ranking and history purposes.
+- **Exactly one acceptance**: the game shall not enter `playing`. Convex shall transition the game directly from `not-started` to `finished` as a walkover, recording the sole accepting team as the winner by default and the remaining teams as forfeiters. No SpacetimeDB instance is needed for the walkover beyond any already provisioned (which shall be torn down).
+- **Zero acceptances**: the game shall not enter `playing`. Convex shall transition the game directly from `not-started` to `finished` as a no-contest, with all participating teams recorded as forfeiters and no winner. Any provisioned SpacetimeDB instance shall be torn down.
+
+In all tournament cases the tournament schedule is unaffected — the round resolves and round chaining proceeds per [05].
 
 **03-REQ-012** *(negative)*: The platform shall not store, exchange, or transmit a shared secret between the platform runtime and a Snek Centaur Server at any point during the server nomination process. Secrets are delivered only via game invitations at game start.
 
@@ -359,12 +369,21 @@ interface GameInvitationResponse {
 
 The server responds with HTTP 200 and a JSON body. If `accepted` is `true`, the game proceeds for this team. If `accepted` is `false`, the optional `reason` is recorded in the game's error state. The reference implementation auto-accepts all invitations by default. Custom servers may reject based on a server-side configuration file that whitelists by player email or Centaur Team ID.
 
-**Timeout and failure handling** (03-REQ-056). Convex waits up to **30 seconds** for each server's response. If any server rejects the invitation, fails to respond within the timeout, or returns a non-200 HTTP status, the game start fails:
+**Timeout and failure handling** (03-REQ-056). Convex waits up to **30 seconds** for each server's response and sends invitations to all participating servers concurrently (not sequentially) to minimize total latency. Behaviour on rejection, timeout, or non-200 HTTP status depends on whether the game is a tournament round.
+
+*Non-tournament games* — any refusal aborts the launch:
 - The SpacetimeDB instance is torn down.
 - Any already-accepted invitations are effectively voided (the game credentials expire because the game returns to `not-started`).
 - The game record returns to `not-started` with an error message identifying which server(s) declined or timed out.
 
-Convex sends invitations to all participating servers concurrently (not sequentially) to minimize total latency. If any invitation fails, all are considered failed and the game does not start.
+*Tournament games* — a refusal forfeits that team's round rather than aborting the launch. After the 30-second window closes, Convex partitions the participating teams into "accepted" and "forfeited" sets based on each server's response, and resolves the round by the count of acceptances:
+- **≥ 2 acceptances**: the round proceeds with the accepting teams only. Convex calls the SpacetimeDB instance's `initialize_game` reducer with a snake roster restricted to the accepting teams; the forfeiting teams' snakes are never spawned. The forfeit list is written to the game record for ranking and replay purposes, and the game transitions to `playing` as normal.
+- **1 acceptance**: the round is a walkover. The provisioned SpacetimeDB instance (if any) is torn down without `initialize_game` being called, the sole accepting team is recorded as the winner by default, the other teams are recorded as forfeiters, and the game transitions directly from `not-started` to `finished`.
+- **0 acceptances**: the round is a no-contest. The provisioned SpacetimeDB instance (if any) is torn down, every participating team is recorded as a forfeiter, no winner is recorded, and the game transitions directly from `not-started` to `finished`.
+
+In tournament cases, the round always resolves within the same orchestration cycle — the game never lingers in `not-started` waiting for a forfeited team to recover. Tournament round chaining (per [05]) proceeds against the resolved game record regardless of which branch fired.
+
+To make the tournament forfeit branches implementable, Convex sends game invitations and waits for acceptances **before** calling `initialize_game` on the SpacetimeDB instance, so that the instance is initialised with only the accepting teams' snake rosters (or, in the 0/1-acceptance branches, never initialised at all). For non-tournament games, the same ordering applies and the all-accept check simply gates the call to `initialize_game`.
 
 ---
 
@@ -432,7 +451,7 @@ interface SpacetimeDbAccessTokenClaims {
 
 **Connection-time-only validation** (03-REQ-021). Token validation occurs only at connection time. Once a client is connected and `client_connected` has written the `centaur_team_permissions` row, the team and role association persists for the lifetime of that connection without further token re-checks. Subsequent expiry of the access token does not cause disconnection of an already-connected client.
 
-**`initialize_game` must complete before clients connect**. The `client_connected` callback reads the `game_config` table to validate `aud`, so the `initialize_game` reducer must have run and populated `game_config` before any client connections are accepted. This is ensured by the game-start orchestration order in [05]: Convex provisions and initializes the instance before issuing access tokens or sending game invitations.
+**`initialize_game` must complete before clients connect**. The `client_connected` callback reads the `game_config` table to validate `aud`, so the `initialize_game` reducer must have run and populated `game_config` before any client connections are accepted. This is ensured by the game-start orchestration order in [05]: Convex provisions the instance, sends and resolves game invitations (per [03-REQ-056]), then calls `initialize_game` with the snake roster restricted to accepting teams before issuing access tokens. Centaur Servers receive their game credentials in the invitation payload but cannot successfully connect until `initialize_game` has completed — this is acceptable because the per-turn clock does not start until `initialize_game` completes ([04]) and `firstTurnTimeMs` provides ample time for client connection thereafter.
 
 **Token refresh** (03-REQ-027). A connected client whose token is approaching expiry can request a new token from Convex without re-authenticating with Google OAuth (for operators) or re-obtaining a game credential (for bots), provided the underlying session or credential is still valid. The new token is used only if the client needs to reconnect (e.g., after a network interruption). No in-band token refresh mechanism exists within SpacetimeDB — refresh is purely a Convex-side operation that produces a new JWT for potential future reconnection.
 

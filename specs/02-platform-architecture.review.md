@@ -108,6 +108,20 @@ Resolved REVIEW items from [`specs/02-platform-architecture.md`](02-platform-arc
 
 ---
 
+### 02-REVIEW-008: Tournament forfeit-on-invitation-refusal — lifecycle diagram update — **RESOLVED**
+
+**Type**: Behavioural correction (downstream)
+**Phase**: Design
+**Context**: Resolution of 03-REVIEW-012 introduced forfeit semantics for tournament games when Centaur Servers refuse or time out on a game invitation. This module's §2.14 game-start step list and the lifecycle diagram in the same section described the `not-started → playing` transition as gated on "invitations accepted", and listed no alternative paths out of `not-started`. The diagram and prose needed to be updated to reflect (a) that for tournament games, invitations may resolve with some teams forfeiting rather than aborting the launch, (b) that `initialize_game` is now called with a snake roster restricted to accepting teams (forfeiters' snakes never spawn), and (c) that a tournament game whose invitations resolve with 0 or 1 acceptances transitions directly from `not-started` to `finished` as a walkover or no-contest without entering `playing`.
+
+**Decision**: Update §2.14 step 5/6 prose to describe invitations being "resolved" rather than "accepted by all servers", reference [03-REQ-056] for the differentiated semantics, and note the restricted-roster `initialize_game` call. Update the lifecycle diagram to add a second arrow out of `not-started` representing the tournament walkover/no-contest transition. Update the prose immediately following the diagram to add a `not-started → finished` bullet alongside the existing `not-started → playing` bullet.
+
+**Rationale**: §2.14 is the architectural overview of the game lifecycle; downstream modules (especially [05]) rely on its diagram and step list being aligned with the binding semantics in [03] and [05]. Leaving the diagram showing only "invitations accepted" would mislead a reader into thinking the all-or-nothing model still applies universally. The amendments are descriptive — all the binding requirements live in [03] and [05]; this module just mirrors them.
+
+**Affected requirements/design elements**: §2.14 step 5/6 prose updated; lifecycle diagram in §2.14 amended to add the tournament walkover transition; the `not-started → playing` and new `not-started → finished` bullet list following the diagram updated. No requirement-level changes in module 02. See 03-REVIEW-012 and 05-REVIEW-016 for the upstream changes.
+
+---
+
 ### 02-REVIEW-007: Spectator visibility — no-team vs. opponent-equivalent — **RESOLVED**
 
 **Type**: Ambiguity

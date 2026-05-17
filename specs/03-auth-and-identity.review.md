@@ -189,6 +189,22 @@ Resolved REVIEW items from [`specs/03-auth-and-identity.md`](03-auth-and-identit
 
 ---
 
+### 03-REVIEW-012: Tournament forfeit-on-invitation-refusal — **RESOLVED**
+
+**Type**: Behavioural correction
+**Phase**: Requirements
+**Context**: The original 03-REQ-056 treated any Centaur Server rejecting a game invitation, or failing to respond within the timeout, as a hard failure of the entire game launch — the game returned to `not-started` and no team got to play. This is undesirable in tournament play, where one team's server failure should not stall the whole bracket. Task #61 was opened to convert refusals into forfeits.
+
+**Question**: Should forfeit-on-refusal replace the all-or-nothing launch model entirely, or only for tournament games?
+
+**Decision**: Differentiated by game type. Non-tournament games retain the original all-or-nothing semantics (any refusal aborts the launch and returns the game to `not-started` with an error). Tournament games adopt forfeit-on-refusal: a server that rejects or times out forfeits its team for the round; the round proceeds with the accepting teams only when ≥ 2 accept, transitions directly to `finished` as a walkover when exactly 1 accepts (sole acceptor wins by default), or transitions directly to `finished` as a no-contest when 0 accept. In all tournament branches the forfeiting teams' snakes never spawn (the snake roster passed to `initialize_game` is restricted to accepting teams), and the forfeit is recorded on the game record (`forfeitedTeamIds`) for scoring, ranking, leaderboard, and replay surfaces. A forfeit is recorded as a loss with score 0, distinguishable from a played loss by the team's presence in `forfeitedTeamIds`.
+
+**Rationale**: For human-scheduled games the all-or-nothing model is fine — the administrative actor can simply re-launch once the failing server is back. For tournament games the schedule is externally fixed and the round must resolve in bounded time regardless of any one team's server health, mirroring competitive esports forfeit conventions. The new `not-started → finished` transition for tournament walkover/no-contest cases is added as an additional permitted state-machine transition in [05-REQ-028]; it preserves tournament round chaining (which fires off the `finished` transition) without needing to first pass through `playing` for a game that will not have any play.
+
+**Affected requirements/design elements**: 03-REQ-056 rewritten to encode the differentiated semantics. §3.16 "Timeout and failure handling" prose rewritten to describe the tournament partitioning and the ordering constraint (invitations must resolve before `initialize_game` is called). 05-REQ-027 amended to add `forfeitedTeamIds` to the game record. 05-REQ-027a added describing the field and the scoring/ranking treatment of forfeits. 05-REQ-028 amended to permit `not-started → finished` for tournament walkover/no-contest cases. 05-REQ-032 rewritten with deferred-init ordering (step 4 prepares the payload, step 5 sends invitations, step 5a partitions tournament outcomes, step 6 calls `initialize_game` with the restricted roster). §2.3.1 game-start orchestration steps 5–9 rewritten with the same ordering and the tournament branching. 05-REVIEW-016 added documenting the §2.3.1 design changes. Module 02 §2.14 step list and the lifecycle diagram updated to reflect "invitations resolved" rather than "invitations accepted" and to add the tournament walkover transition. 02-REVIEW-008 added documenting the lifecycle diagram amendment. README amended in the Centaur Servers bullet to reflect the new behaviour.
+
+---
+
 ### 03-REVIEW-011: `UserId` and `CentaurTeamId` as Convex record `_id`s — **RESOLVED**
 
 **Type**: Gap
