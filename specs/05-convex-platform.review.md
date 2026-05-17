@@ -59,8 +59,8 @@ Resolved REVIEW items from [`specs/05-convex-platform.md`](05-convex-platform.md
 
 **Type**: Gap
 **Phase**: Requirements
-**Decision**: Already defined upstream. Scoring is defined by Module 01 §1.9 (01-REQ-053: score = sum of body lengths of alive snakes). The `GameEndNotification` payload from Module 04 (§3.3) delivers `GameOutcome` with `scores: Record<string, number>`. Convex consumes these scores directly from the notification — no separate computation needed.
-**Rationale**: Module 01 Phase 2 is now complete and defines scores explicitly. Module 04's exported `GameEndNotification` delivers the scores in a JSON-serializable format. Convex stores the outcome directly from the notification payload.
+**Decision**: Already defined upstream. Scoring is defined by Module 01 §1.9 (see resolved 01-REVIEW-018 for the current normalised formula). The `GameEndNotification` payload from Module 04 (§3.3) delivers `GameOutcome` with `scores: Record<string, number>` carrying the normalised real-valued scores. Convex consumes these scores directly from the notification — no separate computation needed.
+**Rationale**: Module 01 Phase 2 is now complete and defines scores explicitly. Module 04's exported `GameEndNotification` delivers the scores in a JSON-serializable format. Convex stores the outcome directly from the notification payload. *(Note: the original decision text referenced the integer body-length score; the current scoring formula is the normalised body-share formula defined by 01-REVIEW-018, which supersedes the prior integer-sum rule.)*
 **Affected requirements/design elements**: None — 05-REQ-038 consumes scores from the notification payload as originally intended.
 
 ---
@@ -188,5 +188,22 @@ Two corrections were identified:
 **Decision**: See resolved **01-REVIEW-018** in Module 01's decision log. That item is the source of truth for the cross-module decision to collapse `BoardSize` to a raw integer `number`. Module 05's Convex schema and parameter table have been updated accordingly: `boardSizeV` validator removed; `boardSize: v.number()` used directly in `gameOrchestrationConfigV`; the `config.orchestration.boardSize` row in the §5.5 parameter table updated to Integer type with default 13 and range 7–32; 05-REQ-032b updated to also reject `boardSize` values outside `[7, 32]` at the preview mutation boundary.
 
 **Affected requirements/design elements**: 05-REQ-023 (`boardSize` row), 05-REQ-032b (board-size bound added to preview mutation), [05] §2.1 Convex schema (`gameOrchestrationConfigV`).
+
+---
+
+### 05-REVIEW-018: Walkover score value for sole-acceptor tournament branch — **RESOLVED**
+
+**Type**: Amendment (cascade from 01-REVIEW-018)
+**Phase**: Design
+
+**Prior text**: The `= 1 accepted` branch of the tournament invitation-resolution logic ([05-REQ-032] step 5a; §2.3.1 step 6) recorded the sole accepting team as "winner-by-default" without specifying a numeric score, and recorded forfeiters with score `0`. Under the original integer body-length score, the sole acceptor had no alive-snake aggregates from a completed game, so a numeric score was ill-defined in the walkover case and the "winner-by-default" sentinel was used to paper over it. [03-REQ-056] carried the same "winner by default" phrasing.
+
+**Amendment**: The sole acceptor receives score `1.0`; forfeiters receive score `0` per [01-REQ-053a]. The "winner-by-default" sentinel is removed everywhere it appeared. The numeric value is derived directly from the normalised formula resolved by 01-REVIEW-018: with `competing_teams = 1` (the only non-forfeited team), the last-team-standing branch of [01-REQ-054] yields `1.0 × 1 = 1.0` analytically, with no body-length ratio needed.
+
+**Rationale**: Treating a walkover as a par outcome is consistent with the design principle that par represents holding a proportional share — a team that accepted while all opponents forfeited "held the field" and should score exactly par, not more (they faced zero opponents) and not zero (they were willing to play). Anchoring the value to the formula rather than introducing a walkover-specific constant keeps the scoring rule single-sourced in [01] and lets the same `GameOutcome.scores` shape be reused across the played-game, walkover, and no-contest branches.
+
+**Informal spec reference**: N/A (orchestration-layer wiring of [01]'s amended scoring rule).
+
+**Affected requirements/design elements**: [05-REQ-032] step 5a bullet `= 1 accepted` (score `1.0` for acceptor, `0` for forfeiters, replacing the "winner-by-default" formulation); §2.3.1 step 6 design prose (same update); §3.2 `GameOutcome` prose (scores described as real-valued normalised numbers; forfeited teams carry `0`). Cascade to [03]: 03-REQ-056 and the §3.17 design prose lose the "winner by default" phrasing and cite the score values directly.
 
 ---

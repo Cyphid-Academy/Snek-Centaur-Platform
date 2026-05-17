@@ -116,7 +116,7 @@
 
 **08-REQ-024**: The game history page shall be scoped to a specific hosted Centaur Team. It shall list completed games in which the authenticated human was either (a) a member of the owning team at the time of the game (per the game's participating-team snapshot of [05-REQ-029]) or (b) a current member of the owning team, in reverse chronological order.
 
-**08-REQ-025**: Each listing shall display at minimum: room name, date, opponent teams, the team's result (win/loss/draw — subject to resolution of score semantics per [05-REVIEW-006]), and final scores ([05-REQ-038]). Listing data shall be sourced from [05]'s read surface.
+**08-REQ-025**: Each listing shall display at minimum: room name, date, opponent teams, the team's result (win/loss/draw), and final scores ([05-REQ-038]). The normalised score per [01-REQ-053] shall be the headline score value, with par `1.0` as the visual reference; the per-team `aggregateLength` (Σ alive body lengths) shall be shown as a secondary stat. Non-integer score values shall be displayed (the score is real-valued). Listing data shall be sourced from [05]'s read surface.
 
 **08-REQ-026**: Selecting a listing shall open the replay viewer (§8.15) for that game. The replay viewer entry point from the game history page shall default to the team-perspective sub-turn view.
 
@@ -292,7 +292,7 @@
 
 **08-REQ-070**: The board-level replay mode shall source all displayed data from the persisted replay of [05-REQ-040] and shall never consult a SpacetimeDB game instance, consistent with [05-REQ-044]. The replay viewer shall therefore remain functional for replay viewing after the source game's SpacetimeDB instance has been torn down per [05-REQ-037].
 
-**08-REQ-070a**: The board-level replay mode shall render board state at turn granularity: the cell layout, snake positions and bodies, items, hazards, fertile tiles, and per-team scoreboard shall be shown for the currently-selected turn. The rendering shall be visually consistent with the Live Spectating view (§8.16) such that familiarity with the live view carries over to the replay view. The board-level mode obtains its scrubbing affordance from the unified timeline control specified by [08-REQ-072] / [08-REQ-072a]–[08-REQ-072d].
+**08-REQ-070a**: The board-level replay mode shall render board state at turn granularity: the cell layout, snake positions and bodies, items, hazards, fertile tiles, and per-team scoreboard shall be shown for the currently-selected turn. The per-team scoreboard shall display the normalised `teamScore` (per [01-REQ-053]) as the headline score value for each team, with par `1.0` as the visual reference; the `aggregateLength` (Σ alive body lengths) shall appear as a secondary stat alongside it. Non-integer score values shall be rendered (scores are real-valued). The rendering shall be visually consistent with the Live Spectating view (§8.16) such that familiarity with the live view carries over to the replay view. The board-level mode obtains its scrubbing affordance from the unified timeline control specified by [08-REQ-072] / [08-REQ-072a]–[08-REQ-072d].
 
 **08-REQ-070b**: The board-level replay mode shall display a per-turn **event log** listing the turn events of the currently-selected turn as produced by turn resolution — at minimum death events (with cause), food-eaten events, potion-collection events, severing events, spawn events, and effect-application / effect-cancellation events. The set of event types shall match the closed enumeration defined by [01] and [04].
 

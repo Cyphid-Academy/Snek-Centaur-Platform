@@ -203,15 +203,23 @@ Item collection (food, InvulnPotion, InvisPotion) is explicitly *not* a disrupti
 
 ### 1.9 Win Conditions and Scoring
 
-**01-REQ-053**: A team's **score** at any game-end moment is the sum of the body lengths (number of segments) of all alive snakes belonging to that team at that moment.
+**01-REQ-053**: A team's **score** at game end is the normalised body-share multiplied by the number of competing teams:
 
-**01-REQ-054 (Last team standing)**: The game ends when all snakes of every team except one are dead. The surviving team wins. Scores are computed from alive snake lengths at that turn.
+```
+score(team) = (alive_segments_owned(team) / total_alive_segments) × competing_teams
+```
 
-**01-REQ-055 (Simultaneous elimination)**: If all remaining alive snakes across all teams die in the same turn, the game ends. Each team's score is their combined alive snake lengths from the immediately preceding turn. The team with the highest score wins; if two or more teams tie, the result is a draw.
+where `alive_segments_owned(team)` is the sum of body lengths of all alive snakes belonging to that team at the game-end moment, `total_alive_segments` is the sum of body lengths of all alive snakes across all competing teams at that moment, and `competing_teams` is the count of non-forfeited teams. Par is `1`: a team holding a strictly proportional share of living segments scores exactly `1.0`. The previous per-team aggregate of alive body lengths is retained as an intermediate display statistic (`aggregateLength`) but is not a score and is not the basis of win or draw decisions. (See resolved 01-REVIEW-018.)
 
-**01-REQ-056**: For the simultaneous elimination case where the game ends on turn 0 (all snakes die on the first turn), scores shall be computed from the initial snake lengths at game start.
+**01-REQ-053a**: Forfeited teams (per [03-REQ-056] / [05-REQ-027a]) are excluded from `competing_teams` and from both `alive_segments_owned` and `total_alive_segments` in 01-REQ-053. A forfeited team's recorded score is `0`. When `competing_teams = 0` (every team forfeited), every team's score is `0`; this is the only situation in which `competing_teams = 0`.
 
-**01-REQ-057 (Turn limit)**: If the configured `maxTurns` is reached and the game has not ended by another condition, the game ends. Scores are computed from alive snake lengths at that turn. The team with the highest score wins; ties are permitted.
+**01-REQ-054 (Last team standing)**: The game ends when all snakes of every competing team except one are dead. The surviving team scores `1.0 × competing_teams`; every eliminated competing team scores `0`.
+
+**01-REQ-055 (Simultaneous elimination)**: If all remaining alive snakes across all competing teams die in the same turn, the game ends. Each competing team that was alive at the start of that final turn scores `1.0` (par); each competing team eliminated on an earlier turn scores `0`. The team with the highest score wins; if two or more teams tie, the result is a draw.
+
+**01-REQ-056**: For the simultaneous elimination case where the game ends on turn 0 (all competing snakes die on the first turn), every competing team scores `1.0` (par).
+
+**01-REQ-057 (Turn limit)**: If the configured `maxTurns` is reached and the game has not ended by another condition, the game ends. Scores are computed by applying 01-REQ-053 to the alive-segment aggregates at the final turn. The team with the highest score wins; ties are permitted and produce a draw.
 
 **01-REQ-058**: A `maxTurns` of zero or absent means no turn limit; the game continues until last-team-standing or simultaneous elimination.
 
@@ -838,34 +846,43 @@ Module 01 only specifies the *arithmetic* of the clock. The physical mechanism �
 Implements 01-REQ-053 through 01-REQ-058. Phase 10 at the end of turn T:
 
 ```
-aliveTeams = teams with ≥1 alive snake after Phase 9 of turn T
-scores(t)  = sum of body.length over alive snakes in team t
+competingTeams  = non-forfeited teams in the game roster           # [01-REQ-053a]
+N               = competingTeams.length
+aliveTeams      = competing teams with ≥1 alive snake after Phase 9 of turn T
+aggregateLength(t) = sum of body.length over alive snakes in team t
+
+if N === 0:
+  # All-forfeit degenerate case (01-REQ-053a)
+  return { kind: 'draw', tiedCentaurTeamIds: [], scores: allZero }
 
 if aliveTeams.length === 0:
   # Simultaneous elimination (01-REQ-055, 01-REQ-056)
-  if T === 0:
-    # Every snake began at length 3 (01-REQ-020). `initialSnakeCount(t)` is the
-    # number of snakes team `t` had at game start, derived from the initial
-    # GameState that STDB was initialized with; `snakesPerTeam` is an
-    # orchestration-side parameter (GameOrchestrationConfig) and is not
-    # retained at runtime. See resolved 01-REVIEW-017.
-    initialScores(t) = 3 * initialSnakeCount(t)
-    return winnerOrDraw(initialScores)
-  else:
-    return winnerOrDraw(previousTurnScores)
+  # Teams alive at the start of turn T score 1.0 (par); earlier-eliminated teams score 0.
+  # For T === 0 all competing teams were alive at game start, so all score 1.0 (01-REQ-056).
+  # For T > 0 read aliveSnakeCount from the prior-turn scoreboard row (module-04 concern).
+  simElimScores(t) = if hadAliveSnakesAtStartOfT(t) then 1.0 else 0.0
+  return winnerOrDraw(simElimScores)
 
 if aliveTeams.length === 1:
-  return { kind: 'victory', winnerCentaurTeamId: aliveTeams[0], scores }  # 01-REQ-054
+  # Last team standing (01-REQ-054)
+  victoryScores(t) = if t === aliveTeams[0] then 1.0 * N else 0.0
+  return { kind: 'victory', winnerCentaurTeamId: aliveTeams[0], scores: victoryScores }
 
 if config.maxTurns > 0 and T === config.maxTurns - 1:
-  return winnerOrDraw(scores)                                      # 01-REQ-057
+  # Turn limit (01-REQ-057) — apply normalised formula
+  totalAliveSegments = sum of aggregateLength(t) for t in aliveTeams
+  normalizedScores(t) =
+    if t not in aliveTeams: 0.0
+    elif totalAliveSegments === 0: 0.0    # all surviving teams have zero-length snakes
+    else: (aggregateLength(t) / totalAliveSegments) * N
+  return winnerOrDraw(normalizedScores)
 
 return { kind: 'in_progress' }                                     # 01-REQ-058 (no limit)
 ```
 
-Where `winnerOrDraw(scoreMap)` returns `{kind: 'victory', ...}` if there is a unique maximum, else `{kind: 'draw', tiedCentaurTeamIds: [...]}`.
+Where `winnerOrDraw(scoreMap)` returns `{kind: 'victory', winnerCentaurTeamId: ...}` if there is a unique maximum score among competing teams, else `{kind: 'draw', tiedCentaurTeamIds: [...]}`.
 
-**Previous-turn scores**: before Phase 1 of every turn, the engine snapshots the current team scores (computed from alive snakes at start-of-turn, which equals end-of-previous-turn) into `previousTurnScores` for use by the simultaneous-elimination branch. Module 01 specifies the arithmetic; the storage location is a module-04 concern.
+**Prior-turn alive-snake data (simultaneous-elimination branch)**: For T > 0, `hadAliveSnakesAtStartOfT(t)` is true when `aliveSnakeCount > 0` in the scoreboard row for `turn = T - 1`. Module 01 specifies the arithmetic; the storage location is a module-04 concern.
 
 **Turn limit boundary**: `maxTurns` is the count of turns played, so the game ends at the end of turn `maxTurns - 1`. `maxTurns = 0` means no limit (01-REQ-058).
 
@@ -1105,6 +1122,8 @@ export type GameOutcome =
       readonly reason: string
     }
 ```
+
+The `scores` map in `victory` and `draw` variants carries the normalised real-valued scores defined by 01-REQ-053. Each value is in the range `[0, competing_teams]`, with par at `1.0`. Forfeited teams carry score `0` per 01-REQ-053a and are included in the map. The `error` variant carries no `scores` field.
 
 ### 3.5 Turn Event Schema
 

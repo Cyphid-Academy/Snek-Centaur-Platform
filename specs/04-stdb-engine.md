@@ -360,15 +360,15 @@ Grouped by `turn` (non-unique key; multiple rows per turn). Visible to all conne
 interface ScoreboardRow {
   readonly turn: number                   // TurnNumber
   readonly centaurTeamId: string          // CentaurTeamId — Convex centaur_teams._id
-  readonly teamScore: number              // Σ body length of alive snakes for this team at turn boundary [01-REQ-053]
+  readonly teamScore: number              // Normalised score per [01-REQ-053]: (aggregateLength / totalAliveSegments) × competingTeams, computed as if the game ended at this turn boundary. Published live every turn; real-valued (0 to competingTeams).
   readonly aliveSnakeCount: number        // count of snakes with alive = true for this team at turn boundary
-  readonly aggregateLength: number        // Σ body length of alive snakes for this team at turn boundary
+  readonly aggregateLength: number        // Σ body length of alive snakes for this team at turn boundary [01-REQ-053 intermediate stat]
 }
 ```
 
-Primary key: `(turn, centaurTeamId)`. Btree index on `(turn)` for live / historical / catch-up queries (§2.12). One row is written per CentaurTeam in the game's roster per turn — *including* CentaurTeams with `aliveSnakeCount = 0` (zero-filled rather than omitted, so subscribers always see a complete per-team view at every turn). The aggregate is computed over the true alive-snake set including invisible snakes; the visibility filter of [04-REQ-047] does not apply to `scoreboard` rows. `teamScore` and `aggregateLength` are published as separate columns even though they are equal under [01-REQ-053] today, so the wire shape remains stable if a future revision of [01] introduces a score-modifying bonus that decouples score from body length.
+Primary key: `(turn, centaurTeamId)`. Btree index on `(turn)` for live / historical / catch-up queries (§2.12). One row is written per CentaurTeam in the game's roster per turn — *including* CentaurTeams with `aliveSnakeCount = 0` (zero-filled rather than omitted, so subscribers always see a complete per-team view at every turn). The aggregate is computed over the true alive-snake set including invisible snakes; the visibility filter of [04-REQ-047] does not apply to `scoreboard` rows. `teamScore` carries the normalised score (computed as if the game ended on that turn boundary) and `aggregateLength` carries the raw Σ-body-length intermediate; the two are decoupled per [01-REQ-053] (see resolved 04-REVIEW-021).
 
-The materialised per-turn `scoreboard` row is also the storage location for the prior-turn scores referenced by [01-REQ-055]'s simultaneous-elimination tiebreak: when Phase 10 of turn `T` needs the immediately preceding turn's per-team scores, it reads `scoreboard WHERE turn = T - 1` rather than maintaining a separate denormalised `previousTurnScores` field. (For the turn-0 simultaneous-elimination case of [01-REQ-056], scores are computed from initial snake lengths in `initialize_game`'s turn-0 `scoreboard` write — see §2.2.)
+The materialised per-turn `scoreboard` row is also the storage location for the prior-turn alive-snake data referenced by [01-REQ-055]'s simultaneous-elimination branch: when Phase 10 of turn `T` needs to determine which competing teams were alive at the start of that turn, it reads `aliveSnakeCount` from `scoreboard WHERE turn = T - 1` rather than maintaining a separate denormalised field. (For the turn-0 simultaneous-elimination case of [01-REQ-056], all competing teams score `1.0` directly — see §2.2.)
 
 #### 2.1.3 Participant Attribution Table
 
@@ -490,7 +490,7 @@ interface InitializeGameParams {
    - Insert one `item_lifetimes` row per initial item with `spawnTurn = 0` and `destroyedTurn = null`.
    - Insert one `time_budget_states` row per CentaurTeam for turn 0 with `remainingBudgetMs = runtime.clock.initialBudgetMs` [01-REQ-035].
    - Insert a `turns` row for turn 0 with `turnStartTimeMs` and `resolutionStartTimeMs` both set to the current wall-clock time (turn 0 has no distinct resolution phase — it represents the initial state).
-   - Insert one `scoreboard` row per CentaurTeam in the roster for turn 0, with `teamScore`, `aliveSnakeCount`, and `aggregateLength` computed by grouping the just-written turn-0 `snake_states` rows by `centaurTeamId` restricted to `alive = true`. Teams with no alive snakes at turn 0 are zero-filled (`aliveSnakeCount = 0`, `teamScore = 0`, `aggregateLength = 0`). The aggregate covers all snakes the team owns regardless of their `visible` field. (Resolves 04-REVIEW-020 for the turn-0 path; see also §2.7 for the per-turn-resolution path.)
+   - Insert one `scoreboard` row per CentaurTeam in the roster for turn 0. Compute `aliveSnakeCount` and `aggregateLength` by grouping the just-written turn-0 `snake_states` rows by `centaurTeamId` restricted to `alive = true`. Compute `teamScore` (the normalised score per [01-REQ-053]) from these aggregates: `totalAliveSegments = Σ aggregateLength over all competing teams at turn 0`; `teamScore(t) = if totalAliveSegments > 0 then (aggregateLength(t) / totalAliveSegments) × competingTeams else 0`. Teams with no alive snakes at turn 0 are zero-filled (`aliveSnakeCount = 0`, `aggregateLength = 0`, `teamScore = 0`). The aggregate covers all snakes the team owns regardless of their `visible` field. (Resolves 04-REVIEW-020 for the turn-0 path; see also §2.7 for the per-turn-resolution path.)
 5. **Initialize runtime state**: Insert `game_runtime` row with `initialized = true`, `gameEnded = false`, `currentTurn = 0`, `turnStartTimeMs` = current wall-clock time.
 6. **Initialize per-turn working state**: Insert one `centaur_team_turn_state` row per CentaurTeam with `declaredTurnOver = false` and `remainingClockMs = min(runtime.clock.firstTurnTimeMs, runtime.clock.initialBudgetMs + runtime.clock.budgetIncrementMs)` per [01-REQ-037].
 7. **Schedule turn-0 clock expiry** (Section 2.6): Schedule the `check_clock_expiry` reducer to fire at `turnStartTimeMs + remainingClockMs` for the CentaurTeam with the maximum remaining clock (or the common first-turn clock if all CentaurTeams have the same budget).
@@ -694,21 +694,28 @@ reducer resolve_turn():
 
   // — Step 6b: Materialise per-team scoreboard for turn T+1 [04-REQ-071] —
   // Group the just-written turn-(T+1) snake_states rows by centaurTeamId restricted
-  // to alive = true. Insert one scoreboard row per CentaurTeam in the game's roster
-  // for turn T+1; zero-fill (teamScore = aliveSnakeCount = aggregateLength = 0) for
-  // teams with no alive snakes. The aggregate covers all of a team's snakes regardless
-  // of their visible field — the scoreboard is exempt from the visibility filter of
-  // [04-REQ-047]. This costs O(snakes) per turn and is performed inside the same
-  // resolve_turn ACID transaction so subscribers observe the new snake_states and the
-  // matching scoreboard row atomically. (Resolves 04-REVIEW-020.)
+  // to alive = true. Compute aggregateLength and normalised teamScore for each team.
+  // Insert one scoreboard row per CentaurTeam in the game's roster for turn T+1;
+  // zero-fill (teamScore = aliveSnakeCount = aggregateLength = 0) for teams with no
+  // alive snakes. The aggregate covers all of a team's snakes regardless of their
+  // visible field — the scoreboard is exempt from the visibility filter of [04-REQ-047].
+  // teamScore is the normalised score per [01-REQ-053], computed as if the game ended
+  // on this turn: (aggregateLength(t) / totalAliveSegments) × competingTeams.
+  // This costs O(snakes) per turn and is performed inside the same resolve_turn ACID
+  // transaction so subscribers observe the new snake_states and the matching scoreboard
+  // row atomically. (Resolves 04-REVIEW-020; see resolved 04-REVIEW-021.)
   for each centaurTeamId in centaur_team_roster:
     aliveForTeam = result.nextState.snakes
                      .filter(s => s.centaurTeamId === centaurTeamId && s.alive)
     aggregateLength = aliveForTeam.reduce((sum, s) => sum + s.body.length, 0)
-    insert scoreboard row for turn T+1:
-      teamScore       = aggregateLength    // [01-REQ-053] — currently equal
-      aliveSnakeCount = aliveForTeam.length
-      aggregateLength = aggregateLength
+    insert scoreboard row for turn T+1 with aggregateLength and aliveSnakeCount = aliveForTeam.length
+  competingTeams      = non-forfeited teams in centaur_team_roster
+  totalAliveSegments  = sum of aggregateLength over competing teams for turn T+1
+  for each competing centaurTeamId in centaur_team_roster:
+    teamScore = if totalAliveSegments > 0
+                then (aggregateLength(centaurTeamId) / totalAliveSegments) * competingTeams.length
+                else 0
+    update scoreboard row for turn T+1, centaurTeamId: set teamScore
 
   // — Step 7: Advance turn [04-REQ-042] —
   T_next = T + 1
@@ -745,7 +752,7 @@ reducer resolve_turn():
 
 **Determinism** [04-REQ-069]: Given identical game seeds, configurations, and staged-move sequences, `resolveTurn()` produces identical results because (a) the shared engine's turn resolution is a pure function of its inputs, (b) all randomness is seed-derived via `subSeed()` and `rngFromSeed()`, and (c) the staged-move map is assembled deterministically from the table.
 
-**Prior-turn scores for simultaneous-elimination tiebreak**: When the eleven-phase pipeline's Phase 10 needs the immediately preceding turn's per-team scores to evaluate the simultaneous-elimination branch of [01-REQ-055], the reducer reads them directly from `scoreboard WHERE turn = T - 1` and passes them in to the shared engine call (Step 4). No separate `previousTurnScores` field is denormalised onto another row; the materialised `scoreboard` table is the single storage location for prior-turn aggregates, consistent with §2.1.2. For the turn-0 simultaneous-elimination case ([01-REQ-056]), the prior-turn scores fall back to the turn-0 `scoreboard` row written by `initialize_game` (§2.2), which records initial snake-length aggregates.
+**Prior-turn alive-snake data for simultaneous-elimination branch**: When the eleven-phase pipeline's Phase 10 needs to determine which competing teams were alive at the start of turn T (for the simultaneous-elimination branch of [01-REQ-055]), the reducer reads `aliveSnakeCount` from `scoreboard WHERE turn = T - 1` and passes those counts into the shared engine call (Step 4). There is no score-based tiebreak in the simultaneous-elimination branch: per [01-REQ-055] every competing team that was alive at the start of the final turn receives a flat `1.0` (par), regardless of relative body lengths. The `teamScore` and `aggregateLength` columns from the prior-turn scoreboard row are not consulted for this purpose. No separate `previousTurnScores` field is denormalised; the materialised `scoreboard` table is the single storage location for prior-turn aggregates, consistent with §2.1.2. For the turn-0 simultaneous-elimination case ([01-REQ-056]), all competing teams score `1.0` directly; no prior-turn row read is needed.
 
 ---
 
@@ -881,7 +888,7 @@ The `ctx.from` query-builder views emit SQL queries with WHERE clauses and subqu
 | `staged_moves.snakeId` | `staged_moves` | `snakeId` | `staged_moves_view` EXISTS subquery: join to `snake_states` |
 | `scoreboard.turn` | `scoreboard` | `turn` | `scoreboard_view` subscription queries: live (`WHERE turn = currentTurn`), historical scrub (`WHERE turn = T`), and bulk catch-up (§2.12). |
 
-The `scoreboard` table additionally has a primary-key index on `(turn, centaurTeamId)` (§2.1.2) which serves point lookups used by §2.7's prior-turn-score read for the simultaneous-elimination tiebreak.
+The `scoreboard` table additionally has a primary-key index on `(turn, centaurTeamId)` (§2.1.2) which serves point lookups used by §2.7's prior-turn alive-snake data read for the simultaneous-elimination branch.
 
 Without these indexes, the emitted SQL queries would require full table scans on every dependent-table change, degrading performance proportionally to table size.
 
@@ -1166,7 +1173,7 @@ type GameOutcome =
   | { readonly kind: 'error'; readonly reason: string }
 ```
 
-`GameOutcome` matches [01] §3.4 but uses `Record<string, number>` for scores (JSON-serializable form of `ReadonlyMap<CentaurTeamId, number>`). The `error` variant has no `scores` field (scores are meaningless for interrupted games); its `reason` field is a human-readable string describing the interruption cause. `finalTurn` is the turn number at which the terminal outcome was detected; for error cases, this is the last successfully resolved turn (may be 0 if the error occurred before any turn was resolved).
+`GameOutcome` matches [01] §3.4 but uses `Record<string, number>` for scores (JSON-serializable form of `ReadonlyMap<CentaurTeamId, number>`). The `scores` values are the normalised real-valued scores defined by [01-REQ-053]: each entry is in the range `[0, competing_teams]`, with par at `1.0`. The `error` variant has no `scores` field (scores are meaningless for interrupted games); its `reason` field is a human-readable string describing the interruption cause. `finalTurn` is the turn number at which the terminal outcome was detected; for error cases, this is the last successfully resolved turn (may be 0 if the error occurred before any turn was resolved).
 
 `ReplayData` bundles the complete historical record from all STDB tables (Section 2.11). For normal outcomes, `replayData` is non-null and contains the full game history. For error outcomes, `replayData` is `null` (replay is not meaningful for interrupted games). The row types (`GameConfigRow`, `BoardStateRow`, etc.) are the table schemas defined in Section 2.
 

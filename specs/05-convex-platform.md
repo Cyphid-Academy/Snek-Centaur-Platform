@@ -133,8 +133,8 @@ Units inside `config` are milliseconds throughout, consistent with [01]'s canoni
    - For **tournament games**, rejection or timeout by a team's server forfeits that team's participation in the round rather than aborting orchestration. After the timeout window closes, Convex partitions teams into accepted and forfeited sets and resolves the round per the count of acceptances (see step 5a). *(See resolved 05-REVIEW-013 and 05-REVIEW-016.)*
 5a. **(Tournament games only — invitation-resolution branch)** Based on the count of accepting teams:
    - **≥ 2 accepted**: proceed to step 6 with the accepting teams as the effective participant set. Record the forfeiting teams on the game record (see [05-REQ-027a]) so they are reflected in scoring, ranking, and replay.
-   - **= 1 accepted**: skip steps 6–7. Tear down the provisioned SpacetimeDB instance, record the sole accepting team as the winner-by-default and the others as forfeiters on the game record, populate the game's outcome and scores accordingly, and transition the game directly from `not-started` to `finished`. The `not-started → finished` walkover transition is an additional permitted transition under [05-REQ-028].
-   - **= 0 accepted**: skip steps 6–7. Tear down the provisioned SpacetimeDB instance, record every participating team as a forfeiter with no winner, populate the game's outcome as a no-contest, and transition the game directly from `not-started` to `finished` as above.
+   - **= 1 accepted**: skip steps 6–7. Tear down the provisioned SpacetimeDB instance, record the sole accepting team with score `1.0` and every forfeiting team with score `0` on the game record (per [01-REQ-053a] and [01-REQ-054]: `competing_teams = 1`, so `1.0 × 1 = 1.0`), populate the game's outcome accordingly, and transition the game directly from `not-started` to `finished`. The `not-started → finished` walkover transition is an additional permitted transition under [05-REQ-028].
+   - **= 0 accepted**: skip steps 6–7. Tear down the provisioned SpacetimeDB instance, record every participating team as a forfeiter with score `0` and no winner (per [01-REQ-053a]: `competing_teams = 0`, all teams score `0`), populate the game's outcome as a no-contest, and transition the game directly from `not-started` to `finished` as above.
 6. Initialize the SpacetimeDB instance for the **effective participant set** (all participating teams for non-tournament games; the accepting teams for tournament games with ≥ 2 acceptances) by invoking `initialize_game` per step 4 above with a snake roster restricted to that set. Forfeiting teams' snakes are not spawned.
 7. Initialize Centaur subsystem state for each effective participating team by calling `initializeGameCentaurState()` from [06], update the game record with the instance URL, and transition the game's status to `playing`.
 
@@ -579,8 +579,8 @@ Branching is determined by `tournamentMode`:
 - **Non-tournament games**: if `forfeitedTeamIds` is non-empty, the action tears down the STDB instance and returns the game to `not-started` with an invitation failure error identifying the failing servers. Otherwise proceeds to step 7 with the full participant set.
 - **Tournament games**: the action partitions outcomes by `|acceptedTeamIds|`:
   - **≥ 2**: proceed to step 7 with `acceptedTeamIds` as the effective participant set. Record `forfeitedTeamIds` on the game record (per 05-REQ-027a).
-  - **= 1**: skip steps 7–9. Tear down the STDB instance, write `forfeitedTeamIds` and an outcome that records the single acceptor as winner-by-default (score 0 for forfeiters, recorded via `GameOutcome`), and transition the game directly `not-started → finished` in a single mutation. The game-end webhook and tournament-round-chaining handlers (Section 2.10) fire as for any other `finished` transition.
-  - **= 0**: skip steps 7–9. Tear down the STDB instance, write all participating teams to `forfeitedTeamIds`, record a no-contest outcome with no winner, and transition the game directly `not-started → finished`.
+  - **= 1**: skip steps 7–9. Tear down the STDB instance, write `forfeitedTeamIds` and an outcome that records the single acceptor with score `1.0` and every forfeiter with score `0` (per [01-REQ-053a] and [01-REQ-054]: `competing_teams = 1`, so `1.0 × 1 = 1.0`), and transition the game directly `not-started → finished` in a single mutation. The game-end webhook and tournament-round-chaining handlers (Section 2.10) fire as for any other `finished` transition.
+  - **= 0**: skip steps 7–9. Tear down the STDB instance, write all participating teams to `forfeitedTeamIds`, record a no-contest outcome with no winner and score `0` for every team (per [01-REQ-053a]: `competing_teams = 0`), and transition the game directly `not-started → finished`.
 
 **Step 7 — STDB initialization**. The action calls `POST /v1/database/{name}/call/initialize_game` on the STDB instance with the payload prepared in step 4, restricting the snake roster to the effective participant set (`acceptedTeamIds` for tournament games with ≥ 2 acceptors; all participating teams for non-tournament games). Forfeiting teams' snakes are not included and therefore never spawn.
 
@@ -1162,7 +1162,7 @@ type GameOutcome =
   | { readonly kind: "error"; readonly reason: string }
 ```
 
-`GameOutcome` matches Module 04 §3.3's `GameOutcome` type. The `scores` keys are Convex `centaur_teams._id` strings.
+`GameOutcome` matches Module 04 §3.3's `GameOutcome` type. The `scores` keys are Convex `centaur_teams._id` strings. The `scores` values are the normalised real-valued scores defined by [01-REQ-053]: each entry is in the range `[0, competing_teams]`, with par at `1.0`. Forfeited teams carry score `0` per [01-REQ-053a].
 
 **State transitions** (exported as an architectural constraint):
 

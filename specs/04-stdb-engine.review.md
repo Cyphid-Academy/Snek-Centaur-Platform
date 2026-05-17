@@ -326,3 +326,20 @@ Resolved REVIEW items from [`specs/04-stdb-engine.md`](04-stdb-engine.md). See [
 
 **Affected requirements/design elements**: New requirement 04-REQ-071 (§4.13). Design additions: `scoreboard` table (§2.1.2); turn-0 scoreboard write in `initialize_game` step 4 (§2.2); per-turn scoreboard write as Step 6b of `resolve_turn` (§2.7); prior-turn-score read narrative in §2.7; `scoreboard_view` definition and aggregation-at-write-time rationale in §2.9.1; index entries in §2.9.2; subscription bullets in §2.12.1, §2.12.2, §2.12.4, plus the §2.12.4 closing negative on client-side aggregation; replay-bundling additions in §2.10 and §2.11; `ReplayData.scoreboard` in §3.3. Cross-module: Module 08 §2.14's spectator-subscription bullet updated to align row-shape spelling (`centaurTeamId`) with this module; 08-REQ-084 / 08-REQ-084b remain unchanged in substance — the row shape and the channel name they reference now exist.
 
+---
+
+### 04-REVIEW-021: Decouple `teamScore` from `aggregateLength` in `ScoreboardRow` — **RESOLVED**
+
+**Type**: Amendment (cascade from 01-REVIEW-018)
+**Phase**: Design
+
+**Prior text**: 04-REVIEW-020 introduced the materialised per-turn `scoreboard` table with `teamScore` and `aggregateLength` as separate columns, even though they were equal under the then-current [01-REQ-053] (integer body-length sum). 04-REVIEW-020's rationale framed the separation as "a wire-shape concession to a possible future score-modifying bonus in [01]" and explicitly noted "this REVIEW item does not introduce one." The §2.7 prior-turn read for the simultaneous-elimination branch was originally described as a score-based tiebreak reading from the prior `scoreboard` row.
+
+**Amendment**: The two columns are now load-bearing distinct, per the resolution of 01-REVIEW-018. `teamScore` in every `scoreboard` row carries the normalised score computed as if the game ended at that turn boundary: `(aggregateLength(t) / totalAliveSegments) × competingTeams.length`, where `totalAliveSegments` sums `aggregateLength` across all competing (non-forfeited) teams at that turn. The live `scoreboard_view` subscription therefore publishes the live normalised score every turn. `aggregateLength` continues to be written from the raw alive-snake body-length aggregate computed inside `resolve_turn` and is unchanged structurally; it now functions as a secondary display statistic rather than as `teamScore`'s twin. The §2.7 prior-turn read for the simultaneous-elimination branch now reads `aliveSnakeCount` (not `teamScore`) from the prior `scoreboard` row — to determine which teams were alive at the start of the final turn — because the sim-elim outcome is a flat `1.0` per alive team and not a proportional tiebreak.
+
+**Rationale**: Publishing the live normalised `teamScore` every turn is strictly more informative than publishing the raw body-length sum and lets clients and the live UI display "current score if game ended now" without any client-side computation. Keeping `aggregateLength` as a separate column preserves the observable body-length stat that operators and spectators use to assess board position. Reading `aliveSnakeCount` rather than `teamScore` for the sim-elim branch is correct because the sim-elim rule bypasses the proportional formula entirely.
+
+**Informal spec reference**: N/A (cascade from [01]'s amended scoring rule).
+
+**Affected requirements/design elements**: `ScoreboardRow` interface in §2.1.2 (comment updated); turn-0 scoreboard write in §2.2 (normalised `teamScore` formula added); Step 6b in §2.7 (two-pass: compute `aggregateLength`, then compute `teamScore` from the cross-team sum); prior-turn read narrative in §2.7 (now reads `aliveSnakeCount`, not `teamScore`); `GameEndNotification` `GameOutcome` prose in §3.3 (scores described as real-valued).
+
