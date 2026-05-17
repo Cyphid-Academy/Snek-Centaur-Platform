@@ -23,6 +23,12 @@ Concrete anti-patterns the agent must refuse to write into a module body:
 
 Pure forward-looking constraints on future editors (e.g. "any future phase that needs to mutate effect state mid-turn must either … or …") and present-tense justifications that are load-bearing for regression prevention (e.g. "`ceil` rather than `floor` so that `D = 1` still yields one fertile cell") are **not** journey narration and are appropriate in the body. The test is whether the clause describes the current/future contract or recounts the *content* of how the past contract differed.
 
+## Commit Messages for Squash-Merged Tasks
+
+Project tasks are squash-merged to `main`: the final commit message you stage during a task becomes the single commit that lands. Write that message to describe **the entire task** — every spec change, every cascade, every follow-up edit made across the conversation — not just the most recent edit you happened to make before staging.
+
+Before staging the final commit, re-read the full task scope (the project-task plan plus the running conversation) and make sure the message covers all of it. If the task evolved mid-conversation (extra modules touched, follow-up corrections, rebase fix-ups, sibling-module cascades), those belong in the commit message too. A commit message that only describes the last edit hides the rest of the work from `git log` forever.
+
 ## Project Overview
 
 This repository contains the **formal specification** for the Team Snek Centaur Platform — a team-based multiplayer snake game designed for Cyphid Academy's Battle Bunker educational program. Players collaborate with an AI "Centaur Server" that controls their team's snakes by default, with human operators selectively overriding individual snakes.
