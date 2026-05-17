@@ -1,6 +1,6 @@
 # Module 07 — Bot Framework: Decision Log
 
-Resolved REVIEW items from [`specs/07-bot-framework.md`](07-bot-framework.md). See [`SPEC-INSTRUCTIONS.md`](../SPEC-INSTRUCTIONS.md) for the item format and resolution process.
+Resolved REVIEW items from [`specs/07-bot-framework.md`](../07-bot-framework.md). See [`SPEC-INSTRUCTIONS.md`](../../SPEC-INSTRUCTIONS.md) for the item format and resolution process.
 
 ---
 

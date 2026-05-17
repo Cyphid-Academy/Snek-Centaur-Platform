@@ -191,7 +191,7 @@ Read `specs/02-platform-architecture.md` first — it establishes the three-runt
 
 ### Decision Logs and Authoring Process
 
-Each module has a sibling `.review.md` file in `specs/` (for example, `specs/02-platform-architecture.review.md`) that records the open questions and resolved decisions that shaped the module. If you encounter a requirement and want to understand why it is the way it is, the `.review.md` file is the first place to look.
+Each module has a sibling `.review.md` file in `specs/` (for example, `specs/review/02-platform-architecture.review.md`) that records the open questions and resolved decisions that shaped the module. If you encounter a requirement and want to understand why it is the way it is, the `.review.md` file is the first place to look.
 
 `SPEC-INSTRUCTIONS.md` describes the modular authoring discipline: how modules reference each other, how requirements are numbered, how the review files are structured, and how the formal spec relates to the upstream informal sources in `informal-spec/`.
 

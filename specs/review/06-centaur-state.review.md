@@ -1,6 +1,6 @@
 # Module 06 — Centaur State: Decision Log
 
-Resolved REVIEW items from [`specs/06-centaur-state.md`](06-centaur-state.md). See [`SPEC-INSTRUCTIONS.md`](../SPEC-INSTRUCTIONS.md) for the item format and resolution process.
+Resolved REVIEW items from [`specs/06-centaur-state.md`](../06-centaur-state.md). See [`SPEC-INSTRUCTIONS.md`](../../SPEC-INSTRUCTIONS.md) for the item format and resolution process.
 
 ---
 

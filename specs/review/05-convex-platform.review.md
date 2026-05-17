@@ -1,6 +1,6 @@
 # Module 05 — Convex Platform: Decision Log
 
-Resolved REVIEW items from [`specs/05-convex-platform.md`](05-convex-platform.md). See [`SPEC-INSTRUCTIONS.md`](../SPEC-INSTRUCTIONS.md) for the item format and resolution process.
+Resolved REVIEW items from [`specs/05-convex-platform.md`](../05-convex-platform.md). See [`SPEC-INSTRUCTIONS.md`](../../SPEC-INSTRUCTIONS.md) for the item format and resolution process.
 
 ---
 

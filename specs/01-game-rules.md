@@ -1242,4 +1242,4 @@ export interface GameState {
 
 ## REVIEW Items
 
-All REVIEW items for this module (all resolved) have been migrated to [`01-game-rules.review.md`](01-game-rules.review.md).
+All REVIEW items for this module (all resolved) have been migrated to [`01-game-rules.review.md`](review/01-game-rules.review.md).

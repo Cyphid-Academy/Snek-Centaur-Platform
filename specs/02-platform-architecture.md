@@ -864,4 +864,4 @@ export interface UnifiedWebApplicationScope {
 
 ## REVIEW Items
 
-All REVIEW items for this module (all resolved) have been migrated to [`02-platform-architecture.review.md`](02-platform-architecture.review.md).
+All REVIEW items for this module (all resolved) have been migrated to [`02-platform-architecture.review.md`](review/02-platform-architecture.review.md).

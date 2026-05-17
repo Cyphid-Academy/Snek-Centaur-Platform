@@ -1,6 +1,6 @@
 # Module 01 — Game Rules: Decision Log
 
-Resolved REVIEW items from [`specs/01-game-rules.md`](01-game-rules.md). See [`SPEC-INSTRUCTIONS.md`](../SPEC-INSTRUCTIONS.md) for the item format and resolution process.
+Resolved REVIEW items from [`specs/01-game-rules.md`](../01-game-rules.md). See [`SPEC-INSTRUCTIONS.md`](../../SPEC-INSTRUCTIONS.md) for the item format and resolution process.
 
 ---
 

@@ -1215,4 +1215,4 @@ The WASM binary encapsulates the complete game engine module: all table schemas,
 
 ## REVIEW Items
 
-All REVIEW items for this module (all resolved) have been migrated to [`04-stdb-engine.review.md`](04-stdb-engine.review.md).
+All REVIEW items for this module (all resolved) have been migrated to [`04-stdb-engine.review.md`](review/04-stdb-engine.review.md).

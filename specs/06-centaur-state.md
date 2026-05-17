@@ -1213,4 +1213,4 @@ interface GameCentaurStateInitContract {
 
 ## REVIEW Items
 
-All REVIEW items for this module (all resolved) have been migrated to [`06-centaur-state.review.md`](06-centaur-state.review.md).
+All REVIEW items for this module (all resolved) have been migrated to [`06-centaur-state.review.md`](review/06-centaur-state.review.md).

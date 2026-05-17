@@ -1172,4 +1172,4 @@ None. Module 08 is a leaf in the dependency graph (Module 09 is absorbed into 08
 
 ## REVIEW Items
 
-All REVIEW items for this module (all resolved) have been migrated to [`08-centaur-server-app.review.md`](08-centaur-server-app.review.md).
+All REVIEW items for this module (all resolved) have been migrated to [`08-centaur-server-app.review.md`](review/08-centaur-server-app.review.md).

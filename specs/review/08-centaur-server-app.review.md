@@ -1,6 +1,6 @@
 # Module 08 — Centaur Server App: Decision Log
 
-Resolved REVIEW items from [`specs/08-centaur-server-app.md`](08-centaur-server-app.md). See [`SPEC-INSTRUCTIONS.md`](../SPEC-INSTRUCTIONS.md) for the item format and resolution process.
+Resolved REVIEW items from [`specs/08-centaur-server-app.md`](../08-centaur-server-app.md). See [`SPEC-INSTRUCTIONS.md`](../../SPEC-INSTRUCTIONS.md) for the item format and resolution process.
 
 ---
 

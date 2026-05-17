@@ -838,4 +838,4 @@ Modules [05]–[09] must use these names consistently.
 
 ## REVIEW Items
 
-All REVIEW items for this module (all resolved) have been migrated to [`03-auth-and-identity.review.md`](03-auth-and-identity.review.md).
+All REVIEW items for this module (all resolved) have been migrated to [`03-auth-and-identity.review.md`](review/03-auth-and-identity.review.md).

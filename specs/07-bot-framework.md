@@ -951,4 +951,4 @@ Submission timing values (`scheduledSubmissionIntervalMs`, `imminentThresholdMs`
 
 ## REVIEW Items
 
-All REVIEW items for this module (all resolved) have been migrated to [`07-bot-framework.review.md`](07-bot-framework.review.md).
+All REVIEW items for this module (all resolved) have been migrated to [`07-bot-framework.review.md`](review/07-bot-framework.review.md).

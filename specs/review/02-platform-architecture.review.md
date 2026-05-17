@@ -1,6 +1,6 @@
 # Module 02 — Platform Architecture: Decision Log
 
-Resolved REVIEW items from [`specs/02-platform-architecture.md`](02-platform-architecture.md). See [`SPEC-INSTRUCTIONS.md`](../SPEC-INSTRUCTIONS.md) for the item format and resolution process.
+Resolved REVIEW items from [`specs/02-platform-architecture.md`](../02-platform-architecture.md). See [`SPEC-INSTRUCTIONS.md`](../../SPEC-INSTRUCTIONS.md) for the item format and resolution process.
 
 ---
 

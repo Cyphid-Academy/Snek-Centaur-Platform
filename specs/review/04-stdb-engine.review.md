@@ -1,6 +1,6 @@
 # Module 04 — STDB Engine: Decision Log
 
-Resolved REVIEW items from [`specs/04-stdb-engine.md`](04-stdb-engine.md). See [`SPEC-INSTRUCTIONS.md`](../SPEC-INSTRUCTIONS.md) for the item format and resolution process.
+Resolved REVIEW items from [`specs/04-stdb-engine.md`](../04-stdb-engine.md). See [`SPEC-INSTRUCTIONS.md`](../../SPEC-INSTRUCTIONS.md) for the item format and resolution process.
 
 ---
 

@@ -1369,4 +1369,4 @@ interface HttpApiContract {
 
 ## REVIEW Items
 
-All REVIEW items for this module (all resolved) have been migrated to [`05-convex-platform.review.md`](05-convex-platform.review.md).
+All REVIEW items for this module (all resolved) have been migrated to [`05-convex-platform.review.md`](review/05-convex-platform.review.md).

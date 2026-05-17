@@ -1,6 +1,6 @@
 # Module 03 — Auth and Identity: Decision Log
 
-Resolved REVIEW items from [`specs/03-auth-and-identity.md`](03-auth-and-identity.md). See [`SPEC-INSTRUCTIONS.md`](../SPEC-INSTRUCTIONS.md) for the item format and resolution process.
+Resolved REVIEW items from [`specs/03-auth-and-identity.md`](../03-auth-and-identity.md). See [`SPEC-INSTRUCTIONS.md`](../../SPEC-INSTRUCTIONS.md) for the item format and resolution process.
 
 ---
 

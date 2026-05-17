@@ -378,7 +378,7 @@ This approach is chosen over simply deleting resolved items because:
 - **Distinguishing load-bearing from descriptive text**: Marking decisions explicitly tells readers which requirement phrasing is doing active work.
 - **Consistency fuel**: Related future questions can reference the reasoning used on earlier ones.
 
-Once a module's phase is complete, resolved entries are migrated out to a per-module decision log file named `specs/XX-module-name.review.md` (e.g., `specs/01-game-rules.review.md`). The module file retains its `## REVIEW Items` section heading with a single pointer line to the `.review.md` file. The `.review.md` file carries a header, then the full resolved item bodies. Open (unresolved) items remain inline in the module file until resolved, then migrate to the `.review.md` at the next migration pass.
+Once a module's phase is complete, resolved entries are migrated out to a per-module decision log file under `specs/review/` named `XX-module-name.review.md` (e.g., `specs/review/01-game-rules.review.md`). The module file retains its `## REVIEW Items` section heading with a single pointer line to the `.review.md` file. The `.review.md` file carries a header, then the full resolved item bodies. Open (unresolved) items remain inline in the module file until resolved, then migrate to the `.review.md` at the next migration pass.
 
 ---
 
@@ -392,21 +392,22 @@ project-root/
 ├── general-centaur-game-engine-spec.md   ← background context (superseded)
 └── specs/
     ├── 01-game-rules.md
-    ├── 01-game-rules.review.md          ← decision log for module 01
     ├── 02-platform-architecture.md
-    ├── 02-platform-architecture.review.md
     ├── 03-auth-and-identity.md
-    ├── 03-auth-and-identity.review.md
     ├── 04-stdb-engine.md
-    ├── 04-stdb-engine.review.md
     ├── 05-convex-platform.md
-    ├── 05-convex-platform.review.md
     ├── 06-centaur-state.md
-    ├── 06-centaur-state.review.md
     ├── 07-bot-framework.md
-    ├── 07-bot-framework.review.md
     ├── 08-centaur-server-app.md
-    └── 08-centaur-server-app.review.md
+    └── review/
+        ├── 01-game-rules.review.md          ← decision log for module 01
+        ├── 02-platform-architecture.review.md
+        ├── 03-auth-and-identity.review.md
+        ├── 04-stdb-engine.review.md
+        ├── 05-convex-platform.review.md
+        ├── 06-centaur-state.review.md
+        ├── 07-bot-framework.review.md
+        └── 08-centaur-server-app.review.md
 ```
 
 ---
