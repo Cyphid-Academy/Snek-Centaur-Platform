@@ -16,6 +16,103 @@ This document describes how to set up each external platform dependency for the 
    git push -u origin main
    ```
 
+### GitHub Actions workflows must be configured outside Replit
+
+> **Replit-specific constraint.** GitHub requires the `workflow` OAuth scope to create or modify any file under `.github/workflows/`. Replit's GitHub connection does **not** request that scope, so any push from this Repl that touches a workflow file will be rejected with:
+>
+> ```
+> ! [remote rejected] main -> main (refusing to allow an OAuth App to create or
+>   update workflow `.github/workflows/<file>.yml` without `workflow` scope)
+> ```
+>
+> Because of this, **workflow YAML files are not committed from Replit**. They must be authored and maintained through one of:
+>
+> 1. The GitHub Actions web UI (**Actions** tab → **New workflow**), or
+> 2. A local clone authenticated with a Personal Access Token (classic) that has both `repo` and `workflow` scopes, or a fine-grained PAT with **Actions: Read and write** + **Contents: Read and write**.
+>
+> The CI workflow described below (`ci.yml`) and the mirror workflow (`mirror-centaur-server.yml`) are part of the spec's required automation but live outside the Replit push path. When the spec changes the expected CI jobs, update the workflow file via the GitHub UI or a local clone — do not attempt to commit the change from Replit.
+
+### Required CI workflow (`.github/workflows/ci.yml`)
+
+Create this workflow via the GitHub UI or a local clone. It runs on `push` to `main` and on `pull_request` against `main`, and provides the four status checks referenced by branch protection below (`typecheck`, `lint`, `test`, `codegen-drift`).
+
+```yaml
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  typecheck:
+    name: TypeScript typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+
+  lint:
+    name: Biome lint + format check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+
+  test:
+    name: Vitest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+
+  codegen-drift:
+    name: Codegen drift check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - name: Run codegen scripts
+        run: |
+          pnpm --filter @cyphid/convex-snek-platform codegen
+          pnpm --filter @cyphid/convex-centaur-state codegen
+          pnpm --filter @cyphid/snek-stdb codegen
+      - name: Check for drift
+        run: git diff --exit-code
+```
+
 ### Configure branch protection on `main`
 
 1. Go to **Settings → Branches → Add branch protection rule**.
