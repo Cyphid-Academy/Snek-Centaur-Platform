@@ -1,0 +1,23 @@
+{
+  "name": "@cyphid/snek-centaur-platform",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@10.26.1",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "typecheck": "tsc -b && pnpm --filter @cyphid/centaur-server-reference typecheck",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "test": "vitest run",
+    "dev": "pnpm --filter @cyphid/centaur-server-reference dev",
+    "build": "pnpm -r build"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "typescript": "^5.7.3",
+    "vite": "^6.4.2",
+    "vitest": "^3.2.4"
+  }
+}

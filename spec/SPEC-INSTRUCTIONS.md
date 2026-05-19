@@ -75,15 +75,15 @@ The coupling surface other modules consume. Schemas, type signatures, function s
 
 | Module | File | Dependencies |
 |--------|------|-------------|
-| 01 | `specs/01-game-rules.md` | None |
-| 02 | `specs/02-platform-architecture.md` | 01 |
-| 03 | `specs/03-auth-and-identity.md` | 02 |
-| 04 | `specs/04-stdb-engine.md` | 01, 02, 03 |
-| 05 | `specs/05-convex-platform.md` | 02, 03 |
-| 06 | `specs/06-centaur-state.md` | 02 |
-| 07 | `specs/07-bot-framework.md` | 01, 06 |
-| 08 | `specs/08-centaur-server-app.md` | 04, 05, 06, 07 |
-| 09 | `specs/09-platform-ui.md` | *(redirect stub — absorbed into 08)* |
+| 01 | `spec/01-game-rules.md` | None |
+| 02 | `spec/02-platform-architecture.md` | 01 |
+| 03 | `spec/03-auth-and-identity.md` | 02 |
+| 04 | `spec/04-stdb-engine.md` | 01, 02, 03 |
+| 05 | `spec/05-convex-platform.md` | 02, 03 |
+| 06 | `spec/06-centaur-state.md` | 02 |
+| 07 | `spec/07-bot-framework.md` | 01, 06 |
+| 08 | `spec/08-centaur-server-app.md` | 04, 05, 06, 07 |
+| 09 | `spec/09-platform-ui.md` | *(redirect stub — absorbed into 08)* |
 
 ### Module Scope Summaries
 
@@ -378,7 +378,7 @@ This approach is chosen over simply deleting resolved items because:
 - **Distinguishing load-bearing from descriptive text**: Marking decisions explicitly tells readers which requirement phrasing is doing active work.
 - **Consistency fuel**: Related future questions can reference the reasoning used on earlier ones.
 
-Once a module's phase is complete, resolved entries are migrated out to a per-module decision log file under `specs/review/` named `XX-module-name.review.md` (e.g., `specs/review/01-game-rules.review.md`). The module file retains its `## REVIEW Items` section heading with a single pointer line to the `.review.md` file. The `.review.md` file carries a header, then the full resolved item bodies. Open (unresolved) items remain inline in the module file until resolved, then migrate to the `.review.md` at the next migration pass.
+Once a module's phase is complete, resolved entries are migrated out to a per-module decision log file under `spec/review/` named `XX-module-name.review.md` (e.g., `spec/review/01-game-rules.review.md`). The module file retains its `## REVIEW Items` section heading with a single pointer line to the `.review.md` file. The `.review.md` file carries a header, then the full resolved item bodies. Open (unresolved) items remain inline in the module file until resolved, then migrate to the `.review.md` at the next migration pass.
 
 ---
 
@@ -390,7 +390,7 @@ project-root/
 ├── informal-spec/
 │   └── team-snek-centaur-platform-spec.md  ← informal spec (source material)
 ├── general-centaur-game-engine-spec.md   ← background context (superseded)
-└── specs/
+└── spec/
     ├── 01-game-rules.md
     ├── 02-platform-architecture.md
     ├── 03-auth-and-identity.md

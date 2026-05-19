@@ -1,8 +1,12 @@
 # Claude — Pointer File
 
-All project context and agent instructions live in **`AGENTS.md`**. Read and modify that file for all context, status updates, and instructions.
+Agent context is split by concern:
 
-Any updates to agent context (e.g., spec status changes, new instructions) must be written to `AGENTS.md`. The exception is context that is genuinely specific to Claude's product environment (Cowork sessions, Claude Code, the Claude API, etc.) — that belongs here in `CLAUDE.md`.
+- **Implementation work** (TypeScript, packages, CI, infra): read root `AGENTS.md`.
+- **Spec authoring** (editing `spec/` module files, REVIEW items): read `spec/AGENTS.md`.
+- **Package-scoped work**: read the `AGENTS.md` inside the relevant `packages/*/` or `apps/*/` directory.
+
+Any updates to agent context must be written to the appropriate `AGENTS.md` file — not here. This file is only for context genuinely specific to Claude's product environment.
 
 ## Cowork
 

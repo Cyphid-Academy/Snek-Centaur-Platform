@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "tsBuildInfoFile": "dist/.tsbuildinfo"
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../engine" },
+    { "path": "../convex-snek-platform" },
+    { "path": "../convex-centaur-state" }
+  ],
+  "exclude": ["node_modules", "dist"]
+}

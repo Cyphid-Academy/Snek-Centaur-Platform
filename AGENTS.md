@@ -1,100 +1,79 @@
-# Agent Context — Team Snek Centaur Platform
+# Agent Context — Implementation Work
 
-All AI agent context lives in this file. Both Claude and Replit Agent should read and modify this file for project context. Do not fragment context into tool-specific files.
+This is the top-level agent context for **implementation work** in the Snek Centaur Platform monorepo.
 
-> **Essential reading:** Before doing any spec work in this repo, read **[`SPEC-INSTRUCTIONS.md`](SPEC-INSTRUCTIONS.md)** in full. It defines the modular authoring process, phase gates, review protocol, and module dependency graph that govern all specification work. Every conversation that touches spec content must follow those rules.
-
-## Spec Body vs REVIEW Items — No Journey Narration
-
-The Requirements, Design, and Exported Interfaces sections of every spec module describe **only the current correct behaviour of the system**. They must not include the *semantic content* of states the spec used to be in: what an earlier draft said, what mechanism was considered and dropped, what field a removed type used to carry, what option among several was rejected. Inlining that content bloats the spec and — more importantly — primes readers (human or AI) with directions that are no longer the plan, fraying focus and inviting accidental regression to settled-and-rejected calls. The body must read as if the current text were the first and only version ever written.
-
-Journey content — prior drafts, removed mechanisms, "we changed this because…" rationale, and the option-space behind a decision — belongs strictly in **resolved REVIEW items**, whose `Context` / `Question` / `Options` / `Decision` / `Rationale` format (see `SPEC-INSTRUCTIONS.md` §REVIEW Item Format / Resolution) exists precisely to carry it. Resolved REVIEW items have been migrated out of the module files into per-module `specs/review/XX-module-name.review.md` decision logs. Each module file retains its `## REVIEW Items` section heading with a single pointer to its `.review.md` file. New open items should be written inline in the module file as usual; once resolved they migrate to the `.review.md` at the next migration pass.
-
-**Opaque pointers into resolved REVIEW items are allowed and valuable.** A trailing `(see resolved [MODULE-ID]-REVIEW-NNN)` or `See resolved [MODULE-ID]-REVIEW-NNN.` next to the current rule it settles is good practice: the pointer is a stable, low-attention reference that lets a curious reader fetch the journey on demand without forcing it into every reader's working memory. The rule is **the pointer is fine; the prior content the pointer would otherwise replace is not**. A clause that only *names* a resolved REVIEW item is allowed; a clause that *summarises* what the rejected option was, what the earlier draft said, or why the change was made is not (the REVIEW item itself carries that).
-
-Concrete anti-patterns the agent must refuse to write into a module body:
-
-- **Retired-with-explanation requirements**: `*(Retired — the original X rule no longer applies because Y was removed in favour of Z. ID not reused.)*`. Use `*(Retired. ID not reused. See resolved [MODULE-ID]-REVIEW-NNN.)*` and let the REVIEW item carry the substance.
-- **Earlier-draft framing inside body text**: phrases of the form *"earlier drafts of …"*, *"previously …"*, *"formerly …"*, *"no longer needed"*, *"has been refined"*, *"is now exported"*, *"is now …"*, *"this replaces what we had before"*, *"originally we …"* — all narrate change rather than state current behaviour.
-- **Narration of removed mechanisms**: paragraphs explaining what an abandoned field, type, structure, or phase used to do and why it is gone (e.g. "the reason per-source attribution is no longer needed is …"). The current rule stands on its own; the absence needs no obituary.
-- **Anti-explanations**: `"There is no stacking …"`, `"No Phase 9d. … there are no cached fields to recompute"`, `"This is not a snapshot"`. State what *is*; do not enumerate what *isn't* in order to head off a misreading rooted in a prior draft.
-- **In-body enumeration of rejected alternatives**: paragraphs of the form *"Alternative considered: X. Rejected because Y."* or *"Option A would have done X; we chose B instead."* — option-space narration belongs in the REVIEW item's `Options` and `Rationale` fields. An opaque pointer to the REVIEW item replaces the in-body enumeration cleanly.
-- **Justifications inside requirements/design that belong in a REVIEW item's Rationale**: tail clauses of the form *"… because of X consideration that motivated the choice"*, *"… so that future editors don't think Y"*, *"… this is the right level of complexity"`. If the rationale is the journey of the decision, it belongs in the REVIEW item.
-
-Pure forward-looking constraints on future editors (e.g. "any future phase that needs to mutate effect state mid-turn must either … or …") and present-tense justifications that are load-bearing for regression prevention (e.g. "`ceil` rather than `floor` so that `D = 1` still yields one fertile cell") are **not** journey narration and are appropriate in the body. The test is whether the clause describes the current/future contract or recounts the *content* of how the past contract differed.
-
-## Commit Messages for Squash-Merged Tasks
-
-Project tasks are squash-merged to `main`: the final commit message you stage during a task becomes the single commit that lands. Write that message to describe **the entire task** — every spec change, every cascade, every follow-up edit made across the conversation — not just the most recent edit you happened to make before staging.
-
-Before staging the final commit, re-read the full task scope (the project-task plan plus the running conversation) and make sure the message covers all of it. If the task evolved mid-conversation (extra modules touched, follow-up corrections, rebase fix-ups, sibling-module cascades), those belong in the commit message too. A commit message that only describes the last edit hides the rest of the work from `git log` forever.
+- For **spec authoring** (editing `spec/` module files, REVIEW items, SPEC-INSTRUCTIONS): read `spec/AGENTS.md`.
+- For **package-scoped implementation**: read the `AGENTS.md` in the relevant `packages/*/` or `apps/*/` directory.
+- This file covers repo-wide implementation conventions that apply everywhere.
 
 ## Project Overview
 
-This repository contains the **formal specification** for the Team Snek Centaur Platform — a team-based multiplayer snake game designed for Cyphid Academy's Battle Bunker educational program. Players collaborate with an AI "Centaur Server" that controls their team's snakes by default, with human operators selectively overriding individual snakes.
+The **Team Snek Centaur Platform** is a team-based multiplayer snake game for Cyphid Academy's Battle Bunker educational program. Players collaborate with an AI "Centaur Server" that controls their team's snakes by default; human operators selectively override individual snakes.
 
-This is a documentation-only repository. A simple Node.js/Express server renders the markdown specs as a navigable web application.
+The platform runs across three distinct runtimes:
 
-## Architecture
+| Runtime | Role | Lifecycle |
+|---------|------|-----------|
+| SpacetimeDB | Authoritative game logic — turn resolution, RLS, chess timer | Per-game (transient) |
+| Convex | User accounts, rooms, replays, bot state, game orchestration | Global (persistent) |
+| Centaur Servers | Bot computation + operator UI + game invitation acceptance | Per-team |
 
-Three-runtime topology (specified, not yet implemented):
-- **SpacetimeDB** (per-game): authoritative game logic in TypeScript
-- **Convex** (global): user accounts, rooms, replays, bot state
-- **Centaur Servers** (per-team): bot computation + operator UI
+Full architectural detail is in `spec/02-platform-architecture.md`. The spec is the binding source of truth for every behavioural and structural decision.
 
-## Project Structure
+## Package Map
 
-```
-README.md                  # Project overview
-AGENTS.md                  # Canonical agent context (this file)
-CLAUDE.md                  # Pointer → AGENTS.md + Claude Cowork specifics
-replit.md                  # Pointer → AGENTS.md
-SPEC-INSTRUCTIONS.md       # Modular spec authoring process and rules
-informal-spec/             # Source informal specification documents
-specs/                     # 9 formal specification modules (Phase 1 drafted)
-  01-game-rules.md
-  02-platform-architecture.md
-  03-auth-and-identity.md
-  04-stdb-engine.md
-  05-convex-platform.md
-  06-centaur-state.md
-  07-bot-framework.md
-  08-centaur-server-app.md
-  09-platform-ui.md
-server.js                  # Express server that renders specs as HTML
-```
+| Path | npm name | What it is | Spec module(s) |
+|------|----------|------------|----------------|
+| `packages/engine/` | `@cyphid/snek-engine` | Shared game engine — domain types, `resolveTurn`, collision detection, move validation. Consumed by all runtimes. | 01, 02 |
+| `packages/stdb/` | `@cyphid/snek-stdb` | SpacetimeDB TypeScript module — reducers, RLS, schema, chess timer. | 04 |
+| `packages/convex-snek-platform/` | `@cyphid/convex-snek-platform` | Convex Component for platform-wide state (users, rooms, games, replays, webhooks). | 03, 05 |
+| `packages/convex-centaur-state/` | `@cyphid/convex-centaur-state` | Convex Component for Centaur subsystem (snake config, drives, action log). | 06 |
+| `packages/convex-host/` | `@cyphid/snek-convex-host` | Convex deployment that mounts both components, adds auth wrappers, HTTP API, game lifecycle. | 02, 03, 05, 06 |
+| `packages/centaur-server-lib/` | `@cyphid/snek-centaur-server-lib` | Bot framework + invitation handler + healthcheck contract + typed Convex clients. Published via GitHub tags for forkers. | 07, 02-REQ-030 |
+| `apps/centaur-server-reference/` | *(app, not published)* | Svelte 5 reference implementation of the Centaur Server. Mirrored to `cyphid/snek-centaur-server` via `git subtree split`. | 08 |
 
-## Running the App
+## Monorepo Mirror Model
 
-```bash
-node server.js
+The `apps/centaur-server-reference/` directory is the **canonical** source of the Snek Centaur Server. The `cyphid/snek-centaur-server` GitHub repository is a generated mirror. Teams fork the mirror; PRs from forks are cherry-picked here by a maintainer and the mirror workflow re-syncs. See `docs/external-setup.md` for the setup procedure and `.github/workflows/mirror-centaur-server.yml` for the sync workflow.
+
+## Code-to-Spec Citation Convention
+
+Every non-trivial implementation decision that traces to a requirement must carry a comment:
+
+```typescript
+// spec: MM-REQ-NNN
+// spec: MM-REQ-NNN, MM-REQ-MMM  (multi-clause)
 ```
 
-Serves on port 5000. All markdown files are rendered with syntax highlighting and a dark-themed sidebar navigation.
+Use the module number and requirement ID from `spec/` files. This is convention, not yet lint-enforced.
 
-## Tech Stack
+## Tooling Conventions
 
-- **Runtime**: Node.js 20
-- **Server**: Express
-- **Markdown rendering**: marked
-- **Port**: 5000
+**Package manager**: pnpm only. Use `pnpm add`, `pnpm install`, `pnpm remove`. Never use `npm install` or `yarn`.
 
-## Deployment
+**TypeScript**: strict mode throughout. Root `tsconfig.base.json` defines the baseline; each package extends it. Run `pnpm typecheck` to check the whole workspace via `tsc -b`.
 
-Configured for autoscale deployment. Run command: `node server.js`
+**Linting / formatting**: Biome. Run `pnpm lint` (check) or `pnpm format` (write). No ESLint or Prettier.
 
-## Spec Authoring Status
+**Testing**: Vitest. Run `pnpm test` across the workspace. Every package should have at least a smoke test confirming it loads.
 
-Progress on the modular spec (see `SPEC-INSTRUCTIONS.md` for the phase/module framework):
+**Dev server**: `pnpm dev` starts the Centaur Server reference app on port 5000 via Vite. The Replit preview iframe connects to this port.
 
-- **Module 01 — game-rules**: Phase 2 complete. 0 REVIEW items open. Decision log: `specs/review/01-game-rules.review.md`.
-- **Module 02 — platform-architecture**: Phase 2 complete. 0 REVIEW items open. Decision log: `specs/review/02-platform-architecture.review.md`.
-- **Module 03 — auth-and-identity**: Phase 2 complete. 0 REVIEW items open. Decision log: `specs/review/03-auth-and-identity.review.md`.
-- **Module 04 — stdb-engine**: Phase 2 complete. 0 REVIEW items open. Decision log: `specs/review/04-stdb-engine.review.md`.
-- **Module 05 — convex-platform**: Phase 2 complete. 0 REVIEW items open. Decision log: `specs/review/05-convex-platform.review.md`.
-- **Module 06 — centaur-state**: Phase 2 complete. 0 REVIEW items open. Decision log: `specs/review/06-centaur-state.review.md`.
-- **Module 07 — bot-framework**: Phase 2 complete. 0 REVIEW items open. Decision log: `specs/review/07-bot-framework.review.md`.
-- **Module 08 — centaur-server-app**: Phase 2 complete. 0 REVIEW items open. Decision log: `specs/review/08-centaur-server-app.review.md`.
-- **Module 09 — platform-ui**: Phase 1 (Requirements) drafted. (Module absorbed into Module 08; retained as a redirect stub.)
+## Root Scripts
 
-Update this list as modules advance. Keep each entry to a single line — phase status and REVIEW count only. Detail about resolved items, cascades, and rationale belongs in the module files (in the resolved REVIEW item bodies), not here.
+| Script | What it does |
+|--------|-------------|
+| `pnpm typecheck` | `tsc -b` across the workspace |
+| `pnpm lint` | `biome check .` |
+| `pnpm format` | `biome check --write .` |
+| `pnpm test` | `vitest run` across all packages |
+| `pnpm dev` | Starts the Centaur Server reference app |
+| `pnpm build` | Builds all packages |
+
+## Squash-Merge Commit Messages
+
+Project tasks are squash-merged to `main`. The commit message must describe the **entire task** — every file changed, every decision made, every cascade — not just the last edit. Re-read the task scope before staging the final commit.
+
+## Convex Auth Note
+
+`convex-host` has a `TODO` comment for `@convex-dev/auth` integration. Do not integrate it until the first Convex implementation task. See `packages/convex-host/AGENTS.md` for details.

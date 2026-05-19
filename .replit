@@ -22,13 +22,18 @@ args = "Start application"
 name = "Start application"
 author = "agent"
 
+[workflows.workflow.metadata]
+outputType = "webview"
+
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "echo \"Spec-only repository — no application to run.\""
-
-[workflows.workflow.metadata]
-outputType = "console"
+args = "pnpm --filter @cyphid/centaur-server-reference dev"
+waitForPort = 5000
 
 [[ports]]
 localPort = 5000
 externalPort = 80
+
+[[ports]]
+localPort = 5001
+externalPort = 3000

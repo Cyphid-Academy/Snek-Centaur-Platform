@@ -1,0 +1,11 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/engine" },
+    { "path": "packages/stdb" },
+    { "path": "packages/convex-snek-platform" },
+    { "path": "packages/convex-centaur-state" },
+    { "path": "packages/convex-host" },
+    { "path": "packages/centaur-server-lib" }
+  ]
+}
