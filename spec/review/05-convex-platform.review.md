@@ -207,3 +207,18 @@ Two corrections were identified:
 **Affected requirements/design elements**: [05-REQ-032] step 5a bullet `= 1 accepted` (score `1.0` for acceptor, `0` for forfeiters, replacing the "winner-by-default" formulation); §2.3.1 step 6 design prose (same update); §3.2 `GameOutcome` prose (scores described as real-valued normalised numbers; forfeited teams carry `0`). Cascade to [03]: 03-REQ-056 and the §3.17 design prose lose the "winner by default" phrasing and cite the score values directly.
 
 ---
+
+### 05-REVIEW-019: Self-hosted STDB on Fly.io with scale-to-zero and warm-up dispatch on game-config creation — **RESOLVED**
+
+**Type**: Amendment
+**Phase**: Design
+
+**Prior text**: The body of Module 05 referred to a "self-hosted SpacetimeDB management API" in [05-REQ-032] step 3, in [05-REQ-073] design context, and in §2.3.1 step 4 ("calls `POST /v1/database` on the self-hosted SpacetimeDB management API ... authenticated via a Convex self-issued management JWT") without naming the hosting target, the scale-to-zero hosting model, or any upstream signal Convex emits to amortise cold starts. The §2.5 Auto-Create design and the §5.5 game-configuration creation requirements made no reference to any warm-up obligation on the creation of new game-configuration objects.
+
+**Amendment**: The self-hosted SpacetimeDB host is deployed on Fly.io under a scale-to-zero hosting model that suspends the host between Battle Bunker sessions. Convex shall dispatch a best-effort warm-up call to the host's warm-up endpoint ([04-REQ-072] / [04] §3.6) on every code path that creates a new game-configuration object (new [05-REQ-074], new §2.5b), so that the per-game `POST /v1/database` provisioning call of [05-REQ-032] step 3 does not bear a synchronous cold-start cost on the game-launch critical path. The §2.3.1 step 4 design text now names Fly.io as the deployment target and records that a cold start may still occur if no warm-up dispatch has preceded the provisioning call (e.g., if the warm-up failed or was never fired for an out-of-band-created game). Requirements stay implementation-neutral: [05-REQ-074] refers to "the self-hosted SpacetimeDB host" and Fly.io is named only in design text.
+
+**Rationale**: SpacetimeDB Maincloud does not support authorising Convex to provision new databases on demand against a third-party-managed host, so the platform must run its own SpacetimeDB host. Fly.io's scale-to-zero behaviour bounds idle cost between sessions but moves the cold-start cost onto the synchronous game-launch path. Firing the warm-up on game-config creation (rather than on game start) gives the host time to resume during the configuration / readiness phase, when latency is not user-visible, so by the time a captain hits "start" the host is already warm in the common case. Best-effort semantics keep the wiring simple: a failed warm-up costs at most one cold start on the next launch, which the existing [05-REQ-032] step 3 path already handles correctly. See cross-module counterpart [04-REVIEW-022].
+
+**Informal spec reference**: N/A (operational hosting decision; not in the informal spec).
+
+**Affected requirements/design elements**: [05-REQ-074] (new), §2.5b (new), [05-REQ-032] step 3 (scale-to-zero / cold-start prose added), §2.3.1 step 4 (Fly.io named; warm-up reference added), §2.5 Auto-Create (warm-up dispatch trigger noted), §2.12 WASM Module Binary Storage (Fly.io named as the `POST /v1/database` target). The [05-REQ-032a] / [05-REQ-073] requirement bodies are unchanged because they were already implementation-neutral.

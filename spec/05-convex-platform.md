@@ -106,6 +106,8 @@ Units inside `config` are milliseconds throughout, consistent with [01]'s canoni
 
 **05-REQ-026** *(negative)*: The game-configuration parameter set shall not include any parameter that configures bot behaviour, heuristic defaults, or Drive management. Such parameters are owned by [06] and by the Snek Centaur Server web application per [02-REQ-045] through [02-REQ-047].
 
+**05-REQ-074**: On creation of a new game configuration object — including the initial game created with a room per [05-REQ-019], a game created on post-finish auto-create per [05-REQ-039], and any other Convex code path that yields a fresh `games` record — Convex shall dispatch a **warm-up call** to the self-hosted SpacetimeDB host's warm-up endpoint ([04-REQ-072], [04] §3.6) ahead of the eventual game-start provisioning call of [05-REQ-032] step 3. The dispatch is best-effort and decoupled from the configuration-creation transaction: failure or timeout of the warm-up call shall neither block nor roll back game-configuration creation, shall not be retried more than once, and shall not be surfaced to the administrative actor. The sole purpose of the dispatch is to amortise the cold-start cost of the host's scale-to-zero hosting model away from the game-launch critical path; the game-start provisioning call of [05-REQ-032] step 3 may still incur a cold start if no warm-up has occurred or if the warm-up failed. *(See resolved 05-REVIEW-019.)*
+
 ---
 
 ### 5.6 Games and Game Lifecycle Orchestration
@@ -126,7 +128,7 @@ Units inside `config` are milliseconds throughout, consistent with [01]'s canoni
 
 1. Freeze the game configuration ([05-REQ-024]).
 2. Obtain the initial game state: if the not-yet-started game record's `boardPreviewLocked` flag is `true` ([05-REQ-032b]), reuse the starting state already persisted on the game record by the most recent preview generation; otherwise (`boardPreviewLocked` is `false`), run `generateBoardAndInitialState()` from the shared engine codebase ([02-REQ-035]) as pure TypeScript directly within a Convex mutation to produce a fresh initial game state from a fresh seed and overwrite the persisted starting state on the game record (the regenerated state is not surfaced to any configuration-mode UI; it becomes visible only when delivered to operators via SpacetimeDB once the game enters `playing` status). Bounded-retry feasibility logic ([01-REQ-061]) runs within this mutation; if all attempts fail, the mutation produces a structured `BoardGenerationFailure` error that is surfaced reactively to the administrative actor (see [05-REQ-032c]), and the orchestration does not proceed. *(See resolved 08-REVIEW-015.)*
-3. Retrieve the pre-compiled WASM module binary from Convex file storage ([05-REQ-073]) and provision a fresh SpacetimeDB game instance by submitting the binary to the self-hosted SpacetimeDB management API (`POST /v1/database` with the WASM binary in the request body), authenticated per [03-REQ-048]. This single operation creates the database and deploys the game engine module.
+3. Retrieve the pre-compiled WASM module binary from Convex file storage ([05-REQ-073]) and provision a fresh SpacetimeDB game instance by submitting the binary to the self-hosted SpacetimeDB management API (`POST /v1/database` with the WASM binary in the request body), authenticated per [03-REQ-048]. This single operation creates the database and deploys the game engine module. The host backing this management API runs under a scale-to-zero hosting model (see [04-REQ-072] / [04] §2.13); if no warm-up dispatch per [05-REQ-074] has preceded this call (or if the warm-up failed), this provisioning call may incur a cold start while the host resumes. *(See resolved 05-REVIEW-019.)*
 4. Prepare the initialization payload for the instance's privileged initialization reducer (owned by [04]), but **defer the call to step 6** so that invitations (step 5) can resolve first and the snake roster can be restricted to accepting teams under tournament forfeit semantics per [03-REQ-056]. The payload, when subsequently sent via a Convex HTTP action calling SpacetimeDB's HTTP API (`POST /v1/database/{name}/call/{reducer_name}`), shall include all of the following: the pre-computed initial game state (board layout, snake starting states, initial items — the output of `generateBoardAndInitialState()`), the game seed (the root seed used by `generateBoardAndInitialState()`, forwarded for turn-resolution randomness and replay export per [04]), the `config.runtime` subtree of the game record — a `GameRuntimeConfig` carrying max health, max turns, hazard damage, spawn rates, and clock parameters ([01] §3.3, resolved [01-REVIEW-017]) — the game-end notification callback URL (a Convex HTTP action endpoint for receiving game-end notifications per [04-REQ-061a]), the participating-teams snapshot ([05-REQ-029]) sufficient to populate the instance's connection authorization state per [03-REQ-039], and the game's unique identifier (for `aud` claim validation in `client_connected`). Client authentication uses OIDC-based JWT validation against the platform's public key (see [03] §3.17). A per-game **game-outcome callback token** — an RS256-signed JWT issued by Convex with `iss` = `CONVEX_SITE_URL`, `sub` = `stdb-instance:{gameId}`, `aud` = the game-end callback URL, and `exp` = 2 hours — is included in the `initialize_game` payload. The STDB module stores this token and presents it as a Bearer token when it POSTs the game-end notification (including the bundled replay data per [04-REQ-061]) back to Convex. The token is signed using the `SPACETIMEDB_SIGNING_KEY` RSA private key (or a dedicated callback-token key pair if operationally preferred). Convex validates incoming callbacks by verifying the JWT signature against its own key and checking the claims (`iss`, `sub`, `aud`, `exp`). *(See resolved 05-REVIEW-015.)*
 5. Send game invitations to each participating Centaur Team's nominated server domain (per [03]) and wait up to **10 seconds** for each server's response. Behaviour on rejection or timeout is governed by [03-REQ-056] and depends on whether the game is a tournament round:
    - For **non-tournament games**, any rejection or timeout aborts orchestration; the SpacetimeDB instance is torn down, the game returns to `not-started`, and an error indicating which server(s) declined or timed out is written to the game record.
@@ -568,7 +570,7 @@ action startGame(args: { gameId: Id<"games"> }): void
 
 **Step 3 — Healthcheck**. For non-tournament games: the action calls each enrolled team's healthcheck endpoint (`GET https://{nominatedServerDomain}/.well-known/snek-healthcheck`). If any team's server is unhealthy, the action aborts: a mutation writes the healthcheck failures to the game record's `healthcheckFailures` field and the game remains in `not-started`. For tournament games: healthcheck is skipped per 05-REQ-036(b).
 
-**Step 4 — STDB provisioning**. The action retrieves the active WASM binary from Convex file storage (`wasm_modules` table where `active === true`), then calls `POST /v1/database` on the self-hosted SpacetimeDB management API with the binary, authenticated via a Convex self-issued management JWT per [03] §3.22. The response provides the instance URL and module name.
+**Step 4 — STDB provisioning**. The action retrieves the active WASM binary from Convex file storage (`wasm_modules` table where `active === true`), then calls `POST /v1/database` on the self-hosted SpacetimeDB management API with the binary, authenticated via a Convex self-issued management JWT per [03] §3.22. The host backing this API is deployed on Fly.io under a scale-to-zero hosting model (see [04] §2.13); a warm-up dispatch fired earlier from game-configuration creation per [05-REQ-074] / §2.5b should normally have brought the host out of suspension before this point, but if no warm-up dispatch preceded this call (or it failed), this provisioning call will block while Fly.io resumes the host. The response provides the instance URL and module name. *(See resolved 05-REVIEW-019.)*
 
 **Step 5 — Initialization payload prepared (call deferred)**. The action prepares an `InitializeGameParams` payload (Module 04 §3.1) for `POST /v1/database/{name}/call/initialize_game` but **does not yet call the reducer** — the call is deferred to step 7 so the snake roster can be restricted to accepting teams under tournament forfeit semantics per 03-REQ-056. The prepared payload includes: pre-computed initial state (board, snakes, items), the game seed (`boardSeed`), `config.runtime` (the `GameRuntimeConfig` from [01] §3.3, passed as `gameRuntimeConfig`), the game-end callback URL (a Convex HTTP action endpoint), a game-outcome callback token (an RS256-signed JWT with `iss: CONVEX_SITE_URL`, `sub: "stdb-instance:{gameId}"`, `aud: callbackUrl`, `exp: iat + 7200`), the participating-teams roster (filtered in step 7 to the effective set), and the game's Convex document `_id` as the gameId. The callback token is not stored by Convex — the STDB module stores it and presents it back to Convex on game-end; Convex validates it by signature verification and claims checking. *(See resolved 05-REVIEW-015.)*
 
@@ -695,7 +697,41 @@ The mutation appends the team ID to `readyTeamIds`. A corresponding `undeclareRe
 2. Sets the new game's `status` to `"not-started"`, clears `readyTeamIds`, `lockedBoardPreview`, `boardSeed`, `healthcheckFailures`, `outcome`, `finalTurn`, and all timestamp/STDB fields.
 3. Updates the room's `currentGameId` to point to the new game.
 
-Convex's built-in mutation atomicity prevents race conditions with concurrent edits. The new game's config can be edited by the administrative actor before the next game start.
+Convex's built-in mutation atomicity prevents race conditions with concurrent edits. The new game's config can be edited by the administrative actor before the next game start. Every code path that yields a fresh `games` record — including this auto-create mutation, the room-creation flow of [05-REQ-019], and any other future creation path — schedules a warm-up dispatch to the self-hosted STDB host per §2.5b.
+
+---
+
+### 2.5b STDB Host Warm-Up Dispatch on Game-Config Creation
+
+Satisfies 05-REQ-074. *(See resolved 05-REVIEW-019.)*
+
+The self-hosted SpacetimeDB host is deployed on Fly.io under a scale-to-zero hosting model: between Battle Bunker sessions, when no provisioned database is being addressed, Fly.io suspends the host's compute. Resuming the host on demand for the per-game `POST /v1/database` call of §2.3.1 step 4 would visibly delay the `not-started → playing` transition for the first game launched after an idle period. To amortise that cold-start cost away from the game-launch critical path, Convex fires a warm-up dispatch to the host (per [04-REQ-072] / [04] §3.6) whenever a new game-configuration object is created.
+
+**Dispatch trigger**: Every Convex mutation that creates a fresh `games` record — `createRoom` (via [05-REQ-019]), the auto-create mutation of §2.5, and any future game-creation path — schedules a `warmUpStdbHost` action immediately after the create transaction commits, via `ctx.scheduler.runAfter(0, internal.stdbWarmup.warmUpStdbHost, {})`. The schedule call is fire-and-forget; the creating mutation does not wait for, nor depend on, the dispatch's outcome.
+
+**Action shape**:
+
+```typescript
+internalAction warmUpStdbHost(args: {}): void {
+  const baseUrl = process.env.STDB_MANAGEMENT_BASE_URL
+  const token   = process.env.STDB_WARMUP_TOKEN
+  try {
+    await fetch(`${baseUrl}/v1/warmup`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(15_000),
+    })
+  } catch {
+    // best-effort; swallow on failure per [05-REQ-074]
+  }
+}
+```
+
+The action issues one `POST /v1/warmup` call with a 15-second client-side timeout (the 10-second host-side budget of [04-REQ-072] plus a small network margin). Non-2xx responses, network errors, and timeouts are all swallowed silently: a cold start on the subsequent `POST /v1/database` call of §2.3.1 step 4 is a tolerable fallback. The dispatch is not retried — the goal is amortisation, not delivery guarantee — and is not surfaced to the administrative actor.
+
+**Why best-effort**: A failed warm-up costs at most one cold start on the next game launch. Wiring the warm-up into a retry queue, surfacing it to the UI, or blocking game-config creation on its success would add operational coupling for no functional benefit, because §2.3.1 step 4's `POST /v1/database` already handles the cold-start case correctly (it just blocks longer).
+
+The `STDB_MANAGEMENT_BASE_URL` and `STDB_WARMUP_TOKEN` Convex environment variables are provisioned alongside the host's management credentials per `docs/external-setup.md`.
 
 ---
 
@@ -980,7 +1016,7 @@ The mutation:
 1. Creates a new `wasm_modules` record with `active: true`.
 2. Sets all previously active records to `active: false`.
 
-At game-start time, the orchestration action queries `wasm_modules` for the record with `active === true` and retrieves the binary from file storage via `ctx.storage.get(storageId)`.
+At game-start time, the orchestration action queries `wasm_modules` for the record with `active === true` and retrieves the binary from file storage via `ctx.storage.get(storageId)`. The retrieved binary is submitted to the self-hosted SpacetimeDB host's `POST /v1/database` endpoint on Fly.io (see §2.3.1 step 4 and [04] §3.4 step 4).
 
 **Design rationale**: Only one WASM module is active at a time. The `active` flag enables atomic switching when a new build is deployed, while preserving historical records for auditing.
 

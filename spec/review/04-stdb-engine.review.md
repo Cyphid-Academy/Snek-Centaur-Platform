@@ -343,3 +343,18 @@ Resolved REVIEW items from [`specs/04-stdb-engine.md`](../04-stdb-engine.md). Se
 
 **Affected requirements/design elements**: `ScoreboardRow` interface in §2.1.2 (comment updated); turn-0 scoreboard write in §2.2 (normalised `teamScore` formula added); Step 6b in §2.7 (two-pass: compute `aggregateLength`, then compute `teamScore` from the cross-team sum); prior-turn read narrative in §2.7 (now reads `aliveSnakeCount`, not `teamScore`); `GameEndNotification` `GameOutcome` prose in §3.3 (scores described as real-valued).
 
+
+### 04-REVIEW-022: Self-hosted STDB on Fly.io with scale-to-zero and pre-provisioning warm-up — **RESOLVED**
+
+**Type**: Amendment
+**Phase**: Design
+
+**Prior text**: Module 04 referred to a "self-hosted SpacetimeDB management API" in the [04-REQ-061a] design context and in §3.4 step 4 ("Submitted to the self-hosted SpacetimeDB management API ... to create a new database instance with the module already deployed") without naming the hosting target, the scale-to-zero hosting model, or any pre-provisioning warm-up signal. The implicit prior assumption was that the host was continuously available, so the only documented Convex-to-host interaction was the per-game `POST /v1/database` provisioning call authenticated under [03-REQ-048].
+
+**Amendment**: The self-hosted SpacetimeDB host is deployed on Fly.io under a scale-to-zero hosting model that suspends the host between Battle Bunker sessions to bound idle cost. To hide the cold-start cost that scale-to-zero introduces on the per-game `POST /v1/database` call, the host exposes a dedicated warm-up endpoint (new [04-REQ-072], §2.13, §3.6) that Convex calls ahead of provisioning on the schedule of the matching [05-REQ-074]. The warm-up endpoint uses a static shared-secret token (`STDB_WARMUP_TOKEN`) rather than the per-instance management JWT, because its only effect is to resume the host process and the bounded blast radius does not justify the heavier auth surface.
+
+**Rationale**: SpacetimeDB Maincloud does not support authorising Convex to provision new databases on demand against a third-party-managed host, so the platform must run its own SpacetimeDB host. Fly.io's scale-to-zero behaviour keeps idle cost bounded between sessions but moves the cold-start cost onto the synchronous game-launch path; the warm-up signal is the cheapest way to amortise that cost ahead of game launch without committing the host to always-on operation. Naming Fly.io in design text only (not in the requirement) keeps requirements implementation-neutral while letting operations docs ground the hosting target concretely. See cross-module counterpart [05-REVIEW-019].
+
+**Informal spec reference**: N/A (operational hosting decision; not in the informal spec).
+
+**Affected requirements/design elements**: [04-REQ-072] (new), §2.13 (new warm-up endpoint design), §3.6 (new exported warm-up endpoint contract). The §3.4 step 4 / §2.10 references to the self-hosted management API consumed by Convex now read against the Fly.io-hosted scale-to-zero host without requirement-text changes (the prose was already implementation-neutral).

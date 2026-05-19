@@ -345,6 +345,8 @@ Use the shape below, swapping `Correction` ↔ `Amendment` in the Type field and
 
 The same provenance rules apply: write the spec body as if the new text were the only version ever written (per AGENTS.md §"No Journey Narration"), and place an opaque pointer in the body (e.g. `*(See resolved [MODULE_ID]-REVIEW-NNN.)*`) where the load-bearing prose lives.
 
+**Placement — write Correction/Amendment items directly to the `.review.md` decision log.** Because these items are first-raised already-resolved, they skip the inline-in-module stage entirely: append the item body to the module's `spec/review/XX-module-name.review.md` file, and leave the module file's `## REVIEW Items` section as its single-pointer form. The inline-then-migrate flow described under §Resolution below applies only to agent-surfaced items (Ambiguity / Contradiction / Gap / Proposed Addition), which need to sit inline while the question is open. A task plan that instructs the agent to add a resolved Correction/Amendment inline "for now" with migration deferred is incorrect — write it straight to the `.review.md`.
+
 ### Resolution
 
 REVIEW items are resolved by the human before the module's phase is considered complete. When a REVIEW item is resolved:
@@ -378,7 +380,7 @@ This approach is chosen over simply deleting resolved items because:
 - **Distinguishing load-bearing from descriptive text**: Marking decisions explicitly tells readers which requirement phrasing is doing active work.
 - **Consistency fuel**: Related future questions can reference the reasoning used on earlier ones.
 
-Once a module's phase is complete, resolved entries are migrated out to a per-module decision log file under `spec/review/` named `XX-module-name.review.md` (e.g., `spec/review/01-game-rules.review.md`). The module file retains its `## REVIEW Items` section heading with a single pointer line to the `.review.md` file. The `.review.md` file carries a header, then the full resolved item bodies. Open (unresolved) items remain inline in the module file until resolved, then migrate to the `.review.md` at the next migration pass.
+Once a module's phase is complete, resolved entries are migrated out to a per-module decision log file under `spec/review/` named `XX-module-name.review.md` (e.g., `spec/review/01-game-rules.review.md`). The module file retains its `## REVIEW Items` section heading with a single pointer line to the `.review.md` file. The `.review.md` file carries a header, then the full resolved item bodies. Open (unresolved) agent-surfaced items remain inline in the module file until resolved, then migrate to the `.review.md` at the next migration pass. First-raised-already-resolved items (Correction / Amendment per §"Human-initiated items") never sit inline — they are written directly to the `.review.md` from the start.
 
 ---
 

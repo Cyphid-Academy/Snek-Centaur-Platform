@@ -119,27 +119,40 @@ External consumers currently use `github:cyphid/snek-centaur-server-lib#<tag>`. 
 
 ---
 
-## SpacetimeDB Maincloud
+## SpacetimeDB on Fly.io
 
-*(Placeholder — fill in when the first STDB implementation task begins.)*
+*(Stub — fill in when the first STDB hosting task begins.)*
 
-### Prerequisites
+The platform runs its own SpacetimeDB host process on Fly.io rather than using SpacetimeDB Maincloud. SpacetimeDB Maincloud does not expose the per-database provisioning surface Convex needs to create a fresh database per game on demand (see spec module [04] §3.4 and module [05] §2.3.1 step 4), so a self-hosted host is required.
 
-- The SpacetimeDB CLI: follow instructions at [spacetimedb.com/install](https://spacetimedb.com/install).
-- A SpacetimeDB Maincloud account.
+### Hosting model
 
-### Steps
+The Fly.io app is configured for **scale-to-zero**: between Battle Bunker sessions, when no provisioned database is being addressed, Fly.io suspends the host's compute to bound idle cost. The host is resumed on demand by either:
 
-1. Log in: `spacetime login`.
-2. Publish the STDB module: `spacetime publish <module-name> --project-path packages/stdb`.
-3. Note the module address for use as the `stdbInstanceUrl` in game invitations.
+1. The per-game `POST /v1/database` provisioning call issued by Convex on game start (spec [05-REQ-032] step 3 / [04] §3.4 step 4). This call will block while Fly.io resumes the host — a visible cold-start cost on the first game launched after an idle period.
+2. A best-effort `POST /v1/warmup` call issued by Convex when a new game-configuration object is created (spec [04-REQ-072] / [04] §2.13 / §3.6 and [05-REQ-074] / [05] §2.5b). This is the primary path: it amortises the cold-start cost away from the game-launch critical path by waking the host while captains are still configuring and readying up.
+
+### Convex environment variables
+
+Set in the Convex dashboard → **Settings → Environment Variables**:
+
+- `STDB_MANAGEMENT_BASE_URL` — the public URL of the Fly.io-hosted STDB host (e.g. `https://snek-stdb.fly.dev`). Used as the base for both `POST /v1/database` (under the platform-management JWT of spec [03-REQ-048] / [03] §3.22) and `POST /v1/warmup`.
+- `STDB_WARMUP_TOKEN` — a static shared secret presented as `Authorization: Bearer <token>` on the `POST /v1/warmup` call. Distinct from the platform-management JWT; provisioned alongside the host's management credentials.
+
+### TODO
+
+Fill in once the first STDB hosting task begins:
+- Fly.io app name, region selection, machine size, and scale-to-zero (auto-suspend / auto-start) configuration.
+- Provisioning of the host's platform-management JWT verification key and the `STDB_WARMUP_TOKEN` shared secret.
+- Deployment pipeline for publishing the STDB module WASM binary to Convex file storage (consumed per spec [05-REQ-073] / [05] §2.12).
+- Operational runbook: cold-start latency expectations, warm-up failure handling, log access.
 
 ### Local development
 
-For local STDB development without Maincloud:
+For local STDB development without Fly.io:
 ```bash
 spacetime start    # start local STDB instance
 spacetime publish snek-local --project-path packages/stdb
 ```
 
-The Convex host can be pointed at a local STDB URL for dev by setting `STDB_LOCAL_URL` in your environment.
+The Convex host can be pointed at a local STDB URL for dev by setting `STDB_MANAGEMENT_BASE_URL` to the local instance's URL. Local instances do not scale to zero, so the warm-up dispatch of spec [05-REQ-074] is a no-op (the local host always responds immediately).
