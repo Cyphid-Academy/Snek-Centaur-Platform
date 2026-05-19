@@ -1,1 +1,55 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+build/
+.output/
+out/
+.svelte-kit/
+.vite/
+
+# TypeScript
+*.tsbuildinfo
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Convex local state
+.convex/
+convex/.env.local
+
+# SpacetimeDB
+.stdb/
+
+# Vitest
+.vitest-cache/
+coverage/
+
+# Biome
+.biome/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+*.code-workspace
+
+# Replit
+.replit.bak
+.cache/
+.upm/
+replit_zip_error_log.txt
+
+# Attached assets (Replit-managed)
 attached_assets/
+
+# pnpm
+.pnpm-store/
