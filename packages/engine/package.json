@@ -20,5 +20,8 @@
   "devDependencies": {
     "typescript": "*",
     "vitest": "*"
+  },
+  "dependencies": {
+    "@noble/hashes": "^2.2.0"
   }
 }
