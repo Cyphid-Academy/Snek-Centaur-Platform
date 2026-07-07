@@ -133,7 +133,7 @@ Item collection (food, InvulnPotion, InvisPotion) is explicitly *not* a disrupti
 
 **01-REQ-036**: At the start of each turn, each team's budget shall be incremented by the configured `budgetIncrement` (default 500ms).
 
-**01-REQ-037**: At the start of each turn, each team's **per-turn clock** shall be set to `min(effectiveCap, currentBudget)`. The effective cap is `firstTurnTime` (default 60s) on turn 0 and `maxTurnTime` (default 10s) on all subsequent turns.
+**01-REQ-037**: At the start of each turn, each team's **per-turn clock** shall be set to `min(effectiveCap, currentBudget)`, and that amount shall simultaneously be deducted from the team's budget — the per-turn clock is carved out of the budget, so the budget holds only time not currently on the clock. The effective cap is `firstTurnTime` (default 60s) on turn 0 and `maxTurnTime` (default 10s) on all subsequent turns. A team's total remaining time at any instant is `budget + perTurnClock`. (See resolved 01-REVIEW-019.)
 
 **01-REQ-038**: A team may **declare turn over** at any time during the current turn. Upon declaration, the team's remaining per-turn clock time is added back to its budget. The team's per-turn clock stops.
 
@@ -163,7 +163,7 @@ Item collection (food, InvulnPotion, InvisPotion) is explicitly *not* a disrupti
 
 **01-REQ-043 (Phase 2 — Snake Movement)**: All alive snakes shall move simultaneously. Each snake's head advances one cell in its chosen direction. If `ateLastTurn` is `true`, the tail segment is retained and `ateLastTurn` is reset to `false`; otherwise the tail segment is removed. `lastDirection` is updated to the direction moved.
 
-**01-REQ-044 (Phase 3 — Collision Detection)**: After all snakes have moved in Phase 2, the following collision types shall be evaluated simultaneously, reading each snake's start-of-turn effect state per 01-REQ-033. "Simultaneously" means no sub-ordering within Phase 3: the post-Phase-2 board configuration (all moved heads and all body segments of all snakes, including snakes that are themselves dying from wall or self-collision within this same Phase 3) is the single reference state against which every collision rule is evaluated. A snake dying from wall or self-collision in Phase 3 does not have its body removed from Phase 3's evaluation; its segments remain valid body-collision targets for other snakes in the same pass. See resolved 01-REVIEW-002 for a worked example.
+**01-REQ-044 (Phase 3 — Collision Detection)**: After all snakes have moved in Phase 2, the following collision types shall be evaluated simultaneously, reading each snake's start-of-turn effect state per 01-REQ-033. "Simultaneously" means no sub-ordering within Phase 3: the post-Phase-2 board configuration (all moved heads and all body segments of all snakes, including snakes that are themselves dying from wall or self-collision within this same Phase 3) is the single reference state against which every collision rule is evaluated. A snake dying from wall or self-collision in Phase 3 does not have its body removed from Phase 3's evaluation; its segments remain valid body-collision targets for other snakes in the same pass. Every Phase 3 read — head positions, body segments, invulnerability levels (01-REQ-033), and the body lengths used by 01-REQ-044d — is taken from this reference state; body mutations produced by severing (01-REQ-044c) are applied only after all of Phase 3's collision outcomes are determined and have no influence on any outcome within the same phase. See resolved 01-REVIEW-002 for a worked example and resolved 01-REVIEW-021 for the general reference-state principle.
 
 **01-REQ-044a (Wall collision)**: A snake whose head occupies a Wall cell after Phase 2 dies.
 
@@ -171,7 +171,7 @@ Item collection (food, InvulnPotion, InvisPotion) is explicitly *not* a disrupti
 
 **01-REQ-044c (Body collision)**: A snake (attacker) whose head occupies a cell containing a non-head body segment of another snake (victim) after Phase 2 shall be resolved using each snake's start-of-turn `invulnerabilityLevel` (per 01-REQ-033): if the attacker's start-of-turn level exceeds the victim's start-of-turn level, the victim is **severed** — all body segments from the contact segment through the tail are removed from the victim, and the attacker survives; otherwise the attacker dies.
 
-**01-REQ-044d (Head-to-head collision)**: When two or more snake heads occupy the same cell after Phase 2, resolution uses each involved snake's start-of-turn `invulnerabilityLevel` (per 01-REQ-033): snakes whose start-of-turn level is below the maximum start-of-turn level among the involved snakes die; among the remaining snakes (those at the maximum start-of-turn level), shorter snakes (fewer body segments after Phase 2) die; if two or more snakes at the maximum level have equal length, all of them die.
+**01-REQ-044d (Head-to-head collision)**: When two or more snake heads occupy the same cell after Phase 2, resolution uses each involved snake's start-of-turn `invulnerabilityLevel` (per 01-REQ-033): snakes whose start-of-turn level is below the maximum start-of-turn level among the involved snakes die; among the remaining snakes (those at the maximum start-of-turn level), shorter snakes die; if two or more snakes at the maximum level have equal length, all of them die. Length is the snake's body-segment count in the post-Phase-2 reference state of 01-REQ-044 — unaffected by any severing occurring in the same Phase 3. (See resolved 01-REVIEW-021.)
 
 **01-REQ-045 (Phase 4 — Pending Effect Recording)**: For each snake that suffers any disruption in Phase 3 (death, severing, being severed, receiving a body collision) and is the active collector for at least one family per 01-REQ-028, the team-wide, family-scoped cancellation specified in 01-REQ-031 shall be scheduled for application in Phase 9, based on Phase 3 outcomes read against each snake's start-of-turn effect state (per 01-REQ-033). Cancellation scope is determined by which families the disrupted snake holds a `debuff` of at start-of-turn.
 
@@ -570,7 +570,7 @@ Future edits that need to mutate effect state mid-turn must either (a) be placed
 **Cancellation semantics** (01-REQ-031). When a snake holding `(family = F, state = debuff)` suffers a disruption during turn T:
 
 - Phase 4 records the cancellation obligation for family F on that snake's team.
-- Phase 9a applies the cancellation before the rebuild/expiry passes: every active family-F effect is removed from every alive member of the team, and every pending family-F entry scheduled this turn for that team is discarded. Other families are untouched.
+- Phase 9a applies the cancellation before the rebuild/expiry passes: every active family-F effect is removed from every alive member of the team. Pending family-F entries scheduled by a same-turn Phase 6 rebuild are not touched — they proceed to application in 9b, so a same-turn re-collection supersedes the cancellation (01-REQ-031). Other families are untouched. (See resolved 01-REVIEW-020.)
 - If the disrupted snake holds both `(invulnerability, debuff)` and `(invisibility, debuff)` simultaneously, both families are cancelled independently.
 
 See resolved **01-REVIEW-010** and **01-REVIEW-015** for the rationale behind the family-scoped, attribution-free cancellation model.
@@ -592,6 +592,8 @@ Phase 9a reads this buffer to compute cancellation scope.
 ### 2.8 Turn Resolution Pipeline
 
 Implements 01-REQ-041 through 01-REQ-052 and 01-REQ-062. Pseudocode below; `state` is the mutable game state, `T` is the current turn number, `turnSeed = subSeed(gameSeed, "turn:" + T)`.
+
+**Reference-state resolution principle** (see resolved 01-REVIEW-021). Interaction outcomes within a turn — collision deaths, severings, head-to-head resolution, disruption identification — are pure functions of the end-of-previous-turn game state, the turn's staged moves, and the turn seed. Concretely, each phase that resolves interactions reads only (a) state components that no earlier phase of the same turn writes (`activeEffects` and its derived values, per 01-REQ-033 and Section 2.7's structural invariant) and (b) the post-Phase-2 board configuration, which is itself a deterministic mechanical projection of end-of-previous-turn state plus staged moves (movement and pending growth carry no interaction outcomes). Mutations produced by interaction outcomes — death flags, severed segments, effect changes — are applied at phase boundaries and are never read by outcome logic within the same phase. This keeps every phase's internal evaluation order-free: reordering the sub-steps of a phase cannot change any outcome, so the pipeline's correctness never rests on hidden sub-step precedence. Later phases *do* consume earlier phases' committed outcomes (Phase 5 ticks only snakes that survived Phase 3; Phase 6 collects only for snakes that survived Phase 5): the principle governs resolution *within* a phase, while the eleven-phase sequence of 01-REQ-041 defines the only sanctioned cross-outcome dependencies. Future edits that add a rule to any phase must source its reads from the phase's reference state, not from values another rule in the same phase may have mutated.
 
 ```text
 function resolveTurn(state, T, turnSeed):
@@ -630,8 +632,9 @@ function resolveTurn(state, T, turnSeed):
   # ---------- Phase 3: Collision Detection (01-REQ-044) ----------
   # All evaluations run against a single post-Phase-2 snapshot of the board
   # (resolved 01-REVIEW-002).
-  heads  = { snakeId → body[0]  for alive snakes }
-  bodies = { snakeId → body[1:] for alive snakes }
+  heads   = { snakeId → body[0]     for alive snakes }
+  bodies  = { snakeId → body[1:]    for alive snakes }
+  lengths = { snakeId → body.length for alive snakes }
   deaths = set()
   severings = []
 
@@ -650,10 +653,11 @@ function resolveTurn(state, T, turnSeed):
     attLvl = invulnerabilityLevel(attacker)
     vicLvl = invulnerabilityLevel(victim)
     if attLvl > vicLvl:
-      # Sever (01-REQ-044c)
-      segmentsLost = victim.body.length - contactIndex
-      severings.push({attacker, victim, contactCell: victim.body[contactIndex], segmentsLost})
-      victim.body = victim.body.slice(0, contactIndex)
+      # Sever (01-REQ-044c) — recorded now, applied after 3c, so that no
+      # Phase-3 read ever observes a partially severed body.
+      segmentsLost = lengths[victim.snakeId] - contactIndex
+      severings.push({attacker, victim, contactIndex,
+                      contactCell: bodies[victim.snakeId][contactIndex - 1], segmentsLost})
       disruptions.push({attacker, 'severing_other'})
       disruptions.push({victim,   'severed'})
     else:
@@ -663,7 +667,8 @@ function resolveTurn(state, T, turnSeed):
 
   # 3c. Head-to-head (01-REQ-044d). Reads `invulnerabilityLevel(snake)`,
   #     a derived function over `activeEffects`, which equals start-of-turn
-  #     per Section 2.7's invariant.
+  #     per Section 2.7's invariant, and `lengths`, the post-Phase-2
+  #     reference-state body lengths (unaffected by 3b severings).
   for cell, heads_here in groupBy(heads):
     if heads_here.length < 2: continue
     maxLvl  = max(invulnerabilityLevel(s) for s in heads_here)
@@ -673,8 +678,8 @@ function resolveTurn(state, T, turnSeed):
         deaths.add(s.snakeId); disruptions.push({s, 'head_to_head_death'})
     # within the top tier, shorter snakes die
     if topTier.length >= 2:
-      maxLen = max(s.body.length for s in topTier)
-      atMax  = [s for s in topTier if s.body.length === maxLen]
+      maxLen = max(lengths[s.snakeId] for s in topTier)
+      atMax  = [s for s in topTier if lengths[s.snakeId] === maxLen]
       if atMax.length >= 2:
         for s in atMax:
           deaths.add(s.snakeId); disruptions.push({s, 'head_to_head_death'})
@@ -682,6 +687,13 @@ function resolveTurn(state, T, turnSeed):
         for s in topTier:
           if s not in atMax:
             deaths.add(s.snakeId); disruptions.push({s, 'head_to_head_death'})
+
+  # Apply severing outcomes now that every Phase-3 outcome is determined.
+  # When several attackers sever the same victim, the victim is truncated at
+  # the head-closest (minimum) contact index.
+  for victimId, contactIndex in minContactIndexPerVictim(severings):
+    victim = state.snakeById(victimId)
+    victim.body = victim.body.slice(0, contactIndex)
 
   markDead(state, deaths)
 
@@ -763,17 +775,20 @@ function resolveTurn(state, T, turnSeed):
         cancelledByCentaurTeamFamily.add((snake.centaurTeamId, e.family))
   for (centaurTeamId, family) in cancelledByCentaurTeamFamily:
     for mate in aliveMembersOf(state, centaurTeamId):
-      removeActiveOfFamily(mate,  family)
-      removePendingOfFamily(mate, family)
+      # Active effects only (01-REQ-031): pending entries scheduled by a
+      # same-turn Phase 6 rebuild survive and are applied in 9b, so a
+      # same-turn re-collection supersedes this cancellation.
+      removeActiveOfFamily(mate, family)
     # (Dead team members' remaining effects are irrelevant going forward; the
     # family state is reset for everyone, including implicit cleanup on any
     # snake that died this turn and still has a dangling entry.)
 
-  # 9b. Apply pending rebuilds with replace-semantics. Any pending entry that
-  #     survived 9a is applied; it overwrites any prior active entry of the
-  #     same family on the same snake. Because Phase 6 writes at most one
-  #     pending entry per family per snake per turn, this loop processes at
-  #     most two pending entries per snake.
+  # 9b. Apply pending rebuilds with replace-semantics. Every pending entry is
+  #     applied (9a removes active effects only, per 01-REQ-031); it
+  #     overwrites any prior active entry of the same family on the same
+  #     snake. Because Phase 6 writes at most one pending entry per family
+  #     per snake per turn, this loop processes at most two pending entries
+  #     per snake.
   for snake in allSnakes(state):
     for pe in snake.pendingEffects:
       removeActiveOfFamily(snake, pe.family)
@@ -799,7 +814,7 @@ function resolveTurn(state, T, turnSeed):
 - **Expire-then-cancel** would wrongly skip cancellation for a debuff-holder whose debuff expires the same turn as the disruption: the expiry pass would strip the debuff before 9a could read it. The pseudocode avoids this by running 9a first.
 - **Cancel-then-expire-then-apply** (swapping 9b and 9c) would be observably equivalent to the chosen order in all cases because (i) the rebuild's `expiryTurn = T + 3` is always strictly greater than the current turn `T`, so the new entry cannot be expired by 9c regardless of position, and (ii) 9a's cancellation already stripped any family-F entries the rebuild replaces, so the `removeActiveOfFamily` in 9b is a no-op for freshly-cancelled families. Chosen order is cleaner to read.
 
-**Phase 3 simultaneity** (resolved 01-REVIEW-002). The body-collision loop iterates against the post-Phase-2 `bodies` snapshot regardless of which snakes are being added to `deaths` in the same phase; this means snake B can sever or body-collide with snake A's body even if A is itself dying from a wall or self-collision in the same Phase 3. The pseudocode achieves this by computing `heads`/`bodies` once at phase start and not mutating them as deaths accumulate.
+**Phase 3 simultaneity** (resolved 01-REVIEW-002, 01-REVIEW-021). The body-collision loop iterates against the post-Phase-2 `bodies` snapshot regardless of which snakes are being added to `deaths` in the same phase; this means snake B can sever or body-collide with snake A's body even if A is itself dying from a wall or self-collision in the same Phase 3. The pseudocode achieves this by computing `heads`/`bodies`/`lengths` once at phase start and never mutating them within the phase: severing outcomes are recorded during 3b and applied to live bodies only after 3c completes, and 3c's length comparison reads the `lengths` snapshot. No Phase-3 outcome can observe another Phase-3 outcome's mutation, so 3a/3b/3c may be evaluated in any order without changing results. Two corollaries are accepted deliberately: an attacker entering a segment that another attacker severs in the same turn still resolves its collision against that segment (it existed in the reference state), and a snake severed in 3b fights any same-turn head-to-head at its reference-state length.
 
 **Growth observability** (01-REQ-062). `ateLastTurn = true` set in Phase 5c of turn T causes Phase 2 of turn T+1 to retain the old tail. The body-length comparison `end-of-Phase-2(T+1) − end-of-Phase-2(T) === +1` is directly observable via the `snake_moved.grew` boolean in the turn event stream.
 
@@ -824,8 +839,11 @@ export interface CentaurTeamClockState {
 budgetMs  += config.clock.budgetIncrementMs
 cap        = (T === 0) ? config.clock.firstTurnTimeMs : config.clock.maxTurnTimeMs
 perTurnMs  = min(cap, budgetMs)
+budgetMs  -= perTurnMs        # clock time is carved out of the budget (01-REQ-037)
 declaredTurnOver = false
 ```
+
+The invariant `totalRemainingTime = budgetMs + perTurnMs` holds at every instant. Time draining off an expiring clock leaves that total — which is how a consistently slow team's budget depletes toward increment-only turns — while an early declare returns the unspent remainder to the budget. (See resolved 01-REVIEW-019.)
 
 **On explicit declare-turn-over** (01-REQ-038):
 
@@ -1215,6 +1233,7 @@ export interface GameState {
 - `invulnerabilityLevel(snake) ∈ {-1, 0, +1}` and `isVisible(snake)` are pure O(k≤2) functions over `activeEffects`; they are the only reads collision resolution performs (01-REQ-022, 01-REQ-023, 01-REQ-044c, 01-REQ-044d).
 - Disruption of a debuff-holder cancels that family team-wide; other families are untouched (01-REQ-031). Both debuff-holders (invulnerability and invisibility) remain visible — the invisibility-family debuff-holder is explicitly visible to opponents as the targetable weak link for their team's invisibility buff.
 - Turn event ordering within a turn is deterministic: phase ascending, then `snakeId` ascending.
+- Phase-internal order independence (reference-state resolution principle, Section 2.8): interaction outcomes are functions of the post-Phase-2 reference state and start-of-turn effect state only; mutations from those outcomes (deaths, severed segments, effect changes) are applied at phase boundaries and are never read by outcome logic within the same phase (01-REQ-044, resolved 01-REVIEW-021).
 - `fertileGroundEnabled(board)` is the canonical runtime predicate for whether Phase 7 food eligibility restricts to `CellType.Fertile` cells (01-REQ-048). The predicate is derived from the board — not the game config — because `config.orchestration.fertileGround` is not forwarded to STDB; the board's cells are the authoritative record (resolved 01-REVIEW-017). The value is constant for the lifetime of the game since the board is static after generation.
 
 ### 3.10 DOWNSTREAM IMPACT Notes
@@ -1227,7 +1246,7 @@ export interface GameState {
 
 4. **Sub-seed derivation uses BLAKE3 keyed hashing specifically.** Any consumer of `subSeed()` must import the same BLAKE3 implementation; switching hash algorithms breaks replay reproducibility. This is a hard dependency, not a "pick your favourite hash" situation.
 
-5. **Chess timer arithmetic is specified at the game-rules level** (Section 2.9). Module 04's reducer implementations must match the formulas exactly — in particular the "credit unspent clock back to budget on early declare" step, which is easy to miss.
+5. **Chess timer arithmetic is specified at the game-rules level** (Section 2.9). Module 04's reducer implementations must match the formulas exactly — in particular the carve-out of the per-turn clock from the budget at turn start (01-REQ-037) and the "credit unspent clock back to budget on early declare" step, both of which are easy to miss.
 
 6. **Turn event ordering is deterministic.** Replay viewers (08, 09) can assume events arrive in phase-then-snakeId order and need not re-sort.
 

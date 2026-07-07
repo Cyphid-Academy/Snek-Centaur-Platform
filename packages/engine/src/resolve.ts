@@ -260,14 +260,10 @@ export function resolveTurn(
       }
     }
   }
-  for (const [victimId, contactIndex] of pendingSevers) {
-    const victim = byId.get(victimId) as WorkSnake;
-    victim.body = victim.body.slice(0, contactIndex);
-  }
-
   // 3c. Head-to-head (044d): tiers by start-of-turn level, then by
-  // post-Phase-2 snapshot length (severs in 3b do not change the reference
-  // state — "fewer body segments after Phase 2").
+  // post-Phase-2 reference-state length — severs recorded in 3b are applied
+  // only after 3c, per the reference-state resolution principle
+  // (01 §2.8, resolved 01-REVIEW-021).
   const headGroups = new Map<number, WorkSnake[]>();
   for (const snake of movers) {
     const key = cellKey(heads.get(snake.snakeId) as Cell);
@@ -296,6 +292,13 @@ export function resolveTurn(
     for (const s of group) {
       if (losers.has(s.snakeId)) die(s.snakeId, "head_to_head", killer, "head_to_head_death");
     }
+  }
+
+  // Apply severing outcomes now that every Phase-3 outcome is determined
+  // (min contact index per victim). spec: 01-REQ-044c, 01-REVIEW-021
+  for (const [victimId, contactIndex] of pendingSevers) {
+    const victim = byId.get(victimId) as WorkSnake;
+    victim.body = victim.body.slice(0, contactIndex);
   }
 
   // Mark deaths and emit snake_died events.
@@ -487,9 +490,9 @@ export function resolveTurn(
   // 9a. Team-wide, family-scoped cancellation for disrupted debuff-holders
   // (01-REQ-031). Collector identification reads activeEffects, still equal
   // to start-of-turn state here. Removes ACTIVE effects only — pending
-  // rebuilds scheduled this turn survive and apply in 9b (a same-turn
-  // re-collection supersedes the cancellation; 01-REQ-031, which overrides
-  // §2.8's pseudocode — see DECISIONS.md).
+  // rebuilds scheduled this turn survive and apply in 9b, so a same-turn
+  // re-collection supersedes the cancellation (01-REQ-031, resolved
+  // 01-REVIEW-020).
   const cancelledTeamFamilies = new Set<string>();
   const cancelPairs: Array<{ team: CentaurTeamId; family: EffectFamily }> = [];
   for (const d of disruptions) {

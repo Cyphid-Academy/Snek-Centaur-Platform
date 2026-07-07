@@ -8,6 +8,8 @@ Precedence rule applied throughout (per `spec/SPEC-INSTRUCTIONS.md` Rule 5): **t
 
 ## A. Spec contradictions found (requirements override design pseudocode)
 
+> **Status**: all three have since been corrected in the spec itself via Correction REVIEW items **01-REVIEW-019** (A1), **01-REVIEW-020** (A2), and **01-REVIEW-021** (A3, which also states the general reference-state resolution principle in 01 §2.8). The entries below record the divergence as found at implementation time; the spec and the engine now agree.
+
 ### A1. Chess timer: the per-turn clock must be carved out of the budget
 
 §2.9's pseudocode reads `budgetMs += increment; perTurnMs = min(cap, budgetMs)` at turn start and `budgetMs += perTurnMs` on declare — with **no deduction anywhere**. Under those formulas the budget grows monotonically forever: a team that always times out still gains `increment` per turn, and the documented depletion behaviour ("when a team's budget depletes, their per-turn clock drops to the increment alone") is unreachable. 01-REQ-038's "remaining per-turn clock time is added **back** to its budget" only makes sense if the clock was taken *out* of the budget first.
@@ -126,5 +128,5 @@ Improved-Perlin fade with 8 gradient directions; output divided by √2 to bound
 
 1. **Hazard 30% is frequently infeasible.** Uniform hazard placement at 25–30% density sits near the site-percolation threshold on mid-size boards: on a 13-board at 30%, roughly half of game seeds exhaust all four attempts on `HAZARD_CONNECTIVITY` (measured: 11/20 seeds succeed; 15-board: 3/20). The bounded-retry design absorbs this, but the room-owner UX at the top of the 0–30 range will be "provisioning failed" often enough to notice. A connectivity-aware placement algorithm (e.g. carve from a spanning structure) or a tighter range cap may be worth a REVIEW item.
 2. **01-REQ-049 wording** ("same eligible-cell criteria as food") vs. the fertile restriction — see C1.
-3. **§2.9 and §2.7/§2.8 pseudocode** should be updated to match A1/A2/A3 if these resolutions are accepted.
+3. ~~**§2.9 and §2.7/§2.8 pseudocode** should be updated to match A1/A2/A3 if these resolutions are accepted.~~ *Done — corrected via 01-REVIEW-019/020/021.*
 4. **The `teams[].name` parameter** of `generateBoardAndInitialState` is unused by module 01 (display names are derived downstream per 01-REQ-018); kept for signature stability.

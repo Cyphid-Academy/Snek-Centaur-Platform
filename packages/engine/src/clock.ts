@@ -28,15 +28,13 @@ export function initialClock(
   };
 }
 
-// spec: 01-REQ-036, 01-REQ-037
+// spec: 01-REQ-036, 01-REQ-037 (resolved 01-REVIEW-019)
 //
-// The per-turn clock is CARVED OUT of the budget: after computing
+// The per-turn clock is carved out of the budget: after computing
 // `perTurnMs = min(cap, budget)`, that amount is deducted from the budget and
-// held by the running clock. §2.9's pseudocode omits the deduction, but
-// without it the budget grows monotonically and can never deplete — which
-// contradicts 01-REQ-038's "added *back* to its budget" and the documented
-// depletion behaviour (clock drops to the increment alone). Requirements
-// bind over design pseudocode (SPEC-INSTRUCTIONS Rule 5); see DECISIONS.md.
+// held by the running clock. The invariant `totalRemainingTime = budgetMs +
+// perTurnMs` holds at every instant; declareTurnOver credits the unspent
+// remainder back.
 export function applyTurnStart(
   clock: CentaurTeamClockState,
   turnNumber: TurnNumber,

@@ -358,3 +358,18 @@ Resolved REVIEW items from [`specs/04-stdb-engine.md`](../04-stdb-engine.md). Se
 **Informal spec reference**: N/A (operational hosting decision; not in the informal spec).
 
 **Affected requirements/design elements**: [04-REQ-072] (new), §2.13 (new warm-up endpoint design), §3.6 (new exported warm-up endpoint contract). The §3.4 step 4 / §2.10 references to the self-hosted management API consumed by Convex now read against the Fly.io-hosted scale-to-zero host without requirement-text changes (the prose was already implementation-neutral).
+
+---
+
+### 04-REVIEW-023: Chess-timer pseudocode — budget carve-out cascade from 01-REVIEW-019 — **RESOLVED**
+
+**Type**: Correction
+**Phase**: Design
+
+**Prior text**: §2.6's turn-start budget arithmetic and §2.7 Step 8's next-turn reset both computed `perTurnMs = min(cap, budgetMs)` without deducting the allocated clock from the budget, mirroring the pre-correction [01] §2.9 formulas. 04-REQ-030 described the derivation as "per-turn clock derivation from `min(effectiveCap, currentBudget)`" with no mention of the deduction.
+
+**Correction**: Cascade of [01]'s 01-REVIEW-019: the per-turn clock is carved out of the budget at the moment it is set (`budgetMs -= perTurnMs` after the `min`), so the budget holds only time not currently on the clock and `totalRemainingTime = budgetMs + perTurnMs` holds at every instant. §2.6's turn-start block and §2.7 Step 8 now carry the deduction line; 04-REQ-030 and 04-REQ-035 name the deduction as part of the [01-REQ-037] rule they bind to. The declare-turn-over and clock-expiry blocks were already consistent with carve-out accounting (they credit back only unspent clock time) and are unchanged. The `centaur_team_clock` post-turn budget recorded in the historical record (04-REQ-009) is the post-carve-out value.
+
+**Rationale**: See 01-REVIEW-019 — without the deduction the budget is monotonically non-decreasing and the depletion behaviour required by the informal spec's chess-timer design is unreachable. Module 04 replicates [01] §2.9's formulas verbatim (module 01 DOWNSTREAM IMPACT note 5 requires exact correspondence), so the correction propagates here mechanically.
+
+**Affected requirements/design elements**: 04-REQ-030, 04-REQ-035 (deduction named); §2.6 turn-start pseudocode; §2.7 Step 8 pseudocode. Implementation: `packages/engine/src/clock.ts` `applyTurnStart` (exported for module 04's reducers).

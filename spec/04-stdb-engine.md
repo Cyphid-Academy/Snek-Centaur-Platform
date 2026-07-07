@@ -86,7 +86,7 @@ This module specifies the per-game runtime that authoritatively executes [01]'s 
 
 ### 4.6 Chess Timer
 
-**04-REQ-030**: The runtime shall implement the chess-timer semantics of [01-REQ-034] through [01-REQ-040] within its own state; no external runtime shall mediate per-turn clock timing. This includes: per-CentaurTeam time budget tracking, per-turn clock derivation from `min(effectiveCap, currentBudget)`, budget crediting on explicit declaration, and automatic declaration on clock expiry.
+**04-REQ-030**: The runtime shall implement the chess-timer semantics of [01-REQ-034] through [01-REQ-040] within its own state; no external runtime shall mediate per-turn clock timing. This includes: per-CentaurTeam time budget tracking, per-turn clock derivation from `min(effectiveCap, currentBudget)` with the derived amount deducted from the budget per [01-REQ-037], budget crediting on explicit declaration, and automatic declaration on clock expiry. (See resolved 04-REVIEW-023.)
 
 **04-REQ-031**: The runtime shall expose a **declare-turn-over operation** that a registered connection may invoke on behalf of the CentaurTeam the connection was admitted for. A declaration shall (a) stop that CentaurTeam's per-turn clock, (b) credit the remaining clock time back to that CentaurTeam's time budget, (c) record the declaration timestamp as part of the per-turn record required by 04-REQ-009, and (d) be idempotent — a second declaration by the same CentaurTeam in the same turn has no effect. Declarations from spectator connections shall be rejected.
 
@@ -96,7 +96,7 @@ This module specifies the per-game runtime that authoritatively executes [01]'s 
 
 **04-REQ-034**: A CentaurTeam that has no alive snakes shall be treated for turn-resolution-triggering purposes as having declared turn over at the start of every subsequent turn. The runtime shall not wait for such a CentaurTeam's clock to expire before triggering resolution. (This handles the case where one CentaurTeam is eliminated but the game continues with the remaining CentaurTeams per [01-REQ-054].)
 
-**04-REQ-035**: Time-budget bookkeeping across turns shall conform to [01-REQ-035] (initial budget from configuration), [01-REQ-036] (budget increment at the start of each turn), and [01-REQ-037] (per-turn clock cap rule including the turn-0 first-turn-time override). The runtime shall record each CentaurTeam's post-turn budget as part of the historical record (04-REQ-009).
+**04-REQ-035**: Time-budget bookkeeping across turns shall conform to [01-REQ-035] (initial budget from configuration), [01-REQ-036] (budget increment at the start of each turn), and [01-REQ-037] (per-turn clock cap rule including the turn-0 first-turn-time override and the deduction of the allocated clock from the budget). The runtime shall record each CentaurTeam's post-turn budget as part of the historical record (04-REQ-009).
 
 ---
 
@@ -591,6 +591,7 @@ budgetMs  += config.clock.budgetIncrementMs         // [01-REQ-036]
 cap        = (T === 0) ? config.clock.firstTurnTimeMs
                        : config.clock.maxTurnTimeMs  // [01-REQ-037]
 perTurnMs  = min(cap, budgetMs)
+budgetMs  -= perTurnMs      // clock time carved out of budget [01-REQ-037]
 ```
 
 On explicit declare-turn-over:
@@ -727,6 +728,7 @@ reducer resolve_turn():
     budgetMs += config.clock.budgetIncrementMs
     cap = config.clock.maxTurnTimeMs
     perTurnMs = min(cap, budgetMs)
+    budgetMs -= perTurnMs   // carve-out per [01-REQ-037]
     reset centaur_team_turn_state for T_next:
       declaredTurnOver = (CentaurTeam has no alive snakes) [04-REQ-034]
       remainingClockMs = perTurnMs
