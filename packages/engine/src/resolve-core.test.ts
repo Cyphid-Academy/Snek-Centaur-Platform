@@ -14,7 +14,7 @@ import type {
 import { DEFAULT_GAME_CONFIG, Direction, ItemType } from "./types.js";
 
 // maxTurns 0 (no limit) and zero spawn rates so tests control every item.
-export const QUIET_CONFIG: GameRuntimeConfig = {
+const QUIET_CONFIG: GameRuntimeConfig = {
   ...DEFAULT_GAME_CONFIG.runtime,
   maxTurns: 0,
   foodSpawnRate: 0,
@@ -44,13 +44,10 @@ function doResolve(
   stagedMoves: Map<SnakeId, StagedMove>,
   opts: { turnNumber?: number; seedN?: number; config?: Partial<GameRuntimeConfig> } = {},
 ) {
-  return resolveTurn(
-    gameState,
-    stagedMoves,
-    turn(opts.turnNumber ?? 1),
-    seed(opts.seedN ?? 50),
-    { ...QUIET_CONFIG, ...opts.config },
-  );
+  return resolveTurn(gameState, stagedMoves, turn(opts.turnNumber ?? 1), seed(opts.seedN ?? 50), {
+    ...QUIET_CONFIG,
+    ...opts.config,
+  });
 }
 
 function snakeById(s: { snakes: ReadonlyArray<SnakeState> }, id: number): SnakeState {
@@ -487,7 +484,14 @@ describe("Phase 3 — collision detection (01-REQ-044)", () => {
     });
     // B moves Up twice conceptually; here (2,7) -> (2,6)? No: A's post-move
     // body is [(0,5)... wall] — use A's segment at (2,5): B at (2,6) moving Up.
-    const b2 = { ...b, body: [{ x: 2, y: 6 }, { x: 2, y: 7 }, { x: 2, y: 8 }] };
+    const b2 = {
+      ...b,
+      body: [
+        { x: 2, y: 6 },
+        { x: 2, y: 7 },
+        { x: 2, y: 8 },
+      ],
+    };
     const { nextState, events } = doResolve(
       state([a, b2]),
       moves([
@@ -556,7 +560,10 @@ describe("Phase 5 — health, hazards, food (01-REQ-046)", () => {
       ],
       health: 42,
     });
-    const { nextState } = doResolve(state([s], { board: { boardSize: 11, cells } }), moves([[0, Direction.Up]]));
+    const { nextState } = doResolve(
+      state([s], { board: { boardSize: 11, cells } }),
+      moves([[0, Direction.Up]]),
+    );
     expect(snakeById(nextState, 0).health).toBe(42 - 1 - 15);
   });
 

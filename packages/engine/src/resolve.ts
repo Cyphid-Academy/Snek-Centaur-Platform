@@ -7,7 +7,7 @@
 // only, and Phase 9 is the sole writer of `activeEffects` (01 §2.7
 // correctness-critical invariant). All `invulnerabilityLevel`/collision reads
 // therefore see start-of-turn values by construction.
-import { advance, cellAt, cellIndex, fertileGroundEnabled } from "./board.js";
+import { advance, cellAt, fertileGroundEnabled } from "./board.js";
 import { invulnerabilityLevel } from "./effects.js";
 import { rngFromSeed, subSeed } from "./rng.js";
 import type { Rng } from "./rng.js";
@@ -21,10 +21,8 @@ import type {
   GameRuntimeConfig,
   GameState,
   ItemId,
-  ItemState,
   PotionEffect,
   SnakeId,
-  SnakeState,
   StagedMove,
   TurnEvent,
   TurnNumber,
@@ -190,7 +188,10 @@ export function resolveTurn(
   const heads = new Map<SnakeId, Cell>(movers.map((s) => [s.snakeId, s.body[0] as Cell]));
   const snapBodies = new Map<SnakeId, Cell[]>(movers.map((s) => [s.snakeId, [...s.body]]));
   const snapLength = new Map<SnakeId, number>(movers.map((s) => [s.snakeId, s.body.length]));
-  const deadThisPhase = new Map<SnakeId, { cause: "wall" | "self_collision" | "body_collision" | "head_to_head"; killer: SnakeId | null }>();
+  const deadThisPhase = new Map<
+    SnakeId,
+    { cause: "wall" | "self_collision" | "body_collision" | "head_to_head"; killer: SnakeId | null }
+  >();
   const die = (
     id: SnakeId,
     cause: "wall" | "self_collision" | "body_collision" | "head_to_head",
@@ -332,7 +333,8 @@ export function resolveTurn(
       disruptions.push({ snakeId: snake.snakeId, cause: "hazard_entry" });
     }
     const food = items.find(
-      (i) => !i.consumed && i.itemType === ItemType.Food && i.cell.x === head.x && i.cell.y === head.y,
+      (i) =>
+        !i.consumed && i.itemType === ItemType.Food && i.cell.x === head.x && i.cell.y === head.y,
     );
     if (food !== undefined) {
       // 5c (046c, 01-REQ-025): heal after tick/hazard; eating is not a disruption
@@ -370,7 +372,10 @@ export function resolveTurn(
   // ---------- Phase 6: Potion Collection. spec: 01-REQ-047, 026, 027 ----------
   // Collect-and-aggregate: (team, family) → collector set, then one coherent
   // team rebuild per pair via pendingEffects.
-  const collectorsByTeamFamily = new Map<string, { team: CentaurTeamId; family: EffectFamily; collectorIds: Set<SnakeId> }>();
+  const collectorsByTeamFamily = new Map<
+    string,
+    { team: CentaurTeamId; family: EffectFamily; collectorIds: Set<SnakeId> }
+  >();
   for (const snake of alive()) {
     const head = snake.body[0] as Cell;
     const potion = items.find(
@@ -380,7 +385,7 @@ export function resolveTurn(
         i.cell.x === head.x &&
         i.cell.y === head.y,
     );
-    if (potion === undefined) continue;
+    if (potion === undefined || potion.itemType === ItemType.Food) continue;
     potion.consumed = true;
     const family: EffectFamily =
       potion.itemType === ItemType.InvulnPotion ? "invulnerability" : "invisibility";
@@ -442,7 +447,7 @@ export function resolveTurn(
     return cells; // row-major deterministic order
   };
   const spawnItems = (
-    itemType: ItemType,
+    itemType: typeof ItemType.Food | typeof ItemType.InvulnPotion | typeof ItemType.InvisPotion,
     rate: number,
     rng: Rng,
     eligible: Cell[],

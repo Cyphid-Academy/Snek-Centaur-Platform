@@ -41,7 +41,12 @@ describe("applyTurnStart", () => {
 
   // Depleted budget: per-turn clock drops to the increment alone
   it("limits the clock to the budget when the budget is below the cap", () => {
-    const depleted = { centaurTeamId: tid("red"), budgetMs: 0, perTurnMs: 0, declaredTurnOver: true };
+    const depleted = {
+      centaurTeamId: tid("red"),
+      budgetMs: 0,
+      perTurnMs: 0,
+      declaredTurnOver: true,
+    };
     const clock = applyTurnStart(depleted, turn(5), CLOCK_CONFIG);
     expect(clock.perTurnMs).toBe(500); // min(10000, 500)
     expect(clock.budgetMs).toBe(0); // fully carved out

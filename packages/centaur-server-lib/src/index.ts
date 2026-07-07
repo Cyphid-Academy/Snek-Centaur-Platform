@@ -6,10 +6,10 @@
 export type {
   Direction,
   GameState,
-  Snake,
+  SnakeState,
   Board,
-  Item,
-  Effect,
+  ItemState,
+  PotionEffect,
   EffectFamily,
   TurnEvent,
 } from "@cyphid/snek-engine";

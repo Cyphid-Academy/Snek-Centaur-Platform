@@ -15,9 +15,7 @@ export function cellAt(board: Board, cell: Cell): CellType | undefined {
 
 // spec: 01-REQ-009
 export function isInner(board: Board, cell: Cell): boolean {
-  return (
-    cell.x > 0 && cell.x < board.boardSize - 1 && cell.y > 0 && cell.y < board.boardSize - 1
-  );
+  return cell.x > 0 && cell.x < board.boardSize - 1 && cell.y > 0 && cell.y < board.boardSize - 1;
 }
 
 // spec: 01-REQ-016

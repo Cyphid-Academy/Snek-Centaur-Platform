@@ -6,12 +6,20 @@
 // concern (module 01 DOWNSTREAM IMPACT note 5). These helpers are exported
 // so module 04's reducers apply the exact formulas, including the
 // easy-to-miss credit-back on early declare.
-import type { CentaurTeamClockState, CentaurTeamId, GameRuntimeConfig, TurnNumber } from "./types.js";
+import type {
+  CentaurTeamClockState,
+  CentaurTeamId,
+  GameRuntimeConfig,
+  TurnNumber,
+} from "./types.js";
 
 type ClockConfig = GameRuntimeConfig["clock"];
 
 // spec: 01-REQ-035
-export function initialClock(centaurTeamId: CentaurTeamId, config: ClockConfig): CentaurTeamClockState {
+export function initialClock(
+  centaurTeamId: CentaurTeamId,
+  config: ClockConfig,
+): CentaurTeamClockState {
   return {
     centaurTeamId,
     budgetMs: config.initialBudgetMs,

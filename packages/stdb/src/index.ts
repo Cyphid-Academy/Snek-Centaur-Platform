@@ -6,12 +6,12 @@
 export type {
   Direction,
   GameState,
-  StagedMoves,
-  TurnResult,
+  StagedMove,
+  TurnResolution,
   TurnEvent,
-  Snake,
+  SnakeState,
   Board,
-  Item,
+  ItemState,
 } from "@cyphid/snek-engine";
 
 // ---------------------------------------------------------------------------

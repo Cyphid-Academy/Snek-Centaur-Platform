@@ -80,7 +80,7 @@ class Xoshiro256pp implements Rng {
 
   nextIntExclusive(maxExclusive: number): number {
     if (!Number.isInteger(maxExclusive) || maxExclusive <= 0) {
-      throw new Error(`nextIntExclusive: maxExclusive must be a positive integer`);
+      throw new Error("nextIntExclusive: maxExclusive must be a positive integer");
     }
     return Math.floor(this.nextFloat() * maxExclusive);
   }

@@ -218,9 +218,7 @@ describe("Phase 9a — collector disruption cancels the family team-wide (01-REQ
     );
     expect(snakeById(nextState, 0).alive).toBe(true);
     // Invisibility cancelled team-wide; the collector's invuln buff survives.
-    expect(snakeById(nextState, 0).activeEffects).toEqual([
-      effect("invulnerability", "buff", 9),
-    ]);
+    expect(snakeById(nextState, 0).activeEffects).toEqual([effect("invulnerability", "buff", 9)]);
     expect(snakeById(nextState, 1).activeEffects).toEqual([]);
   });
 
@@ -242,9 +240,7 @@ describe("Phase 9a — collector disruption cancels the family team-wide (01-REQ
       ]),
     );
     expect(snakeById(nextState, 1).alive).toBe(false);
-    expect(snakeById(nextState, 0).activeEffects).toEqual([
-      effect("invulnerability", "debuff", 9),
-    ]);
+    expect(snakeById(nextState, 0).activeEffects).toEqual([effect("invulnerability", "debuff", 9)]);
   });
 
   it("cancels both families independently for a dual-family collector", () => {
@@ -305,9 +301,7 @@ describe("Phase 9a — collector disruption cancels the family team-wide (01-REQ
         [2, Direction.Up],
       ]),
     );
-    expect(snakeById(nextState, 2).activeEffects).toEqual([
-      effect("invulnerability", "buff", 9),
-    ]);
+    expect(snakeById(nextState, 2).activeEffects).toEqual([effect("invulnerability", "buff", 9)]);
   });
 
   it("lets a same-turn re-collection supersede the cancellation (01-REQ-031)", () => {
