@@ -89,7 +89,7 @@ function collectorPair(family: "invulnerability" | "invisibility") {
   return { collector, mate };
 }
 
-describe("Phase 9a — collector disruption cancels the family team-wide (01-REQ-031)", () => {
+describe("Cancellation — collector disruption cancels the family team-wide (01-REQ-031)", () => {
   it("cancels teammates' buffs when the collector dies", () => {
     const { collector, mate } = collectorPair("invulnerability");
     // Collector drives into the wall: body starts adjacent to it.
@@ -332,7 +332,145 @@ describe("Phase 9a — collector disruption cancels the family team-wide (01-REQ
   });
 });
 
-describe("Phase 9c — expiry (resolved 01-REVIEW-003)", () => {
+describe("collection and death in the same turn (01-REVIEW-022)", () => {
+  it("applies the team rebuild when the collector dies by body collision (sacrificial collection)", () => {
+    // The collector grabs the potion on a cell crossed by an enemy body and
+    // dies there; the rebuild still applies — debuff on the corpse, buff on
+    // the living teammate, and the buff window cannot be disrupted.
+    const collector = makeSnake({
+      snakeId: sid(0),
+      body: [
+        { x: 4, y: 5 },
+        { x: 4, y: 6 },
+        { x: 4, y: 7 },
+      ],
+    });
+    const mate = makeSnake({
+      snakeId: sid(1),
+      letter: "B",
+      body: [
+        { x: 7, y: 8 },
+        { x: 7, y: 9 },
+        { x: 7, y: 9 },
+      ],
+    });
+    const enemy = makeSnake({
+      snakeId: sid(2),
+      centaurTeamId: tid("blue"),
+      body: [
+        { x: 5, y: 4 },
+        { x: 5, y: 5 },
+        { x: 5, y: 6 },
+      ],
+      lastDirection: Direction.Up,
+    });
+    const potion = makeItem(0, ItemType.InvulnPotion, { x: 5, y: 5 });
+    const { nextState, events } = doResolve(
+      state([collector, mate, enemy], { items: [potion] }),
+      moves([
+        [0, Direction.Right], // into the enemy body AND onto the potion
+        [1, Direction.Up],
+        [2, Direction.Up],
+      ]),
+      4,
+    );
+    expect(snakeById(nextState, 0).alive).toBe(false);
+    expect(nextState.items[0]?.consumed).toBe(true);
+    // Corpse keeps the debuff; living teammate holds the buff.
+    expect(snakeById(nextState, 0).activeEffects).toEqual([
+      { family: "invulnerability", state: "debuff", expiryTurn: turn(7) },
+    ]);
+    expect(snakeById(nextState, 1).activeEffects).toEqual([
+      { family: "invulnerability", state: "buff", expiryTurn: turn(7) },
+    ]);
+    expect(eventsOfKind(events, "potion_collected")).toHaveLength(1);
+  });
+
+  it("keeps the buff window alive when the dead collector's corpse is hit later", () => {
+    // Turn 1: collector dies by wall while a teammate re-collects — no,
+    // simpler: dead-in-snapshot snakes are not on the logical board, so a
+    // corpse debuff-holder can never be disrupted. Verify: mate keeps its
+    // buff on the following turn even when an enemy crosses the corpse cell.
+    const corpse = makeSnake({
+      snakeId: sid(0),
+      body: [
+        { x: 5, y: 5 },
+        { x: 5, y: 6 },
+        { x: 5, y: 7 },
+      ],
+      alive: false,
+      activeEffects: [effect("invulnerability", "debuff", 9)],
+    });
+    const mate = makeSnake({
+      snakeId: sid(1),
+      letter: "B",
+      body: [
+        { x: 8, y: 5 },
+        { x: 8, y: 6 },
+        { x: 8, y: 7 },
+      ],
+      activeEffects: [effect("invulnerability", "buff", 9)],
+    });
+    const enemy = makeSnake({
+      snakeId: sid(2),
+      centaurTeamId: tid("blue"),
+      body: [
+        { x: 4, y: 6 },
+        { x: 3, y: 6 },
+        { x: 2, y: 6 },
+      ],
+    });
+    const { nextState } = doResolve(
+      state([corpse, mate, enemy]),
+      moves([
+        [1, Direction.Up],
+        [2, Direction.Right], // onto the corpse's old body cell — no collision, no disruption
+      ]),
+      5,
+    );
+    expect(snakeById(nextState, 2).alive).toBe(true); // corpse bodies are not obstacles
+    expect(snakeById(nextState, 1).activeEffects).toEqual([effect("invulnerability", "buff", 9)]);
+  });
+
+  it("denies collection to a head-to-head loser (044d precedence)", () => {
+    const loser = makeSnake({
+      snakeId: sid(0),
+      body: [
+        { x: 4, y: 5 },
+        { x: 3, y: 5 },
+        { x: 2, y: 5 },
+      ],
+    });
+    const winner = makeSnake({
+      snakeId: sid(1),
+      centaurTeamId: tid("blue"),
+      body: [
+        { x: 6, y: 5 },
+        { x: 7, y: 5 },
+        { x: 8, y: 5 },
+        { x: 8, y: 6 },
+      ],
+    });
+    const potion = makeItem(0, ItemType.InvulnPotion, { x: 5, y: 5 });
+    const { nextState, events } = doResolve(
+      state([loser, winner], { items: [potion] }),
+      moves([
+        [0, Direction.Right],
+        [1, Direction.Left],
+      ]),
+      4,
+    );
+    expect(snakeById(nextState, 0).alive).toBe(false);
+    expect(snakeById(nextState, 0).activeEffects).toEqual([]); // loser collected nothing
+    // The unique winner collected: it is this turn's collector (debuff).
+    expect(snakeById(nextState, 1).activeEffects).toEqual([
+      { family: "invulnerability", state: "debuff", expiryTurn: turn(7) },
+    ]);
+    expect(eventsOfKind(events, "potion_collected")[0]?.snakeId).toBe(sid(1));
+  });
+});
+
+describe("Expiry (resolved 01-REVIEW-003)", () => {
   it("keeps an effect active on turns T+1..T+3 and removes it at the end of T+3", () => {
     const collector = makeSnake({
       snakeId: sid(0),

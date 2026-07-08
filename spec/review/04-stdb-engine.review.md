@@ -373,3 +373,18 @@ Resolved REVIEW items from [`specs/04-stdb-engine.md`](../04-stdb-engine.md). Se
 **Rationale**: See 01-REVIEW-019 — without the deduction the budget is monotonically non-decreasing and the depletion behaviour required by the informal spec's chess-timer design is unreachable. Module 04 replicates [01] §2.9's formulas verbatim (module 01 DOWNSTREAM IMPACT note 5 requires exact correspondence), so the correction propagates here mechanically.
 
 **Affected requirements/design elements**: 04-REQ-030, 04-REQ-035 (deduction named); §2.6 turn-start pseudocode; §2.7 Step 8 pseudocode. Implementation: `packages/engine/src/clock.ts` `applyTurnStart` (exported for module 04's reducers).
+
+---
+
+### 04-REVIEW-024: Turn-resolution model and snake-state schema cascade from 01-REVIEW-022 — **RESOLVED**
+
+**Type**: Amendment
+**Phase**: Requirements
+
+**Prior text**: Module 04 mirrored [01]'s eleven-phase pipeline throughout: 04-REQ-036/037/038 bound the reducer to "the eleven-phase pipeline"; 04-REQ-004/006 included `pendingEffects` and the `ateLastTurn` flag in the observable historical record; `SnakeStateRow` carried `pendingEffectsJson` and `ateLastTurn` columns (mirrored in the initial-state payload and replay TS types); 04-REQ-043's event records were phase-attributed, `snake_moved` carried a `grew` flag, `DeathCause` included `starvation`/`hazard`, and 04-REQ-045's canonical event order was phase-major.
+
+**Amendment**: Cascade of [01]'s 01-REVIEW-022. The reducer executes the staged turn-resolution model of [01-REQ-041] (still as one atomic transaction — 04-REQ-037 unchanged in substance). `SnakeState` no longer carries `ateLastTurn` or `pendingEffects` ([01] DOWNSTREAM IMPACT note 7): the columns are removed from `SnakeStateRow`, the initial-state payload, and the replay types — growth state lives in `body` as a duplicated tail segment and rebuilds are intra-turn claims. Event changes: `snake_moved` loses `grew` (growth observable via `food_eaten` + the committed body); `snake_died` gains optional `sources: DamageSource[]` and `DeathCause` becomes `wall | self_collision | body_collision | head_to_head | health_depletion`; the `hazard_damage` event's no-double-count rule now keys on `health_depletion`-with-`hazard`-source deaths; 04-REQ-045's canonical order becomes event-class-major per [01] §2.11 (with `hazard_damage` inserted after food consumption), dropping the phase key. Phase-positional wording across 04-REQ-006/015/028/040/043/051/060 and §2 prose is restated in stage terms.
+
+**Rationale**: See 01-REVIEW-022. Module 04 consumes `resolveTurn` as a black box, so the cascade is representational: schema columns that no longer exist, event payloads/ordering, and wording. The always-empty-at-boundary `pendingEffectsJson` column had carried no information in any historical snapshot.
+
+**Affected requirements/design elements**: 04-REQ-004, 04-REQ-006, 04-REQ-015, 04-REQ-028, 04-REQ-036, 04-REQ-037, 04-REQ-038, 04-REQ-040, 04-REQ-043 (a–j), 04-REQ-045, 04-REQ-051, 04-REQ-060; §2.1 `SnakeStateRow`; §2.3 initial-state payload; §2.7 Step 4 and win-check prose; §2.8 event table, `DeathCause`/`DamageSource`, canonical ordering, `hazard_damage` note; §3.2 replay TS types.

@@ -63,17 +63,19 @@ export interface PotionEffect {
 // spec: 01-REQ-004. `invulnerabilityLevel` and `visible` are NOT stored
 // fields — they are derived from `activeEffects` per 01-REQ-022/023 via
 // `invulnerabilityLevel(snake)` and `isVisible(snake)` in effects.ts.
+// SnakeState carries no intra-turn bookkeeping: growth is a duplicated tail
+// segment in `body` (01-REQ-062) and team rebuilds are intra-turn claims.
 export interface SnakeState {
   readonly snakeId: SnakeId;
   readonly letter: string; // single alphabetic char, 'A' + index within team
   readonly centaurTeamId: CentaurTeamId;
-  readonly body: ReadonlyArray<Cell>; // head at index 0, tail at last index
+  // Head at index 0, tail at last index. Consecutive entries may share a
+  // cell (duplicated tail from growth; fully stacked game-start body).
+  readonly body: ReadonlyArray<Cell>;
   readonly health: number;
   readonly activeEffects: ReadonlyArray<PotionEffect>; // ≤1 per family (01-REQ-028)
-  readonly pendingEffects: ReadonlyArray<PotionEffect>; // ≤1 per family (01-REQ-047)
   readonly lastDirection: Direction | null;
   readonly alive: boolean;
-  readonly ateLastTurn: boolean;
 }
 
 // spec: 01-REQ-007
@@ -178,8 +180,10 @@ export type DeathCause =
   | "self_collision"
   | "body_collision"
   | "head_to_head"
-  | "starvation"
-  | "hazard";
+  | "health_depletion";
+
+// Damage-claim sources reported on health_depletion deaths (01-REQ-046d).
+export type DamageSource = "tick" | "hazard";
 
 export type TurnEvent =
   | {
@@ -188,9 +192,8 @@ export type TurnEvent =
       readonly from: Cell;
       readonly to: Cell;
       readonly direction: Direction;
-      readonly grew: boolean;
-      // null when no move was staged this turn — i.e. Phase 1 fell through
-      // to `lastDirection` or, on turn 0, to the deterministic random pick.
+      // null when no move was staged this turn — the direction came from the
+      // `lastDirection` fallback or, on turn 0, the seeded random pick.
       readonly stagedBy: Agent | null;
     }
   | {
@@ -199,6 +202,9 @@ export type TurnEvent =
       readonly cause: DeathCause;
       readonly killerSnakeId: SnakeId | null;
       readonly location: Cell;
+      // Present iff cause === 'health_depletion': every damage source that
+      // contributed to the fatal health resolution (01-REQ-046d).
+      readonly sources?: ReadonlyArray<DamageSource>;
     }
   | {
       readonly kind: "snake_severed";

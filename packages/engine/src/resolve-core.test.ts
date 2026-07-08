@@ -63,7 +63,7 @@ function eventsOfKind<K extends TurnEvent["kind"]>(
   return events.filter((e): e is Extract<TurnEvent, { kind: K }> => e.kind === kind);
 }
 
-describe("Phase 1 — move collection (01-REQ-042)", () => {
+describe("Move projection — direction (01-REQ-042)", () => {
   it("uses the staged move and attributes it in the snake_moved event", () => {
     const s = makeSnake({
       snakeId: sid(0),
@@ -131,7 +131,7 @@ describe("Phase 1 — move collection (01-REQ-042)", () => {
   });
 });
 
-describe("Phase 2 — snake movement (01-REQ-043, 01-REQ-062)", () => {
+describe("Move projection — body advance and growth (01-REQ-043, 01-REQ-062)", () => {
   it("advances the head and drops the tail, keeping length constant", () => {
     const s = makeSnake({
       snakeId: sid(0),
@@ -150,23 +150,27 @@ describe("Phase 2 — snake movement (01-REQ-043, 01-REQ-062)", () => {
     expect(snakeById(nextState, 0).lastDirection).toBe(Direction.Up);
   });
 
-  it("retains the tail on the turn after eating (growth is +1 exactly)", () => {
+  it("advances a grown snake by dropping only one tail copy (01-REQ-043)", () => {
+    // Doubled tail from an earlier meal: the cell stays occupied after a move.
     const s = makeSnake({
       snakeId: sid(0),
       body: [
         { x: 5, y: 5 },
         { x: 5, y: 6 },
         { x: 5, y: 7 },
+        { x: 5, y: 7 },
       ],
-      ateLastTurn: true,
     });
-    const { nextState, events } = doResolve(state([s]), moves([[0, Direction.Up]]));
-    expect(snakeById(nextState, 0).body).toHaveLength(4);
-    expect(snakeById(nextState, 0).ateLastTurn).toBe(false);
-    expect(eventsOfKind(events, "snake_moved")[0]?.grew).toBe(true);
+    const { nextState } = doResolve(state([s]), moves([[0, Direction.Up]]));
+    expect(snakeById(nextState, 0).body).toEqual([
+      { x: 5, y: 4 },
+      { x: 5, y: 5 },
+      { x: 5, y: 6 },
+      { x: 5, y: 7 },
+    ]);
   });
 
-  it("grows exactly once after one food across two turns (01-REQ-062)", () => {
+  it("grows exactly once, as a doubled tail at the eating turn's commit (01-REQ-062)", () => {
     const s = makeSnake({
       snakeId: sid(0),
       body: [
@@ -178,12 +182,18 @@ describe("Phase 2 — snake movement (01-REQ-043, 01-REQ-062)", () => {
     });
     const withFood = state([s], { items: [makeItem(0, ItemType.Food, { x: 5, y: 4 })] });
     const turn1 = doResolve(withFood, moves([[0, Direction.Up]]));
-    expect(snakeById(turn1.nextState, 0).body).toHaveLength(3); // no growth yet
-    expect(snakeById(turn1.nextState, 0).ateLastTurn).toBe(true);
+    // Growth is committed on the eating turn as a duplicated tail segment...
+    expect(snakeById(turn1.nextState, 0).body).toEqual([
+      { x: 5, y: 4 },
+      { x: 5, y: 5 },
+      { x: 5, y: 6 },
+      { x: 5, y: 6 },
+    ]);
+    // ...and the length is stable (+1 exactly) on subsequent turns.
     const turn2 = doResolve(turn1.nextState, moves([[0, Direction.Up]]), { turnNumber: 2 });
-    expect(snakeById(turn2.nextState, 0).body).toHaveLength(4); // +1 exactly
+    expect(snakeById(turn2.nextState, 0).body).toHaveLength(4);
     const turn3 = doResolve(turn2.nextState, moves([[0, Direction.Up]]), { turnNumber: 3 });
-    expect(snakeById(turn3.nextState, 0).body).toHaveLength(4); // and no more
+    expect(snakeById(turn3.nextState, 0).body).toHaveLength(4);
   });
 
   it("does not move dead snakes", () => {
@@ -194,7 +204,7 @@ describe("Phase 2 — snake movement (01-REQ-043, 01-REQ-062)", () => {
   });
 });
 
-describe("Phase 3 — collision detection (01-REQ-044)", () => {
+describe("Collision rules (01-REQ-044)", () => {
   it("kills a snake whose head enters a wall (044a)", () => {
     const s = makeSnake({
       snakeId: sid(0),
@@ -540,7 +550,7 @@ describe("Phase 3 — collision detection (01-REQ-044)", () => {
   });
 });
 
-describe("Phase 5 — health, hazards, food (01-REQ-046)", () => {
+describe("Health rules (01-REQ-046)", () => {
   it("subtracts 1 health per turn unconditionally (046a)", () => {
     const s = makeSnake({ snakeId: sid(0), health: 42 });
     const { nextState } = doResolve(state([s]), moves([[0, Direction.Up]]));
@@ -567,7 +577,7 @@ describe("Phase 5 — health, hazards, food (01-REQ-046)", () => {
     expect(snakeById(nextState, 0).health).toBe(42 - 1 - 15);
   });
 
-  it("dies with cause hazard when hazard damage is lethal", () => {
+  it("dies of health_depletion with hazard among sources when hazard damage is lethal", () => {
     const board = emptyBoard(11);
     const cells = [...board.cells];
     cells[4 * 11 + 3] = 2;
@@ -584,8 +594,10 @@ describe("Phase 5 — health, hazards, food (01-REQ-046)", () => {
       state([s], { board: { boardSize: 11, cells } }),
       moves([[0, Direction.Up]]),
     );
+    const died = eventsOfKind(events, "snake_died")[0];
     expect(snakeById(nextState, 0).alive).toBe(false);
-    expect(eventsOfKind(events, "snake_died")[0]?.cause).toBe("hazard");
+    expect(died?.cause).toBe("health_depletion");
+    expect(new Set(died?.sources)).toEqual(new Set(["tick", "hazard"]));
   });
 
   it("restores health to max and marks ateLastTurn on food (046c, 01-REQ-025)", () => {
@@ -598,7 +610,7 @@ describe("Phase 5 — health, hazards, food (01-REQ-046)", () => {
       moves([[0, Direction.Up]]),
     );
     expect(snakeById(nextState, 0).health).toBe(100);
-    expect(snakeById(nextState, 0).ateLastTurn).toBe(true);
+    expect(snakeById(nextState, 0).body).toHaveLength(4); // grew at commit
     expect(nextState.items.find((i) => i.itemId === iid(0))?.consumed).toBe(true);
     const eaten = eventsOfKind(events, "food_eaten");
     expect(eaten).toHaveLength(1);
@@ -633,7 +645,9 @@ describe("Phase 5 — health, hazards, food (01-REQ-046)", () => {
     const s = makeSnake({ snakeId: sid(0), health: 1 });
     const { nextState, events } = doResolve(state([s]), moves([[0, Direction.Up]]));
     expect(snakeById(nextState, 0).alive).toBe(false);
-    expect(eventsOfKind(events, "snake_died")[0]?.cause).toBe("starvation");
+    const died = eventsOfKind(events, "snake_died")[0];
+    expect(died?.cause).toBe("health_depletion");
+    expect(died?.sources).toEqual(["tick"]);
   });
 
   it("saves a 1-health snake that reaches food (all modifications before starvation)", () => {
@@ -648,23 +662,108 @@ describe("Phase 5 — health, hazards, food (01-REQ-046)", () => {
     expect(snakeById(nextState, 0).health).toBe(100);
   });
 
-  it("does not let a snake that died in Phase 3 consume food (046c 'surviving')", () => {
-    // Snake runs into the wall; food sits on the wall-adjacent cell it never reaches.
+  it("leaves an item uncollected when a head-to-head tie kills every entrant (044d)", () => {
     const a = makeSnake({
       snakeId: sid(0),
       body: [
-        { x: 1, y: 5 },
-        { x: 2, y: 5 },
+        { x: 4, y: 5 },
         { x: 3, y: 5 },
+        { x: 2, y: 5 },
       ],
     });
-    const food = makeItem(0, ItemType.Food, { x: 0, y: 5 }); // on the wall cell
-    const { nextState } = doResolve(state([a], { items: [food] }), moves([[0, Direction.Left]]));
-    expect(nextState.items[0]?.consumed).toBe(false);
+    const b = makeSnake({
+      snakeId: sid(1),
+      centaurTeamId: tid("blue"),
+      body: [
+        { x: 6, y: 5 },
+        { x: 7, y: 5 },
+        { x: 8, y: 5 },
+      ],
+    });
+    const food = makeItem(0, ItemType.Food, { x: 5, y: 5 }); // the contested cell
+    const { nextState } = doResolve(
+      state([a, b], { items: [food] }),
+      moves([
+        [0, Direction.Right],
+        [1, Direction.Left],
+      ]),
+    );
+    expect(snakeById(nextState, 0).alive).toBe(false);
+    expect(snakeById(nextState, 1).alive).toBe(false);
+    expect(nextState.items[0]?.consumed).toBe(false); // no surviving entrant
+  });
+
+  it("lets the unique head-to-head winner collect the contested item (044d)", () => {
+    const short = makeSnake({
+      snakeId: sid(0),
+      body: [
+        { x: 4, y: 5 },
+        { x: 3, y: 5 },
+        { x: 2, y: 5 },
+      ],
+    });
+    const long = makeSnake({
+      snakeId: sid(1),
+      centaurTeamId: tid("blue"),
+      body: [
+        { x: 6, y: 5 },
+        { x: 7, y: 5 },
+        { x: 8, y: 5 },
+        { x: 8, y: 6 },
+      ],
+      health: 40,
+    });
+    const food = makeItem(0, ItemType.Food, { x: 5, y: 5 });
+    const { nextState } = doResolve(
+      state([short, long], { items: [food] }),
+      moves([
+        [0, Direction.Right],
+        [1, Direction.Left],
+      ]),
+    );
+    expect(snakeById(nextState, 0).alive).toBe(false); // loser eats nothing
+    expect(snakeById(nextState, 1).alive).toBe(true);
+    expect(nextState.items[0]?.consumed).toBe(true);
+    expect(snakeById(nextState, 1).health).toBe(100); // winner healed
+  });
+
+  it("lets a snake dying by body collision still eat (sacrificial collection)", () => {
+    // Food sits on a cell crossed by the victim's body; the attacker dies
+    // there but its head reached the cell — the food is consumed.
+    const attacker = makeSnake({
+      snakeId: sid(0),
+      body: [
+        { x: 4, y: 5 },
+        { x: 4, y: 6 },
+        { x: 4, y: 7 },
+      ],
+    });
+    const victim = makeSnake({
+      snakeId: sid(1),
+      centaurTeamId: tid("blue"),
+      body: [
+        { x: 5, y: 4 },
+        { x: 5, y: 5 },
+        { x: 5, y: 6 },
+      ],
+      lastDirection: Direction.Up,
+    });
+    const food = makeItem(0, ItemType.Food, { x: 5, y: 5 });
+    const { nextState, events } = doResolve(
+      state([attacker, victim], { items: [food] }),
+      moves([
+        [0, Direction.Right],
+        [1, Direction.Up],
+      ]),
+    );
+    expect(snakeById(nextState, 0).alive).toBe(false);
+    expect(eventsOfKind(events, "snake_died")[0]?.cause).toBe("body_collision");
+    expect(nextState.items[0]?.consumed).toBe(true);
+    expect(eventsOfKind(events, "food_eaten")).toHaveLength(1);
   });
 });
 
-describe("Phase 6 — potion collection (01-REQ-047, 01-REQ-026/027)", () => {
+describe("Potion rule (01-REQ-047, 01-REQ-026/027)", () => {
   function teamPair() {
     const collector = makeSnake({
       snakeId: sid(0),
@@ -704,7 +803,6 @@ describe("Phase 6 — potion collection (01-REQ-047, 01-REQ-026/027)", () => {
     expect(snakeById(nextState, 1).activeEffects).toEqual([
       { family: "invulnerability", state: "buff", expiryTurn: turn(7) },
     ]);
-    expect(snakeById(nextState, 0).pendingEffects).toEqual([]);
     const collected = eventsOfKind(events, "potion_collected");
     expect(collected).toHaveLength(1);
     expect(collected[0]?.snakeId).toBe(sid(0));

@@ -114,7 +114,7 @@
 
 ### 2.7 Shared Engine Codebase
 
-**02-REQ-034**: The platform shall provide a single shared TypeScript codebase that exports the domain type vocabulary defined by [01] (Section 1.1) and a turn-resolution implementation conforming to the eleven-phase pipeline of [01-REQ-041] through [01-REQ-052].
+**02-REQ-034**: The platform shall provide a single shared TypeScript codebase that exports the domain type vocabulary defined by [01] (Section 1.1) and a turn-resolution implementation conforming to the staged turn-resolution model of [01-REQ-041] through [01-REQ-052].
 
 **02-REQ-035**: The SpacetimeDB game runtime shall consume the shared engine codebase to perform authoritative turn resolution. It shall not implement [01]'s domain types or turn-resolution algorithm in a parallel codebase.
 
@@ -233,7 +233,7 @@ The platform is composed of exactly three runtime kinds, each with a distinct li
 
 Satisfies 02-REQ-007 through 02-REQ-014.
 
-**Authoritative turn resolution** (02-REQ-007, 02-REQ-008). The SpacetimeDB module imports the shared engine codebase ([02-REQ-035]) and invokes `resolveTurn()` (from Module 01's exported interface, Section 3.8) inside a `resolve_turn` reducer. Because SpacetimeDB reducers execute as single ACID transactions, the entire eleven-phase pipeline either completes and commits or is rolled back entirely. No other runtime calls `resolveTurn()` authoritatively — the Snek Centaur Server library uses it for simulation only (02-REQ-036), and web clients use it for pre-validation and rendering only (02-REQ-037). Board generation is performed by Convex before the STDB instance is provisioned (see §2.14).
+**Authoritative turn resolution** (02-REQ-007, 02-REQ-008). The SpacetimeDB module imports the shared engine codebase ([02-REQ-035]) and invokes `resolveTurn()` (from Module 01's exported interface, Section 3.8) inside a `resolve_turn` reducer. Because SpacetimeDB reducers execute as single ACID transactions, the entire turn-resolution computation either completes and commits or is rolled back entirely. No other runtime calls `resolveTurn()` authoritatively — the Snek Centaur Server library uses it for simulation only (02-REQ-036), and web clients use it for pre-validation and rendering only (02-REQ-037). Board generation is performed by Convex before the STDB instance is provisioned (see §2.14).
 
 **Real-time synchronization** (02-REQ-009). SpacetimeDB provides automatic real-time state synchronization to connected clients via subscription queries. When a reducer commits new rows (e.g., new `snake_states` entries after turn resolution), all subscribers whose subscription queries match the new data receive updates without polling. This is a platform-provided capability of SpacetimeDB, not custom application code.
 

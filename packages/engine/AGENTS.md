@@ -31,17 +31,17 @@ Every non-trivial decision must cite the spec requirement it satisfies:
 // spec: 01-REQ-042
 ```
 
-Structural invariants to preserve (01 §2.7):
+Structural invariants to preserve (01 §2.8, resolved 01-REVIEW-022):
 
-- No code path before Phase 9 writes `snake.activeEffects`; Phase 6 writes `pendingEffects` only. This is how 01-REQ-033 (start-of-turn effect reads) is satisfied — there is no snapshot to maintain.
-- Phase 3 evaluates every collision against a single post-Phase-2 snapshot (`heads`/`snapBodies`/`snapLength` in `resolve.ts`); severs must never mutate that reference state.
+- Turn resolution is snapshot → parallel rules → deterministic commit. Interaction rules read only the snapshot, the surviving moved-head set `H*` (after head-to-head precedence), and the turn seed; they emit claims and never write game state. The commit is the sole writer. A new mechanic is a new rule emitting claims plus, at most, one clause in the commit — never an in-place mutation during rule evaluation.
+- `SnakeState` carries no intra-turn bookkeeping: growth is a duplicated tail segment in `body` (01-REQ-062); there is no `ateLastTurn` or `pendingEffects` field.
 - `subSeed` is BLAKE3 keyed hashing via `@noble/hashes` — changing the algorithm or the context tags breaks replay reproducibility everywhere (module 01 DOWNSTREAM IMPACT note 4).
 
 ## Key files
 
 - `src/index.ts` — public API surface, mirrors 02 §2.17's export list
 - `src/types.ts` — canonical domain types (01 §3.1–3.6)
-- `src/resolve.ts` — the eleven-phase resolver + win conditions
+- `src/resolve.ts` — the staged rule/commit resolver + win conditions
 - `src/boardgen.ts` — board generation pipeline with bounded retry
 - `src/rng.ts`, `src/perlin.ts` — randomness and fertile-tile noise
 - `src/clock.ts` — chess-timer arithmetic

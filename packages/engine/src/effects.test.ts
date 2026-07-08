@@ -22,11 +22,6 @@ describe("invulnerabilityLevel", () => {
     const snake = makeSnake({ activeEffects: [effect("invisibility", "buff", 5)] });
     expect(invulnerabilityLevel(snake)).toBe(0);
   });
-
-  it("ignores pending effects", () => {
-    const snake = makeSnake({ pendingEffects: [effect("invulnerability", "buff", 5)] });
-    expect(invulnerabilityLevel(snake)).toBe(0);
-  });
 });
 
 describe("isVisible", () => {

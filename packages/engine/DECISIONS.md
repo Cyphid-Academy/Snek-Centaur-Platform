@@ -124,6 +124,18 @@ Improved-Perlin fade with 8 gradient directions; output divided by √2 to bound
 
 ---
 
+## F. Post-implementation redesign — staged parallel-rule model (01-REVIEW-022)
+
+After the initial implementation shipped, the turn-resolution model was redesigned by human direction (recorded as Amendment **01-REVIEW-022**, with cascades 02-REVIEW-009 and 04-REVIEW-024): turn resolution is now **snapshot → move projection → head-to-head precedence → parallel interaction rules (claims) → derived rules → deterministic commit**. Consequences for this package:
+
+- `SnakeState` lost `ateLastTurn` and `pendingEffects`; growth is a duplicated tail segment committed on the eating turn.
+- Head-to-head resolution runs first and withdraws losing heads from the set every other rule consumes — items are collected by the unique winning entrant or nobody.
+- Death by any non-head-to-head cause no longer blocks item collection (sacrificial collection); a collector killed in its collection turn leaves an undisruptable corpse debuff and the team keeps its buffs.
+- Health resolves from parallel damage claims and a dominant heal claim; `starvation`/`hazard` death causes merged into `health_depletion` + `sources`.
+- `snake_moved` lost `grew`; canonical event ordering is event-class-major.
+
+This supersedes interpretations **C2** (death-cause precedence — now specified in 01 §2.11), **C3** (hazard-vs-starvation attribution — replaced by `health_depletion` + sources), and **C7** (event ordering — now specified class-major in 01 §2.11). The remaining sections below describe the original implementation pass and stand as history.
+
 ## E. Observations for the spec authors (no action taken)
 
 1. **Hazard 30% is frequently infeasible.** Uniform hazard placement at 25–30% density sits near the site-percolation threshold on mid-size boards: on a 13-board at 30%, roughly half of game seeds exhaust all four attempts on `HAZARD_CONNECTIVITY` (measured: 11/20 seeds succeed; 15-board: 3/20). The bounded-retry design absorbs this, but the room-owner UX at the top of the 0–30 range will be "provisioning failed" often enough to notice. A connectivity-aware placement algorithm (e.g. carve from a spanning structure) or a tighter range cap may be worth a REVIEW item.

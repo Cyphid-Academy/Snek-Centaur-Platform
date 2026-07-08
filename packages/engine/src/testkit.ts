@@ -54,10 +54,8 @@ export interface SnakeOverrides {
   readonly body?: ReadonlyArray<Cell>;
   readonly health?: number;
   readonly activeEffects?: ReadonlyArray<PotionEffect>;
-  readonly pendingEffects?: ReadonlyArray<PotionEffect>;
   readonly lastDirection?: Direction | null;
   readonly alive?: boolean;
-  readonly ateLastTurn?: boolean;
 }
 
 export function makeSnake(overrides: SnakeOverrides = {}): SnakeState {
@@ -72,10 +70,8 @@ export function makeSnake(overrides: SnakeOverrides = {}): SnakeState {
     ],
     health: overrides.health ?? 100,
     activeEffects: overrides.activeEffects ?? [],
-    pendingEffects: overrides.pendingEffects ?? [],
     lastDirection: overrides.lastDirection !== undefined ? overrides.lastDirection : null,
     alive: overrides.alive ?? true,
-    ateLastTurn: overrides.ateLastTurn ?? false,
   };
 }
 

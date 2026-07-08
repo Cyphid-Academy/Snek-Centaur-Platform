@@ -47,7 +47,9 @@ describe("isValidMove", () => {
     expect(isValidMove(state([loop]), sid(0), Direction.Right)).toBe(true);
   });
 
-  it("treats the tail as staying put when the snake grew last turn", () => {
+  it("treats a duplicated tail cell as staying occupied after the move", () => {
+    // Doubled tail from growth (01-REQ-062): only one copy drops this turn,
+    // so the tail cell remains occupied and the move into it is fatal.
     const loop = makeSnake({
       snakeId: sid(0),
       body: [
@@ -55,8 +57,8 @@ describe("isValidMove", () => {
         { x: 3, y: 4 },
         { x: 4, y: 4 },
         { x: 4, y: 3 },
+        { x: 4, y: 3 },
       ],
-      ateLastTurn: true, // tail is retained this turn → target stays occupied
     });
     expect(isValidMove(state([loop]), sid(0), Direction.Right)).toBe(false);
   });

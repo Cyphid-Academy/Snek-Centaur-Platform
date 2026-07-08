@@ -148,10 +148,8 @@ describe("snake initialization", () => {
       expect(s.body[2]).toEqual(s.body[0]);
       expect(s.health).toBe(77);
       expect(s.activeEffects).toEqual([]);
-      expect(s.pendingEffects).toEqual([]);
       expect(s.lastDirection).toBeNull();
       expect(s.alive).toBe(true);
-      expect(s.ateLastTurn).toBe(false);
     }
   });
 

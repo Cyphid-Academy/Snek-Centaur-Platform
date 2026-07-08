@@ -185,10 +185,8 @@ function runAttempt(
         body: [head, head, head], // length 3, stacked. spec: 01-REQ-020
         health: config.runtime.maxHealth, // spec: 01-REQ-021
         activeEffects: [],
-        pendingEffects: [],
         lastDirection: null,
         alive: true,
-        ateLastTurn: false,
       });
     });
   });

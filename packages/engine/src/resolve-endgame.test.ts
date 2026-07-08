@@ -82,7 +82,7 @@ function blueSnake(id: number, x: number): SnakeState {
   });
 }
 
-describe("Phase 7/8 — item spawning (01-REQ-048, 01-REQ-049)", () => {
+describe("Item spawning (01-REQ-048, 01-REQ-049)", () => {
   it("spawns exactly floor(rate) items for an integer rate, on unoccupied inner cells", () => {
     const s = redSnake(0, 5);
     const existing = makeItem(5, ItemType.Food, { x: 8, y: 8 });
@@ -170,7 +170,7 @@ describe("Phase 7/8 — item spawning (01-REQ-048, 01-REQ-049)", () => {
   });
 });
 
-describe("Phase 10 — win conditions (01-REQ-053..058)", () => {
+describe("Win conditions (01-REQ-053..058)", () => {
   it("declares last-team-standing victory with score 1.0 x N (01-REQ-054)", () => {
     const red = redSnake(0, 5);
     const blueDoomed = {
@@ -233,8 +233,9 @@ describe("Phase 10 — win conditions (01-REQ-053..058)", () => {
   });
 
   it("ends at the turn limit with normalised body-share scores (01-REQ-057, 01-REQ-053)", () => {
-    // Red 4 segments (grew), blue 3: total 7. Red = 4/7*2, blue = 3/7*2.
-    const red = { ...redSnake(0, 3), ateLastTurn: true };
+    // Red 4 segments, blue 3: total 7. Red = 4/7*2, blue = 3/7*2.
+    const base = redSnake(0, 3);
+    const red = { ...base, body: [...base.body, base.body[2] as { x: number; y: number }] };
     const blue = blueSnake(1, 7);
     const { outcome } = doResolve(
       state([red, blue]),
@@ -278,7 +279,7 @@ describe("Phase 10 — win conditions (01-REQ-053..058)", () => {
   });
 });
 
-describe("Phase 11 — event ordering (01-REQ-052)", () => {
+describe("Event ordering (01-REQ-052)", () => {
   it("orders events by phase, then ascending snakeId within a phase", () => {
     // Snake 1 (lower x) and snake 0 both move; snake 0 dies on a wall; food
     // spawning follows. Kind order must follow phase order regardless of

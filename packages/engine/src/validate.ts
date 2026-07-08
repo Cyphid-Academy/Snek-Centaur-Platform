@@ -20,8 +20,9 @@ export function isValidMove(state: GameState, snakeId: SnakeId, direction: Direc
   const target = advance(head, direction);
   const targetType = cellAt(state.board, target);
   if (targetType === undefined || targetType === CellType.Wall) return false;
-  // Own segments still occupied after this move: all but the head slot, and
-  // the tail only if it is retained this turn (growth pending).
-  const occupiedAfter = snake.ateLastTurn ? snake.body.slice(1) : snake.body.slice(1, -1);
+  // Own segments still occupied after the unconditional advance-and-drop-tail
+  // move (01-REQ-043): body[1 .. len-2]. A duplicated tail segment from
+  // growth (01-REQ-062) keeps its cell occupied via the second-to-last entry.
+  const occupiedAfter = snake.body.slice(1, -1);
   return !occupiedAfter.some((c) => c.x === target.x && c.y === target.y);
 }
