@@ -1,67 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { resolveTurn } from "./resolve.js";
-import { effect, emptyBoard, iid, makeItem, makeSnake, seed, sid, tid, turn } from "./testkit.js";
-import type {
-  Agent,
-  Direction as DirectionT,
-  GameRuntimeConfig,
-  GameState,
-  SnakeId,
-  SnakeState,
-  StagedMove,
-  TurnEvent,
-} from "./types.js";
-import { DEFAULT_GAME_CONFIG, Direction, ItemType } from "./types.js";
-
-// maxTurns 0 (no limit) and zero spawn rates so tests control every item.
-const QUIET_CONFIG: GameRuntimeConfig = {
-  ...DEFAULT_GAME_CONFIG.runtime,
-  maxTurns: 0,
-  foodSpawnRate: 0,
-  invulnPotionSpawnRate: 0,
-  invisPotionSpawnRate: 0,
-};
-
-function op(): Agent {
-  return { kind: "operator", operatorUserId: "user-1" } as Agent;
-}
-
-function state(snakes: SnakeState[], extra: Partial<GameState> = {}): GameState {
-  return {
-    board: extra.board ?? emptyBoard(11),
-    snakes,
-    items: extra.items ?? [],
-    clocks: extra.clocks ?? [],
-  };
-}
-
-function moves(entries: Array<[number, DirectionT]>): Map<SnakeId, StagedMove> {
-  return new Map(entries.map(([id, direction]) => [sid(id), { direction, stagedBy: op() }]));
-}
-
-function doResolve(
-  gameState: GameState,
-  stagedMoves: Map<SnakeId, StagedMove>,
-  opts: { turnNumber?: number; seedN?: number; config?: Partial<GameRuntimeConfig> } = {},
-) {
-  return resolveTurn(gameState, stagedMoves, turn(opts.turnNumber ?? 1), seed(opts.seedN ?? 50), {
-    ...QUIET_CONFIG,
-    ...opts.config,
-  });
-}
-
-function snakeById(s: { snakes: ReadonlyArray<SnakeState> }, id: number): SnakeState {
-  const snake = s.snakes.find((sn) => sn.snakeId === sid(id));
-  if (snake === undefined) throw new Error(`no snake ${id}`);
-  return snake;
-}
-
-function eventsOfKind<K extends TurnEvent["kind"]>(
-  events: ReadonlyArray<TurnEvent>,
-  kind: K,
-): Array<Extract<TurnEvent, { kind: K }>> {
-  return events.filter((e): e is Extract<TurnEvent, { kind: K }> => e.kind === kind);
-}
+import {
+  TEST_OPERATOR,
+  doResolve,
+  effect,
+  emptyBoard,
+  eventsOfKind,
+  iid,
+  makeItem,
+  makeSnake,
+  stagedMoves as moves,
+  sid,
+  snakeById,
+  makeState as state,
+  tid,
+  turn,
+} from "./testkit.js";
+import type { SnakeState } from "./types.js";
+import { Direction, ItemType } from "./types.js";
 
 describe("Move projection — direction (01-REQ-042)", () => {
   it("uses the staged move and attributes it in the snake_moved event", () => {
@@ -79,7 +34,7 @@ describe("Move projection — direction (01-REQ-042)", () => {
     const moved = eventsOfKind(events, "snake_moved");
     expect(moved).toHaveLength(1);
     expect(moved[0]?.direction).toBe(Direction.Right);
-    expect(moved[0]?.stagedBy).toEqual(op());
+    expect(moved[0]?.stagedBy).toEqual(TEST_OPERATOR);
   });
 
   it("falls back to lastDirection with stagedBy null when nothing is staged", () => {

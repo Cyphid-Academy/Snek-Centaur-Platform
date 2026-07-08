@@ -15,6 +15,15 @@
 export const Direction = { Up: 0, Right: 1, Down: 2, Left: 3 } as const;
 export type Direction = (typeof Direction)[keyof typeof Direction];
 
+// Canonical iteration order (Up, Right, Down, Left) — also the draw order of
+// the turn-0 seeded random pick (01-REQ-042), so reordering changes replays.
+export const ALL_DIRECTIONS: ReadonlyArray<Direction> = [
+  Direction.Up,
+  Direction.Right,
+  Direction.Down,
+  Direction.Left,
+];
+
 // spec: 01-REQ-002. Fertile is an overlay on Normal — a cell is never
 // simultaneously Fertile and Wall/Hazard — but is represented as a distinct
 // CellType so every inner cell sits in exactly one category.

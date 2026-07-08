@@ -1,6 +1,36 @@
-// Derived effect values. Pure O(k≤2) functions over `activeEffects`;
-// the ONLY reads collision resolution performs. spec: 01 Section 2.7.
-import type { SnakeState } from "./types.js";
+// Effect-domain helpers: derived values (pure O(k≤2) functions over
+// `activeEffects` — the ONLY effect reads the interaction rules perform,
+// spec: 01 §2.7) plus the effect-collection primitives that maintain the
+// ≤1-per-family invariant (01-REQ-028).
+import type { EffectFamily, PotionEffect, SnakeState } from "./types.js";
+import { ItemType } from "./types.js";
+
+// spec: 01-REVIEW-003 / 01-REQ-026/027 — effects granted at turn T's commit
+// carry expiryTurn = T + EFFECT_DURATION_TURNS and are active on the three
+// following turns.
+export const EFFECT_DURATION_TURNS = 3;
+
+// spec: 01-REQ-047 — the potion-type → effect-family mapping.
+export function familyOfPotion(
+  itemType: typeof ItemType.InvulnPotion | typeof ItemType.InvisPotion,
+): EffectFamily {
+  return itemType === ItemType.InvulnPotion ? "invulnerability" : "invisibility";
+}
+
+/**
+ * Remove the (at most one, per 01-REQ-028) effect of `family` from a
+ * collection. Returns the removed effect, or undefined when none was held —
+ * the single home of the family-removal surgery used by the commit's
+ * cancel / replace / expiry passes.
+ */
+export function removeFamily(
+  effects: ReadonlyArray<PotionEffect>,
+  family: EffectFamily,
+): { readonly effects: PotionEffect[]; readonly removed: PotionEffect | undefined } {
+  const removed = effects.find((e) => e.family === family);
+  if (removed === undefined) return { effects: [...effects], removed: undefined };
+  return { effects: effects.filter((e) => e.family !== family), removed };
+}
 
 // spec: 01-REQ-022
 export function invulnerabilityLevel(snake: SnakeState): -1 | 0 | 1 {

@@ -8,7 +8,7 @@
 // staging time, so body/head collisions with them are NOT flagged; every
 // direction remains *legal* to stage (the game rules never reject a staged
 // move — a lethal one simply kills in Phase 3).
-import { advance, cellAt } from "./board.js";
+import { advance, cellAt, sameCell } from "./board.js";
 import type { Direction, GameState, SnakeId } from "./types.js";
 import { CellType } from "./types.js";
 
@@ -24,5 +24,5 @@ export function isValidMove(state: GameState, snakeId: SnakeId, direction: Direc
   // move (01-REQ-043): body[1 .. len-2]. A duplicated tail segment from
   // growth (01-REQ-062) keeps its cell occupied via the second-to-last entry.
   const occupiedAfter = snake.body.slice(1, -1);
-  return !occupiedAfter.some((c) => c.x === target.x && c.y === target.y);
+  return !occupiedAfter.some((c) => sameCell(c, target));
 }

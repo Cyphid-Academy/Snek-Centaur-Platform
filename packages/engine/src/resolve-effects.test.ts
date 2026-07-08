@@ -1,67 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { resolveTurn } from "./resolve.js";
-import { effect, emptyBoard, makeItem, makeSnake, seed, sid, tid, turn } from "./testkit.js";
-import type {
-  Direction as DirectionT,
-  GameRuntimeConfig,
-  GameState,
-  SnakeId,
-  SnakeState,
-  StagedMove,
-  TurnEvent,
-} from "./types.js";
-import { CellType, DEFAULT_GAME_CONFIG, Direction, ItemType } from "./types.js";
-
-const QUIET: GameRuntimeConfig = {
-  ...DEFAULT_GAME_CONFIG.runtime,
-  maxTurns: 0,
-  foodSpawnRate: 0,
-  invulnPotionSpawnRate: 0,
-  invisPotionSpawnRate: 0,
-};
-
-function state(snakes: SnakeState[], extra: Partial<GameState> = {}): GameState {
-  return {
-    board: extra.board ?? emptyBoard(11),
-    snakes,
-    items: extra.items ?? [],
-    clocks: extra.clocks ?? [],
-  };
-}
-
-function moves(entries: Array<[number, DirectionT]>): Map<SnakeId, StagedMove> {
-  return new Map(
-    entries.map(([id, direction]) => [
-      sid(id),
-      { direction, stagedBy: { kind: "centaur_team", centaurTeamId: tid("red") } as const },
-    ]),
-  );
-}
-
-function doResolve(
-  gameState: GameState,
-  stagedMoves: Map<SnakeId, StagedMove>,
-  turnNumber = 1,
-  config: Partial<GameRuntimeConfig> = {},
-) {
-  return resolveTurn(gameState, stagedMoves, turn(turnNumber), seed(50), {
-    ...QUIET,
-    ...config,
-  });
-}
-
-function snakeById(s: { snakes: ReadonlyArray<SnakeState> }, id: number): SnakeState {
-  const snake = s.snakes.find((sn) => sn.snakeId === sid(id));
-  if (snake === undefined) throw new Error(`no snake ${id}`);
-  return snake;
-}
-
-function eventsOfKind<K extends TurnEvent["kind"]>(
-  events: ReadonlyArray<TurnEvent>,
-  kind: K,
-): Array<Extract<TurnEvent, { kind: K }>> {
-  return events.filter((e): e is Extract<TurnEvent, { kind: K }> => e.kind === kind);
-}
+import {
+  doResolve,
+  effect,
+  emptyBoard,
+  eventsOfKind,
+  makeItem,
+  makeSnake,
+  stagedMoves as moves,
+  sid,
+  snakeById,
+  makeState as state,
+  tid,
+  turn,
+} from "./testkit.js";
+import { CellType, Direction, ItemType } from "./types.js";
 
 // Red team: snake 0 (the collector, holding the family debuff) and snake 1
 // (holding the family buff), both mid-board and safe unless a test steers
@@ -324,7 +276,7 @@ describe("Cancellation — collector disruption cancels the family team-wide (01
         [0, Direction.Left], // collector dies
         [1, Direction.Up], // mate collects at (7,4)
       ]),
-      4,
+      { turnNumber: 4 },
     );
     expect(snakeById(nextState, 1).activeEffects).toEqual([
       { family: "invulnerability", state: "debuff", expiryTurn: turn(7) },
@@ -372,7 +324,7 @@ describe("collection and death in the same turn (01-REVIEW-022)", () => {
         [1, Direction.Up],
         [2, Direction.Up],
       ]),
-      4,
+      { turnNumber: 4 },
     );
     expect(snakeById(nextState, 0).alive).toBe(false);
     expect(nextState.items[0]?.consumed).toBe(true);
@@ -426,7 +378,7 @@ describe("collection and death in the same turn (01-REVIEW-022)", () => {
         [1, Direction.Up],
         [2, Direction.Right], // onto the corpse's old body cell — no collision, no disruption
       ]),
-      5,
+      { turnNumber: 5 },
     );
     expect(snakeById(nextState, 2).alive).toBe(true); // corpse bodies are not obstacles
     expect(snakeById(nextState, 1).activeEffects).toEqual([effect("invulnerability", "buff", 9)]);
@@ -458,7 +410,7 @@ describe("collection and death in the same turn (01-REVIEW-022)", () => {
         [0, Direction.Right],
         [1, Direction.Left],
       ]),
-      4,
+      { turnNumber: 4 },
     );
     expect(snakeById(nextState, 0).alive).toBe(false);
     expect(snakeById(nextState, 0).activeEffects).toEqual([]); // loser collected nothing
@@ -482,15 +434,17 @@ describe("Expiry (resolved 01-REVIEW-003)", () => {
     });
     const potion = makeItem(0, ItemType.InvulnPotion, { x: 3, y: 6 });
     // Collect on turn 2 → expiryTurn 5.
-    let current = doResolve(state([collector], { items: [potion] }), moves([[0, Direction.Up]]), 2);
+    let current = doResolve(state([collector], { items: [potion] }), moves([[0, Direction.Up]]), {
+      turnNumber: 2,
+    });
     expect(snakeById(current.nextState, 0).activeEffects).toHaveLength(1);
     // Turns 3 and 4: still active.
     for (const t of [3, 4]) {
-      current = doResolve(current.nextState, moves([[0, Direction.Up]]), t);
+      current = doResolve(current.nextState, moves([[0, Direction.Up]]), { turnNumber: t });
       expect(snakeById(current.nextState, 0).activeEffects).toHaveLength(1);
     }
     // Turn 5 (= expiryTurn): active during the turn, removed in Phase 9c.
-    current = doResolve(current.nextState, moves([[0, Direction.Up]]), 5);
+    current = doResolve(current.nextState, moves([[0, Direction.Up]]), { turnNumber: 5 });
     expect(snakeById(current.nextState, 0).activeEffects).toEqual([]);
     expect(eventsOfKind(current.events, "effect_cancelled")).toContainEqual({
       kind: "effect_cancelled",

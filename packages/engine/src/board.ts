@@ -46,3 +46,9 @@ export function advance(cell: Cell, direction: Direction): Cell {
 export function sameCell(a: Cell, b: Cell): boolean {
   return a.x === b.x && a.y === b.y;
 }
+
+// Collision-free numeric key for Map/Set keying of cells. The 4096 stride
+// requires boardSize <= 4096; the user-facing bound is 32 (01-REQ-063).
+export function cellKey(cell: Cell): number {
+  return cell.y * 4096 + cell.x;
+}

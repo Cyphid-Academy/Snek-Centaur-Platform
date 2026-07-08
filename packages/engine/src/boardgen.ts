@@ -33,6 +33,7 @@ interface AttemptFailure {
 }
 
 const TWO_PI = 2 * Math.PI;
+const LETTER_A = "A".charCodeAt(0);
 
 /**
  * Generate the board and initial game entities for one game.
@@ -180,7 +181,7 @@ function runAttempt(
     heads.forEach((head, i) => {
       snakes.push({
         snakeId: (teamIdx * snakesPerTeam + i) as SnakeId,
-        letter: String.fromCharCode(65 + i), // 'A' + index within team
+        letter: String.fromCharCode(LETTER_A + i), // 'A' + index within team (01-REQ-018)
         centaurTeamId: team.centaurTeamId,
         body: [head, head, head], // length 3, stacked. spec: 01-REQ-020
         health: config.runtime.maxHealth, // spec: 01-REQ-021
