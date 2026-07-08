@@ -52,6 +52,8 @@ Structural invariants to preserve (01 §2.8, resolved 01-REVIEW-022):
 - `src/rng.ts`, `src/perlin.ts` — randomness and fertile-tile noise
 - `src/clock.ts` — chess-timer arithmetic
 - `src/effects.ts` — derived effect values + family helpers + EFFECT_DURATION_TURNS
+- `src/driver.ts` — local-game driver convenience (`createLocalGame`, `seedFromText`)
+  for demos / module-07 loops / replay tooling; not contract surface (DECISIONS.md §5)
 - `src/testkit.ts` — shared test builders and the doResolve harness (not exported)
 - `src/resolve-properties.test.ts` — rule-order-shuffle property test and the
   multi-turn invariant fuzzer; run these after ANY resolver change

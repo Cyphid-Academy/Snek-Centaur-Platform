@@ -3,16 +3,15 @@
 // Teams use this library to build their Centaur Server implementation.
 // This is a typed skeleton — implementation deferred.
 
-export type {
-  Direction,
-  GameState,
-  SnakeState,
-  Board,
-  ItemState,
-  PotionEffect,
-  EffectFamily,
-  TurnEvent,
-} from "@cyphid/snek-engine";
+// The full public engine surface (types AND runtime values: resolveTurn,
+// generateBoardAndInitialState, isValidMove, the local-game driver, board
+// geometry helpers, derived-effect functions, …) is re-exported so Centaur
+// Server implementations consume the engine through this package.
+// spec: 02-REQ-034 — the shared engine codebase reaches the Centaur Server
+// runtime via this library; forkers of the mirrored server repo receive it
+// through this package's published dependency rather than the private
+// monorepo workspace.
+export * from "@cyphid/snek-engine";
 
 export type {
   GameInvitationPayload,

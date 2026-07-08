@@ -27,10 +27,20 @@ When the mirror workflow runs, it rewrites the `@cyphid/snek-centaur-server-lib`
 
 - Dev server runs on port 5000 with `server.allowedHosts: true` so the Replit preview iframe works.
 - `@sveltejs/adapter-node` is used for production builds.
+- All engine access goes through `@cyphid/snek-centaur-server-lib` (which re-exports the
+  full `@cyphid/snek-engine` surface) — never import the engine package directly, so the
+  mirror/forker dependency rewrite keeps working.
+- `vitest.config.ts` is a plain config (no SvelteKit plugin, no DOM env) — app tests are
+  pure TS and run via the app's own `pnpm test`, not the root workspace suite.
+- Svelte 5 gotcha: never hand a `$state` proxy to the engine or bot. The `/demo` page
+  keeps the `LocalGame` driver outside `$state` and renders from a plain snapshot.
 
 ## Key files
 
 - `src/routes/+page.svelte` — landing page skeleton
+- `src/routes/demo/+page.svelte` — playable demo: two bot teams on the full engine rules
+  (SVG board, event log, seeded replay) driven by the engine's `createLocalGame`
+- `src/lib/snek/bot.ts` — greedy demo bot with certain-death avoidance (module-07 stand-in)
 - `src/routes/.well-known/snek-game-invite/+server.ts` — invitation endpoint
 - `vite.config.ts` — Vite config with allowedHosts
 - `svelte.config.js` — SvelteKit config with Node adapter

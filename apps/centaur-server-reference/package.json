@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "svelte-kit sync && tsc --noEmit",
-    "test": "vitest run"
+    "test": "svelte-kit sync && vitest run"
   },
   "dependencies": {
     "@cyphid/snek-centaur-server-lib": "workspace:*"

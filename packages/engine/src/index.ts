@@ -8,7 +8,7 @@
 // else in this package is module-internal detail.
 
 // 01 §3.1 — enums, branded ids, Agent, derived effect values
-export { CellType, DEFAULT_GAME_CONFIG, Direction, ItemType } from "./types.js";
+export { ALL_DIRECTIONS, CellType, DEFAULT_GAME_CONFIG, Direction, ItemType } from "./types.js";
 export type {
   Agent,
   Cell,
@@ -51,7 +51,16 @@ export type { StagedMove } from "./types.js";
 
 // Board geometry helpers (01 §2.2; fertileGroundEnabled is contract-level
 // per 02 §2.17's export list, the rest are shared conveniences).
-export { advance, cellAt, cellIndex, fertileGroundEnabled, isInner, parityOf } from "./board.js";
+export {
+  advance,
+  cellAt,
+  cellIndex,
+  cellKey,
+  fertileGroundEnabled,
+  isInner,
+  parityOf,
+  sameCell,
+} from "./board.js";
 
 // Chess-timer arithmetic (01 §2.9) — exported so module 04's reducers apply
 // the exact formulas.
@@ -59,3 +68,11 @@ export { applyTurnStart, declareTurnOver, initialClock } from "./clock.js";
 
 // Move pre-validation (02-REQ-037 consumers; see validate.ts for semantics).
 export { isValidMove } from "./validate.js";
+
+// Derived-effect helpers beyond the §3.1 pair — shared conveniences.
+export { EFFECT_DURATION_TURNS, familyOfPotion } from "./effects.js";
+
+// Local game driver — convenience harness (not contract surface; see
+// driver.ts) for demos, module-07 bot loops, and replay tooling.
+export { createLocalGame, seedFromText } from "./driver.js";
+export type { LocalGame } from "./driver.js";

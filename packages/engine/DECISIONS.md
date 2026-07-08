@@ -104,3 +104,16 @@ When module 07 lands: profile against the bench baseline first, then choose alon
 1. **Hazard 30% is frequently infeasible.** Uniform hazard placement at 25–30% density sits near the site-percolation threshold on mid-size boards: on a 13-board at 30%, roughly half of game seeds exhaust all four attempts on `HAZARD_CONNECTIVITY` (measured: 11/20 seeds succeed; 15-board: 3/20). The bounded-retry design absorbs this, but room-owner UX at the top of the 0–30 range will see "provisioning failed" often enough to notice. A connectivity-aware placement algorithm (e.g. carve from a spanning structure) or a tighter range cap may be worth a REVIEW item.
 2. **01-REQ-049 wording** ("same eligible-cell criteria as food") vs. the food-only fertile restriction — see §2.1.
 3. **The `teams[].name` parameter** of `generateBoardAndInitialState` is unused by module 01 (display names are derived downstream per 01-REQ-018); kept for signature stability.
+
+---
+
+## 5. First real consumer — local-game driver and convenience exports
+
+The `/demo` page in `apps/centaur-server-reference` (two bot teams playing full games in the browser) is the first consumer of this engine outside its own test suite. Wiring it surfaced exactly the ergonomic gap left when the drafted API split bookkeeping out to module 04: every local consumer (demo, module-07 bot loops, replay tooling) re-derives the same ~40-line state machine around `resolveTurn`. That loop is now productionised as `src/driver.ts`:
+
+- `createLocalGame(config, teams, gameSeed)` → a stepping `LocalGame` (or the `BoardGenerationFailure` passed through). It owns turn numbering, `turnSeed = subSeed(gameSeed, "turn:" + T)` derivation, clock assembly per 01-REQ-035, and outcome tracking — the same loop as the property-test fuzzer, so a driver game replays identically to a module-04 game from the same seed. Clocks pass through untouched; the driver does not simulate real time.
+- `seedFromText(text)` — BLAKE3 of a human-memorable string → 32-byte game seed, so a seed shown in a UI reproduces the game anywhere.
+
+Both are conveniences per 01 §3's contract note, NOT contract surface (§3.5). `sameCell`/`cellKey` (already listed in §3.5) plus `EFFECT_DURATION_TURNS`/`familyOfPotion` are now actually exported from the index for the same reason.
+
+Packaging: `package.json` `exports` gained a `development` condition pointing at `src/index.ts`, so Vite/Vitest consumers in the workspace resolve engine source directly (no stale-`dist` problem in `pnpm dev`); production builds and `tsc` keep resolving `dist/`. The engine reaches the app through `@cyphid/snek-centaur-server-lib`, which re-exports the full public surface — the app never imports the (private) engine package directly, preserving the mirror/forker model.
