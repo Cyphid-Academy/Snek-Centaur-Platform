@@ -14,6 +14,7 @@ import { CellType, ItemType } from "../types.js";
 import type { ClaimSet } from "./claims.js";
 import type { TurnContext } from "./context.js";
 import { projectionOf } from "./context.js";
+import type { WorkSnake } from "./work.js";
 
 export type InteractionRule = (ctx: TurnContext, claims: ClaimSet) => void;
 
@@ -42,13 +43,16 @@ export const selfCollisionRule: InteractionRule = (ctx, claims) => {
 // claims and applied at commit, so no rule observes a severed body.
 export const bodyCollisionRule: InteractionRule = (ctx, claims) => {
   for (const { snake: attacker, head } of ctx.survivingHeads) {
-    for (const victim of ctx.aliveInS) {
-      if (victim.snakeId === attacker.snakeId) continue;
-      const victimBody = projectionOf(ctx, victim.snakeId).body;
-      const contactIndex = victimBody.findIndex((seg, i) => i >= 1 && sameCell(seg, head));
-      if (contactIndex === -1) continue;
+    // ctx.bodySegmentsAt entries are ordered by (snakeId, segment index), so
+    // the first entry seen per victim is the head-closest contact and victims
+    // are evaluated in ascending-snakeId order.
+    const contacted = new Set<WorkSnake>();
+    for (const { snake: victim, index: contactIndex } of ctx.bodySegmentsAt(head)) {
+      if (victim.snakeId === attacker.snakeId || contacted.has(victim)) continue;
+      contacted.add(victim);
       // Snapshot invulnerability levels (01-REQ-033).
       if (invulnerabilityLevel(attacker) > invulnerabilityLevel(victim)) {
+        const victimBody = projectionOf(ctx, victim.snakeId).body;
         claims.sever(
           {
             attackerSnakeId: attacker.snakeId,

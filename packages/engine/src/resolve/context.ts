@@ -36,6 +36,12 @@ export interface SurvivingHead {
   readonly head: Cell;
 }
 
+export interface BodySegmentEntry {
+  readonly snake: WorkSnake;
+  /** Segment position in the owner's moved body (always ≥ 1; 0 is the head). */
+  readonly index: number;
+}
+
 export interface TurnContext {
   readonly board: Board;
   readonly config: GameRuntimeConfig;
@@ -52,6 +58,17 @@ export interface TurnContext {
   readonly survivingHeads: ReadonlyArray<SurvivingHead>;
   /** Unconsumed items at a cell (usually 0 or 1; hand-built states may stack). */
   readonly itemsAt: (cell: Cell) => ReadonlyArray<WorkItem>;
+  /**
+   * Non-head segments of moved bodies at a cell — the body-collision targets
+   * of 01-REQ-044c, including head-to-head losers' bodies. Entries are
+   * ordered by (snakeId, segment index) ascending; `index` is the segment's
+   * position in the owner's moved body (≥ 1). The contract is fixed by the
+   * spec; the backing structure behind this function is deliberately simple
+   * (per-call Map) and is the designated swap point for profile-driven
+   * optimisation once module 07's simulation loop provides real load
+   * (see DECISIONS.md G3).
+   */
+  readonly bodySegmentsAt: (cell: Cell) => ReadonlyArray<BodySegmentEntry>;
   /** Snapshot health, immune to commit mutation (event derivation needs it). */
   readonly snapshotHealth: ReadonlyMap<SnakeId, number>;
   readonly roster: ReadonlyArray<CentaurTeamId>;
@@ -155,6 +172,25 @@ export function buildTurnContext(
     .filter((s) => !claims.diedHeadToHead(s.snakeId))
     .map((s) => ({ snake: s, head: must(moved.get(s.snakeId), "projection").head }));
 
+  // Segment occupancy index: non-head moved-body segments per cell, built
+  // once per turn in (snakeId, segment index) order so lookups are
+  // deterministic. Turns body-collision detection from
+  // O(attackers × victims × segments) into O(heads + segments).
+  const segmentIndex = new Map<number, BodySegmentEntry[]>();
+  for (const snake of aliveInS) {
+    const body = must(moved.get(snake.snakeId), "projection").body;
+    for (let index = 1; index < body.length; index++) {
+      const key = cellKey(body[index] as Cell);
+      const list = segmentIndex.get(key);
+      const entry = { snake, index };
+      if (list === undefined) segmentIndex.set(key, [entry]);
+      else list.push(entry);
+    }
+  }
+  const EMPTY_SEGMENTS: ReadonlyArray<BodySegmentEntry> = [];
+  const bodySegmentsAt = (cell: Cell): ReadonlyArray<BodySegmentEntry> =>
+    segmentIndex.get(cellKey(cell)) ?? EMPTY_SEGMENTS;
+
   // Item index for O(1) cell lookups by the food/potion rules.
   const itemIndex = new Map<number, WorkItem[]>();
   for (const item of items) {
@@ -177,6 +213,7 @@ export function buildTurnContext(
     moved,
     survivingHeads,
     itemsAt,
+    bodySegmentsAt,
     snapshotHealth,
     roster,
     aliveTeamsAtStart,

@@ -15,7 +15,8 @@
     "build": "tsc -b",
     "typecheck": "tsc -b",
     "test": "vitest run",
-    "dev": "tsc -b --watch"
+    "dev": "tsc -b --watch",
+    "bench": "vitest bench --run"
   },
   "devDependencies": {
     "typescript": "*",
