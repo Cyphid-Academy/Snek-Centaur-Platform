@@ -19,6 +19,7 @@ const subtitle = "Reference Implementation";
     Svelte 5 / SvelteKit app scaffolds and serves correctly.
   </p>
   <ul>
+    <li><a href="/demo"><strong>▶ Playable v0 game demo</strong></a> — reduced engine, two bot teams</li>
     <li><a href="/.well-known/snek-game-invite">Healthcheck endpoint (POST only)</a></li>
   </ul>
 </main>
