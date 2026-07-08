@@ -41,11 +41,28 @@ Structural invariants to preserve (01 §2.8, resolved 01-REVIEW-022):
 
 - `src/index.ts` — public API surface, mirrors 02 §2.17's export list
 - `src/types.ts` — canonical domain types (01 §3.1–3.6)
-- `src/resolve.ts` — the staged rule/commit resolver + win conditions
-- `src/boardgen.ts` — board generation pipeline with bounded retry
+- `src/resolve/` — the staged rule/commit resolver:
+  - `context.ts` — TurnContext build (move projection, head-to-head precedence → H*)
+  - `claims.ts` — ClaimSet: the turn's typed claim vocabulary, canonically ordered
+  - `rules.ts` — INTERACTION_RULES (one pure function per mechanic) + derived rules
+  - `commit.ts` — the sole writer; fixed-order combinator + event derivation
+  - `spawn.ts`, `win.ts`, `events.ts`, `work.ts`, `index.ts` (orchestrator)
+- `src/resolve.ts` — stable re-export shim for the resolver
+- `src/boardgen.ts` — board generation as named stage functions with bounded retry
 - `src/rng.ts`, `src/perlin.ts` — randomness and fertile-tile noise
 - `src/clock.ts` — chess-timer arithmetic
-- `src/testkit.ts` — shared test builders (not exported from the package)
+- `src/effects.ts` — derived effect values + family helpers + EFFECT_DURATION_TURNS
+- `src/testkit.ts` — shared test builders and the doResolve harness (not exported)
+- `src/resolve-properties.test.ts` — rule-order-shuffle property test and the
+  multi-turn invariant fuzzer; run these after ANY resolver change
 - `DECISIONS.md` — implementation decision log
 - `spec/01-game-rules.md` — binding source of truth
 - `spec/02-platform-architecture.md` § Shared Engine Codebase
+
+## Adding a mechanic
+
+Write one pure rule `(ctx, claims) => void` in `src/resolve/rules.ts`, add it
+to `INTERACTION_RULES`, and (only for a brand-new claim type) add one clause
+to `commit.ts`. Claim collections must expose canonically-ordered views (see
+`damageSources`/`cancellations` in claims.ts) so outputs stay independent of
+rule evaluation order — the order-shuffle property test enforces this.

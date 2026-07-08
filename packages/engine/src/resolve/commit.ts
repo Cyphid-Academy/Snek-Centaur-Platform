@@ -87,7 +87,7 @@ export function commit(ctx: TurnContext, claims: ClaimSet, events: EventBuffer):
   // ---- Effect resolution: cancel → rebuild (replace-semantics) → expire ----
   // spec: 01-REQ-050
 
-  for (const { team, family } of claims.cancellations) {
+  for (const { team, family } of claims.cancellations()) {
     for (const mate of ctx.snakes) {
       if (!mate.alive || mate.centaurTeamId !== team) continue;
       const { effects, removed } = removeFamily(mate.activeEffects, family);

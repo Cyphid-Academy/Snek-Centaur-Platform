@@ -142,3 +142,11 @@ This supersedes interpretations **C2** (death-cause precedence — now specified
 2. **01-REQ-049 wording** ("same eligible-cell criteria as food") vs. the fertile restriction — see C1.
 3. ~~**§2.9 and §2.7/§2.8 pseudocode** should be updated to match A1/A2/A3 if these resolutions are accepted.~~ *Done — corrected via 01-REVIEW-019/020/021.*
 4. **The `teams[].name` parameter** of `generateBoardAndInitialState` is unused by module 01 (display names are derived downstream per 01-REQ-018); kept for signature stability.
+
+---
+
+## G2. Architecture refactor — rules reified, claims canonicalised
+
+A dedicated refactor pass (behaviour-preserving, gated on the full suite) restructured the resolver to make the 01 §2.8 model literal in code: `src/resolve/{work,claims,context,rules,events,commit,spawn,win,index}.ts`, with the seven interaction rules as named pure functions in an `INTERACTION_RULES` array, `TurnContext` carrying per-snake move projections (replacing four parallel maps and ~30 casts), `ClaimSet` as the typed claim vocabulary, and the commit as the sole writer. `WorkSnake` is derived from `SnakeState` via a mapped type so new fields flow through automatically. Board generation was likewise split into named stage functions. Test helpers were consolidated into `testkit.ts`.
+
+Two new property suites guard the architecture: a rule-order-shuffle test that replays whole fuzzed games under permuted rule orders and asserts identical event streams (machine-checking 01-REQ-041's order-independence), and a multi-turn invariant fuzzer (≤1 effect per family, effect windows, alive-head uniqueness, health bounds, canonical event ordering, item-id uniqueness, no consumed-item resurrection). Writing the shuffle test immediately caught two real order-dependence leaks the example tests missed — `snake_died.sources` reported in damage-claim insertion order, and cancellation pairs iterated in disruption-discovery order — both fixed by giving `ClaimSet` canonically-ordered views (`damageSources` in fixed tick→hazard order; `cancellations()` sorted by team then family). Claim collections added in the future must follow the same canonical-view discipline.
