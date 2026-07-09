@@ -136,3 +136,16 @@ Resolved REVIEW items from [`specs/02-platform-architecture.md`](../02-platform-
 **Decision**: B — spectators see no invisible snakes (intersection semantics). Spectators are treated as opponents of every team for RLS purposes.
 **Rationale**: Spectators belong to no team. The RLS invisibility rule hides a team's invisible snakes from all connections that are not affiliated with that team. Since a spectator is not affiliated with any team, they are opponents of every team, and every team's invisible snakes are hidden from them. This is the natural reading of 02-REQ-041's "on the same terms as opponent team connections" and produces the most conservative, leak-free visibility policy. The union interpretation (Option A) would grant spectators strictly *more* visibility than any team player — a counterintuitive privilege that would undermine the strategic value of invisibility. The intersection interpretation preserves the competitive integrity of the invisibility mechanic for all observers.
 **Affected requirements/design elements**: 02-REQ-041 tightened to explicitly state that spectators see no invisible snakes of any team, removing the ambiguity of the "same terms as opponent team connections" phrasing. §2.18 spectator connection model description already contains explicit language ("spectators cannot see invisible snakes of any team") and requires no changes.
+
+---
+
+### 02-REVIEW-009: Turn-resolution model wording cascade from 01-REVIEW-022 — **RESOLVED**
+
+**Type**: Amendment
+**Phase**: Requirements
+
+**Prior text**: 02-REQ-034 required the shared engine codebase to export "a turn-resolution implementation conforming to the eleven-phase pipeline of [01-REQ-041] through [01-REQ-052]", and §2.13's authoritative-turn-resolution paragraph described the reducer transaction as committing or rolling back "the entire eleven-phase pipeline".
+
+**Amendment**: Cascade of [01]'s 01-REVIEW-022: [01-REQ-041] now defines a staged turn-resolution model (snapshot → parallel interaction rules → deterministic commit) rather than an eleven-phase pipeline. 02-REQ-034 and §2.13 reference "the staged turn-resolution model" / "the entire turn-resolution computation". No architectural content of module 02 changes — the shared-engine contract, consumer table, and compatibility constraints are unaffected.
+
+**Affected requirements/design elements**: 02-REQ-034; §2.13 authoritative-turn-resolution paragraph.

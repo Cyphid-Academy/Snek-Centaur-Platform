@@ -18,11 +18,11 @@ This module specifies the per-game runtime that authoritatively executes [01]'s 
 
 ### 4.2 Game State Retention Model
 
-**04-REQ-004**: The runtime shall maintain a **historical record** of the game's state over time such that, for every turn `T` in `[0, latestCompletedTurn]`, the complete observable state of the game at the boundary between turn `T` and turn `T+1` is directly queryable from the runtime alone, without any auxiliary computation that re-executes prior turns. The observable state comprises: every snake's body, health, invulnerability level, active effects, pending effects, last direction, alive status, visible status, and `ateLastTurn` flag per [01-REQ-004]; every item's position and type; the board layout; and each CentaurTeam's time budget. (Satisfies [02-REQ-013].)
+**04-REQ-004**: The runtime shall maintain a **historical record** of the game's state over time such that, for every turn `T` in `[0, latestCompletedTurn]`, the complete observable state of the game at the boundary between turn `T` and turn `T+1` is directly queryable from the runtime alone, without any auxiliary computation that re-executes prior turns. The observable state comprises: every snake's body, health, invulnerability level, active effects, last direction, alive status, and visible status per [01-REQ-004]; every item's position and type; the board layout; and each CentaurTeam's time budget. (Satisfies [02-REQ-013].)
 
 **04-REQ-005**: The historical record shall be **append-only**: once a row, event, or other record representing state at or before turn `T` has been written as part of the atomic transaction that resolves turn `T`, the runtime shall not subsequently mutate or delete that record except as part of replay export teardown ([02-REQ-021]). Historical records shall not be re-written to reflect later corrections. **Exception**: `item_lifetimes.destroyedTurn` may be updated exactly once from `null` to a value as part of a later turn's resolution when the item is consumed or destroyed; this is the single permitted mutation to a previously-written historical row (see §2.1.2).
 
-**04-REQ-006**: The historical record shall include, for each turn `T ≥ 0`, a per-turn snapshot of each snake's full state ([01-REQ-004]) at the boundary between turn `T` and turn `T+1`. "At the boundary" means after Phase 11 of turn `T` has completed and before Phase 1 of turn `T+1` has begun.
+**04-REQ-006**: The historical record shall include, for each turn `T ≥ 0`, a per-turn snapshot of each snake's full state ([01-REQ-004]) at the boundary between turn `T` and turn `T+1`. "At the boundary" means after turn `T`'s resolution has committed and before turn `T+1`'s move projection has begun.
 
 **04-REQ-007**: The historical record shall track each item's lifetime by recording the turn on which it was spawned and the turn on which it was consumed or destroyed. For any turn `T`, the set of items present on the board at the boundary between turn `T` and turn `T+1` shall be directly derivable from this record. Items present at game start (Section 4.3) shall have a spawn turn of `0`.
 
@@ -44,7 +44,7 @@ This module specifies the per-game runtime that authoritatively executes [01]'s 
 
 **04-REQ-014**: Successful completion of the initialisation operation shall leave the runtime in a state where (a) the static board layout ([01-REQ-008] through [01-REQ-013]) is written, (b) each snake's initial state ([01-REQ-020], [01-REQ-021]) is written as the turn-0 snapshot, (c) initial food placements ([01-REQ-017]) are written as spawn-turn-0 items, (d) each CentaurTeam's initial time budget ([01-REQ-035]) is recorded, (e) the game's unique identifier is stored in `game_config` for `aud` claim validation by the `client_connected` callback (Section 4.4), and (f) the participating-CentaurTeam roster (per [03-REQ-039]) is available for use by the connection admission path.
 
-**04-REQ-015**: Once the initialisation operation has completed successfully, the runtime shall be in the state of **turn 0 before Phase 1** and shall be ready to accept client connections (Section 4.4), staged moves (Section 4.5), and turn-over declarations (Section 4.6).
+**04-REQ-015**: Once the initialisation operation has completed successfully, the runtime shall be in the state of **turn 0 before move projection** and shall be ready to accept client connections (Section 4.4), staged moves (Section 4.5), and turn-over declarations (Section 4.6).
 
 **04-REQ-016** *(negative)*: The runtime shall reject any attempt to invoke the privileged initialisation operation after it has completed once. The runtime shall also reject any move-staging or turn-declaration operation submitted before the initialisation operation has completed, and the `client_connected` callback shall disconnect any client that connects before initialisation is complete.
 
@@ -78,7 +78,7 @@ This module specifies the per-game runtime that authoritatively executes [01]'s 
 
 **04-REQ-027**: The staged-move storage shall be **append-only and historical**: it forms part of the permanent game record. Staged-move entries are not cleared by turn resolution; they persist for the full game lifetime as a historical log of all staging actions. This enables downstream systems ([06], [08]) to reconstruct which moves were staged by whom at any point during the game, supporting sub-turn replay fidelity. (See resolved 06-REVIEW-004.)
 
-**04-REQ-028**: The runtime shall not validate move legality (e.g., reject moves that lead into walls) at the moment of staging. Legality is determined only during turn resolution, where a fatal direction kills the snake in Phase 3 per [01-REQ-044]. This preserves the "explore a direction to see its score" affordance described in [08]'s live-operator interface.
+**04-REQ-028**: The runtime shall not validate move legality (e.g., reject moves that lead into walls) at the moment of staging. Legality is determined only during turn resolution, where a fatal direction kills the snake via the collision rules per [01-REQ-044]. This preserves the "explore a direction to see its score" affordance described in [08]'s live-operator interface.
 
 **04-REQ-029** *(negative)*: The runtime shall not permit a connection to stage a move for a snake belonging to a CentaurTeam other than the CentaurTeam the connection was admitted for, even if a connection identifier from the opposing CentaurTeam's admission is supplied in a spoofed parameter. CentaurTeam membership is the connection-level association established in Section 4.4 and cannot be asserted per-call.
 
@@ -86,7 +86,7 @@ This module specifies the per-game runtime that authoritatively executes [01]'s 
 
 ### 4.6 Chess Timer
 
-**04-REQ-030**: The runtime shall implement the chess-timer semantics of [01-REQ-034] through [01-REQ-040] within its own state; no external runtime shall mediate per-turn clock timing. This includes: per-CentaurTeam time budget tracking, per-turn clock derivation from `min(effectiveCap, currentBudget)`, budget crediting on explicit declaration, and automatic declaration on clock expiry.
+**04-REQ-030**: The runtime shall implement the chess-timer semantics of [01-REQ-034] through [01-REQ-040] within its own state; no external runtime shall mediate per-turn clock timing. This includes: per-CentaurTeam time budget tracking, per-turn clock derivation from `min(effectiveCap, currentBudget)` with the derived amount deducted from the budget per [01-REQ-037], budget crediting on explicit declaration, and automatic declaration on clock expiry. (See resolved 04-REVIEW-023.)
 
 **04-REQ-031**: The runtime shall expose a **declare-turn-over operation** that a registered connection may invoke on behalf of the CentaurTeam the connection was admitted for. A declaration shall (a) stop that CentaurTeam's per-turn clock, (b) credit the remaining clock time back to that CentaurTeam's time budget, (c) record the declaration timestamp as part of the per-turn record required by 04-REQ-009, and (d) be idempotent — a second declaration by the same CentaurTeam in the same turn has no effect. Declarations from spectator connections shall be rejected.
 
@@ -96,21 +96,21 @@ This module specifies the per-game runtime that authoritatively executes [01]'s 
 
 **04-REQ-034**: A CentaurTeam that has no alive snakes shall be treated for turn-resolution-triggering purposes as having declared turn over at the start of every subsequent turn. The runtime shall not wait for such a CentaurTeam's clock to expire before triggering resolution. (This handles the case where one CentaurTeam is eliminated but the game continues with the remaining CentaurTeams per [01-REQ-054].)
 
-**04-REQ-035**: Time-budget bookkeeping across turns shall conform to [01-REQ-035] (initial budget from configuration), [01-REQ-036] (budget increment at the start of each turn), and [01-REQ-037] (per-turn clock cap rule including the turn-0 first-turn-time override). The runtime shall record each CentaurTeam's post-turn budget as part of the historical record (04-REQ-009).
+**04-REQ-035**: Time-budget bookkeeping across turns shall conform to [01-REQ-035] (initial budget from configuration), [01-REQ-036] (budget increment at the start of each turn), and [01-REQ-037] (per-turn clock cap rule including the turn-0 first-turn-time override and the deduction of the allocated clock from the budget). The runtime shall record each CentaurTeam's post-turn budget as part of the historical record (04-REQ-009).
 
 ---
 
 ### 4.7 Turn Resolution
 
-**04-REQ-036**: Turn resolution shall execute the eleven-phase pipeline of [01-REQ-041] and its sub-requirements ([01-REQ-042] through [01-REQ-052]) using the shared engine codebase of [02-REQ-034] and [02-REQ-035]. The runtime shall not implement a parallel or specialised variant of this pipeline.
+**04-REQ-036**: Turn resolution shall execute the staged turn-resolution model of [01-REQ-041] and its sub-requirements ([01-REQ-042] through [01-REQ-052]) using the shared engine codebase of [02-REQ-034] and [02-REQ-035]. The runtime shall not implement a parallel or specialised variant of this pipeline.
 
-**04-REQ-037**: Turn resolution shall execute as a **single atomic transaction**, such that either every state mutation produced by the eleven-phase pipeline is observable to subscribed clients simultaneously, or none of them are. No intermediate state from within the resolution pipeline shall be observable to any subscribed client. (Restates [02-REQ-008] at this module's level of specificity.)
+**04-REQ-037**: Turn resolution shall execute as a **single atomic transaction**, such that either every state mutation produced by turn resolution is observable to subscribed clients simultaneously, or none of them are. No intermediate state from within the resolution pipeline shall be observable to any subscribed client. (Restates [02-REQ-008] at this module's level of specificity.)
 
-**04-REQ-038**: Within the atomic transaction of turn resolution, the runtime shall, in order: (a) read the effective staged moves for the current turn (the latest entry per snake by timestamp from the append-only staged-moves log, each carrying its `stagedBy: Agent` per 04-REQ-026); (b) run the eleven-phase pipeline of [01-REQ-041]; (c) for each snake that moved, emit a movement event recording the direction moved, whether growth occurred, and the `Agent` value of the connection that staged the move that was consumed (or `null` if the move was determined by the fallback rule of [01-REQ-042] because no move was staged); (d) emit all other turn events required by [01-REQ-052] (Section 4.8); (e) append the new turn-`T+1` snake-state snapshots, updated item-lifetime records, and post-turn time-budget entries to the historical record; (f) add the budget increment to each CentaurTeam's budget per [01-REQ-036].
+**04-REQ-038**: Within the atomic transaction of turn resolution, the runtime shall, in order: (a) read the effective staged moves for the current turn (the latest entry per snake by timestamp from the append-only staged-moves log, each carrying its `stagedBy: Agent` per 04-REQ-026); (b) run the turn-resolution model of [01-REQ-041]; (c) for each snake that moved, emit a movement event recording the direction moved and the `Agent` value of the connection that staged the move that was consumed (or `null` if the move was determined by the fallback rule of [01-REQ-042] because no move was staged); (d) emit all other turn events required by [01-REQ-052] (Section 4.8); (e) append the new turn-`T+1` snake-state snapshots, updated item-lifetime records, and post-turn time-budget entries to the historical record; (f) add the budget increment to each CentaurTeam's budget per [01-REQ-036].
 
 **04-REQ-039**: The `stagedBy` value captured in movement events shall be the `Agent` resolved from the staging connection's Identity at registration time per 04-REQ-020 and carried through from the staged-move record per 04-REQ-026. No further interpretation, mapping, or substitution of the `Agent` value is performed during turn resolution or replay export. (Satisfies [03-REQ-032]. Resolves 04-REVIEW-011.)
 
-**04-REQ-040**: If a snake had no staged move at the moment of turn resolution and its direction was determined by the Phase 1 fallback rule of [01-REQ-042], the movement event for that snake shall distinguish the fallback case from the staged-move case. The `stagedBy` field of the movement event shall be **nullable** (`Agent | null`); it shall be populated with the `Agent` of the writer whose staged move was consumed when the move was staged, and shall be **null** when the move was determined by fallback. The fallback case covers both (a) subsequent-turn fallback to `lastDirection` per [01-REQ-042(b)] and (b) turn-0 random fallback per [01-REQ-042(c)] when no move was staged. (Resolves 04-REVIEW-002.)
+**04-REQ-040**: If a snake had no staged move at the moment of turn resolution and its direction was determined by the move-projection fallback rule of [01-REQ-042], the movement event for that snake shall distinguish the fallback case from the staged-move case. The `stagedBy` field of the movement event shall be **nullable** (`Agent | null`); it shall be populated with the `Agent` of the writer whose staged move was consumed when the move was staged, and shall be **null** when the move was determined by fallback. The fallback case covers both (a) subsequent-turn fallback to `lastDirection` per [01-REQ-042(b)] and (b) turn-0 random fallback per [01-REQ-042(c)] when no move was staged. (Resolves 04-REVIEW-002.)
 
 **04-REQ-041** *(negative)*: Once turn resolution for turn `T` has committed, the runtime shall not accept further staged moves or turn-over declarations attributable to turn `T`. Any such operations received after commitment shall either be treated as pertaining to turn `T+1` (if they arrive after the new turn has begun) or rejected, at the runtime's discretion; the runtime shall not silently reorder them into turn `T`'s committed state.
 
@@ -122,20 +122,20 @@ This module specifies the per-game runtime that authoritatively executes [01]'s 
 
 **04-REQ-043**: The runtime shall emit, as part of each turn's atomic resolution transaction, a set of **turn events** covering every observable outcome of that turn. The set of event kinds shall be a **closed enumeration** — no extensibility mechanism shall permit new event kinds to be added without a deliberate revision of this requirement. The closed set shall comprise at minimum:
 
-- (a) **Snake movement**: for each snake that executed a move in Phase 2, a record capturing the snake identifier, the originating cell, the destination cell, the direction, whether the tail was retained (growth), and `stagedBy` per 04-REQ-039 and 04-REQ-040 (nullable; null indicates a fallback-determined move).
-- (b) **Snake death**: for each snake that died in Phase 3, Phase 5, or other phase of the pipeline, a record capturing the snake identifier, the cause of death (wall, hazard, self-collision, body-collision, head-to-head, starvation), the location, and — where applicable — the identifier of the snake responsible (e.g., the attacker in a body-collision kill).
+- (a) **Snake movement**: for each snake that executed a move, a record capturing the snake identifier, the originating cell, the destination cell, the direction, and `stagedBy` per 04-REQ-039 and 04-REQ-040 (nullable; null indicates a fallback-determined move). Growth is observable via the food-consumption event (d) and the committed body's duplicated tail segment per [01-REQ-062].
+- (b) **Snake death**: for each snake that died during the turn, a record capturing the snake identifier, the cause of death (wall, self-collision, body-collision, head-to-head, or health depletion — the latter carrying the set of contributing damage sources per [01-REQ-046d]), the location, and — where applicable — the identifier of the snake responsible (e.g., the attacker in a body-collision kill).
 - (c) **Severing**: for each severing outcome per [01-REQ-044c], a record capturing the attacker identifier, the victim identifier, the contact cell, and the number of segments removed.
-- (d) **Food consumption**: for each snake that consumed food in Phase 5, a record capturing the snake identifier, the cell, and the resulting health value.
-- (e) **Potion collection**: for each snake that consumed a potion in Phase 6, a record capturing the collector identifier, the cell, the potion type, and the set of teammates affected by the resulting pending effects.
-- (f) **Food spawning**: for each food item spawned in Phase 7, a record capturing the new item's identifier and cell.
-- (g) **Potion spawning**: for each potion item spawned in Phase 8, a record capturing the new item's identifier, cell, and potion type.
-- (h) **Effect application**: for each effect that was moved from `pendingEffects` to `activeEffects` in Phase 9, a record capturing the affected snake, effect type, and expiry turn.
-- (i) **Effect cancellation**: for each effect that was removed in Phase 9 — whether by disruption-triggered cancellation per [01-REQ-031] or by natural expiry per [01-REQ-050] — a record capturing the affected snake, effect type, and the reason (`disruption` or `expiry`).
-- (j) **Hazard damage**: for each surviving snake that took hazard damage in Phase 5b without dying that turn, a record capturing the snake identifier, the hazard cell, the damage amount applied, and the resulting health value. Snakes that die *from* hazard damage in Phase 5 are covered by the death event (b) with cause `hazard` and shall not additionally emit a hazard_damage event. (See resolved 04-REVIEW-003.)
+- (d) **Food consumption**: for each snake that consumed food, a record capturing the snake identifier, the cell, and the resulting health value.
+- (e) **Potion collection**: for each snake that consumed a potion, a record capturing the collector identifier, the cell, the potion type, and the set of teammates affected by the resulting team rebuild.
+- (f) **Food spawning**: for each food item spawned, a record capturing the new item's identifier and cell.
+- (g) **Potion spawning**: for each potion item spawned, a record capturing the new item's identifier, cell, and potion type.
+- (h) **Effect application**: for each effect that became active at the turn's commit ([01-REQ-050]), a record capturing the affected snake, effect type, and expiry turn.
+- (i) **Effect cancellation**: for each effect that was removed at the turn's commit — whether by disruption-triggered cancellation per [01-REQ-031] or by natural expiry per [01-REQ-050] — a record capturing the affected snake, effect type, and the reason (`disruption` or `expiry`).
+- (j) **Hazard damage**: for each surviving snake that took hazard damage without dying that turn, a record capturing the snake identifier, the hazard cell, the damage amount applied, and the resulting health value. Snakes that die with hazard damage contributing are covered by the death event (b) with cause `health_depletion` and `hazard` among its sources, and shall not additionally emit a hazard_damage event. (See resolved 04-REVIEW-003.)
 
 **04-REQ-044**: Each turn-event record shall include enough information for a replay or animation client to visualise the associated outcome without re-executing turn resolution. In particular, event records shall not require the client to diff successive snake-state snapshots to recover information that the event describes (e.g., a death event shall carry the cause explicitly rather than requiring the client to infer it from a snake's alive-to-dead transition).
 
-**04-REQ-045**: A turn's events form a **set** — they are not causally or temporally ordered with respect to each other within the turn; they are all produced atomically by a single turn-resolution transaction. For storage, replay consistency, and deterministic bit-exact comparison across independent runs, this set is given a **canonical representation order**. The ordering keys, applied in priority order, are: (1) **phase** — Phase 1 events before Phase 2 events, and so on through the eleven-phase pipeline; (2) **event-type class** within a phase — event types are grouped into an implementation-defined but fixed class order (e.g., movement events before death events before collection events within phases that produce multiple types); (3) **ascending snake identifier** of the primary subject within each event-type class (the moving snake for movement, the dying snake for death, the collector for potion collection, the eater for food consumption, the affected snake for effect application/cancellation/hazard damage, and so on); phase-internal events that have no snake subject (food spawning, potion spawning) shall follow all snake-subject events of the same phase in ascending item-identifier order. The resulting total order is a canonical representation order for storage and replay — it does not express causal or temporal dependencies between events within the turn and imposes no delivery-order obligation on subscription infrastructure. The canonical order shall be stable across independent replays of the same game seed. (Resolves 04-REVIEW-004; see also 04-REVIEW-009.)
+**04-REQ-045**: A turn's events form a **set** — they are not causally or temporally ordered with respect to each other within the turn; they are all produced atomically by a single turn-resolution transaction. For storage, replay consistency, and deterministic bit-exact comparison across independent runs, this set is given a **canonical representation order**. The ordering keys, applied in priority order, are: (1) **event-type class** — event types are grouped into the fixed canonical class order of [01] §2.11 (with module 04's `hazard_damage` inserted after food consumption); (2) **ascending snake identifier** of the primary subject within each event-type class (the moving snake for movement, the dying snake for death, the victim for severing, the collector for potion collection, the eater for food consumption, the affected snake for effect application/cancellation/hazard damage, and so on); events that have no snake subject (food spawning, potion spawning) are ordered within their class in ascending item-identifier order. The resulting total order is a canonical representation order for storage and replay — it does not express causal or temporal dependencies between events within the turn and imposes no delivery-order obligation on subscription infrastructure. The canonical order shall be stable across independent replays of the same game seed. (Resolves 04-REVIEW-004; see also 04-REVIEW-009.)
 
 **04-REQ-046** *(negative)*: The runtime shall not emit turn events that imply the existence of game mechanics not specified in [01]. The closed enumeration of 04-REQ-043 is exhaustive for the Team Snek ruleset as specified in this spec version.
 
@@ -151,7 +151,7 @@ This module specifies the per-game runtime that authoritatively executes [01]'s 
 
 **04-REQ-050**: Allied connections (i.e., connections admitted for the same CentaurTeam as the invisible snake) shall observe the invisible snake normally, including any dedicated visual indicator the client chooses to render on the basis of the snake's `visible` field. The runtime shall expose `visible = false` to allied queries so the client can distinguish ally-invisible from ally-visible.
 
-**04-REQ-051**: When a snake becomes visible or invisible at a turn boundary (because an `invis_buff` or `invis_collector` effect is applied, cancelled, or expires in Phase 9), the visibility filter shall transition at the boundary between turns. An opposing-CentaurTeam client observing turn `T+1` after the snake becomes invisible shall no longer observe the snake; a client that previously saw the snake shall have the observation vanish at that boundary. The reverse transition (invisible → visible) shall cause the snake to appear at the boundary.
+**04-REQ-051**: When a snake becomes visible or invisible at a turn boundary (because an `invis_buff` or `invis_collector` effect is applied, cancelled, or expires at a turn's commit), the visibility filter shall transition at the boundary between turns. An opposing-CentaurTeam client observing turn `T+1` after the snake becomes invisible shall no longer observe the snake; a client that previously saw the snake shall have the observation vanish at that boundary. The reverse transition (invisible → visible) shall cause the snake to appear at the boundary.
 
 **04-REQ-052** *(negative)*: The runtime shall not rely on client-side filtering for invisibility. A client that issues unfiltered queries directly against the runtime's data layer shall receive `snake_states` data that has already had invisible-opponent snakes elided; the runtime shall not assume a cooperating client. Additionally, the runtime shall block access to data that clients have no legitimate need to read (staged moves, connection attribution metadata) regardless of snake visibility.
 
@@ -189,7 +189,7 @@ This module specifies the per-game runtime that authoritatively executes [01]'s 
 
 ### 4.12 Replay Export
 
-**04-REQ-060**: After a win condition has been detected in Phase 10 of some turn `T_end` ([01-REQ-051], [01-REQ-054] through [01-REQ-057]), the runtime shall treat the game as **ended** for gameplay purposes: further move-staging and turn-declaration operations shall be rejected, and no further turns shall be resolved. Game-end rejection begins at the moment the final turn's transaction commits. In-flight staged moves or turn-declaration operations arriving after the commit of turn `T_end` shall be rejected as "game over" — there is no grace window between commit and enforcement.
+**04-REQ-060**: After a win condition has been detected by the win-condition check of some turn `T_end` ([01-REQ-051], [01-REQ-054] through [01-REQ-057]), the runtime shall treat the game as **ended** for gameplay purposes: further move-staging and turn-declaration operations shall be rejected, and no further turns shall be resolved. Game-end rejection begins at the moment the final turn's transaction commits. In-flight staged moves or turn-declaration operations arriving after the commit of turn `T_end` shall be rejected as "game over" — there is no grace window between commit and enforcement.
 
 **04-REQ-061**: After game-end detection, the runtime shall make the complete historical record available to Convex for replay persistence ([05-REQ-040]). The complete record comprises the static board layout (as received from Convex at init time), the dynamic gameplay parameters seeded at initialisation, the per-game seed ([01-REQ-059], [01-REQ-060]) so that downstream systems can verify deterministic reproducibility per 04-REQ-069 (see resolved 04-REVIEW-013), the full per-turn historical record of snake states (04-REQ-006), the full item-lifetime record (04-REQ-007), the full per-turn time-budget record (04-REQ-009), the full turn-timing record (04-REQ-010), the full turn-event record (04-REQ-011), and the participant attribution record of Section 4.4. The complete record shall be bundled into the `GameEndNotification` payload of [04-REQ-061a] by the `notify_game_end` scheduled procedure (see §2.10, §2.11). The callback token authenticating the notification is a Convex-signed JWT; Convex validates it by signature verification and claims checking — no stored-token comparison is required. (See also [03-REQ-045].)
 
@@ -301,10 +301,8 @@ interface SnakeStateRow {
   readonly bodyJson: string               // JSON-serialized ReadonlyArray<Cell>
   readonly health: number
   readonly activeEffectsJson: string      // JSON-serialized ReadonlyArray<PotionEffect>
-  readonly pendingEffectsJson: string     // JSON-serialized ReadonlyArray<PotionEffect>
   readonly lastDirection: number | null   // Direction enum value, null on turn 0 if no move staged
   readonly alive: boolean
-  readonly ateLastTurn: boolean
   readonly invulnerabilityLevel: number   // denormalized: -1 | 0 | 1
   readonly visible: boolean               // denormalized: derived via isVisible()
 }
@@ -370,7 +368,7 @@ interface ScoreboardRow {
 
 Primary key: `(turn, centaurTeamId)`. Btree index on `(turn)` for live / historical / catch-up queries (§2.12). One row is written per CentaurTeam in the game's roster per turn — *including* CentaurTeams with `aliveSnakeCount = 0` (zero-filled rather than omitted, so subscribers always see a complete per-team view at every turn). The aggregate is computed over the true alive-snake set including invisible snakes; the visibility filter of [04-REQ-047] does not apply to `scoreboard` rows. `teamScore` carries the normalised score (computed as if the game ended on that turn boundary) and `aggregateLength` carries the raw Σ-body-length intermediate; the two are decoupled per [01-REQ-053] (see resolved 04-REVIEW-021).
 
-The materialised per-turn `scoreboard` row is also the storage location for the prior-turn alive-snake data referenced by [01-REQ-055]'s simultaneous-elimination branch: when Phase 10 of turn `T` needs to determine which competing teams were alive at the start of that turn, it reads `aliveSnakeCount` from `scoreboard WHERE turn = T - 1` rather than maintaining a separate denormalised field. (For the turn-0 simultaneous-elimination case of [01-REQ-056], all competing teams score `1.0` directly — see §2.2.)
+The materialised per-turn `scoreboard` row is also the storage location for the prior-turn alive-snake data referenced by [01-REQ-055]'s simultaneous-elimination branch: when the win-condition check of turn `T` needs to determine which competing teams were alive at the start of that turn, it reads `aliveSnakeCount` from `scoreboard WHERE turn = T - 1` rather than maintaining a separate denormalised field. (For the turn-0 simultaneous-elimination case of [01-REQ-056], all competing teams score `1.0` directly — see §2.2.)
 
 #### 2.1.3 Participant Attribution Table
 
@@ -464,10 +462,8 @@ interface InitializeGameParams {
     readonly body: ReadonlyArray<{ readonly x: number; readonly y: number }>
     readonly health: number
     readonly activeEffects: ReadonlyArray<PotionEffect>
-    readonly pendingEffects: ReadonlyArray<PotionEffect>
     readonly lastDirection: number | null
     readonly alive: boolean
-    readonly ateLastTurn: boolean
   }>
   readonly items: ReadonlyArray<{
     readonly itemId: number
@@ -591,6 +587,7 @@ budgetMs  += config.clock.budgetIncrementMs         // [01-REQ-036]
 cap        = (T === 0) ? config.clock.firstTurnTimeMs
                        : config.clock.maxTurnTimeMs  // [01-REQ-037]
 perTurnMs  = min(cap, budgetMs)
+budgetMs  -= perTurnMs      // clock time carved out of budget [01-REQ-037]
 ```
 
 On explicit declare-turn-over:
@@ -672,7 +669,7 @@ reducer resolve_turn():
   gameSeed = game_config.gameSeed
   turnSeed = subSeed(gameSeed, `turn-${T}`)
 
-  // — Step 4: Execute eleven-phase pipeline [04-REQ-036] —
+  // — Step 4: Execute shared-engine turn resolution [04-REQ-036] —
   result = resolveTurn(gameState, stagedMoves, T as TurnNumber, turnSeed)
   // result = { nextState, events, outcome }
 
@@ -727,6 +724,7 @@ reducer resolve_turn():
     budgetMs += config.clock.budgetIncrementMs
     cap = config.clock.maxTurnTimeMs
     perTurnMs = min(cap, budgetMs)
+    budgetMs -= perTurnMs   // carve-out per [01-REQ-037]
     reset centaur_team_turn_state for T_next:
       declaredTurnOver = (CentaurTeam has no alive snakes) [04-REQ-034]
       remainingClockMs = perTurnMs
@@ -754,7 +752,7 @@ reducer resolve_turn():
 
 **Determinism** [04-REQ-069]: Given identical game seeds, configurations, and staged-move sequences, `resolveTurn()` produces identical results because (a) the shared engine's turn resolution is a pure function of its inputs, (b) all randomness is seed-derived via `subSeed()` and `rngFromSeed()`, and (c) the staged-move map is assembled deterministically from the table.
 
-**Prior-turn alive-snake data for simultaneous-elimination branch**: When the eleven-phase pipeline's Phase 10 needs to determine which competing teams were alive at the start of turn T (for the simultaneous-elimination branch of [01-REQ-055]), the reducer reads `aliveSnakeCount` from `scoreboard WHERE turn = T - 1` and passes those counts into the shared engine call (Step 4). There is no score-based tiebreak in the simultaneous-elimination branch: per [01-REQ-055] every competing team that was alive at the start of the final turn receives a flat `1.0` (par), regardless of relative body lengths. The `teamScore` and `aggregateLength` columns from the prior-turn scoreboard row are not consulted for this purpose. No separate `previousTurnScores` field is denormalised; the materialised `scoreboard` table is the single storage location for prior-turn aggregates, consistent with §2.1.2. For the turn-0 simultaneous-elimination case ([01-REQ-056]), all competing teams score `1.0` directly; no prior-turn row read is needed.
+**Prior-turn alive-snake data for simultaneous-elimination branch**: When turn resolution's win-condition check needs to determine which competing teams were alive at the start of turn T (for the simultaneous-elimination branch of [01-REQ-055]), the reducer reads `aliveSnakeCount` from `scoreboard WHERE turn = T - 1` and passes those counts into the shared engine call (Step 4). There is no score-based tiebreak in the simultaneous-elimination branch: per [01-REQ-055] every competing team that was alive at the start of the final turn receives a flat `1.0` (par), regardless of relative body lengths. The `teamScore` and `aggregateLength` columns from the prior-turn scoreboard row are not consulted for this purpose. No separate `previousTurnScores` field is denormalised; the materialised `scoreboard` table is the single storage location for prior-turn aggregates, consistent with §2.1.2. For the turn-0 simultaneous-elimination case ([01-REQ-056]), all competing teams score `1.0` directly; no prior-turn row read is needed.
 
 ---
 
@@ -764,31 +762,30 @@ Satisfies 04-REQ-043 through 04-REQ-046.
 
 The `turn_events` table stores each event as a row with `eventType` discriminant and `payloadJson` containing the event-specific fields. The closed 10-kind event set:
 
-| eventType | Phase | Payload fields | Req |
-|-----------|-------|---------------|-----|
-| `snake_moved` | 2 | `snakeId`, `from: {x,y}`, `to: {x,y}`, `direction`, `grew: bool`, `stagedBy: AgentId \| null` | 04-REQ-043a |
-| `snake_died` | 3/5 | `snakeId`, `cause: DeathCause`, `killerSnakeId: number \| null`, `location: {x,y}` | 04-REQ-043b |
+| eventType | Class order | Payload fields | Req |
+|-----------|-------------|---------------|-----|
+| `snake_moved` | 1 | `snakeId`, `from: {x,y}`, `to: {x,y}`, `direction`, `stagedBy: AgentId \| null` | 04-REQ-043a |
+| `snake_died` | 2 | `snakeId`, `cause: DeathCause`, `killerSnakeId: number \| null`, `location: {x,y}`, `sources?: DamageSource[]` | 04-REQ-043b |
 | `snake_severed` | 3 | `attackerSnakeId`, `victimSnakeId`, `contactCell: {x,y}`, `segmentsLost: number` | 04-REQ-043c |
-| `food_eaten` | 5 | `snakeId`, `cell: {x,y}`, `healthRestored: number` | 04-REQ-043d |
+| `food_eaten` | 4 | `snakeId`, `cell: {x,y}`, `healthRestored: number` | 04-REQ-043d |
+| `hazard_damage` | 5 | `snakeId`, `cell: {x,y}`, `damageApplied: number`, `resultingHealth: number` | 04-REQ-043j |
 | `potion_collected` | 6 | `snakeId`, `cell: {x,y}`, `potionType: number`, `affectedTeammateIds: number[]` | 04-REQ-043e |
 | `food_spawned` | 7 | `itemId`, `cell: {x,y}` | 04-REQ-043f |
 | `potion_spawned` | 8 | `itemId`, `cell: {x,y}`, `potionType: number` | 04-REQ-043g |
 | `effect_applied` | 9 | `snakeId`, `family: string`, `state: string`, `expiryTurn: number` | 04-REQ-043h |
-| `effect_cancelled` | 9 | `snakeId`, `family: string`, `reason: string` | 04-REQ-043i |
-| `hazard_damage` | 5 | `snakeId`, `cell: {x,y}`, `damageApplied: number`, `resultingHealth: number` | 04-REQ-043j |
+| `effect_cancelled` | 10 | `snakeId`, `family: string`, `reason: string` | 04-REQ-043i |
 
-`DeathCause` values: `'wall'`, `'self_collision'`, `'body_collision'`, `'head_to_head'`, `'starvation'`, `'hazard'` — matching [01] §2.11.
+`DeathCause` values: `'wall'`, `'self_collision'`, `'body_collision'`, `'head_to_head'`, `'health_depletion'`; `DamageSource` values: `'tick'`, `'hazard'` (present on `snake_died` iff cause is `health_depletion`) — matching [01] §2.11.
 
 **Canonical ordering** [04-REQ-045]: Events within a turn are ordered by applying the following deterministic sort key, derived from each event's data rather than stored as a separate column:
 
-1. **Phase ascending**: Phase 2 events before Phase 3, Phase 3 before Phase 5, etc. The phase is derivable from `eventType` (each event kind maps to exactly one phase).
-2. **Event-type class within a phase**: Within a phase that produces multiple event types (e.g., Phase 5 produces `food_eaten`, `snake_died`/starvation, and `hazard_damage`), event types are ordered by a fixed class order: movement → death → severing → food consumption → hazard damage → potion collection → food spawning → potion spawning → effect application → effect cancellation.
-3. **Ascending snake/item identifier**: Within each event-type class, events are sorted by the primary subject's identifier — `snakeId` for snake-subject events, `itemId` for item-spawn events.
-4. **Payload tie-breaker**: Within events sharing the same event-type class and primary subject identifier (e.g., multiple `effect_applied` events for the same snake), sort by the first distinguishing payload field: `family` for effect events, `cell.x` then `cell.y` for positional events.
+1. **Event-type class**: event types are ordered by the fixed class order of the table above (movement → death → severing → food consumption → hazard damage → potion collection → food spawning → potion spawning → effect application → effect cancellation), matching [01] §2.11's canonical order with `hazard_damage` inserted after food consumption. The class is derivable from `eventType`.
+2. **Ascending snake/item identifier**: Within each event-type class, events are sorted by the primary subject's identifier — `snakeId` for snake-subject events (the victim for `snake_severed`), `itemId` for item-spawn events.
+3. **Payload tie-breaker**: Within events sharing the same event-type class and primary subject identifier (e.g., multiple `effect_applied` events for the same snake), sort by the first distinguishing payload field: `family` for effect events, `cell.x` then `cell.y` for positional events.
 
 This total order is deterministic, derivable from the event data alone, and stable across independent replays of the same game seed [04-REQ-069]. No stored index is needed.
 
-**`hazard_damage` event** (see resolved 04-REVIEW-003): Emitted for each surviving snake that took hazard damage in Phase 5b without dying that turn. Snakes that die from hazard damage emit only a `snake_died` event with `cause: 'hazard'` — no additional `hazard_damage` event. This prevents double-counting while satisfying 04-REQ-044's requirement that event records carry enough information to avoid snapshot diffing.
+**`hazard_damage` event** (see resolved 04-REVIEW-003): Emitted for each surviving snake that took hazard damage without dying that turn. Snakes that die with hazard damage contributing emit only a `snake_died` event with `cause: 'health_depletion'` and `'hazard'` among its `sources` — no additional `hazard_damage` event. This prevents double-counting while satisfying 04-REQ-044's requirement that event records carry enough information to avoid snapshot diffing.
 
 ---
 
@@ -870,7 +867,7 @@ SELECT * FROM scoreboard
 
 There is no `ctx.sender` predicate: every connection (operator, Centaur Server, spectator, coach) sees the same `scoreboard` rows for every turn. The view exists as a thin `ctx.from` wrapper purely to keep the client-facing subscription surface uniform with `snake_states_view` / `staged_moves_view` and to remain forward-compatible with planned IVM optimisations on the `ctx.from` path (§2.9 introduction).
 
-**Why aggregation is materialised at write time rather than expressed inside the view**: The View capability surface available to this module is filter / projection only. The `ctx.from` query-builder path supports `WHERE` predicates over a single table (with simple `EXISTS` subqueries against indexed columns) but does not support `GROUP BY` or aggregate functions, so a `SELECT centaurTeamId, SUM(body_length), COUNT(*) FROM snake_states_view WHERE alive AND turn = T GROUP BY centaurTeamId` shape cannot be expressed as a `ctx.from` view. The alternative path — `ctx.db` procedural views — does support arbitrary TypeScript aggregation, but it forfeits IVM compatibility entirely (the runtime tracks an indexed-read set and re-executes the whole view body on every dependent-table change), which §2.9 has explicitly chosen against for visibility-critical channels. Materialising the per-team aggregates inside `resolve_turn` (§2.7, Step 6b) costs `O(snakes)` once per turn — the alive-snake set is already in hand at the end of Phase 10 — and turns the subscription channel into the kind of filtered projection that the chosen `ctx.from` view surface handles natively. It also keeps the score-authority story single-sourced: the row a spectator subscribes to is exactly the row the resolving transaction wrote, with no derivation step downstream.
+**Why aggregation is materialised at write time rather than expressed inside the view**: The View capability surface available to this module is filter / projection only. The `ctx.from` query-builder path supports `WHERE` predicates over a single table (with simple `EXISTS` subqueries against indexed columns) but does not support `GROUP BY` or aggregate functions, so a `SELECT centaurTeamId, SUM(body_length), COUNT(*) FROM snake_states_view WHERE alive AND turn = T GROUP BY centaurTeamId` shape cannot be expressed as a `ctx.from` view. The alternative path — `ctx.db` procedural views — does support arbitrary TypeScript aggregation, but it forfeits IVM compatibility entirely (the runtime tracks an indexed-read set and re-executes the whole view body on every dependent-table change), which §2.9 has explicitly chosen against for visibility-critical channels. Materialising the per-team aggregates inside `resolve_turn` (§2.7, Step 6b) costs `O(snakes)` once per turn — the alive-snake set is already in hand at the end of the win-condition check — and turns the subscription channel into the kind of filtered projection that the chosen `ctx.from` view surface handles natively. It also keeps the score-authority story single-sourced: the row a spectator subscribes to is exactly the row the resolving transaction wrote, with no derivation step downstream.
 
 Clients subscribe to `scoreboard_view` rather than the raw `scoreboard` table for all subscription patterns in §2.12. The aggregates published by this view are computed over the *true* alive-snake set including invisible snakes per [04-REQ-047]; the visibility-bypass posture is pinned by [04-REQ-071] (§4.13).
 
@@ -900,7 +897,7 @@ Visibility filtering applies to historical queries with the same predicates [04-
 
 #### 2.9.4 Visibility Transitions
 
-When a snake's visibility changes at a turn boundary (effect applied, cancelled, or expired in Phase 9), the filtering transition is immediate at that boundary [04-REQ-051]:
+When a snake's visibility changes at a turn boundary (effect applied, cancelled, or expired at the turn's commit), the filtering transition is immediate at that boundary [04-REQ-051]:
 - Invisible → visible: the snake appears in the opponent's next subscription update (the view's SQL query is re-run against the updated `snake_states` table, and the newly visible row appears in the diff).
 - Visible → invisible: the snake vanishes from the opponent's next subscription update (the re-run query omits the now-invisible row, producing a deletion diff).
 
@@ -1073,14 +1070,8 @@ interface InitializeGameParams {
       readonly state: string              // EffectState
       readonly expiryTurn: number
     }>
-    readonly pendingEffects: ReadonlyArray<{
-      readonly family: string
-      readonly state: string
-      readonly expiryTurn: number
-    }>
     readonly lastDirection: number | null  // Direction enum value
     readonly alive: boolean
-    readonly ateLastTurn: boolean
   }>
   readonly items: ReadonlyArray<{
     readonly itemId: number
@@ -1119,11 +1110,12 @@ type TurnEventType =
 
 type TurnEventPayload =
   | { readonly kind: 'snake_moved'; readonly snakeId: number; readonly from: Cell;
-      readonly to: Cell; readonly direction: number; readonly grew: boolean;
+      readonly to: Cell; readonly direction: number;
       readonly stagedBy: AgentId | null }
   | { readonly kind: 'snake_died'; readonly snakeId: number;
       readonly cause: DeathCause; readonly killerSnakeId: number | null;
-      readonly location: Cell }
+      readonly location: Cell;
+      readonly sources?: ReadonlyArray<DamageSource> }
   | { readonly kind: 'snake_severed'; readonly attackerSnakeId: number;
       readonly victimSnakeId: number; readonly contactCell: Cell;
       readonly segmentsLost: number }
@@ -1148,14 +1140,16 @@ interface Cell { readonly x: number; readonly y: number }
 
 type DeathCause =
   | 'wall' | 'self_collision' | 'body_collision'
-  | 'head_to_head' | 'starvation' | 'hazard'
+  | 'head_to_head' | 'health_depletion'
+
+type DamageSource = 'tick' | 'hazard'
 
 type AgentId = string
 ```
 
 The stored event payload shapes match [01] §2.11's `TurnEvent` union plus the module 04 addition of `hazard_damage` (see resolved 04-REVIEW-003). `Cell` and `DeathCause` are re-exported from [01] §3.1–3.2. `AgentId` is a plain string — the Convex record ID of either a CentaurTeam (`centaur_teams._id`) or an Operator (`users._id`). The `payloadJson` column in the `turn_events` table stores the `TurnEventPayload` variant serialized as JSON.
 
-**DOWNSTREAM IMPACT**: [08]'s replay viewer and animation layer must handle all 10 event kinds, including `hazard_damage`. The canonical ordering (phase → event-type class → ascending snake/item ID) is derivable from the event data per the deterministic rules in §2.8 [04-REQ-045].
+**DOWNSTREAM IMPACT**: [08]'s replay viewer and animation layer must handle all 10 event kinds, including `hazard_damage`. The canonical ordering (event-type class → ascending snake/item ID) is derivable from the event data per the deterministic rules in §2.8 [04-REQ-045].
 
 ### 3.3 Game-End Notification Payload
 

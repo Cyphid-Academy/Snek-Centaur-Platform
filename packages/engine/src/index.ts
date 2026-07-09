@@ -1,183 +1,61 @@
-// spec: 01-REQ-001, 02-REQ-034
-// Shared game engine — domain types, turn resolution, collision detection.
-// All runtimes (SpacetimeDB, Centaur Server, web clients) import from here.
-// No feature code exists yet — this is a typed skeleton.
+// @cyphid/snek-engine — the shared game engine.
+// spec: 02-REQ-034 — single shared codebase exporting module 01's domain
+// type vocabulary and the eleven-phase turn resolver, consumed by the
+// SpacetimeDB module (authoritative), the Centaur Server library
+// (simulation), and web clients (pre-validation/rendering).
+//
+// The export list mirrors 02 §2.17 / 01 §3 (Exported Interfaces). Everything
+// else in this package is module-internal detail.
 
-// ---------------------------------------------------------------------------
-// Direction
-// ---------------------------------------------------------------------------
+// 01 §3.1 — enums, branded ids, Agent, derived effect values
+export { CellType, DEFAULT_GAME_CONFIG, Direction, ItemType } from "./types.js";
+export type {
+  Agent,
+  Cell,
+  CentaurTeamId,
+  EffectFamily,
+  EffectState,
+  ItemId,
+  SnakeId,
+  TurnNumber,
+  UserId,
+} from "./types.js";
+export { invulnerabilityLevel, isVisible } from "./effects.js";
 
-export type Direction = "Up" | "Right" | "Down" | "Left";
+// 01 §3.2 — state shapes
+export type {
+  Board,
+  CentaurTeamClockState,
+  GameState,
+  ItemState,
+  PotionEffect,
+  SnakeState,
+} from "./types.js";
 
-// ---------------------------------------------------------------------------
-// Cell types
-// ---------------------------------------------------------------------------
+// 01 §3.3 — game configuration
+export type { GameConfig, GameOrchestrationConfig, GameRuntimeConfig } from "./types.js";
 
-export type CellType = "Normal" | "Wall" | "Hazard" | "Fertile";
+// 01 §3.4 / §3.5 / §3.6 — outcome, events, board-generation failure
+export type { BoardGenerationFailure, DeathCause, GameOutcome, TurnEvent } from "./types.js";
 
-export interface Cell {
-  readonly x: number;
-  readonly y: number;
-  readonly type: CellType;
-}
+// 01 §3.7 — randomness primitives
+export { rngFromSeed, subSeed } from "./rng.js";
+export type { Rng } from "./rng.js";
 
-// ---------------------------------------------------------------------------
-// Board geometry
-// ---------------------------------------------------------------------------
+// 01 §3.8 — entry points
+export { generateBoardAndInitialState } from "./boardgen.js";
+export type { GeneratedInitialState, TeamRegistration } from "./boardgen.js";
+export { resolveTurn } from "./resolve.js";
+export type { TurnResolution } from "./resolve.js";
+export type { StagedMove } from "./types.js";
 
-export type BoardSize = "Small" | "Medium" | "Large" | "Giant";
+// Board geometry helpers (01 §2.2; fertileGroundEnabled is contract-level
+// per 02 §2.17's export list, the rest are shared conveniences).
+export { advance, cellAt, cellIndex, fertileGroundEnabled, isInner, parityOf } from "./board.js";
 
-export interface BoardDimensions {
-  readonly width: number;
-  readonly height: number;
-}
+// Chess-timer arithmetic (01 §2.9) — exported so module 04's reducers apply
+// the exact formulas.
+export { applyTurnStart, declareTurnOver, initialClock } from "./clock.js";
 
-export interface Board {
-  readonly size: BoardSize;
-  readonly dimensions: BoardDimensions;
-  readonly cells: ReadonlyArray<ReadonlyArray<Cell>>;
-}
-
-// ---------------------------------------------------------------------------
-// Item types
-// ---------------------------------------------------------------------------
-
-export type ItemType = "Food" | "InvulnerabilityPotion" | "InvisibilityPotion";
-
-export interface Item {
-  readonly id: string;
-  readonly type: ItemType;
-  readonly x: number;
-  readonly y: number;
-}
-
-// ---------------------------------------------------------------------------
-// Effect types
-// ---------------------------------------------------------------------------
-
-export type EffectFamily = "Invulnerability" | "Invisibility";
-export type EffectKind = "Buff" | "Debuff";
-
-export interface Effect {
-  readonly family: EffectFamily;
-  readonly kind: EffectKind;
-  readonly turnsRemaining: number;
-}
-
-// ---------------------------------------------------------------------------
-// Snake state
-// ---------------------------------------------------------------------------
-
-export interface SnakeSegment {
-  readonly x: number;
-  readonly y: number;
-}
-
-export interface Snake {
-  readonly id: string;
-  readonly teamId: string;
-  readonly letter: string;
-  readonly segments: ReadonlyArray<SnakeSegment>;
-  readonly health: number;
-  readonly maxHealth: number;
-  readonly invulnerabilityLevel: number;
-  readonly effects: ReadonlyArray<Effect>;
-  readonly alive: boolean;
-}
-
-// ---------------------------------------------------------------------------
-// Game state
-// ---------------------------------------------------------------------------
-
-export interface GameState {
-  readonly gameId: string;
-  readonly turn: number;
-  readonly board: Board;
-  readonly snakes: ReadonlyArray<Snake>;
-  readonly items: ReadonlyArray<Item>;
-  readonly teamIds: ReadonlyArray<string>;
-}
-
-// ---------------------------------------------------------------------------
-// Turn input / output
-// ---------------------------------------------------------------------------
-
-export interface StagedMoves {
-  readonly [snakeId: string]: Direction;
-}
-
-export interface TurnResult {
-  readonly nextState: GameState;
-  readonly events: ReadonlyArray<TurnEvent>;
-}
-
-// ---------------------------------------------------------------------------
-// Turn events (closed enumeration)
-// ---------------------------------------------------------------------------
-
-export type TurnEvent =
-  | {
-      readonly type: "SnakeMoved";
-      readonly snakeId: string;
-      readonly direction: Direction;
-      readonly stagedBy: string;
-    }
-  | { readonly type: "SnakeDied"; readonly snakeId: string; readonly cause: DeathCause }
-  | { readonly type: "SnakeSevered"; readonly snakeId: string; readonly segmentsRemoved: number }
-  | { readonly type: "FoodConsumed"; readonly snakeId: string; readonly itemId: string }
-  | {
-      readonly type: "PotionConsumed";
-      readonly snakeId: string;
-      readonly itemId: string;
-      readonly family: EffectFamily;
-    }
-  | {
-      readonly type: "EffectExpired";
-      readonly snakeId: string;
-      readonly family: EffectFamily;
-      readonly kind: EffectKind;
-    }
-  | { readonly type: "ItemSpawned"; readonly item: Item }
-  | { readonly type: "TurnTimeExpired"; readonly teamId: string }
-  | {
-      readonly type: "GameEnded";
-      readonly winnerTeamId: string | null;
-      readonly reason: WinReason;
-    };
-
-export type DeathCause =
-  | "WallCollision"
-  | "BodyCollision"
-  | "HeadToHead"
-  | "HealthDepleted"
-  | "HazardDamage";
-
-export type WinReason = "LastTeamStanding" | "HealthTimeout" | "AdminTerminated";
-
-// ---------------------------------------------------------------------------
-// resolveTurn — authoritative turn resolution
-// spec: 01-REQ-050, 02-REQ-034
-// ---------------------------------------------------------------------------
-
-/**
- * Resolve one complete turn of Team Snek game logic.
- * Implements all eleven turn-resolution phases from spec module 01.
- *
- * @throws Error("not implemented") — implementation is deferred to the first
- *   SpacetimeDB implementation task (packages/stdb).
- */
-export function resolveTurn(_state: GameState, _moves: StagedMoves): TurnResult {
-  throw new Error("not implemented");
-}
-
-// ---------------------------------------------------------------------------
-// Validation helpers — stubs
-// ---------------------------------------------------------------------------
-
-/**
- * Returns true if the given direction is a legal staged move for the snake.
- * @throws Error("not implemented")
- */
-export function isValidMove(_state: GameState, _snakeId: string, _direction: Direction): boolean {
-  throw new Error("not implemented");
-}
+// Move pre-validation (02-REQ-037 consumers; see validate.ts for semantics).
+export { isValidMove } from "./validate.js";

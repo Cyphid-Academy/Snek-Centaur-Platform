@@ -1,0 +1,167 @@
+// The interaction rules (01 §2.8 stage 3) and derived rules (stage 4).
+//
+// Every interaction rule is a pure function of (TurnContext, ClaimSet): it
+// reads the snapshot via the context and the surviving moved-head set H*,
+// and only ever ADDS claims. Rules never write game state and never read
+// another rule's committed effect, so INTERACTION_RULES may be evaluated in
+// any order (verified by the order-shuffle property test).
+//
+// Adding a mechanic = adding a rule here (plus, for a new claim type, one
+// clause in commit.ts). No pipeline position to choose.
+import { cellAt, sameCell } from "../board.js";
+import { familyOfPotion, invulnerabilityLevel } from "../effects.js";
+import { CellType, ItemType } from "../types.js";
+import type { ClaimSet } from "./claims.js";
+import type { TurnContext } from "./context.js";
+import { projectionOf } from "./context.js";
+import type { WorkSnake } from "./work.js";
+
+export type InteractionRule = (ctx: TurnContext, claims: ClaimSet) => void;
+
+// Wall rule. spec: 01-REQ-044a
+export const wallRule: InteractionRule = (ctx, claims) => {
+  for (const { snake, head } of ctx.survivingHeads) {
+    const type = cellAt(ctx.board, head);
+    if (type === CellType.Wall || type === undefined) {
+      claims.certainDeath(snake.snakeId, { cause: "wall", killer: null }, "wall_death");
+    }
+  }
+};
+
+// Self-collision rule. spec: 01-REQ-044b
+export const selfCollisionRule: InteractionRule = (ctx, claims) => {
+  for (const { snake, head } of ctx.survivingHeads) {
+    const body = projectionOf(ctx, snake.snakeId).body;
+    if (body.slice(1).some((c) => sameCell(c, head))) {
+      claims.certainDeath(snake.snakeId, { cause: "self_collision", killer: null }, "self_death");
+    }
+  }
+};
+
+// Body-collision rule. spec: 01-REQ-044c — victims include head-to-head
+// losers (their bodies stay on the logical board); severs are recorded as
+// claims and applied at commit, so no rule observes a severed body.
+export const bodyCollisionRule: InteractionRule = (ctx, claims) => {
+  for (const { snake: attacker, head } of ctx.survivingHeads) {
+    // ctx.bodySegmentsAt entries are ordered by (snakeId, segment index), so
+    // the first entry seen per victim is the head-closest contact and victims
+    // are evaluated in ascending-snakeId order.
+    const contacted = new Set<WorkSnake>();
+    for (const { snake: victim, index: contactIndex } of ctx.bodySegmentsAt(head)) {
+      if (victim.snakeId === attacker.snakeId || contacted.has(victim)) continue;
+      contacted.add(victim);
+      // Snapshot invulnerability levels (01-REQ-033).
+      if (invulnerabilityLevel(attacker) > invulnerabilityLevel(victim)) {
+        const victimBody = projectionOf(ctx, victim.snakeId).body;
+        claims.sever(
+          {
+            attackerSnakeId: attacker.snakeId,
+            victimSnakeId: victim.snakeId,
+            contactCell: victimBody[contactIndex] as (typeof victimBody)[number],
+            segmentsLost: victimBody.length - contactIndex,
+          },
+          contactIndex,
+        );
+      } else {
+        claims.certainDeath(
+          attacker.snakeId,
+          { cause: "body_collision", killer: victim.snakeId },
+          "body_collision_death",
+        );
+        claims.disrupt(victim.snakeId, "body_collision_received");
+      }
+    }
+  }
+};
+
+// Hazard rule. spec: 01-REQ-046b
+export const hazardRule: InteractionRule = (ctx, claims) => {
+  for (const { snake, head } of ctx.survivingHeads) {
+    if (cellAt(ctx.board, head) === CellType.Hazard) {
+      claims.damage(snake.snakeId, ctx.config.hazardDamage, "hazard");
+      claims.disrupt(snake.snakeId, "hazard_entry");
+    }
+  }
+};
+
+// Health-tick rule. spec: 01-REQ-046a
+export const healthTickRule: InteractionRule = (ctx, claims) => {
+  for (const snake of ctx.aliveInS) {
+    claims.damage(snake.snakeId, 1, "tick");
+  }
+};
+
+// Food rule. spec: 01-REQ-046c — unique entrancy guaranteed by stage 2.
+// Death by any non-head-to-head cause does not gate collection (01-REVIEW-022).
+export const foodRule: InteractionRule = (ctx, claims) => {
+  for (const { snake, head } of ctx.survivingHeads) {
+    const food = ctx.itemsAt(head).find((i) => i.itemType === ItemType.Food);
+    if (food === undefined) continue;
+    food.consumed = true;
+    claims.eatFood(snake.snakeId, head);
+  }
+};
+
+// Potion rule. spec: 01-REQ-047 — aggregates to one rebuild claim per
+// (team, family); sacrificial collection stands (01-REVIEW-022).
+export const potionRule: InteractionRule = (ctx, claims) => {
+  for (const { snake, head } of ctx.survivingHeads) {
+    const potion = ctx
+      .itemsAt(head)
+      .find((i) => i.itemType === ItemType.InvulnPotion || i.itemType === ItemType.InvisPotion);
+    if (potion === undefined) continue;
+    potion.consumed = true;
+    const potionType = potion.itemType as
+      | typeof ItemType.InvulnPotion
+      | typeof ItemType.InvisPotion;
+    claims.collectPotion(snake.centaurTeamId, {
+      snakeId: snake.snakeId,
+      cell: head,
+      potionType,
+      family: familyOfPotion(potionType),
+    });
+  }
+};
+
+// spec: 01-REQ-041 stage 3 — the order of this list is NOT semantically
+// meaningful (any permutation yields identical output); it is fixed only so
+// the source reads in the spec's presentation order.
+export const INTERACTION_RULES: ReadonlyArray<InteractionRule> = [
+  wallRule,
+  selfCollisionRule,
+  bodyCollisionRule,
+  hazardRule,
+  healthTickRule,
+  foodRule,
+  potionRule,
+];
+
+/**
+ * Derived rules (01 §2.8 stage 4) — read the claim set plus the snapshot.
+ * Internal order matters here and only here among the rule stages: health
+ * resolution must precede cancellation because a fatal health depletion is
+ * itself a disruption that can trigger a cancellation.
+ */
+export function runDerivedRules(ctx: TurnContext, claims: ClaimSet): void {
+  // Health resolution and health deaths. spec: 01-REQ-046d
+  for (const snake of ctx.aliveInS) {
+    const resolved = claims.hasHeal(snake.snakeId)
+      ? ctx.config.maxHealth
+      : snake.health - claims.totalDamage(snake.snakeId);
+    claims.setResolvedHealth(snake.snakeId, resolved);
+    if (resolved <= 0 && !claims.hasCertainDeath(snake.snakeId)) {
+      claims.healthDeath(snake.snakeId, claims.damageSources(snake.snakeId));
+    }
+  }
+
+  // Cancellation. spec: 01-REQ-045, 01-REQ-031 — snapshot debuff-holders
+  // only, so a collector is disruptable only from the turn after its debuff
+  // committed; rebuild claims from this turn are unaffected (supersede rule).
+  for (const d of claims.disruptions) {
+    const snake = ctx.byId.get(d.snakeId);
+    if (snake === undefined) continue;
+    for (const e of snake.activeEffects) {
+      if (e.state === "debuff") claims.cancelFamily(snake.centaurTeamId, e.family);
+    }
+  }
+}
