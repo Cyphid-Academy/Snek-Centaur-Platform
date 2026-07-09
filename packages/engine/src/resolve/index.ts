@@ -31,7 +31,7 @@ export interface TurnResolution {
  * Resolve one complete turn.
  *
  * `config` is the runtime half of the game configuration (documented
- * deviation from the drafted 01 §3.8 signature — see DECISIONS.md B1).
+ * deviation from the drafted 01 §3.8 signature — see DECISIONS.md §1.1).
  * `state.clocks` passes through untouched: the chess timer is driven by
  * module 04 between turns (01 §2.9).
  */

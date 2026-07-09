@@ -3,7 +3,7 @@
 // thousands of times per real turn. Run with `pnpm bench` in this package.
 //
 // Use these numbers as the BASELINE when profile-driven optimisation starts
-// (DECISIONS.md G3): candidate hotspots are work-copy cloning, the per-call
+// (DECISIONS.md §3.10): candidate hotspots are work-copy cloning, the per-call
 // segment/item indexes in context.ts, and event derivation.
 import { bench, describe } from "vitest";
 import { generateBoardAndInitialState } from "./boardgen.js";

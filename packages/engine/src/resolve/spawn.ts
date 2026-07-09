@@ -65,7 +65,7 @@ export function runSpawning(ctx: TurnContext, turnSeed: Uint8Array, events: Even
     rngFood,
     eligibleSpawnCells(fertileGroundEnabled(board)),
   );
-  // Potion eligibility is not fertile-restricted (01-REQ-049; DECISIONS.md C1).
+  // Potion eligibility is not fertile-restricted (01-REQ-049; DECISIONS.md §2.1).
   const rngPotion = rngFromSeed(subSeed(turnSeed, "phase-8-potions"));
   spawnItems(
     ItemType.InvulnPotion,

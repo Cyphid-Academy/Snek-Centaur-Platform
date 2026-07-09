@@ -2,7 +2,7 @@
 
 Shared game engine for the Team Snek Centaur Platform.
 
-Implements spec module 01 in full: the domain type vocabulary, seeded randomness (Xoshiro256++ + BLAKE3 sub-seed derivation), the board generation pipeline (hazards, Perlin fertile tiles, territories, snake init, initial food, bounded retry), chess-timer arithmetic, and the authoritative eleven-phase `resolveTurn`. All three runtimes — SpacetimeDB (authoritative), Centaur Server (simulation), and web clients (pre-validation/rendering) — import from this package.
+Implements spec module 01 in full: the domain type vocabulary, seeded randomness (Xoshiro256++ + BLAKE3 sub-seed derivation), the board generation pipeline (hazards, Perlin fertile tiles, territories, snake init, initial food, bounded retry), chess-timer arithmetic, and the authoritative staged `resolveTurn` (snapshot → parallel interaction rules → deterministic commit). All three runtimes — SpacetimeDB (authoritative), Centaur Server (simulation), and web clients (pre-validation/rendering) — import from this package.
 
 Everything is pure ECMAScript with no runtime-specific APIs; the only dependency is `@noble/hashes` (BLAKE3, mandated by module 01 DOWNSTREAM IMPACT note 4).
 
@@ -16,4 +16,4 @@ Key entry points:
 - `invulnerabilityLevel(snake)` / `isVisible(snake)` — derived effect values
 - `rngFromSeed` / `subSeed` — reproducible randomness primitives
 
-Implementation decisions and spec divergences are recorded in [`DECISIONS.md`](./DECISIONS.md).
+Implementation-level decisions are recorded in [`DECISIONS.md`](./DECISIONS.md).

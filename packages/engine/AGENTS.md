@@ -4,13 +4,13 @@ This package is `@cyphid/snek-engine`: the shared game engine. It is the single 
 
 ## Spec scope
 
-- **Module 01** (`spec/01-game-rules.md`) — all domain types and the full turn resolution algorithm (eleven phases).
+- **Module 01** (`spec/01-game-rules.md`) — all domain types and the full staged turn-resolution model.
 - **Module 02** (`spec/02-platform-architecture.md`) — `02-REQ-034` mandates this shared codebase.
 
 ## What goes here
 
 - Domain type vocabulary: `Direction`, `CellType`, `SnakeState`, `Board`, `ItemState`, `PotionEffect`, `TurnEvent`, etc.
-- `resolveTurn(state, stagedMoves, turnNumber, turnSeed, config)` — the authoritative eleven-phase turn resolver.
+- `resolveTurn(state, stagedMoves, turnNumber, turnSeed, config)` — the authoritative staged turn resolver.
 - `generateBoardAndInitialState(config, teams, gameSeed)` — the board generation pipeline.
 - `isValidMove(state, snakeId, direction): boolean` — pre-validation helper.
 - Any pure game-logic utilities (spawning algorithms, collision math, seeded randomness, chess-timer arithmetic).
@@ -23,7 +23,7 @@ This package is `@cyphid/snek-engine`: the shared game engine. It is the single 
 
 ## Implementation notes
 
-Module 01 is fully implemented and tested. Non-trivial decisions and the spec divergences found during implementation are recorded in `DECISIONS.md` — read it before changing turn-resolution or clock semantics.
+Module 01 is fully implemented and tested. Non-trivial implementation-level decisions are recorded in `DECISIONS.md` — read it before changing turn-resolution or clock semantics.
 
 Every non-trivial decision must cite the spec requirement it satisfies:
 

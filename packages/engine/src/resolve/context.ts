@@ -66,7 +66,7 @@ export interface TurnContext {
    * spec; the backing structure behind this function is deliberately simple
    * (per-call Map) and is the designated swap point for profile-driven
    * optimisation once module 07's simulation loop provides real load
-   * (see DECISIONS.md G3).
+   * (see DECISIONS.md §3.10).
    */
   readonly bodySegmentsAt: (cell: Cell) => ReadonlyArray<BodySegmentEntry>;
   /** Snapshot health, immune to commit mutation (event derivation needs it). */
@@ -174,8 +174,7 @@ export function buildTurnContext(
 
   // Segment occupancy index: non-head moved-body segments per cell, built
   // once per turn in (snakeId, segment index) order so lookups are
-  // deterministic. Turns body-collision detection from
-  // O(attackers × victims × segments) into O(heads + segments).
+  // deterministic and body-collision detection is O(heads + segments).
   const segmentIndex = new Map<number, BodySegmentEntry[]>();
   for (const snake of aliveInS) {
     const body = must(moved.get(snake.snakeId), "projection").body;
