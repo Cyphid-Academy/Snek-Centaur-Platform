@@ -70,6 +70,31 @@
   let speedMs = $state(180);
   let log = $state<string[]>([]);
 
+  // Per-turn history for scrubbing. resolveTurn returns a fresh immutable
+  // nextState each turn, so storing references is cheap — no cloning. Kept
+  // OUTSIDE $state (like the driver) so snapshots stay plain objects; only
+  // the currently-viewed snapshot is handed to the reactive `view`.
+  interface Snapshot {
+    readonly snakes: LocalGame["state"]["snakes"];
+    readonly items: LocalGame["state"]["items"];
+    readonly outcome: GameOutcome;
+  }
+  let history: Snapshot[] = [];
+  let scrubTurn = $state(0);
+  let lastTurn = $state(0);
+  // `game` is intentionally non-reactive, so the template can't watch
+  // `game.finished` — mirror it into $state for the scrub bar's visibility.
+  let gameFinished = $state(false);
+
+  function snapshot(): void {
+    if (game === null) return;
+    history.push({
+      snakes: game.state.snakes,
+      items: game.state.items,
+      outcome: game.outcome,
+    });
+  }
+
   function syncView(): void {
     if (game === null) return;
     view = {
@@ -79,6 +104,22 @@
       turn: game.turnNumber,
       outcome: game.outcome,
     };
+    scrubTurn = game.turnNumber;
+    lastTurn = game.turnNumber;
+    gameFinished = game.finished;
+  }
+
+  function showTurn(turn: number): void {
+    if (game === null) return;
+    const snap = history[turn];
+    if (snap === undefined) return;
+    view = {
+      board: game.state.board,
+      snakes: snap.snakes,
+      items: snap.items,
+      turn,
+      outcome: snap.outcome,
+    };
   }
 
   function startGame(text: string): void {
@@ -87,18 +128,24 @@
     failure = null;
     game = null;
     view = null;
+    scrubTurn = 0;
+    lastTurn = 0;
+    gameFinished = false;
     const created = createLocalGame(DEMO_CONFIG, TEAMS, seedFromText(text));
     if ("code" in created) {
       failure = created;
       return;
     }
     game = created;
+    history = [];
+    snapshot();
     syncView();
   }
 
   function step(): void {
     if (game === null || game.finished) return;
     const resolution = game.step(computeBotMoves(game.state, DEMO_CONFIG.runtime));
+    snapshot();
     syncView();
     const turn = game.turnNumber;
     const lines = resolution.events
@@ -337,11 +384,11 @@
         </svg>
 
         <div class="controls">
-          <button onclick={step} disabled={view.outcome.kind !== "in_progress"}>Step ▷</button>
+          <button onclick={step} disabled={gameFinished}>Step ▷</button>
           <button
             class="primary"
             onclick={() => (playing = !playing)}
-            disabled={view.outcome.kind !== "in_progress"}
+            disabled={gameFinished}
           >
             {playing ? "Pause ⏸" : "Play ▶"}
           </button>
@@ -352,6 +399,24 @@
             <input type="range" min="60" max="600" step="20" bind:value={speedMs} />
           </label>
         </div>
+        {#if gameFinished && lastTurn > 0}
+          <label class="scrub-row">
+            <span class="scrub-label">replay t{scrubTurn}/{lastTurn}</span>
+            <input
+              class="scrub"
+              type="range"
+              min="0"
+              max={lastTurn}
+              step="1"
+              value={scrubTurn}
+              oninput={(e) => {
+                scrubTurn = e.currentTarget.valueAsNumber;
+                showTurn(scrubTurn);
+              }}
+              aria-label="scrub through completed game turns"
+            />
+          </label>
+        {/if}
         <label class="seed-row">
           seed
           <input class="seed-input" type="text" bind:value={seedText} />
@@ -518,6 +583,25 @@
     display: flex;
     align-items: center;
     gap: 6px;
+  }
+  .scrub-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-top: 12px;
+    font-size: 0.8rem;
+    color: #94a3b8;
+  }
+  .scrub-label {
+    flex: 0 0 auto;
+    font-family: ui-monospace, monospace;
+    font-size: 0.75rem;
+    color: #7dd3fc;
+    min-width: 96px;
+  }
+  .scrub {
+    flex: 1;
+    accent-color: #22c55e;
   }
   .seed-row {
     display: flex;

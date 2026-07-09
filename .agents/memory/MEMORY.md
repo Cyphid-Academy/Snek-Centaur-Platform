@@ -1,0 +1,1 @@
+- [Svelte 5 demo reactivity](svelte-demo-reactivity.md) — non-reactive engine state + runes pitfalls; bind:value/oninput ordering; snapshots by reference are safe.
