@@ -1,6 +1,6 @@
 // @cyphid/snek-engine — the shared game engine.
 // spec: 02-REQ-034 — single shared codebase exporting module 01's domain
-// type vocabulary and the eleven-phase turn resolver, consumed by the
+// type vocabulary and the staged turn resolver, consumed by the
 // SpacetimeDB module (authoritative), the Centaur Server library
 // (simulation), and web clients (pre-validation/rendering).
 //
@@ -12,6 +12,7 @@ export { CellType, DEFAULT_GAME_CONFIG, Direction, ItemType } from "./types.js";
 export type {
   Agent,
   Cell,
+  CellIndex,
   CentaurTeamId,
   EffectFamily,
   EffectState,
@@ -22,15 +23,18 @@ export type {
 } from "./types.js";
 export { invulnerabilityLevel, isVisible } from "./effects.js";
 
-// 01 §3.2 — state shapes
+// 01 §3.2 — state shapes (itemsByCell/itemAt bridge the flat wire form of
+// present items to the logical cell-keyed map)
 export type {
   Board,
   CentaurTeamClockState,
   GameState,
+  ItemsByCell,
   ItemState,
   PotionEffect,
   SnakeState,
 } from "./types.js";
+export { itemAt, itemsByCell } from "./items.js";
 
 // 01 §3.3 — game configuration
 export type { GameConfig, GameOrchestrationConfig, GameRuntimeConfig } from "./types.js";

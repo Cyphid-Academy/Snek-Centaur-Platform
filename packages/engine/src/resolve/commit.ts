@@ -1,8 +1,8 @@
 // The commit (01 §2.8 stage 5): the SOLE writer of game state. Combines the
 // turn's claims into the end-of-turn state in a fixed, centralised order —
 // health resolution → death union → body mutation (move → sever → grow) →
-// effect resolution (cancel → rebuild → expire) — and derives the events
-// that describe what it did.
+// effect resolution (cancel → rebuild → expire) → item removal for
+// consumption claims — and derives the events that describe what it did.
 import { EFFECT_DURATION_TURNS, removeFamily } from "../effects.js";
 import type { PotionEffect, SnakeId, TurnNumber } from "../types.js";
 import type { ClaimSet } from "./claims.js";
@@ -73,13 +73,13 @@ export function commit(ctx: TurnContext, claims: ClaimSet, events: EventBuffer):
     events.emit({ kind: "snake_severed", ...record }, record.victimSnakeId);
   }
 
-  for (const [id, cell] of claims.foodEaten) {
+  for (const [id, { cell, itemId }] of claims.foodEaten) {
     // MaxHealth minus what the snake would have resolved to without the heal.
     const withoutHeal =
       must(ctx.snapshotHealth.get(id), `snapshot health for snake ${id}`) - claims.totalDamage(id);
     const resolved = must(claims.resolvedHealth(id), `resolved health for snake ${id}`);
     events.emit(
-      { kind: "food_eaten", snakeId: id, cell, healthRestored: resolved - withoutHeal },
+      { kind: "food_eaten", snakeId: id, itemId, cell, healthRestored: resolved - withoutHeal },
       id,
     );
   }
@@ -148,6 +148,7 @@ export function commit(ctx: TurnContext, claims: ClaimSet, events: EventBuffer):
       {
         kind: "potion_collected",
         snakeId: collection.snakeId,
+        itemId: collection.itemId,
         cell: collection.cell,
         potionType: collection.potionType,
         affectedTeammateIds: recipients.filter((id) => id !== collection.snakeId),
@@ -168,5 +169,10 @@ export function commit(ctx: TurnContext, claims: ClaimSet, events: EventBuffer):
         snake.snakeId,
       );
     }
+  }
+
+  // ---- Item removal for consumption claims. spec: 01-REQ-007, 046c, 047 ----
+  for (const consumption of claims.consumptions()) {
+    ctx.items.delete(consumption.cellIndex);
   }
 }

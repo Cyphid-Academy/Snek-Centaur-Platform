@@ -205,7 +205,8 @@ describe("foodRule and potionRule (01-REQ-046c, 01-REQ-047)", () => {
     foodRule(ctx, claims);
     expect(claims.hasHeal(sid(0))).toBe(true);
     expect(claims.hasGrow(sid(0))).toBe(true);
-    expect(ctx.items[0]?.consumed).toBe(true);
+    expect(claims.consumptions().map((c) => c.itemId)).toEqual([food.itemId]);
+    expect(ctx.items.size).toBe(1); // rules never write the items map
     expect(claims.disruptions).toHaveLength(0); // eating is not a disruption
   });
 

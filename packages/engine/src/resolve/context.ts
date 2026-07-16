@@ -3,24 +3,26 @@
 // precedence (01-REQ-044d), which withdraws losing heads and yields the
 // surviving moved-head set H*. Everything downstream reads only this context
 // plus the claim set.
-import { advance, cellKey } from "../board.js";
+import { advance, cellIndex, cellKey } from "../board.js";
 import { invulnerabilityLevel } from "../effects.js";
 import { rngFromSeed, subSeed } from "../rng.js";
 import type {
   Agent,
   Board,
   Cell,
+  CellIndex,
   CentaurTeamId,
   Direction,
   GameRuntimeConfig,
   GameState,
+  ItemState,
   SnakeId,
   StagedMove,
   TurnNumber,
 } from "../types.js";
 import { ALL_DIRECTIONS } from "../types.js";
 import type { ClaimSet } from "./claims.js";
-import type { WorkItem, WorkSnake } from "./work.js";
+import type { WorkSnake } from "./work.js";
 import { must, toWorkSnake } from "./work.js";
 
 export interface MoveProjection {
@@ -49,15 +51,19 @@ export interface TurnContext {
   /** All snakes, ascending snakeId. Work copies — mutated only by the commit. */
   readonly snakes: ReadonlyArray<WorkSnake>;
   readonly byId: ReadonlyMap<SnakeId, WorkSnake>;
-  /** Items, including consumed ones. Rules mark consumption; spawn appends. */
-  readonly items: WorkItem[];
+  /**
+   * Present items, cell-keyed — the turn's working copy of GameState.items.
+   * Rules never write it (consumption is a claim); the commit removes
+   * consumption-claimed entries and spawning inserts new ones.
+   */
+  readonly items: Map<CellIndex, ItemState>;
   /** Snakes alive in the snapshot, ascending snakeId. */
   readonly aliveInS: ReadonlyArray<WorkSnake>;
   readonly moved: ReadonlyMap<SnakeId, MoveProjection>;
   /** H* (01-REQ-044d): alive movers whose head survived head-to-head. */
   readonly survivingHeads: ReadonlyArray<SurvivingHead>;
-  /** Unconsumed items at a cell (usually 0 or 1; hand-built states may stack). */
-  readonly itemsAt: (cell: Cell) => ReadonlyArray<WorkItem>;
+  /** The nullable single item occupant of a cell (01-REQ-007). */
+  readonly itemAt: (cell: Cell) => ItemState | null;
   /**
    * Non-head segments of moved bodies at a cell — the body-collision targets
    * of 01-REQ-044c, including head-to-head losers' bodies. Entries are
@@ -95,7 +101,7 @@ export function buildTurnContext(
   const snakes = state.snakes.map(toWorkSnake);
   snakes.sort((a, b) => a.snakeId - b.snakeId); // deterministic iteration
   const byId = new Map<SnakeId, WorkSnake>(snakes.map((s) => [s.snakeId, s]));
-  const items: WorkItem[] = state.items.map((i) => ({ ...i }));
+  const items = new Map<CellIndex, ItemState>(state.items);
   const aliveInS = snakes.filter((s) => s.alive);
 
   // Roster and start-of-turn aliveness for the win check. Forfeit exclusion
@@ -190,16 +196,8 @@ export function buildTurnContext(
   const bodySegmentsAt = (cell: Cell): ReadonlyArray<BodySegmentEntry> =>
     segmentIndex.get(cellKey(cell)) ?? EMPTY_SEGMENTS;
 
-  // Item index for O(1) cell lookups by the food/potion rules.
-  const itemIndex = new Map<number, WorkItem[]>();
-  for (const item of items) {
-    const key = cellKey(item.cell);
-    const list = itemIndex.get(key);
-    if (list === undefined) itemIndex.set(key, [item]);
-    else list.push(item);
-  }
-  const itemsAt = (cell: Cell): ReadonlyArray<WorkItem> =>
-    (itemIndex.get(cellKey(cell)) ?? []).filter((i) => !i.consumed);
+  // The cell-keyed items map IS the lookup structure — one nullable occupant.
+  const itemAt = (cell: Cell): ItemState | null => items.get(cellIndex(state.board, cell)) ?? null;
 
   return {
     board: state.board,
@@ -211,7 +209,7 @@ export function buildTurnContext(
     aliveInS,
     moved,
     survivingHeads,
-    itemsAt,
+    itemAt,
     bodySegmentsAt,
     snapshotHealth,
     roster,

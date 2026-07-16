@@ -1,9 +1,10 @@
 // Board geometry helpers. spec: 01 Section 2.2.
-import type { Board, Cell, CellType, Direction } from "./types.js";
+import type { Board, Cell, CellIndex, CellType, Direction } from "./types.js";
 
 // spec: 01-REQ-008 / DOWNSTREAM IMPACT note 3 — flat row-major encoding.
-export function cellIndex(board: Board, cell: Cell): number {
-  return cell.y * board.boardSize + cell.x;
+// Also the key type of the present-items map (01 §3.2).
+export function cellIndex(board: Board, cell: Cell): CellIndex {
+  return (cell.y * board.boardSize + cell.x) as CellIndex;
 }
 
 export function cellAt(board: Board, cell: Cell): CellType | undefined {

@@ -84,7 +84,7 @@ export function resolveTurnWithRules(
     nextState: {
       board: ctx.board,
       snakes: ctx.snakes.map(toSnakeState),
-      items: ctx.items,
+      items: ctx.items, // the turn-owned working map, now final
       clocks: state.clocks,
     },
     events: events.ordered(),

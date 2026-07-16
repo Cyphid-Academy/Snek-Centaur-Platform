@@ -4,9 +4,10 @@
 //
 // Use these numbers as the BASELINE when profile-driven optimisation starts
 // (DECISIONS.md §3.10): candidate hotspots are work-copy cloning, the per-call
-// segment/item indexes in context.ts, and event derivation.
+// segment index in context.ts, and event derivation.
 import { bench, describe } from "vitest";
 import { generateBoardAndInitialState } from "./boardgen.js";
+import { itemsByCell } from "./items.js";
 import { resolveTurn } from "./resolve.js";
 import { subSeed } from "./rng.js";
 import { seed, tid } from "./testkit.js";
@@ -24,7 +25,7 @@ function midGameState(config: GameConfig, gameSeedN: number, turns: number): Gam
   let state: GameState = {
     board: generated.board,
     snakes: generated.snakes,
-    items: generated.items,
+    items: itemsByCell(generated.board, generated.items),
     clocks: [],
   };
   for (let t = 0; t < turns; t++) {

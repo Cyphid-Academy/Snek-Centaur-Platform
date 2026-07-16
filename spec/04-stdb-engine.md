@@ -125,8 +125,8 @@ This module specifies the per-game runtime that authoritatively executes [01]'s 
 - (a) **Snake movement**: for each snake that executed a move, a record capturing the snake identifier, the originating cell, the destination cell, the direction, and `stagedBy` per 04-REQ-039 and 04-REQ-040 (nullable; null indicates a fallback-determined move). Growth is observable via the food-consumption event (d) and the committed body's duplicated tail segment per [01-REQ-062].
 - (b) **Snake death**: for each snake that died during the turn, a record capturing the snake identifier, the cause of death (wall, self-collision, body-collision, head-to-head, or health depletion — the latter carrying the set of contributing damage sources per [01-REQ-046d]), the location, and — where applicable — the identifier of the snake responsible (e.g., the attacker in a body-collision kill).
 - (c) **Severing**: for each severing outcome per [01-REQ-044c], a record capturing the attacker identifier, the victim identifier, the contact cell, and the number of segments removed.
-- (d) **Food consumption**: for each snake that consumed food, a record capturing the snake identifier, the cell, and the resulting health value.
-- (e) **Potion collection**: for each snake that consumed a potion, a record capturing the collector identifier, the cell, the potion type, and the set of teammates affected by the resulting team rebuild.
+- (d) **Food consumption**: for each snake that consumed food, a record capturing the snake identifier, the consumed item's identifier (used to stamp `item_lifetimes.destroyedTurn` per [04-REQ-007]), the cell, and the resulting health value.
+- (e) **Potion collection**: for each snake that consumed a potion, a record capturing the collector identifier, the consumed item's identifier (used to stamp `item_lifetimes.destroyedTurn` per [04-REQ-007]), the cell, the potion type, and the set of teammates affected by the resulting team rebuild.
 - (f) **Food spawning**: for each food item spawned, a record capturing the new item's identifier and cell.
 - (g) **Potion spawning**: for each potion item spawned, a record capturing the new item's identifier, cell, and potion type.
 - (h) **Effect application**: for each effect that became active at the turn's commit ([01-REQ-050]), a record capturing the affected snake, effect type, and expiry turn.
@@ -323,7 +323,7 @@ interface ItemLifetimeRow {
 }
 ```
 
-Item presence at turn T: `spawnTurn <= T AND (destroyedTurn IS NULL OR destroyedTurn > T)`. Items present at game start have `spawnTurn = 0`.
+Item presence at turn T: `spawnTurn <= T AND (destroyedTurn IS NULL OR destroyedTurn > T)`. Items present at game start have `spawnTurn = 0`. Primary-key uniqueness is guaranteed by the shared engine's turn-namespaced `ItemId` allocation ([01-REQ-078]) — no id coordination with consumed rows is needed.
 
 **Append-only exception**: The `destroyedTurn` field is updated from `null` to a value when an item is consumed during a later turn's resolution. This is the single permitted mutation to a previously-written row in the historical tables, consistent with the informal spec's design (§10: "Updates `destroyedTurn` on consumed `item_lifetimes`"). The update only adds information (null → value), never overwrites existing data, and occurs exactly once per row.
 
@@ -661,7 +661,7 @@ reducer resolve_turn():
   // — Step 2: Assemble GameState from tables —
   board = readBoardState()                                // from board_state
   snakes = readSnakeStatesForTurn(T)                      // from snake_states WHERE turn = T
-  items = readActiveItems(T)                              // from item_lifetimes WHERE active at turn T
+  items = itemsByCell(board, readActiveItems(T))          // active item_lifetimes rows -> cell-keyed map ([01] §3.2)
   clocks = readCentaurTeamClockStates()                          // from centaur_team_turn_state + time_budget_states
   gameState = { board, snakes, items, clocks }
 
@@ -685,8 +685,8 @@ reducer resolve_turn():
   for each snake in result.nextState.snakes:
     insert snake_states row for turn T+1 (with denormalized visible, invulnerabilityLevel)
   for each item change (consumed items, newly spawned items):
-    update item_lifetimes.destroyedTurn for consumed items
-    insert item_lifetimes rows for newly spawned items
+    update item_lifetimes.destroyedTurn for consumed items    // identified by the itemId on food_eaten / potion_collected events
+    insert item_lifetimes rows for newly spawned items        // from food_spawned / potion_spawned events
   for each CentaurTeam:
     insert time_budget_states row for turn T
   insert turns row for turn T (turnStartTimeMs, resolutionStartTimeMs)
@@ -748,7 +748,7 @@ reducer resolve_turn():
 
 **`stagedBy` capture** [04-REQ-038c, 04-REQ-039]: The `agentId` stored in the latest `staged_moves` entry per snake (written at staging time per Section 2.4) is read in step 1 and passed to `resolveTurn()` as `StagedMove.stagedBy`. For snakes where no move was staged for the current turn (no entries with `turn = T`), `resolveTurn()` returns `stagedBy: null` in the movement event per 04-REQ-040.
 
-**GameState assembly**: Module 01's `GameState` aggregate shape is exported as `interface GameState { board, snakes, items, clocks }` ([01] DOWNSTREAM IMPACT note 8; see resolved 01-REVIEW-013). This module assembles the exported `GameState` from table rows: `board: Board` from `board_state`; `snakes: ReadonlyArray<SnakeState>` from the latest `snake_states` rows (turn T); `items: ReadonlyArray<ItemState>` from active `item_lifetimes` rows (spawnTurn ≤ T AND destroyedTurn IS NULL or > T); `clocks: ReadonlyArray<CentaurTeamClockState>` from `centaur_team_turn_state` combined with `time_budget_states`. The field names and types align exactly with Module 01's exported interface.
+**GameState assembly**: Module 01's `GameState` aggregate shape is exported as `interface GameState { board, snakes, items, clocks }` ([01] DOWNSTREAM IMPACT note 8; see resolved 01-REVIEW-013). This module assembles the exported `GameState` from table rows: `board: Board` from `board_state`; `snakes: ReadonlyArray<SnakeState>` from the latest `snake_states` rows (turn T); `items: ItemsByCell` via the shared engine's `itemsByCell()` over the active `item_lifetimes` rows (spawnTurn ≤ T AND destroyedTurn IS NULL or > T) — the active-rows query yields present items on distinct cells by construction; `clocks: ReadonlyArray<CentaurTeamClockState>` from `centaur_team_turn_state` combined with `time_budget_states`. The field names and types align exactly with Module 01's exported interface.
 
 **Determinism** [04-REQ-069]: Given identical game seeds, configurations, and staged-move sequences, `resolveTurn()` produces identical results because (a) the shared engine's turn resolution is a pure function of its inputs, (b) all randomness is seed-derived via `subSeed()` and `rngFromSeed()`, and (c) the staged-move map is assembled deterministically from the table.
 
@@ -767,9 +767,9 @@ The `turn_events` table stores each event as a row with `eventType` discriminant
 | `snake_moved` | 1 | `snakeId`, `from: {x,y}`, `to: {x,y}`, `direction`, `stagedBy: AgentId \| null` | 04-REQ-043a |
 | `snake_died` | 2 | `snakeId`, `cause: DeathCause`, `killerSnakeId: number \| null`, `location: {x,y}`, `sources?: DamageSource[]` | 04-REQ-043b |
 | `snake_severed` | 3 | `attackerSnakeId`, `victimSnakeId`, `contactCell: {x,y}`, `segmentsLost: number` | 04-REQ-043c |
-| `food_eaten` | 4 | `snakeId`, `cell: {x,y}`, `healthRestored: number` | 04-REQ-043d |
+| `food_eaten` | 4 | `snakeId`, `itemId`, `cell: {x,y}`, `healthRestored: number` | 04-REQ-043d |
 | `hazard_damage` | 5 | `snakeId`, `cell: {x,y}`, `damageApplied: number`, `resultingHealth: number` | 04-REQ-043j |
-| `potion_collected` | 6 | `snakeId`, `cell: {x,y}`, `potionType: number`, `affectedTeammateIds: number[]` | 04-REQ-043e |
+| `potion_collected` | 6 | `snakeId`, `itemId`, `cell: {x,y}`, `potionType: number`, `affectedTeammateIds: number[]` | 04-REQ-043e |
 | `food_spawned` | 7 | `itemId`, `cell: {x,y}` | 04-REQ-043f |
 | `potion_spawned` | 8 | `itemId`, `cell: {x,y}`, `potionType: number` | 04-REQ-043g |
 | `effect_applied` | 9 | `snakeId`, `family: string`, `state: string`, `expiryTurn: number` | 04-REQ-043h |
@@ -1120,9 +1120,11 @@ type TurnEventPayload =
       readonly victimSnakeId: number; readonly contactCell: Cell;
       readonly segmentsLost: number }
   | { readonly kind: 'food_eaten'; readonly snakeId: number;
-      readonly cell: Cell; readonly healthRestored: number }
+      readonly itemId: number; readonly cell: Cell;
+      readonly healthRestored: number }
   | { readonly kind: 'potion_collected'; readonly snakeId: number;
-      readonly cell: Cell; readonly potionType: number;
+      readonly itemId: number; readonly cell: Cell;
+      readonly potionType: number;
       readonly affectedTeammateIds: ReadonlyArray<number> }
   | { readonly kind: 'food_spawned'; readonly itemId: number; readonly cell: Cell }
   | { readonly kind: 'potion_spawned'; readonly itemId: number;

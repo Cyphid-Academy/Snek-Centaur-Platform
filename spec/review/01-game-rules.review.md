@@ -526,3 +526,30 @@ Option A was rejected because it retains the exact asymmetry and reducer problem
 **Informal spec reference**: Section 5 (turn phases) — superseded as the structural model; the informal spec's phase numbering survives only as the canonical event-class presentation order.
 
 **Affected requirements/design elements**: 01-REQ-004 (fields removed), 01-REQ-021, 01-REQ-025, 01-REQ-026/027 (rebuild claims), 01-REQ-028, 01-REQ-031 (claim language), 01-REQ-033 (snapshot/commit wording), 01-REQ-041 (stage model), 01-REQ-042/043 (move projection), 01-REQ-044/a/b/c/d (parallel collision rules, head-to-head precedence), 01-REQ-045 (derived cancellation rule), 01-REQ-046/a–d (parallel health), 01-REQ-047 (potion rule, dead-collector semantics), 01-REQ-048/049 (post-commit spawning), 01-REQ-050 (commit effect order), 01-REQ-051, 01-REQ-052 (event set), 01-REQ-062 (tail duplication); §2.1, §2.6, §2.7 (claims), §2.8 (rewritten), §2.10 (wording), §2.11 (events, cause precedence, class ordering), §3.2, §3.9, §3.10 (notes 1, 6, 7, 9). Downstream cascades: [02] 02-REQ-034 and §2.13 wording (see 02-REVIEW-009); [04] 04-REQ-004/006/015/028/036/037/038/040/043/045/051/060, `SnakeStateRow` schema, initial-state payload, event table and TS payload types (see 04-REVIEW-024). Implementation: `packages/engine/src` (`types.ts`, `resolve/`, `validate.ts`, tests).
+
+---
+
+### 01-REVIEW-023: Item consumption as a claim; present-items state; lifetime record integration — **RESOLVED**
+
+**Type**: Correction & Amendment
+**Phase**: Requirements
+
+**Context**: [04-REQ-007] stores each item's whole lifetime in a single `item_lifetimes` row (`spawnTurn`, `destroyedTurn`), and [04] §2.6 assembles `GameState.items` for `resolve_turn` from the *active* rows only (`spawnTurn <= T AND (destroyedTurn IS NULL OR destroyedTurn > T)`). Module 01's item model did not fit that contract.
+
+**Prior text**: 01-REQ-007 defined `ItemState` with a `consumed: boolean` flag; consumed items remained in `GameState.items` indefinitely as identity records; `GameState.items` was `ReadonlyArray<ItemState>` with no occupancy constraint; the food and potion rules marked `consumed = true` during rule evaluation (a sanctioned exception to "rules never write"); no requirement governed `ItemId` allocation; `food_eaten`/`potion_collected` events carried no item identity.
+
+**Correction**: two defects against the module's own model and the cross-module contract.
+
+1. *Rule-time mutation.* The §2.8 pseudocode already modelled consumption as a claim (`claims += Consume(item)`), but the normative text and the sanctioned implementation marked items consumed during rule evaluation. Consumption is now a consumption claim recorded by the food/potion rules and applied by the commit — the sole writer — like every other outcome (01-REQ-046c, 01-REQ-047).
+2. *Id-allocation soundness.* With consumed items retained, the only stated identity convention (ids continue from the maximum present) collides once [04] §2.6 supplies active rows only: after items are consumed, a fresh maximum re-issues previously-used ids, corrupting the `item_lifetimes` primary key. 01-REQ-078 now pins turn-namespaced allocation (`(T + 1) × 256 + k` for turn-T spawns; setup items from 0), which is unique game-wide without observing consumed items.
+
+**Amendment** (direction from human):
+
+1. **Present-items projection** (01-REQ-007): `GameState.items` holds only items currently on the board. The lossless lifetime record lives solely in the data layer ([04-REQ-007]); the events carry everything needed to maintain it (`*_spawned` inserts with `spawnTurn`; the new `itemId` field on `food_eaten`/`potion_collected` stamps `destroyedTurn`).
+2. **Single occupancy as a type-level invariant** (01-REQ-007, §3.2): the collection is `ItemsByCell = ReadonlyMap<CellIndex, ItemState>` — a second occupant of a cell is unrepresentable. Rules perform one nullable lookup (`itemAt`). The invariant was already maintained dynamically (unoccupied-cell spawning, unique consumption); it is now structural.
+3. **Wire form vs logical form** (§3.2, §3.8): flat `ItemState` lists remain the serialization/wire representation (board-generation output, [05]'s stored preview, active `item_lifetimes` rows); `itemsByCell(board, list)` validates and builds the logical map.
+4. **Event payloads** (§2.11): `food_eaten` and `potion_collected` gain `itemId`.
+
+**Rationale**: The consumed flag was a lossy, snapshot-flattened shadow of `destroyedTurn`, and retaining consumed records made working state grow monotonically with game length — dead weight cloned on every simulation step of [07]'s world-tree search. Removing the rule-time mutation restores the uniform claim discipline (no carve-outs in the order-independence argument), and the cell-keyed map eliminates the item-instance selection problem that motivated the mutation in the first place: with at most one occupant, "which item was collected" has exactly one answer.
+
+**Affected requirements/design elements**: 01-REQ-007, 01-REQ-046c, 01-REQ-047, 01-REQ-052, 01-REQ-078 (new); §2.1 (`ItemState`, branded types), §2.8 (pseudocode, commit order wording, present-items prose), §2.11 (event payloads), §3.1 (`CellIndex`), §3.2 (`ItemState`, `ItemsByCell`, `itemsByCell`, `itemAt`), §3.8 (`GameState.items`), §3.9 (invariants), §3.10 (notes 1, 8, 10). Downstream cascades: [02] §2.17/§3.5 export lists (see 02-REVIEW-010); [04] §2.6 GameState assembly, §2.7 step 6, §2.8 event table, §3.2 payload types (see 04-REVIEW-025). Implementation: `packages/engine/src` (`types.ts`, `board.ts`, `resolve/`, `spawn`, `boardgen.ts`, testkit, tests).

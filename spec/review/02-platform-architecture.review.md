@@ -149,3 +149,16 @@ Resolved REVIEW items from [`specs/02-platform-architecture.md`](../02-platform-
 **Amendment**: Cascade of [01]'s 01-REVIEW-022: [01-REQ-041] now defines a staged turn-resolution model (snapshot → parallel interaction rules → deterministic commit) rather than an eleven-phase pipeline. 02-REQ-034 and §2.13 reference "the staged turn-resolution model" / "the entire turn-resolution computation". No architectural content of module 02 changes — the shared-engine contract, consumer table, and compatibility constraints are unaffected.
 
 **Affected requirements/design elements**: 02-REQ-034; §2.13 authoritative-turn-resolution paragraph.
+
+---
+
+### 02-REVIEW-010: Shared-engine export list — item projection types cascade from 01-REVIEW-023 — **RESOLVED**
+
+**Type**: Amendment (cascade)
+**Phase**: Requirements
+
+**Prior text**: The shared-engine export lists (§2.17, §3.5) carried `ItemState` only among the state shapes, and §3.4's `preComputedInitialState.items` was described without distinguishing wire form from logical form.
+
+**Amendment**: Per resolved [01-REVIEW-023], module 01's state shapes now include `CellIndex`, `ItemsByCell` (the cell-keyed present-items map used by `GameState`), and the `itemsByCell`/`itemAt` helpers. Both export lists gain these names. §3.4's initial-state `items` list is noted as the flat wire form; consumers build the logical map via `itemsByCell()`.
+
+**Affected requirements/design elements**: §2.17 codebase-structure export list, §3.4 (initial-state note), §3.5 authoritative export list.

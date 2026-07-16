@@ -5,7 +5,7 @@ import { Direction } from "./types.js";
 import { isValidMove } from "./validate.js";
 
 function state(snakes: SnakeState[]): GameState {
-  return { board: emptyBoard(11), snakes, items: [], clocks: [] };
+  return { board: emptyBoard(11), snakes, items: new Map(), clocks: [] };
 }
 
 describe("isValidMove", () => {

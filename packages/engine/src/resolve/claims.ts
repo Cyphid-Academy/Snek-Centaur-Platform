@@ -4,10 +4,12 @@
 // committed effect, which is what makes rule evaluation order-free.
 import type {
   Cell,
+  CellIndex,
   CentaurTeamId,
   DamageSource,
   DeathCause,
   EffectFamily,
+  ItemId,
   ItemType,
   SnakeId,
 } from "../types.js";
@@ -49,9 +51,17 @@ export interface RebuildClaim {
 
 export interface PotionCollection {
   readonly snakeId: SnakeId;
+  readonly itemId: ItemId;
   readonly cell: Cell;
   readonly potionType: typeof ItemType.InvulnPotion | typeof ItemType.InvisPotion;
   readonly family: EffectFamily;
+}
+
+// spec: 01-REQ-046c, 01-REQ-047 — the commit removes the entry from the
+// present-items map (01-REQ-007); rules never write it.
+export interface ConsumptionClaim {
+  readonly itemId: ItemId;
+  readonly cellIndex: CellIndex;
 }
 
 export interface CancelPair {
@@ -75,7 +85,8 @@ export class ClaimSet {
   readonly disruptions: Array<{ readonly snakeId: SnakeId; readonly cause: DisruptionCause }> = [];
   private readonly rebuildMap = new Map<string, RebuildClaim>();
   readonly potionCollections: PotionCollection[] = [];
-  readonly foodEaten = new Map<SnakeId, Cell>();
+  readonly foodEaten = new Map<SnakeId, { readonly cell: Cell; readonly itemId: ItemId }>();
+  private readonly consumptionList: ConsumptionClaim[] = [];
   // Derived-stage outputs (01 §2.8 stage 4) — still claims, written before
   // the commit runs.
   private readonly resolvedHealthMap = new Map<SnakeId, number>();
@@ -124,10 +135,14 @@ export class ClaimSet {
     this.disrupt(record.victimSnakeId, "severed");
   }
 
-  eatFood(id: SnakeId, cell: Cell): void {
+  consume(itemId: ItemId, cellIndex: CellIndex): void {
+    this.consumptionList.push({ itemId, cellIndex });
+  }
+
+  eatFood(id: SnakeId, cell: Cell, itemId: ItemId): void {
     this.healed.add(id);
     this.grown.add(id);
-    this.foodEaten.set(id, cell);
+    this.foodEaten.set(id, { cell, itemId });
   }
 
   collectPotion(team: CentaurTeamId, collection: PotionCollection): void {
@@ -165,6 +180,11 @@ export class ClaimSet {
     return [...this.cancelPairs].sort(
       (a, b) => a.team.localeCompare(b.team) || a.family.localeCompare(b.family),
     );
+  }
+
+  // Canonical itemId order — same set discipline as cancellations().
+  consumptions(): ConsumptionClaim[] {
+    return [...this.consumptionList].sort((a, b) => a.itemId - b.itemId);
   }
 
   // ---- queries ----

@@ -1,25 +1,25 @@
 // Item spawning (01 §2.8 stage 6): seeded generation against the committed
-// occupancy. spec: 01-REQ-048, 01-REQ-049.
-import { cellKey, fertileGroundEnabled } from "../board.js";
+// occupancy. spec: 01-REQ-048, 01-REQ-049, 01-REQ-078.
+import { cellIndex, fertileGroundEnabled } from "../board.js";
+import { itemIdFor } from "../items.js";
 import type { Rng } from "../rng.js";
 import { rngFromSeed, subSeed } from "../rng.js";
-import type { Cell, ItemId } from "../types.js";
+import type { Cell } from "../types.js";
 import { CellType, ItemType } from "../types.js";
 import type { TurnContext } from "./context.js";
 import type { EventBuffer } from "./events.js";
 
 export function runSpawning(ctx: TurnContext, turnSeed: Uint8Array, events: EventBuffer): void {
   const { board, config, items } = ctx;
-  let nextItemId = items.reduce((max, i) => Math.max(max, i.itemId), -1) + 1;
+  // Spawned items first exist at the boundary after this turn: id namespace
+  // turnNumber + 1, in spawn order within the turn (01-REQ-078).
+  let spawnedThisTurn = 0;
 
   const eligibleSpawnCells = (fertileOnly: boolean): Cell[] => {
     const occupied = new Set<number>();
     for (const snake of ctx.snakes) {
       if (!snake.alive) continue;
-      for (const seg of snake.body) occupied.add(cellKey(seg));
-    }
-    for (const item of items) {
-      if (!item.consumed) occupied.add(cellKey(item.cell));
+      for (const seg of snake.body) occupied.add(cellIndex(board, seg));
     }
     const cells: Cell[] = [];
     for (let y = 1; y < board.boardSize - 1; y++) {
@@ -27,8 +27,12 @@ export function runSpawning(ctx: TurnContext, turnSeed: Uint8Array, events: Even
         const type = board.cells[y * board.boardSize + x];
         if (type === CellType.Wall || type === CellType.Hazard) continue;
         if (fertileOnly && type !== CellType.Fertile) continue;
-        if (occupied.has(cellKey({ x, y }))) continue;
-        cells.push({ x, y });
+        const cell = { x, y };
+        const key = cellIndex(board, cell);
+        // The items map already reflects this turn's earlier spawns, so a
+        // later family can never stack onto a just-spawned cell (01-REQ-007).
+        if (occupied.has(key) || items.has(key)) continue;
+        cells.push(cell);
       }
     }
     return cells; // row-major deterministic order
@@ -47,8 +51,8 @@ export function runSpawning(ctx: TurnContext, turnSeed: Uint8Array, events: Even
     if (count <= 0) return;
     rng.shuffle(eligible);
     for (const cell of eligible.slice(0, count)) {
-      const itemId = nextItemId++ as ItemId;
-      items.push({ itemId, itemType, cell, consumed: false });
+      const itemId = itemIdFor(ctx.turnNumber + 1, spawnedThisTurn++);
+      items.set(cellIndex(board, cell), { itemId, itemType, cell });
       events.emit(
         itemType === ItemType.Food
           ? { kind: "food_spawned", itemId, cell }

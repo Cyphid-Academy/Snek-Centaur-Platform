@@ -51,6 +51,8 @@ export type CentaurTeamId = string & { readonly __brand: "CentaurTeamId" };
 export type ItemId = number & { readonly __brand: "ItemId" };
 export type TurnNumber = number & { readonly __brand: "TurnNumber" };
 export type UserId = string & { readonly __brand: "UserId" };
+// Canonical flat cell index, `y * boardSize + x` (DOWNSTREAM IMPACT note 3).
+export type CellIndex = number & { readonly __brand: "CellIndex" };
 
 // Agent: the actor that staged a move. Module 01 distinguishes two kinds —
 // the team's Centaur bot and an individual human operator. The mapping from
@@ -87,13 +89,20 @@ export interface SnakeState {
   readonly alive: boolean;
 }
 
-// spec: 01-REQ-007
+// spec: 01-REQ-007 — a present item. Consumption removes the entry from the
+// items collection at commit; there is no consumed flag. The full lifetime
+// (spawn/destruction turns) is module 04's item_lifetimes record, maintained
+// from spawn/consumption events.
 export interface ItemState {
   readonly itemId: ItemId;
   readonly itemType: ItemType;
   readonly cell: Cell;
-  readonly consumed: boolean;
 }
+
+// spec: 01-REQ-007, 01 §3.2 — the present-items component of game state,
+// keyed by canonical cell index so a second occupant of a cell is
+// unrepresentable. Build from flat lists via itemsByCell (items.ts).
+export type ItemsByCell = ReadonlyMap<CellIndex, ItemState>;
 
 // spec: 01-REQ-003, 01-REQ-008. Flat row-major cell array; index is
 // `y * boardSize + x` (module 01 DOWNSTREAM IMPACT note 3).
@@ -225,12 +234,14 @@ export type TurnEvent =
   | {
       readonly kind: "food_eaten";
       readonly snakeId: SnakeId;
+      readonly itemId: ItemId; // the consumed item (01-REQ-046c)
       readonly cell: Cell;
       readonly healthRestored: number;
     }
   | {
       readonly kind: "potion_collected";
       readonly snakeId: SnakeId;
+      readonly itemId: ItemId; // the consumed item (01-REQ-047)
       readonly cell: Cell;
       readonly potionType: typeof ItemType.InvulnPotion | typeof ItemType.InvisPotion;
       readonly affectedTeammateIds: ReadonlyArray<SnakeId>;
@@ -278,10 +289,11 @@ export interface StagedMove {
 }
 
 // spec: Section 3.8 (resolved 01-REVIEW-013). The canonical aggregate of the
-// four game-state components; module 04 assembles this shape from its tables.
+// four game-state components; module 04 assembles this shape from its tables
+// (`items` via itemsByCell over the active item_lifetimes rows).
 export interface GameState {
   readonly board: Board;
   readonly snakes: ReadonlyArray<SnakeState>;
-  readonly items: ReadonlyArray<ItemState>;
+  readonly items: ItemsByCell;
   readonly clocks: ReadonlyArray<CentaurTeamClockState>;
 }

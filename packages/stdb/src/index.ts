@@ -12,7 +12,10 @@ export type {
   SnakeState,
   Board,
   ItemState,
+  ItemsByCell,
 } from "@cyphid/snek-engine";
+// GameState.items assembly from active item_lifetimes rows (04 §2.6).
+export { itemsByCell } from "@cyphid/snek-engine";
 
 // ---------------------------------------------------------------------------
 // SpacetimeDB reducer stubs
