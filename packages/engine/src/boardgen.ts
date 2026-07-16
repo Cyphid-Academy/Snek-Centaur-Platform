@@ -6,6 +6,7 @@
 // are individually reproducible and testable. The attempt loop retries with
 // per-attempt sub-seeds (01-REQ-061).
 import { cellIndex, isInner, parityOf } from "./board.js";
+import { itemIdFor } from "./items.js";
 import { fractalNoise2D, makePerlin } from "./perlin.js";
 import type { Rng } from "./rng.js";
 import { rngFromSeed, subSeed } from "./rng.js";
@@ -307,11 +308,12 @@ function placeInitialFood(
     return { code: "INITIAL_FOOD_SHORTAGE", eligibleCellCount: eligible.length };
   }
   rng.shuffle(eligible);
+  // Setup items allocate in id namespace 0 (01-REQ-078); turn-resolution
+  // spawns start at namespace 1, so these ids never collide with later ones.
   return eligible.slice(0, snakes.length).map((cell, i) => ({
-    itemId: i as ItemState["itemId"],
+    itemId: itemIdFor(0, i),
     itemType: ItemType.Food,
     cell,
-    consumed: false,
   }));
 }
 

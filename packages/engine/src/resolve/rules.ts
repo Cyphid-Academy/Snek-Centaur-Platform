@@ -8,7 +8,7 @@
 //
 // Adding a mechanic = adding a rule here (plus, for a new claim type, one
 // clause in commit.ts). No pipeline position to choose.
-import { cellAt, sameCell } from "../board.js";
+import { cellAt, cellIndex, sameCell } from "../board.js";
 import { familyOfPotion, invulnerabilityLevel } from "../effects.js";
 import { CellType, ItemType } from "../types.js";
 import type { ClaimSet } from "./claims.js";
@@ -91,14 +91,15 @@ export const healthTickRule: InteractionRule = (ctx, claims) => {
   }
 };
 
-// Food rule. spec: 01-REQ-046c — unique entrancy guaranteed by stage 2.
+// Food rule. spec: 01-REQ-046c — unique entrancy guaranteed by stage 2;
+// consumption is a claim applied at commit, never a rule-time write.
 // Death by any non-head-to-head cause does not gate collection (01-REVIEW-022).
 export const foodRule: InteractionRule = (ctx, claims) => {
   for (const { snake, head } of ctx.survivingHeads) {
-    const food = ctx.itemsAt(head).find((i) => i.itemType === ItemType.Food);
-    if (food === undefined) continue;
-    food.consumed = true;
-    claims.eatFood(snake.snakeId, head);
+    const item = ctx.itemAt(head);
+    if (item === null || item.itemType !== ItemType.Food) continue;
+    claims.consume(item.itemId, cellIndex(ctx.board, head));
+    claims.eatFood(snake.snakeId, head, item.itemId);
   }
 };
 
@@ -106,16 +107,13 @@ export const foodRule: InteractionRule = (ctx, claims) => {
 // (team, family); sacrificial collection stands (01-REVIEW-022).
 export const potionRule: InteractionRule = (ctx, claims) => {
   for (const { snake, head } of ctx.survivingHeads) {
-    const potion = ctx
-      .itemsAt(head)
-      .find((i) => i.itemType === ItemType.InvulnPotion || i.itemType === ItemType.InvisPotion);
-    if (potion === undefined) continue;
-    potion.consumed = true;
-    const potionType = potion.itemType as
-      | typeof ItemType.InvulnPotion
-      | typeof ItemType.InvisPotion;
+    const item = ctx.itemAt(head);
+    if (item === null || item.itemType === ItemType.Food) continue;
+    const potionType = item.itemType;
+    claims.consume(item.itemId, cellIndex(ctx.board, head));
     claims.collectPotion(snake.centaurTeamId, {
       snakeId: snake.snakeId,
+      itemId: item.itemId,
       cell: head,
       potionType,
       family: familyOfPotion(potionType),

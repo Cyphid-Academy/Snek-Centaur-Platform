@@ -6,6 +6,7 @@ import {
   emptyBoard,
   eventsOfKind,
   iid,
+  itemList,
   makeItem,
   makeSnake,
   stagedMoves as moves,
@@ -555,7 +556,7 @@ describe("Health rules (01-REQ-046)", () => {
     expect(new Set(died?.sources)).toEqual(new Set(["tick", "hazard"]));
   });
 
-  it("restores health to max and marks ateLastTurn on food (046c, 01-REQ-025)", () => {
+  it("restores health to max and grows on food (046c, 01-REQ-025)", () => {
     const s = makeSnake({ snakeId: sid(0), health: 30 });
     const head = s.body[0];
     if (head === undefined) throw new Error("no head");
@@ -566,10 +567,11 @@ describe("Health rules (01-REQ-046)", () => {
     );
     expect(snakeById(nextState, 0).health).toBe(100);
     expect(snakeById(nextState, 0).body).toHaveLength(4); // grew at commit
-    expect(nextState.items.find((i) => i.itemId === iid(0))?.consumed).toBe(true);
+    expect(itemList(nextState)).toHaveLength(0); // consumed item removed from the board
     const eaten = eventsOfKind(events, "food_eaten");
     expect(eaten).toHaveLength(1);
     expect(eaten[0]?.healthRestored).toBe(100 - 29); // after the tick
+    expect(eaten[0]?.itemId).toBe(iid(0)); // consumed item's identity on the event
   });
 
   it("nets to max health on a food-on-hazard cell (046c)", () => {
@@ -645,7 +647,7 @@ describe("Health rules (01-REQ-046)", () => {
     );
     expect(snakeById(nextState, 0).alive).toBe(false);
     expect(snakeById(nextState, 1).alive).toBe(false);
-    expect(nextState.items[0]?.consumed).toBe(false); // no surviving entrant
+    expect(itemList(nextState)).toHaveLength(1); // no surviving entrant — item stays
   });
 
   it("lets the unique head-to-head winner collect the contested item (044d)", () => {
@@ -678,7 +680,7 @@ describe("Health rules (01-REQ-046)", () => {
     );
     expect(snakeById(nextState, 0).alive).toBe(false); // loser eats nothing
     expect(snakeById(nextState, 1).alive).toBe(true);
-    expect(nextState.items[0]?.consumed).toBe(true);
+    expect(itemList(nextState)).toHaveLength(0); // winner consumed the item
     expect(snakeById(nextState, 1).health).toBe(100); // winner healed
   });
 
@@ -713,7 +715,7 @@ describe("Health rules (01-REQ-046)", () => {
     );
     expect(snakeById(nextState, 0).alive).toBe(false);
     expect(eventsOfKind(events, "snake_died")[0]?.cause).toBe("body_collision");
-    expect(nextState.items[0]?.consumed).toBe(true);
+    expect(itemList(nextState)).toHaveLength(0); // sacrificial collection consumed it
     expect(eventsOfKind(events, "food_eaten")).toHaveLength(1);
   });
 });

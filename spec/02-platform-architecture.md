@@ -437,9 +437,10 @@ Satisfies 02-REQ-034 through 02-REQ-037.
 ```typescript
 export {
   Direction, CellType, ItemType, EffectFamily, EffectState,
-  Cell, SnakeId, CentaurTeamId, ItemId, TurnNumber, UserId,
+  Cell, CellIndex, SnakeId, CentaurTeamId, ItemId, TurnNumber, UserId,
   Agent, invulnerabilityLevel, isVisible, fertileGroundEnabled,
-  PotionEffect, SnakeState, ItemState, Board, CentaurTeamClockState,
+  PotionEffect, SnakeState, ItemState, ItemsByCell, itemsByCell, itemAt,
+  Board, CentaurTeamClockState,
   GameConfig, GameOrchestrationConfig, GameRuntimeConfig,
   GameOutcome, TurnEvent, DeathCause,
   BoardGenerationFailure, StagedMove, Rng, rngFromSeed, subSeed,
@@ -620,7 +621,7 @@ export interface CentaurTeamMembershipRecord {
 }
 ```
 
-`Board`, `SnakeState`, and `ItemState` are re-exported from Module 01 (Section 3.2). `GameRuntimeConfig` is the engine-runtime half of `GameConfig` (Module 01 Section 3.3): max health, max turns, hazard damage, food and potion spawn rates, and clock parameters — everything consumed during per-turn resolution. The other half, `GameOrchestrationConfig` (board size, snakes-per-team, hazard percentage, fertile-ground parameters), is consumed only by Convex during board generation and never forwarded to STDB (see resolved [01-REVIEW-017]). `CentaurTeamId` is re-exported from Module 01 (Section 3.1). The pre-computed initial state is produced by Convex running `generateBoardAndInitialState()` from the shared engine codebase.
+`Board`, `SnakeState`, and `ItemState` are re-exported from Module 01 (Section 3.2). The initial-state `items` list is the flat wire form of the present-items component ([01-REQ-007]); consumers build the logical cell-keyed `ItemsByCell` map via the shared engine's `itemsByCell()` (see resolved 02-REVIEW-010). `GameRuntimeConfig` is the engine-runtime half of `GameConfig` (Module 01 Section 3.3): max health, max turns, hazard damage, food and potion spawn rates, and clock parameters — everything consumed during per-turn resolution. The other half, `GameOrchestrationConfig` (board size, snakes-per-team, hazard percentage, fertile-ground parameters), is consumed only by Convex during board generation and never forwarded to STDB (see resolved [01-REVIEW-017]). `CentaurTeamId` is re-exported from Module 01 (Section 3.1). The pre-computed initial state is produced by Convex running `generateBoardAndInitialState()` from the shared engine codebase.
 
 **DOWNSTREAM IMPACT**: [04] must implement the `initialize_game` reducer to accept a pre-computed initial game state (board, snakes, items) plus the `GameRuntimeConfig` payload, the game seed (used by STDB for turn-resolution randomness and replay export), game-end callback URL, and the game-outcome callback token (a Convex-signed JWT for authenticating the game-end notification POST back to Convex). [05] must implement the provisioning orchestration that supplies them, including running `generateBoardAndInitialState()` (which takes a `GameOrchestrationConfig`) within a Convex mutation, retrieving the pre-compiled WASM binary from Convex file storage and including it in the `POST /v1/database` provisioning request, the game-start invitation flow to nominated servers, and the HTTP action that calls the STDB init reducer. [05] must store the current WASM module binary in Convex file storage, uploaded by the platform build pipeline at build/deploy time. [03] must define the game credential generation and the SpacetimeDB access token format validated via OIDC.
 
@@ -634,11 +635,12 @@ The shared engine codebase re-exports all of Module 01's exported interfaces (Se
 export {
   // Enums and branded types (01 §3.1)
   Direction, CellType, ItemType, EffectFamily, EffectState,
-  Cell, SnakeId, CentaurTeamId, ItemId, TurnNumber, UserId, Agent,
+  Cell, CellIndex, SnakeId, CentaurTeamId, ItemId, TurnNumber, UserId, Agent,
   invulnerabilityLevel, isVisible, fertileGroundEnabled,
 
   // State shapes (01 §3.2)
-  PotionEffect, SnakeState, ItemState, Board, CentaurTeamClockState,
+  PotionEffect, SnakeState, ItemState, ItemsByCell, itemsByCell, itemAt,
+  Board, CentaurTeamClockState,
 
   // Game configuration (01 §3.3)
   GameConfig, GameOrchestrationConfig, GameRuntimeConfig,

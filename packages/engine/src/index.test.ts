@@ -45,7 +45,7 @@ describe("@cyphid/snek-engine public API", () => {
       let state: engine.GameState = {
         board: generated.board,
         snakes: generated.snakes,
-        items: generated.items,
+        items: engine.itemsByCell(generated.board, generated.items),
         clocks: teams.map((t) => engine.initialClock(t.centaurTeamId, config.runtime.clock)),
       };
       const allEvents: engine.TurnEvent[] = [];

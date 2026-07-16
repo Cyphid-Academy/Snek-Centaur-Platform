@@ -4,6 +4,7 @@ import {
   effect,
   emptyBoard,
   eventsOfKind,
+  itemList,
   makeItem,
   makeSnake,
   stagedMoves as moves,
@@ -327,7 +328,7 @@ describe("collection and death in the same turn (01-REVIEW-022)", () => {
       { turnNumber: 4 },
     );
     expect(snakeById(nextState, 0).alive).toBe(false);
-    expect(nextState.items[0]?.consumed).toBe(true);
+    expect(itemList(nextState)).toHaveLength(0); // potion consumed and removed
     // Corpse keeps the debuff; living teammate holds the buff.
     expect(snakeById(nextState, 0).activeEffects).toEqual([
       { family: "invulnerability", state: "debuff", expiryTurn: turn(7) },
@@ -419,6 +420,7 @@ describe("collection and death in the same turn (01-REVIEW-022)", () => {
       { family: "invulnerability", state: "debuff", expiryTurn: turn(7) },
     ]);
     expect(eventsOfKind(events, "potion_collected")[0]?.snakeId).toBe(sid(1));
+    expect(eventsOfKind(events, "potion_collected")[0]?.itemId).toBe(potion.itemId);
   });
 });
 

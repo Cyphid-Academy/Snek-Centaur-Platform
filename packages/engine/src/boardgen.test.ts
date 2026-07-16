@@ -192,7 +192,6 @@ describe("initial food", () => {
     const itemCells = new Set<string>();
     for (const item of items) {
       expect(item.itemType).toBe(ItemType.Food);
-      expect(item.consumed).toBe(false);
       expect(isInner(board, item.cell)).toBe(true);
       expect(board.cells[cellIndex(board, item.cell)]).not.toBe(CellType.Hazard);
       expect(occupied.has(`${item.cell.x},${item.cell.y}`)).toBe(false);

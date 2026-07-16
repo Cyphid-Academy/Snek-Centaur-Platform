@@ -9,6 +9,7 @@ export type {
   SnakeState,
   Board,
   ItemState,
+  ItemsByCell,
   PotionEffect,
   EffectFamily,
   TurnEvent,

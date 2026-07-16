@@ -26,7 +26,7 @@
 
 **01-REQ-006**: The system shall define a potion `EffectFamily` with values `invulnerability` and `invisibility`, and an `EffectState` with values `buff` and `debuff`. A potion effect is a `(family, state, expiryTurn)` triple. The four combinations are the exhaustive set of potion effects a snake can hold.
 
-**01-REQ-007**: The system shall define an `ItemState` tracking each item's type, cell position, and whether it has been consumed.
+**01-REQ-007**: The system shall define an `ItemState` describing a present item's identity (`itemId`), type, and cell position. The `items` component of game state contains only items currently present on the board and is keyed by cell — at most one item per cell, an invariant maintained by unique consumption (01-REQ-044d) and unoccupied-cell spawning (01-REQ-048/049). Consumption removes the item from the collection at commit; there is no consumed flag. An item's complete lifetime (spawn turn, destruction turn) is a single data-layer record owned by the historical store ([04-REQ-007]); the game-state collection is the present-items projection of that record. *(Amended per 01-REVIEW-023 resolution.)*
 
 ---
 
@@ -178,21 +178,23 @@ The **snapshot** for a turn is the committed game state at the end of the previo
 
 **01-REQ-046b (Hazard damage)**: A snake whose surviving moved head occupies a Hazard cell incurs a damage claim of the configured `hazardDamage` (default 15, source `hazard`) and a hazard-entry disruption claim.
 
-**01-REQ-046c (Food consumption)**: For a snake whose surviving moved head occupies a cell containing an unconsumed food item, the food is consumed and the snake incurs a **heal claim** and a **growth claim** (01-REQ-062). 01-REQ-044d guarantees at most one surviving head per cell, so each food item is collected by at most one snake per turn. Eating is not a disruption; a hazard entry on the same cell still is (01-REQ-046b applies independently, and the heal claim dominates the damage at resolution per 01-REQ-046d).
+**01-REQ-046c (Food consumption)**: For a snake whose surviving moved head occupies a cell holding a food item, the rule records a **consumption claim** for the item together with a **heal claim** and a **growth claim** for the snake (01-REQ-062). At commit the consumption claim removes the item from the board (01-REQ-007), and the `food_eaten` event reports the consumed `itemId`. 01-REQ-044d guarantees at most one surviving head per cell, so each food item is collected by at most one snake per turn. Eating is not a disruption; a hazard entry on the same cell still is (01-REQ-046b applies independently, and the heal claim dominates the damage at resolution per 01-REQ-046d).
 
 **01-REQ-046d (Health resolution and health death)**: At commit, each snake's health resolves to `MaxHealth` if the snake holds any heal claim, else to `snapshot health − Σ(damage claims)`. A snake whose resolved health is ≤ 0 dies (cause `health_depletion`), reporting the set of damage sources that contributed. Health death is a disruption (subcase of "death from any cause" in 01-REQ-030). Certain-death claims (wall, self-collision, body collision, head-to-head) are independent of health resolution: a snake dies if it incurs any certain-death claim or its resolved health is ≤ 0; when both hold, the certain-death cause is reported (Section 2.11).
 
-**01-REQ-047 (Potion rule)**: For each snake whose surviving moved head occupies a cell containing an unconsumed potion, the potion is consumed (unique entrancy per 01-REQ-044d). All collections by one team of one family in the same turn collapse into a single **team rebuild claim** per 01-REQ-026 (invulnerability) or 01-REQ-027 (invisibility): every collector-of-this-turn takes `state = debuff`, every other member takes `state = buff`, and all entries carry the same `expiryTurn = currentTurn + 3`. At commit the rebuild applies with replace-semantics (01-REQ-050): each collector receives its `debuff` entry regardless of whether it is alive at commit; non-collector members receive their `buff` entries only if alive at commit. A collector killed in its collection turn by a cause other than head-to-head therefore yields a buff window whose debuff-holder is already dead and can never be disrupted — the team's buffs run their full course, the accepted reward for a sacrificial collection play. Potion collection is not a disruption (01-REQ-030). (See resolved 01-REVIEW-022.)
+**01-REQ-047 (Potion rule)**: For each snake whose surviving moved head occupies a cell holding a potion, the rule records a **consumption claim** for the potion (unique entrancy per 01-REQ-044d; at commit the claim removes the item from the board and the `potion_collected` event reports the consumed `itemId`). All collections by one team of one family in the same turn collapse into a single **team rebuild claim** per 01-REQ-026 (invulnerability) or 01-REQ-027 (invisibility): every collector-of-this-turn takes `state = debuff`, every other member takes `state = buff`, and all entries carry the same `expiryTurn = currentTurn + 3`. At commit the rebuild applies with replace-semantics (01-REQ-050): each collector receives its `debuff` entry regardless of whether it is alive at commit; non-collector members receive their `buff` entries only if alive at commit. A collector killed in its collection turn by a cause other than head-to-head therefore yields a buff window whose debuff-holder is already dead and can never be disrupted — the team's buffs run their full course, the accepted reward for a sacrificial collection play. Potion collection is not a disruption (01-REQ-030). (See resolved 01-REVIEW-022.)
 
 **01-REQ-048 (Food spawning)**: Food shall spawn each turn after commit. The expected count is the configured `foodSpawnRate` (a non-negative decimal; 0 means no food ever spawns). The guaranteed count is `floor(foodSpawnRate)` items, with probability `foodSpawnRate mod 1` of one additional item. Spawn locations are chosen randomly using the turn seed from eligible cells of the committed state: inner, non-Wall, non-Hazard, and not currently occupied by an alive snake, food, or potion. When `fertileGroundEnabled(board)` is true (Section 3.2), eligible cells are further restricted to Fertile cells.
 
 **01-REQ-049 (Potion spawning)**: InvulnPotions shall spawn each turn using `invulnPotionSpawnRate` by the same probabilistic mechanism and eligible-cell criteria as food; a spawn rate of 0 results in no invulnerability potions spawning. InvisPotions shall spawn independently each turn using `invisPotionSpawnRate` by the same mechanism; a spawn rate of 0 results in no invisibility potions spawning.
 
+**01-REQ-078 (Item identity)**: Every item shall carry a game-unique `ItemId`, assigned by the engine and treated as opaque by downstream modules. Ids are allocated by turn namespace: items placed by game setup (01-REQ-017) take `itemId = k` for `k = 0, 1, …` in placement order; items spawned by turn T's resolution take `itemId = (T + 1) × 256 + k` in spawn order within the turn — the namespace of the turn boundary at which the item first exists. Configured spawn rates (01-REQ-071–073) keep per-turn spawn counts far below the 256-per-namespace bound; the engine shall fail loudly rather than allocate a colliding id if an out-of-range configuration exceeds it. Because allocation depends only on the turn number and within-turn spawn order, uniqueness holds across the whole game without the engine ever observing consumed items. *(Added per 01-REVIEW-023 resolution.)*
+
 **01-REQ-050 (Commit — effect resolution)**: At commit, effect changes shall apply in the following fixed order: (a) cancellation claims (01-REQ-031, 01-REQ-045) remove all active effects of the cancelled families from every alive member of the affected team; (b) team rebuild claims (01-REQ-047) apply with replace-semantics — for each affected `(snake, family)` pair, any remaining active effect of that family is removed and the rebuild entry becomes active; rebuild claims are unaffected by same-turn cancellation claims (01-REQ-031); (c) all active effects whose expiry condition has been reached (`currentTurn >= expiryTurn`) are removed. The per-family single-effect invariant of 01-REQ-028 holds after commit. `invulnerabilityLevel` and `visible` are derived values per 01-REQ-022/023 and require no separate recomputation step.
 
 **01-REQ-051 (Win condition check)**: Win conditions shall be evaluated as specified in Section 1.9 against the committed end-of-turn state.
 
-**01-REQ-052 (Event derivation)**: Events shall be derived from the turn's claims and commit for all significant outcomes. The emitted event types are a closed set covering: snake movements (direction, identity of who staged the move), deaths (cause — including `health_depletion` with its contributing damage sources — killer where applicable, and location), severing events, food consumption, potion collection (collector and affected teammates), food spawning, potion spawning, effect applications, and effect cancellations.
+**01-REQ-052 (Event derivation)**: Events shall be derived from the turn's claims and commit for all significant outcomes. The emitted event types are a closed set covering: snake movements (direction, identity of who staged the move), deaths (cause — including `health_depletion` with its contributing damage sources — killer where applicable, and location), severing events, food consumption and potion collection (each carrying the consumed item's identity; potion collection also carries the collector and affected teammates), food spawning, potion spawning, effect applications, and effect cancellations.
 
 **01-REQ-062 (Growth from food consumption)**: If a snake consumes food during turn T (01-REQ-025, 01-REQ-046c), then at turn T's commit — after any severing is applied (01-REQ-044c) — the snake's final tail segment shall be duplicated in place. The snake's committed body length at the end of turn T is thereby one greater than its moved-body length, while its cell occupancy is unchanged until the duplicated tail advances on a later turn. The grown length is present in the snapshot consumed by the following turn's rules, including head-to-head resolution (01-REQ-044d). See resolved 01-REVIEW-008 and 01-REVIEW-022.
 
@@ -302,6 +304,7 @@ export type SnakeId    = number & { readonly __brand: 'SnakeId' }
 export type CentaurTeamId     = string & { readonly __brand: 'CentaurTeamId' }
 export type ItemId     = number & { readonly __brand: 'ItemId' }
 export type TurnNumber = number & { readonly __brand: 'TurnNumber' }
+export type CellIndex  = number & { readonly __brand: 'CellIndex' }  // y * boardSize + x (note 3)
 
 // 01-REQ-006 potion effect entry. A snake holds at most one active effect
 // per family per 01-REQ-028; the collection shape is retained (rather than
@@ -330,13 +333,17 @@ export interface SnakeState {
   readonly alive: boolean
 }
 
-// 01-REQ-007
+// 01-REQ-007 — a present item. Consumption removes the entry from the
+// items collection at commit; there is no consumed flag.
 export interface ItemState {
   readonly itemId: ItemId
   readonly itemType: ItemType
   readonly cell: Cell
-  readonly consumed: boolean
 }
+
+// The present-items component of game state: keyed by canonical cell index,
+// so a second occupant of a cell is unrepresentable (01-REQ-007).
+export type ItemsByCell = ReadonlyMap<CellIndex, ItemState>
 ```
 
 **Invisibility as information asymmetry only** (01-REQ-024). `isVisible(snake) = false` has no effect on collision detection, severing, health ticks, or any other turn-resolution mechanic — those phases operate against the full live state. The derived value exists exclusively to support filtering at the observation boundary: module 04's RLS rules use it to hide invisible snakes from opponent-team subscribers, and module 09's spectator views respect the same filter. The turn-resolution pseudocode in Section 2.8 never computes `isVisible(snake)` during Phases 1–8; it is only consulted by observation-boundary code.
@@ -588,7 +595,7 @@ The `health_depletion` disruption is derived in stage 4 from the turn's damage a
 
 Implements 01-REQ-041 through 01-REQ-052 and 01-REQ-062.
 
-**Reference-state resolution principle** (see resolved 01-REVIEW-021 and 01-REVIEW-022). Interaction outcomes within a turn are pure functions of the snapshot, the staged moves, and the turn seed. Stage 1 projects movement mechanically; stage 2 resolves head-to-head precedence and yields the surviving moved-head set **H\***; each stage-3 interaction rule reads only `(snapshot, H*, seed)` and emits claims; stage-4 derived rules read the claim set plus the snapshot; the stage-5 commit is the sole writer of game state. Because no rule observes another rule's committed effect, rule evaluation within a stage is order-free — rules may be evaluated in any order or concurrently without changing any outcome. A new mechanic is added as a new rule emitting claims (plus, if it introduces a new claim type, one clause in the commit); no position in a pipeline has to be chosen. The commit's internal order is fixed and centralised: health resolution, death union, body mutation (move → sever → grow), effect resolution (cancel → rebuild → expire), item consumption.
+**Reference-state resolution principle** (see resolved 01-REVIEW-021 and 01-REVIEW-022). Interaction outcomes within a turn are pure functions of the snapshot, the staged moves, and the turn seed. Stage 1 projects movement mechanically; stage 2 resolves head-to-head precedence and yields the surviving moved-head set **H\***; each stage-3 interaction rule reads only `(snapshot, H*, seed)` and emits claims; stage-4 derived rules read the claim set plus the snapshot; the stage-5 commit is the sole writer of game state. Because no rule observes another rule's committed effect, rule evaluation within a stage is order-free — rules may be evaluated in any order or concurrently without changing any outcome. A new mechanic is added as a new rule emitting claims (plus, if it introduces a new claim type, one clause in the commit); no position in a pipeline has to be chosen. The commit's internal order is fixed and centralised: health resolution, death union, body mutation (move → sever → grow), effect resolution (cancel → rebuild → expire), item removal for consumption claims.
 
 Pseudocode; `S` is the snapshot, `T` the current turn number, `turnSeed = subSeed(gameSeed, "turn:" + T)`:
 
@@ -647,11 +654,12 @@ function resolveTurn(S, stagedMoves, T, turnSeed):
   for snake in aliveIn(S): claims += Damage(snake, 1, source = tick)
 
   # Food (01-REQ-046c) — unique entrant guaranteed by stage 2
-  for (s, h) in Hs where unconsumed Food item at h:
-    claims += Consume(item); claims += Heal(s); claims += Grow(s)
+  for (s, h) in Hs where itemAt(S.items, h) is a Food item:
+    claims += Consume(itemAt(S.items, h)); claims += Heal(s); claims += Grow(s)
 
   # Potions (01-REQ-047) — aggregate to one rebuild claim per (team, family)
-  for (s, h) in Hs where unconsumed potion item at h:
+  for (s, h) in Hs where itemAt(S.items, h) is a potion item:
+    item = itemAt(S.items, h)
     claims += Consume(item); collectors[(team(s), familyOf(item))] += s
   for (team, family), collectorIds in collectors:
     claims += Rebuild(team, family, collectorIds, expiryTurn = T + 3)
@@ -681,7 +689,7 @@ function resolveTurn(S, stagedMoves, T, turnSeed):
     if Grow claim on snake:     # sever first, then grow (01-REQ-062)
       snake.body = snake.body ++ [snake.body.last]
     snake.lastDirection = dir[snake]
-  mark Consume claims on items
+  for Consume(item) in claims: remove item from items   # present-items map (01-REQ-007)
   # Effect resolution (01-REQ-050): cancel -> rebuild -> expire
   for CancelFamily(team, family) in claims:
     for mate in aliveAfterCommit(team): removeActiveOfFamily(mate, family)
@@ -697,6 +705,7 @@ function resolveTurn(S, stagedMoves, T, turnSeed):
     removeActive(snake, e)
 
   # ---------- Stage 6: Item Spawning (01-REQ-048, 01-REQ-049) ----------
+  # Spawned items take ids in namespace T+1 (01-REQ-078).
   rngFood = rngFromSeed(subSeed(turnSeed, "phase-7-food"))
   spawnItems(Food, config.foodSpawnRate, rngFood, eligibleFoodCells(committed))
   rngPotion = rngFromSeed(subSeed(turnSeed, "phase-8-potions"))
@@ -714,6 +723,8 @@ function resolveTurn(S, stagedMoves, T, turnSeed):
 **Simultaneity and accepted corollaries** (resolved 01-REVIEW-002, 01-REVIEW-021). Every collision reads the same logical board — all moved bodies, including those of snakes dying in the same turn — and the snapshot's levels and lengths. Two corollaries are deliberate: an attacker entering a segment that another attacker severs in the same turn still resolves its collision against that segment (it exists in the reference state though it is gone by turn end), and a snake severed this turn fights any same-turn head-to-head at its snapshot length. These match player expectations: the effect of one's move is determined by the state visible when the move was chosen, plus only the parallel movements of other snakes.
 
 **Head-to-head precedence and item entrancy** (01-REQ-044d). Withdrawing losing heads before the other rules run guarantees each item cell has at most one collecting head, and means a head-to-head loser collects nothing, enters no hazard, and triggers no body collision in its death turn. Its body segments remain lethal to others for the whole turn.
+
+**Present-items projection and single occupancy** (01-REQ-007, 01-REQ-078). `GameState.items` holds only items presently on the board, keyed by cell — at most one occupant per cell, so rules read a single nullable lookup, `itemAt(items, cell)`. Consumption is a claim like every other outcome: the commit removes consumed entries, and the `food_eaten`/`potion_collected` events carry the removed item's `itemId`, from which the data layer stamps `destroyedTurn` on the item's lifetime record ([04-REQ-007]). Every item's spawn-to-destruction span thus lives losslessly in one historical record while the engine's working state carries only live items.
 
 **Sacrificial collection** (01-REQ-047). A snake may die and collect in the same turn when the death cause is anything other than a head-to-head loss — e.g. a body collision on the item's cell, or fatal health depletion. The team rebuild still applies at commit; if the dead snake was a collector, the debuff entry rests on a corpse that can never be disrupted, so the team's buffs run their full course.
 
@@ -853,6 +864,7 @@ export type TurnEvent =
   | {
       readonly kind: 'food_eaten'
       readonly snakeId: SnakeId
+      readonly itemId: ItemId       // the consumed item (01-REQ-046c)
       readonly cell: Cell
       // MaxHealth minus the health the snake would have resolved to without
       // the heal claim (01-REQ-046d).
@@ -861,6 +873,7 @@ export type TurnEvent =
   | {
       readonly kind: 'potion_collected'
       readonly snakeId: SnakeId
+      readonly itemId: ItemId       // the consumed item (01-REQ-047)
       readonly cell: Cell
       readonly potionType: ItemType.InvulnPotion | ItemType.InvisPotion
       readonly affectedTeammateIds: ReadonlyArray<SnakeId>
@@ -924,6 +937,7 @@ export type CentaurTeamId     = string & { readonly __brand: 'CentaurTeamId' }
 export type ItemId     = number & { readonly __brand: 'ItemId' }
 export type TurnNumber = number & { readonly __brand: 'TurnNumber' }
 export type UserId    = string & { readonly __brand: 'UserId' }
+export type CellIndex  = number & { readonly __brand: 'CellIndex' }  // y * boardSize + x (note 3)
 
 // Agent: the actor that staged a move. Module 01 distinguishes two kinds —
 // CentaurTeam (a Centaur Team's bot acting on the team's collective behalf,
@@ -971,12 +985,25 @@ export interface SnakeState {
   // `invulnerabilityLevel(snake)` and `isVisible(snake)` from Section 3.1.
 }
 
+// A present item (01-REQ-007). Consumption removes the entry from the
+// items collection at commit; there is no consumed flag.
 export interface ItemState {
   readonly itemId: ItemId
   readonly itemType: ItemType
   readonly cell: Cell
-  readonly consumed: boolean
 }
+
+// The present-items component of game state: cell-keyed (canonical index
+// y * boardSize + x, DOWNSTREAM IMPACT note 3), at most one item per cell
+// by construction (01-REQ-007).
+export type ItemsByCell = ReadonlyMap<CellIndex, ItemState>
+
+// Bridge from the flat wire/rest representation — a list of present items
+// on distinct cells (board-generation output, active item_lifetimes rows
+// per [04-REQ-007], stored previews) — to the logical map; throws if two
+// items share a cell. itemAt is the single nullable lookup rules perform.
+export function itemsByCell(board: Board, items: Iterable<ItemState>): ItemsByCell
+export function itemAt(board: Board, items: ItemsByCell, cell: Cell): ItemState | null
 
 export interface Board {
   readonly boardSize: number                   // edge length in cells (01-REQ-003)
@@ -1130,12 +1157,12 @@ export function resolveTurn(
 export interface GameState {
   readonly board: Board
   readonly snakes: ReadonlyArray<SnakeState>
-  readonly items: ReadonlyArray<ItemState>
+  readonly items: ItemsByCell
   readonly clocks: ReadonlyArray<CentaurTeamClockState>
 }
 ```
 
-`GameState` is the concrete aggregate of the four game-state components. It is the input and output type for `resolveTurn` and is exported so that downstream modules (especially Module 04) use a single canonical shape rather than defining their own aggregates independently. See resolved **01-REVIEW-013**.
+`GameState` is the concrete aggregate of the four game-state components. It is the input and output type for `resolveTurn` and is exported so that downstream modules (especially Module 04) use a single canonical shape rather than defining their own aggregates independently. See resolved **01-REVIEW-013**. `items` is the cell-keyed present-items map (§3.2); flat `ItemState` lists — board-generation output, stored previews, active `item_lifetimes` rows — convert via `itemsByCell`. *(Amended per 01-REVIEW-023 resolution.)*
 
 ### 3.9 Invariants and Constants
 
@@ -1149,12 +1176,14 @@ export interface GameState {
 - Disruption of a snapshot debuff-holder cancels that family team-wide; other families are untouched (01-REQ-031). A collector becomes disruptable only from the turn after its debuff is committed (01-REQ-045). Both debuff-holders (invulnerability and invisibility) remain visible — the invisibility-family debuff-holder is explicitly visible to opponents as the targetable weak link for their team's invisibility buff.
 - Reference-state resolution (01-REQ-041, Section 2.8): interaction outcomes are pure functions of the snapshot, the surviving moved-head set, and the turn seed; the commit is the sole writer of game state, and no rule observes another rule's committed effect.
 - Head-to-head precedence (01-REQ-044d) leaves at most one surviving moved head per cell, so every item is collected by at most one snake per turn.
+- `GameState.items` holds only present items, at most one per cell — structurally, because the collection is keyed by cell (01-REQ-007). Consumption is a claim; the commit removes the entry, and the consumption event carries the removed `itemId` (01-REQ-046c, 01-REQ-047).
+- `ItemId`s are game-unique and turn-namespaced (01-REQ-078); downstream modules treat them as opaque.
 - Turn event ordering within a turn is deterministic: canonical event-class order, then primary-subject `snakeId` ascending (Section 2.11).
 - `fertileGroundEnabled(board)` is the canonical runtime predicate for whether food-spawn eligibility restricts to `CellType.Fertile` cells (01-REQ-048). The predicate is derived from the board — not the game config — because `config.orchestration.fertileGround` is not forwarded to STDB; the board's cells are the authoritative record (resolved 01-REVIEW-017). The value is constant for the lifetime of the game since the board is static after generation.
 
 ### 3.10 DOWNSTREAM IMPACT Notes
 
-1. **Event schema is closed.** Modules 04, 08, 09 can rely on the nine `TurnEvent` kinds being exhaustive. `snake_died` carries `health_depletion` deaths with their contributing `DamageSource` set; `snake_moved` carries no growth flag — growth is observable via `food_eaten` and the committed body's duplicated tail. Adding a new kind (or a new `DamageSource`) requires a coordinated change across every consumer and a module-01 version bump.
+1. **Event schema is closed.** Modules 04, 08, 09 can rely on the nine `TurnEvent` kinds being exhaustive. `snake_died` carries `health_depletion` deaths with their contributing `DamageSource` set; `snake_moved` carries no growth flag — growth is observable via `food_eaten` and the committed body's duplicated tail. `food_eaten` and `potion_collected` carry the consumed item's `itemId`: the data layer stamps `destroyedTurn` on the item's lifetime record from these events alone ([04-REQ-007]). Adding a new kind (or a new `DamageSource`) requires a coordinated change across every consumer and a module-01 version bump.
 
 2. **Effect schema is `PotionEffect { family, state, expiryTurn }`, no source attribution.** Module 04's schema must carry exactly these three fields. Adding back per-stack attribution would require reintroducing stacking. See resolved 01-REVIEW-010 and 01-REVIEW-015.
 
@@ -1168,9 +1197,11 @@ export interface GameState {
 
 7. **`SnakeState` carries no intra-turn bookkeeping fields.** Growth state lives in `body` itself (duplicated tail segment, 01-REQ-062) and team rebuilds are intra-turn claims resolved at commit (01-REQ-047, 01-REQ-050). Module 04's schema must not persist per-snake `ateLastTurn` or `pendingEffects` columns — no such fields exist. (See resolved 01-REVIEW-022.)
 
-8. **`GameState` aggregate shape is exported** (see resolved 01-REVIEW-013). The canonical shape is `{ board: Board, snakes: ReadonlyArray<SnakeState>, items: ReadonlyArray<ItemState>, clocks: ReadonlyArray<CentaurTeamClockState> }`. Module 04 must assemble this shape from its SpacetimeDB tables when calling `resolveTurn` and must destructure it from the result. Module 07 may continue to consume components individually through its simulation layer but should reference the exported `GameState` type for structural alignment.
+8. **`GameState` aggregate shape is exported** (see resolved 01-REVIEW-013). The canonical shape is `{ board: Board, snakes: ReadonlyArray<SnakeState>, items: ItemsByCell, clocks: ReadonlyArray<CentaurTeamClockState> }`. Module 04 must assemble this shape from its SpacetimeDB tables when calling `resolveTurn` — `items` via `itemsByCell` over the active `item_lifetimes` rows — and must destructure it from the result. Module 07 may continue to consume components individually through its simulation layer but should reference the exported `GameState` type for structural alignment.
 
 9. **Rules read the snapshot; the commit is the sole writer.** 01-REQ-033 and 01-REQ-041 are satisfied structurally: interaction and derived rules are pure functions over the snapshot, the surviving moved-head set, and the claim set — never over committed mid-turn state. Downstream modules that implement or extend `resolveTurn` must express every new mechanic as a rule emitting claims resolved at commit; in-place mutation during rule evaluation silently breaks the order-independence guarantees of Section 2.8. (See resolved 01-REVIEW-021 and 01-REVIEW-022.)
+
+10. **Item lifetimes are one historical record each; game state carries present items only.** `GameState.items` never contains consumed items. Module 04's `item_lifetimes` row ([04-REQ-007]) is the lossless spawn-to-destruction record, maintained entirely from events: `food_spawned`/`potion_spawned` insert a row with its `spawnTurn`, and the `itemId` on `food_eaten`/`potion_collected` stamps `destroyedTurn`. Id uniqueness requires no consumed-item bookkeeping — allocation is turn-namespaced (01-REQ-078). (See resolved 01-REVIEW-023.)
 
 ---
 

@@ -5,8 +5,10 @@
 // 2. Multi-turn invariant fuzzing: seeded random games hold the structural
 //    invariants of 01 §3.9 on every turn.
 import { describe, expect, it } from "vitest";
+import { cellIndex } from "./board.js";
 import { generateBoardAndInitialState } from "./boardgen.js";
 import { EFFECT_DURATION_TURNS } from "./effects.js";
+import { itemsByCell } from "./items.js";
 import { resolveTurn, resolveTurnWithRules } from "./resolve/index.js";
 import type { InteractionRule } from "./resolve/rules.js";
 import { INTERACTION_RULES } from "./resolve/rules.js";
@@ -53,7 +55,12 @@ const EVENT_CLASS_ORDER: ReadonlyArray<TurnEvent["kind"]> = [
 function initialState(gameSeed: Uint8Array): GameState {
   const generated = generateBoardAndInitialState(FUZZ_CONFIG, TEAMS, gameSeed);
   if ("code" in generated) throw new Error(`board generation failed: ${generated.code}`);
-  return { board: generated.board, snakes: generated.snakes, items: generated.items, clocks: [] };
+  return {
+    board: generated.board,
+    snakes: generated.snakes,
+    items: itemsByCell(generated.board, generated.items),
+    clocks: [],
+  };
 }
 
 function shuffledRules(seedN: number): InteractionRule[] {
@@ -151,15 +158,27 @@ describe("multi-turn structural invariants (01 §3.9)", () => {
     expect(sawEffect).toBe(true);
   });
 
-  it("never resurrects a consumed item and keeps item ids unique", () => {
+  it("never re-issues an item id and keys every item by its own cell", () => {
     for (const gameSeedN of [41, 42]) {
-      const consumed = new Set<number>();
+      // Once an id leaves the board (consumed) it must never reappear
+      // (01-REQ-078 turn-namespaced allocation), and every map entry must
+      // sit under its own cell's index (01-REQ-007 single occupancy).
+      const everSeen = new Map<number, string>(); // itemId -> home cell
+      const departed = new Set<number>();
       playFuzzGame(seed(gameSeedN), null, (state) => {
-        const ids = state.items.map((i) => i.itemId);
-        expect(new Set(ids).size).toBe(ids.length);
-        for (const item of state.items) {
-          if (item.consumed) consumed.add(item.itemId);
-          else expect(consumed.has(item.itemId)).toBe(false);
+        const presentIds = new Set<number>();
+        for (const [key, item] of state.items) {
+          expect(key).toBe(cellIndex(state.board, item.cell));
+          expect(presentIds.has(item.itemId)).toBe(false); // ids unique on board
+          presentIds.add(item.itemId);
+          expect(departed.has(item.itemId)).toBe(false); // no resurrection
+          const home = `${item.cell.x},${item.cell.y}`;
+          const prior = everSeen.get(item.itemId);
+          if (prior !== undefined) expect(prior).toBe(home); // ids never move
+          everSeen.set(item.itemId, home);
+        }
+        for (const id of everSeen.keys()) {
+          if (!presentIds.has(id)) departed.add(id);
         }
       });
     }

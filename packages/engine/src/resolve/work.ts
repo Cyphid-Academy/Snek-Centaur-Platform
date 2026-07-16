@@ -1,7 +1,9 @@
 // Mutable working copies of the domain state, used only inside turn
 // resolution. Inputs to resolveTurn are never mutated; the commit stage
 // writes to these copies and the orchestrator snapshots them back out.
-import type { Cell, ItemState, PotionEffect, SnakeState } from "../types.js";
+// Items need no work copy: ItemState records are immutable — the working
+// items *map* is the mutable container (commit deletes, spawning inserts).
+import type { Cell, PotionEffect, SnakeState } from "../types.js";
 
 type Mutable<T> = { -readonly [K in keyof T]: T[K] };
 
@@ -12,8 +14,6 @@ export interface WorkSnake extends Mutable<Omit<SnakeState, "body" | "activeEffe
   body: Cell[];
   activeEffects: PotionEffect[];
 }
-
-export interface WorkItem extends Mutable<ItemState> {}
 
 export function toWorkSnake(s: SnakeState): WorkSnake {
   return { ...s, body: [...s.body], activeEffects: [...s.activeEffects] };

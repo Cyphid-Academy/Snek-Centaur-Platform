@@ -1,4 +1,5 @@
 // Shared test helpers. Not exported from the package.
+import { itemsByCell } from "./items.js";
 import { resolveTurn } from "./resolve.js";
 import type {
   Agent,
@@ -84,7 +85,7 @@ export function makeSnake(overrides: SnakeOverrides = {}): SnakeState {
 }
 
 export function makeItem(itemId: number, itemType: ItemType, cell: Cell): ItemState {
-  return { itemId: iid(itemId), itemType, cell, consumed: false };
+  return { itemId: iid(itemId), itemType, cell };
 }
 
 export function effect(
@@ -110,13 +111,26 @@ export const QUIET_CONFIG: GameRuntimeConfig = {
 
 export const TEST_OPERATOR: Agent = { kind: "operator", operatorUserId: uid("user-1") };
 
-export function makeState(snakes: SnakeState[], extra: Partial<GameState> = {}): GameState {
+/** State-builder overrides; `items` takes the flat wire form for brevity. */
+export interface StateOverrides {
+  readonly board?: Board;
+  readonly items?: ReadonlyArray<ItemState>;
+  readonly clocks?: GameState["clocks"];
+}
+
+export function makeState(snakes: SnakeState[], extra: StateOverrides = {}): GameState {
+  const board = extra.board ?? emptyBoard(11);
   return {
-    board: extra.board ?? emptyBoard(11),
+    board,
     snakes,
-    items: extra.items ?? [],
+    items: itemsByCell(board, extra.items ?? []),
     clocks: extra.clocks ?? [],
   };
+}
+
+/** Present items of a state (or resolution result) as a flat list. */
+export function itemList(s: { items: GameState["items"] }): ItemState[] {
+  return [...s.items.values()].sort((a, b) => a.itemId - b.itemId);
 }
 
 export function stagedMoves(

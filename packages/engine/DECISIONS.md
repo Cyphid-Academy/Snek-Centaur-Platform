@@ -32,7 +32,7 @@ The contact index for a sever is the first (head-closest) segment of the victim'
 
 ### 2.4 Spawn-eligibility occupancy counts alive snakes only
 
-Dead snakes' bodies remain in state as a record but do not block food/potion spawns (01-REQ-048 "occupied by a snake" read as an alive snake). Consumed items likewise stay in `items` (with `consumed: true`) as the identity record for events and replays; new item ids continue from `max(existing) + 1`.
+Dead snakes' bodies remain in state as a record but do not block food/potion spawns (01-REQ-048 "occupied by a snake" read as an alive snake). Items always block: the items map holds only present items (01-REQ-007), so map membership is exactly the occupancy test — including same-turn earlier spawns, which is what prevents the potion pass from stacking onto a cell the food pass just filled.
 
 ### 2.5 `potion_collected.affectedTeammateIds` excludes the collector
 

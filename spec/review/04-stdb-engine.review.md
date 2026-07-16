@@ -388,3 +388,20 @@ Resolved REVIEW items from [`specs/04-stdb-engine.md`](../04-stdb-engine.md). Se
 **Rationale**: See 01-REVIEW-022. Module 04 consumes `resolveTurn` as a black box, so the cascade is representational: schema columns that no longer exist, event payloads/ordering, and wording. The always-empty-at-boundary `pendingEffectsJson` column had carried no information in any historical snapshot.
 
 **Affected requirements/design elements**: 04-REQ-004, 04-REQ-006, 04-REQ-015, 04-REQ-028, 04-REQ-036, 04-REQ-037, 04-REQ-038, 04-REQ-040, 04-REQ-043 (a–j), 04-REQ-045, 04-REQ-051, 04-REQ-060; §2.1 `SnakeStateRow`; §2.3 initial-state payload; §2.7 Step 4 and win-check prose; §2.8 event table, `DeathCause`/`DamageSource`, canonical ordering, `hazard_damage` note; §3.2 replay TS types.
+
+---
+
+### 04-REVIEW-025: Item consumption events carry itemId; GameState assembly via itemsByCell — cascade from 01-REVIEW-023 — **RESOLVED**
+
+**Type**: Amendment (cascade)
+**Phase**: Requirements
+
+**Prior text**: 04-REQ-043d/e (and the §2.8 event table and §3.2 payload types) defined `food_eaten`/`potion_collected` without item identity, so stamping `item_lifetimes.destroyedTurn` required resolving the consumed item from the event's cell. §2.6/§2.7 assembled `GameState.items` as a flat `ReadonlyArray<ItemState>` from active `item_lifetimes` rows, while module 01's engine at that time retained consumed items in state and derived new ids from the maximum present id — an allocation that collides with the active-rows assembly once items have been consumed.
+
+**Amendment**: Per resolved [01-REVIEW-023]:
+
+1. `food_eaten` and `potion_collected` gain an `itemId` payload field (04-REQ-043d/e, §2.8 table, §3.2 types). `resolve_turn` stamps `item_lifetimes.destroyedTurn` directly from these ids and inserts new rows from `food_spawned`/`potion_spawned` — the lifetime table is maintained entirely from events.
+2. `GameState.items` is module 01's cell-keyed `ItemsByCell`; §2.6/§2.7 assemble it via the shared engine's `itemsByCell()` over the active rows (which yield present items on distinct cells by construction).
+3. The id-collision hazard is closed at the source: module 01's turn-namespaced `ItemId` allocation ([01-REQ-078]) is unique game-wide without reference to consumed rows; a note at the `item_lifetimes` schema records that primary-key uniqueness needs no id coordination.
+
+**Affected requirements/design elements**: 04-REQ-043d, 04-REQ-043e; §2.1.2 (`item_lifetimes` note), §2.6 (GameState assembly), §2.7 (steps 2 and 6), §2.8 (event table), §3.2 (payload types).
