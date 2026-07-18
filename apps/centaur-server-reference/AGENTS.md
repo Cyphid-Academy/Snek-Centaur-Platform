@@ -4,7 +4,7 @@ This app is the reference implementation of the Snek Centaur Server — a Svelte
 
 ## Spec scope
 
-- **Module 08** (`spec/08-centaur-server-app.md`) — the full Snek Centaur Server Frontend specification.
+- **Module 08** (`legacy-spec-archive/spec/08-centaur-server-app.md`) — the full Snek Centaur Server Frontend specification.
 
 ## Subtree mirror model
 
@@ -18,7 +18,7 @@ When the mirror workflow runs, it rewrites the `@cyphid/snek-centaur-server-lib`
 
 ## What goes here
 
-- The full SvelteKit app as specified in `spec/08-centaur-server-app.md`.
+- The full SvelteKit app as specified in `legacy-spec-archive/spec/08-centaur-server-app.md`.
 - `/.well-known/snek-game-invite` endpoint (invitation acceptance + GET healthcheck).
 - All platform-level and team-internal pages from the spec.
 - Uses `defineBot` from `@cyphid/snek-centaur-server-lib` for bot computation.
@@ -34,4 +34,4 @@ When the mirror workflow runs, it rewrites the `@cyphid/snek-centaur-server-lib`
 - `src/routes/.well-known/snek-game-invite/+server.ts` — invitation endpoint
 - `vite.config.ts` — Vite config with allowedHosts
 - `svelte.config.js` — SvelteKit config with Node adapter
-- `spec/08-centaur-server-app.md` — binding source of truth
+- `legacy-spec-archive/spec/08-centaur-server-app.md` — binding source of truth

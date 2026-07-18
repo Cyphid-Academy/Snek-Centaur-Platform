@@ -4,7 +4,7 @@ This package is `@cyphid/convex-centaur-state`: a Convex Component that owns the
 
 ## Spec scope
 
-- **Module 06** (`spec/06-centaur-state.md`) — Centaur subsystem tables, selection invariants, action log schema, drive management mutations, data contract for sub-turn replay.
+- **Module 06** (`legacy-spec-archive/spec/06-centaur-state.md`) — Centaur subsystem tables, selection invariants, action log schema, drive management mutations, data contract for sub-turn replay.
 
 ## What goes here
 
@@ -30,4 +30,4 @@ Selection invariants in `06-REQ-070` and `06-REQ-071` must be enforced at the Co
 ## Key files
 
 - `src/index.ts` — exported types and component config stub
-- `spec/06-centaur-state.md` — binding source of truth
+- `legacy-spec-archive/spec/06-centaur-state.md` — binding source of truth

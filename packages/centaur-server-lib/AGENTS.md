@@ -4,10 +4,10 @@ This package is `@cyphid/snek-centaur-server-lib`: the bot framework and server 
 
 ## Spec scope
 
-- **Module 07** (`spec/07-bot-framework.md`) — Drive/Preference types, portfolio model, game tree cache, Dijkstra traversal, anytime submission, softmax decision, compute scheduling.
-- **Module 02** (`spec/02-platform-architecture.md`) — `02-REQ-030` establishes the Centaur Server as a framework teams must use.
-- **Module 03** (`spec/03-auth-and-identity.md`) — game credential usage, per-team bot admission tickets.
-- **Module 08** (`spec/08-centaur-server-app.md`) — invitation endpoint contract, healthcheck contract.
+- **Module 07** (`legacy-spec-archive/spec/07-bot-framework.md`) — Drive/Preference types, portfolio model, game tree cache, Dijkstra traversal, anytime submission, softmax decision, compute scheduling.
+- **Module 02** (`legacy-spec-archive/spec/02-platform-architecture.md`) — `02-REQ-030` establishes the Centaur Server as a framework teams must use.
+- **Module 03** (`legacy-spec-archive/spec/03-auth-and-identity.md`) — game credential usage, per-team bot admission tickets.
+- **Module 08** (`legacy-spec-archive/spec/08-centaur-server-app.md`) — invitation endpoint contract, healthcheck contract.
 
 ## What goes here
 
@@ -27,6 +27,6 @@ This library is published via GitHub tags for external consumers who fork the `c
 ## Key files
 
 - `src/index.ts` — all exports
-- `spec/07-bot-framework.md` — binding source of truth
-- `spec/02-platform-architecture.md` § Centaur Servers
-- `spec/03-auth-and-identity.md` § Game credentials
+- `legacy-spec-archive/spec/07-bot-framework.md` — binding source of truth
+- `legacy-spec-archive/spec/02-platform-architecture.md` § Centaur Servers
+- `legacy-spec-archive/spec/03-auth-and-identity.md` § Game credentials

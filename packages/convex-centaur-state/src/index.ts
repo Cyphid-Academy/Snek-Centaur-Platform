@@ -8,7 +8,7 @@
 // Table record types
 // spec: 06-REQ-010 (snake_config), 06-REQ-020 (snake_drives),
 //       06-REQ-030 (heuristic_config), 06-REQ-040 (bot_params),
-//       06-REQ-050 (centaur_action_log)
+//       06-REQ-033 (centaur_action_log)
 // ---------------------------------------------------------------------------
 
 export interface SnakeConfigRecord {
@@ -58,7 +58,7 @@ export interface BotParamsRecord {
 
 // ---------------------------------------------------------------------------
 // Centaur action log — discriminated union
-// spec: 06-REQ-050
+// spec: 06-REQ-033, 06-REQ-034, 06-REQ-036
 // ---------------------------------------------------------------------------
 
 export type CentaurActionType =
@@ -89,8 +89,8 @@ export interface CentaurActionRecord {
 
 // ---------------------------------------------------------------------------
 // Selection invariant types
-// spec: 06-REQ-070 (at-most-one-operator-per-snake),
-//       06-REQ-071 (at-most-one-snake-per-operator)
+// spec: 06-REQ-019 (at-most-one-operator-per-snake),
+//       06-REQ-020 (at-most-one-snake-per-operator)
 // ---------------------------------------------------------------------------
 
 export interface SelectionState {

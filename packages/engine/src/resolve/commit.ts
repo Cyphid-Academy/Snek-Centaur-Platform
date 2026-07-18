@@ -158,7 +158,7 @@ export function commit(ctx: TurnContext, claims: ClaimSet, events: EventBuffer):
   }
 
   // Expiry: remove effects whose last-active turn has been reached.
-  // spec: 01-REQ-050c, resolved 01-REVIEW-003
+  // spec: 01-REQ-050 (clause c), resolved 01-REVIEW-003
   for (const snake of ctx.snakes) {
     const expired = snake.activeEffects.filter((e) => ctx.turnNumber >= e.expiryTurn);
     if (expired.length === 0) continue;
