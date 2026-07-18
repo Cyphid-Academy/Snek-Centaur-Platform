@@ -39,7 +39,7 @@ function generateOk(config: GameConfig, s = seed(42)) {
 }
 
 describe("board construction", () => {
-  // spec: 01-REQ-008
+  // spec: game-rules/board-geometry
   it("builds a boardSize x boardSize grid with a 1-cell wall border", () => {
     const { board } = generateOk(cfg({ boardSize: 11 }));
     expect(board.boardSize).toBe(11);
@@ -56,14 +56,14 @@ describe("board construction", () => {
     }
   });
 
-  // spec: 01-REQ-010
+  // spec: game-rules/hazards
   it("places floor(innerCount * H / 100) hazard cells", () => {
     const { board } = generateOk(cfg({ boardSize: 11, hazardPercentage: 20 }));
     const hazards = board.cells.filter((c) => c === CellType.Hazard).length;
     expect(hazards).toBe(Math.floor(81 * 0.2)); // 16
   });
 
-  // spec: 01-REQ-010 — all non-hazard inner cells form a single connected region
+  // spec: game-rules/hazards — all non-hazard inner cells form a single connected region
   it("keeps non-hazard inner cells 4-connected", () => {
     // seed(1) is a known-feasible seed for 30% hazards on a 13-board; ~half
     // of seeds exhaust all four attempts at this density (see DECISIONS.md).
@@ -102,7 +102,7 @@ describe("board construction", () => {
     expect(visited.size).toBe(open.length);
   });
 
-  // spec: 01-REQ-012, 01-REQ-013, 01 §2.5 step 4 — ceil(|candidates| * D / 100)
+  // spec: game-rules/fertile-ground, 01 §2.5 step 4 — ceil(|candidates| * D / 100)
   it("marks ceil(candidates * density / 100) fertile cells, never on walls or hazards", () => {
     const config = cfg({ boardSize: 15, hazardPercentage: 10, fertileDensity: 30 });
     const { board } = generateOk(config);
@@ -129,7 +129,7 @@ describe("board construction", () => {
 });
 
 describe("snake initialization", () => {
-  // spec: 01-REQ-018..021
+  // spec: game-rules/initial-snakes..021
   it("creates snakesPerTeam snakes per team with consecutive letters from A", () => {
     const { snakes } = generateOk(cfg({ snakesPerTeam: 3 }));
     expect(snakes).toHaveLength(6);
@@ -153,7 +153,7 @@ describe("snake initialization", () => {
     }
   });
 
-  // spec: 01-REQ-015 — non-Wall, non-Hazard inner cells, distinct per snake
+  // spec: game-rules/starting-placement — non-Wall, non-Hazard inner cells, distinct per snake
   it("places heads on distinct non-wall, non-hazard inner cells", () => {
     const { board, snakes } = generateOk(cfg({ boardSize: 15, hazardPercentage: 20 }));
     const heads = snakes.map((s) => s.body[0]);
@@ -167,7 +167,7 @@ describe("snake initialization", () => {
     }
   });
 
-  // spec: 01-REQ-016 — single parity across ALL teams
+  // spec: game-rules/starting-placement — single parity across ALL teams
   it("places all heads on cells of the same parity", () => {
     for (const s of [1, 2, 3, 4, 5]) {
       const { snakes } = generateOk(cfg({}), seed(s));
@@ -184,7 +184,7 @@ describe("snake initialization", () => {
 });
 
 describe("initial food", () => {
-  // spec: 01-REQ-017
+  // spec: game-rules/initial-food
   it("spawns one food per snake on eligible cells", () => {
     const { board, snakes, items } = generateOk(cfg({ snakesPerTeam: 3 }));
     expect(items).toHaveLength(6);
@@ -210,7 +210,7 @@ describe("initial food", () => {
 });
 
 describe("determinism and retry", () => {
-  // spec: 01-REQ-059, 01-REQ-061 — reproducible from the game seed alone
+  // spec: game-rules/determinism, game-rules/board-generation-retry — reproducible from the game seed alone
   it("produces identical output for identical seeds and different output for different seeds", () => {
     const config = cfg({ boardSize: 13, hazardPercentage: 15, fertileDensity: 25 });
     const a = generateBoardAndInitialState(config, TEAMS, seed(11));
@@ -220,7 +220,7 @@ describe("determinism and retry", () => {
     expect(a).not.toEqual(c);
   });
 
-  // spec: 01-REQ-061 — territory/parity infeasibility surfaces after 4 attempts
+  // spec: game-rules/board-generation-retry — territory/parity infeasibility surfaces after 4 attempts
   it("reports TERRITORY_PARITY_SHORTAGE for too many snakes on a tiny board", () => {
     const result = generateBoardAndInitialState(
       cfg({ boardSize: 7, snakesPerTeam: 10 }),
@@ -234,7 +234,7 @@ describe("determinism and retry", () => {
     expect(result.details.centaurTeamId).toBeDefined();
   });
 
-  // spec: 01-REQ-061 — food-eligibility infeasibility
+  // spec: game-rules/board-generation-retry — food-eligibility infeasibility
   it("reports INITIAL_FOOD_SHORTAGE when fertile cells cannot hold one food per snake", () => {
     const result = generateBoardAndInitialState(
       cfg({ boardSize: 9, snakesPerTeam: 3, fertileDensity: 1 }),

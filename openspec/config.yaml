@@ -39,7 +39,10 @@ context: |
   migration begins with a carving decision made WITH the human author (one
   new capability, several, and/or deltas to existing capabilities),
   recorded in that migration change's proposal and in the cutover table.
-  Capabilities so far: (none — the first lands with module 01's migration).
+  Capabilities so far: game-rules — root of the dependency structure, no
+  dependencies (module 01, carved as a single capability by author
+  decision: it is already a coherent semantic unit — the complete rules of
+  the game, independent of storage, networking, and UI).
 
   MIGRATION NOTE: modules migrate from legacy-spec-archive/spec/ one at a
   time (cutover table: openspec/README.md). For unmigrated modules the

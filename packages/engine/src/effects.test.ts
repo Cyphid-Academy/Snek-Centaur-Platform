@@ -3,7 +3,7 @@ import { invulnerabilityLevel, isVisible } from "./effects.js";
 import { effect, makeSnake } from "./testkit.js";
 
 describe("invulnerabilityLevel", () => {
-  // spec: 01-REQ-022
+  // spec: game-rules/collisions-and-severing
   it("is 0 with no active effects", () => {
     expect(invulnerabilityLevel(makeSnake())).toBe(0);
   });
@@ -25,7 +25,7 @@ describe("invulnerabilityLevel", () => {
 });
 
 describe("isVisible", () => {
-  // spec: 01-REQ-023
+  // spec: game-rules/invisibility
   it("is true with no active effects", () => {
     expect(isVisible(makeSnake())).toBe(true);
   });

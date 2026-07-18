@@ -10,7 +10,7 @@ const CLOCK_CONFIG = {
 };
 
 describe("initialClock", () => {
-  // spec: 01-REQ-035
+  // spec: game-rules/chess-timer
   it("starts with the configured initial budget, no per-turn clock", () => {
     const clock = initialClock(tid("red"), CLOCK_CONFIG);
     expect(clock).toEqual({
@@ -23,7 +23,7 @@ describe("initialClock", () => {
 });
 
 describe("applyTurnStart", () => {
-  // spec: 01-REQ-036, 01-REQ-037 — increment budget, then carve the per-turn
+  // spec: game-rules/chess-timer — increment budget, then carve the per-turn
   // clock out of it (budget holds what is NOT on the running clock)
   it("adds the increment and carves out a clock capped at maxTurnTime on turns > 0", () => {
     const clock = applyTurnStart(initialClock(tid("red"), CLOCK_CONFIG), turn(1), CLOCK_CONFIG);
@@ -32,7 +32,7 @@ describe("applyTurnStart", () => {
     expect(clock.declaredTurnOver).toBe(false);
   });
 
-  // spec: 01-REQ-037 — firstTurnTime cap on turn 0
+  // spec: game-rules/chess-timer — firstTurnTime cap on turn 0
   it("uses the firstTurnTime cap on turn 0", () => {
     const clock = applyTurnStart(initialClock(tid("red"), CLOCK_CONFIG), turn(0), CLOCK_CONFIG);
     expect(clock.perTurnMs).toBe(60000); // min(60000, 60500)
@@ -54,7 +54,7 @@ describe("applyTurnStart", () => {
 });
 
 describe("declareTurnOver", () => {
-  // spec: 01-REQ-038 — unused clock time returns to the budget
+  // spec: game-rules/chess-timer — unused clock time returns to the budget
   it("credits remaining per-turn time back to the budget and stops the clock", () => {
     const running = {
       centaurTeamId: tid("red"),
@@ -68,7 +68,7 @@ describe("declareTurnOver", () => {
     expect(clock.declaredTurnOver).toBe(true);
   });
 
-  // spec: 01-REQ-039 — expiry is declare-over with a zero credit-back
+  // spec: game-rules/chess-timer — expiry is declare-over with a zero credit-back
   it("is a no-op credit when the clock already reached zero (auto-declare)", () => {
     const expired = {
       centaurTeamId: tid("red"),
@@ -94,7 +94,7 @@ describe("declareTurnOver", () => {
 });
 
 describe("budget accumulation across turns", () => {
-  // spec: 01-REQ-034 — a fast team accumulates surplus across turns
+  // spec: game-rules/chess-timer — a fast team accumulates surplus across turns
   it("accumulates surplus for a team that declares instantly every turn", () => {
     let clock = initialClock(tid("red"), CLOCK_CONFIG);
     for (let t = 0; t < 5; t++) {

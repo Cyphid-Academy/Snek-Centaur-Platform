@@ -1,0 +1,619 @@
+{
+  "$schema": "Legacy identifier map. Grows only as modules migrate; the sole mutable file in legacy-spec-archive/. requirements: legacy numeric id -> {target: current requirement, scenarios: anchors pinning its specific edge cases, note}. reviews: legacy review item -> {scenarios: anchors encoding its edge case(s), resolvedBy, note}; full item bodies remain in ../review/. This file is also the tombstone registry: every key under requirements is a retired identifier. All targets and anchors are validated by scripts/check-spec-citations.mjs.",
+  "provenance": {
+    "change": "2026-07-18-migrate-module-01-game-rules",
+    "note": "module 01 was re-authored at intent grain with named identifiers; rationale and migration recipe in the archived change folder"
+  },
+  "requirements": {
+    "01-REQ-001": {
+      "target": "game-rules/domain-vocabulary",
+      "scenarios": []
+    },
+    "01-REQ-002": {
+      "target": "game-rules/domain-vocabulary",
+      "scenarios": []
+    },
+    "01-REQ-003": {
+      "target": "game-rules/board-geometry",
+      "scenarios": []
+    },
+    "01-REQ-004": {
+      "target": "game-rules/domain-vocabulary",
+      "scenarios": []
+    },
+    "01-REQ-005": {
+      "target": "game-rules/domain-vocabulary",
+      "scenarios": []
+    },
+    "01-REQ-006": {
+      "target": "game-rules/domain-vocabulary",
+      "scenarios": []
+    },
+    "01-REQ-007": {
+      "target": "game-rules/item-identity",
+      "scenarios": [
+        "game-rules/item-identity#one-item-per-cell",
+        "game-rules/item-identity#consumption-removes-and-reports"
+      ]
+    },
+    "01-REQ-008": {
+      "target": "game-rules/board-geometry",
+      "scenarios": []
+    },
+    "01-REQ-009": {
+      "target": "game-rules/board-geometry",
+      "scenarios": []
+    },
+    "01-REQ-010": {
+      "target": "game-rules/hazards",
+      "scenarios": ["game-rules/hazards#connectivity-guarantee"]
+    },
+    "01-REQ-011": {
+      "target": "game-rules/hazards",
+      "scenarios": ["game-rules/hazards#permanence-and-coexistence"]
+    },
+    "01-REQ-012": {
+      "target": "game-rules/fertile-ground",
+      "scenarios": ["game-rules/fertile-ground#stable-designation"]
+    },
+    "01-REQ-013": {
+      "target": "game-rules/fertile-ground",
+      "scenarios": ["game-rules/fertile-ground#knob-semantics"]
+    },
+    "01-REQ-014": {
+      "target": "game-rules/starting-placement",
+      "scenarios": ["game-rules/starting-placement#territory-assignment"]
+    },
+    "01-REQ-015": {
+      "target": "game-rules/starting-placement",
+      "scenarios": []
+    },
+    "01-REQ-016": {
+      "target": "game-rules/starting-placement",
+      "scenarios": ["game-rules/starting-placement#shared-parity"]
+    },
+    "01-REQ-017": {
+      "target": "game-rules/initial-food",
+      "scenarios": ["game-rules/initial-food#one-food-per-snake"]
+    },
+    "01-REQ-018": {
+      "target": "game-rules/initial-snakes",
+      "scenarios": ["game-rules/initial-snakes#naming"]
+    },
+    "01-REQ-019": {
+      "target": "game-rules/initial-snakes",
+      "scenarios": []
+    },
+    "01-REQ-020": {
+      "target": "game-rules/initial-snakes",
+      "scenarios": []
+    },
+    "01-REQ-021": {
+      "target": "game-rules/initial-snakes",
+      "scenarios": ["game-rules/initial-snakes#initial-state"]
+    },
+    "01-REQ-022": {
+      "target": "game-rules/collisions-and-severing",
+      "scenarios": [
+        "game-rules/collisions-and-severing#level-comparison-decides-sever-versus-death"
+      ]
+    },
+    "01-REQ-023": {
+      "target": "game-rules/invisibility",
+      "scenarios": ["game-rules/invisibility#the-collector-stays-visible"]
+    },
+    "01-REQ-024": {
+      "target": "game-rules/invisibility",
+      "scenarios": ["game-rules/invisibility#information-asymmetry-only"]
+    },
+    "01-REQ-025": {
+      "target": "game-rules/food-and-growth",
+      "scenarios": []
+    },
+    "01-REQ-026": {
+      "target": "game-rules/team-potion-effects",
+      "scenarios": ["game-rules/team-potion-effects#rebuild-shape"]
+    },
+    "01-REQ-027": {
+      "target": "game-rules/team-potion-effects",
+      "scenarios": []
+    },
+    "01-REQ-028": {
+      "target": "game-rules/team-potion-effects",
+      "scenarios": []
+    },
+    "01-REQ-030": {
+      "target": "game-rules/team-potion-effects",
+      "scenarios": []
+    },
+    "01-REQ-031": {
+      "target": "game-rules/team-potion-effects",
+      "scenarios": [
+        "game-rules/team-potion-effects#disrupting-the-collector-strips-the-family",
+        "game-rules/team-potion-effects#dual-family-collector"
+      ]
+    },
+    "01-REQ-033": {
+      "target": "game-rules/turn-resolution-model",
+      "scenarios": ["game-rules/turn-resolution-model#snapshot-purity"]
+    },
+    "01-REQ-034": {
+      "target": "game-rules/chess-timer",
+      "scenarios": []
+    },
+    "01-REQ-035": {
+      "target": "game-rules/chess-timer",
+      "scenarios": []
+    },
+    "01-REQ-036": {
+      "target": "game-rules/chess-timer",
+      "scenarios": []
+    },
+    "01-REQ-037": {
+      "target": "game-rules/chess-timer",
+      "scenarios": ["game-rules/chess-timer#carve-out-arithmetic"]
+    },
+    "01-REQ-038": {
+      "target": "game-rules/chess-timer",
+      "scenarios": ["game-rules/chess-timer#declaration-banks-the-remainder"]
+    },
+    "01-REQ-039": {
+      "target": "game-rules/chess-timer",
+      "scenarios": ["game-rules/chess-timer#expiry-declares-automatically"]
+    },
+    "01-REQ-040": {
+      "target": "game-rules/chess-timer",
+      "scenarios": ["game-rules/chess-timer#expiry-declares-automatically"]
+    },
+    "01-REQ-041": {
+      "target": "game-rules/turn-resolution-model",
+      "scenarios": []
+    },
+    "01-REQ-042": {
+      "target": "game-rules/movement",
+      "scenarios": [
+        "game-rules/movement#direction-precedence",
+        "game-rules/movement#no-steering-assistance"
+      ]
+    },
+    "01-REQ-043": {
+      "target": "game-rules/movement",
+      "scenarios": ["game-rules/movement#body-advance"]
+    },
+    "01-REQ-044": {
+      "target": "game-rules/collisions-and-severing",
+      "scenarios": ["game-rules/collisions-and-severing#dead-bodies-remain-lethal-all-turn"]
+    },
+    "01-REQ-044a": {
+      "target": "game-rules/collisions-and-severing",
+      "scenarios": []
+    },
+    "01-REQ-044b": {
+      "target": "game-rules/collisions-and-severing",
+      "scenarios": [
+        "game-rules/collisions-and-severing#tail-chase-is-safe-unless-the-tail-is-duplicated"
+      ]
+    },
+    "01-REQ-044c": {
+      "target": "game-rules/collisions-and-severing",
+      "scenarios": [
+        "game-rules/collisions-and-severing#level-comparison-decides-sever-versus-death",
+        "game-rules/collisions-and-severing#multiple-attackers-one-truncation"
+      ]
+    },
+    "01-REQ-044d": {
+      "target": "game-rules/head-to-head-precedence",
+      "scenarios": [
+        "game-rules/head-to-head-precedence#level-then-length-then-mutual-destruction",
+        "game-rules/head-to-head-precedence#withdrawal",
+        "game-rules/head-to-head-precedence#unique-entrancy"
+      ]
+    },
+    "01-REQ-045": {
+      "target": "game-rules/team-potion-effects",
+      "scenarios": ["game-rules/team-potion-effects#fresh-debuffs-are-not-triggers"]
+    },
+    "01-REQ-046": {
+      "target": "game-rules/health-and-starvation",
+      "scenarios": []
+    },
+    "01-REQ-046a": {
+      "target": "game-rules/health-and-starvation",
+      "scenarios": ["game-rules/health-and-starvation#starvation-with-sources"]
+    },
+    "01-REQ-046b": {
+      "target": "game-rules/health-and-starvation",
+      "scenarios": ["game-rules/health-and-starvation#starvation-with-sources"]
+    },
+    "01-REQ-046c": {
+      "target": "game-rules/food-and-growth",
+      "scenarios": ["game-rules/food-and-growth#food-on-a-hazard-cell"]
+    },
+    "01-REQ-046d": {
+      "target": "game-rules/health-and-starvation",
+      "scenarios": [
+        "game-rules/health-and-starvation#heal-dominates-same-turn-damage",
+        "game-rules/health-and-starvation#starvation-with-sources",
+        "game-rules/health-and-starvation#certain-death-outranks-health-death"
+      ]
+    },
+    "01-REQ-047": {
+      "target": "game-rules/team-potion-effects",
+      "scenarios": [
+        "game-rules/team-potion-effects#collector-marked-even-in-death",
+        "game-rules/team-potion-effects#sacrificial-collection"
+      ]
+    },
+    "01-REQ-048": {
+      "target": "game-rules/item-spawning",
+      "scenarios": [
+        "game-rules/item-spawning#floor-plus-fraction-mechanic",
+        "game-rules/item-spawning#eligibility"
+      ]
+    },
+    "01-REQ-049": {
+      "target": "game-rules/item-spawning",
+      "scenarios": []
+    },
+    "01-REQ-050": {
+      "target": "game-rules/team-potion-effects",
+      "scenarios": []
+    },
+    "01-REQ-051": {
+      "target": "game-rules/game-end-conditions",
+      "scenarios": []
+    },
+    "01-REQ-052": {
+      "target": "game-rules/turn-events",
+      "scenarios": []
+    },
+    "01-REQ-053": {
+      "target": "game-rules/scoring",
+      "scenarios": []
+    },
+    "01-REQ-053a": {
+      "target": "game-rules/scoring",
+      "scenarios": ["game-rules/scoring#forfeit-exclusion"]
+    },
+    "01-REQ-054": {
+      "target": "game-rules/game-end-conditions",
+      "scenarios": []
+    },
+    "01-REQ-055": {
+      "target": "game-rules/game-end-conditions",
+      "scenarios": []
+    },
+    "01-REQ-056": {
+      "target": "game-rules/game-end-conditions",
+      "scenarios": ["game-rules/game-end-conditions#simultaneous-elimination-including-turn-0"]
+    },
+    "01-REQ-057": {
+      "target": "game-rules/game-end-conditions",
+      "scenarios": []
+    },
+    "01-REQ-058": {
+      "target": "game-rules/game-end-conditions",
+      "scenarios": []
+    },
+    "01-REQ-059": {
+      "target": "game-rules/determinism",
+      "scenarios": ["game-rules/determinism#reproducibility", "game-rules/determinism#secrecy"]
+    },
+    "01-REQ-060": {
+      "target": "game-rules/determinism",
+      "scenarios": ["game-rules/determinism#reproducibility", "game-rules/determinism#secrecy"]
+    },
+    "01-REQ-061": {
+      "target": "game-rules/board-generation-retry",
+      "scenarios": []
+    },
+    "01-REQ-062": {
+      "target": "game-rules/food-and-growth",
+      "scenarios": [
+        "game-rules/food-and-growth#duplication-after-severing",
+        "game-rules/food-and-growth#growth-counts-from-the-next-snapshot"
+      ]
+    },
+    "01-REQ-063": {
+      "target": "game-rules/configuration-parameters",
+      "scenarios": []
+    },
+    "01-REQ-064": {
+      "target": "game-rules/configuration-parameters",
+      "scenarios": []
+    },
+    "01-REQ-065": {
+      "target": "game-rules/configuration-parameters",
+      "scenarios": []
+    },
+    "01-REQ-066": {
+      "target": "game-rules/configuration-parameters",
+      "scenarios": []
+    },
+    "01-REQ-067": {
+      "target": "game-rules/configuration-parameters",
+      "scenarios": []
+    },
+    "01-REQ-068": {
+      "target": "game-rules/configuration-parameters",
+      "scenarios": []
+    },
+    "01-REQ-069": {
+      "target": "game-rules/configuration-parameters",
+      "scenarios": []
+    },
+    "01-REQ-070": {
+      "target": "game-rules/configuration-parameters",
+      "scenarios": []
+    },
+    "01-REQ-071": {
+      "target": "game-rules/configuration-parameters",
+      "scenarios": []
+    },
+    "01-REQ-072": {
+      "target": "game-rules/configuration-parameters",
+      "scenarios": []
+    },
+    "01-REQ-073": {
+      "target": "game-rules/configuration-parameters",
+      "scenarios": []
+    },
+    "01-REQ-074": {
+      "target": "game-rules/configuration-parameters",
+      "scenarios": []
+    },
+    "01-REQ-075": {
+      "target": "game-rules/configuration-parameters",
+      "scenarios": []
+    },
+    "01-REQ-076": {
+      "target": "game-rules/configuration-parameters",
+      "scenarios": []
+    },
+    "01-REQ-077": {
+      "target": "game-rules/configuration-parameters",
+      "scenarios": []
+    },
+    "01-REQ-078": {
+      "target": "game-rules/item-identity",
+      "scenarios": [
+        "game-rules/item-identity#ids-never-collide",
+        "game-rules/item-identity#consumption-removes-and-reports"
+      ]
+    },
+    "01-REQ-029": {
+      "target": null,
+      "note": "retired pre-migration (01-REVIEW-015); never re-expressed",
+      "scenarios": []
+    },
+    "01-REQ-032": {
+      "target": null,
+      "note": "retired pre-migration (01-REVIEW-015); never re-expressed",
+      "scenarios": []
+    },
+    "01-REQ-101": {
+      "target": "game-rules/domain-vocabulary",
+      "note": "interim intent-grain id used during migration drafting; superseded by named identifiers before merge",
+      "scenarios": []
+    },
+    "01-REQ-102": {
+      "target": "game-rules/board-geometry",
+      "note": "interim intent-grain id used during migration drafting; superseded by named identifiers before merge",
+      "scenarios": []
+    },
+    "01-REQ-103": {
+      "target": "game-rules/hazards",
+      "note": "interim intent-grain id used during migration drafting; superseded by named identifiers before merge",
+      "scenarios": []
+    },
+    "01-REQ-104": {
+      "target": "game-rules/fertile-ground",
+      "note": "interim intent-grain id used during migration drafting; superseded by named identifiers before merge",
+      "scenarios": []
+    },
+    "01-REQ-105": {
+      "target": "game-rules/starting-placement",
+      "note": "interim intent-grain id used during migration drafting; superseded by named identifiers before merge",
+      "scenarios": []
+    },
+    "01-REQ-106": {
+      "target": "game-rules/initial-snakes",
+      "note": "interim intent-grain id used during migration drafting; superseded by named identifiers before merge",
+      "scenarios": []
+    },
+    "01-REQ-107": {
+      "target": "game-rules/initial-food",
+      "note": "interim intent-grain id used during migration drafting; superseded by named identifiers before merge",
+      "scenarios": []
+    },
+    "01-REQ-108": {
+      "target": "game-rules/board-generation-retry",
+      "note": "interim intent-grain id used during migration drafting; superseded by named identifiers before merge",
+      "scenarios": []
+    },
+    "01-REQ-109": {
+      "target": "game-rules/determinism",
+      "note": "interim intent-grain id used during migration drafting; superseded by named identifiers before merge",
+      "scenarios": []
+    },
+    "01-REQ-110": {
+      "target": "game-rules/turn-resolution-model",
+      "note": "interim intent-grain id used during migration drafting; superseded by named identifiers before merge",
+      "scenarios": []
+    },
+    "01-REQ-111": {
+      "target": "game-rules/movement",
+      "note": "interim intent-grain id used during migration drafting; superseded by named identifiers before merge",
+      "scenarios": []
+    },
+    "01-REQ-112": {
+      "target": "game-rules/collisions-and-severing",
+      "note": "interim intent-grain id used during migration drafting; superseded by named identifiers before merge",
+      "scenarios": []
+    },
+    "01-REQ-113": {
+      "target": "game-rules/head-to-head-precedence",
+      "note": "interim intent-grain id used during migration drafting; superseded by named identifiers before merge",
+      "scenarios": []
+    },
+    "01-REQ-114": {
+      "target": "game-rules/health-and-starvation",
+      "note": "interim intent-grain id used during migration drafting; superseded by named identifiers before merge",
+      "scenarios": []
+    },
+    "01-REQ-115": {
+      "target": "game-rules/food-and-growth",
+      "note": "interim intent-grain id used during migration drafting; superseded by named identifiers before merge",
+      "scenarios": []
+    },
+    "01-REQ-116": {
+      "target": "game-rules/item-spawning",
+      "note": "interim intent-grain id used during migration drafting; superseded by named identifiers before merge",
+      "scenarios": []
+    },
+    "01-REQ-117": {
+      "target": "game-rules/team-potion-effects",
+      "note": "interim intent-grain id used during migration drafting; superseded by named identifiers before merge",
+      "scenarios": []
+    },
+    "01-REQ-118": {
+      "target": "game-rules/invisibility",
+      "note": "interim intent-grain id used during migration drafting; superseded by named identifiers before merge",
+      "scenarios": []
+    },
+    "01-REQ-119": {
+      "target": "game-rules/chess-timer",
+      "note": "interim intent-grain id used during migration drafting; superseded by named identifiers before merge",
+      "scenarios": []
+    },
+    "01-REQ-120": {
+      "target": "game-rules/game-end-conditions",
+      "note": "interim intent-grain id used during migration drafting; superseded by named identifiers before merge",
+      "scenarios": []
+    },
+    "01-REQ-121": {
+      "target": "game-rules/scoring",
+      "note": "interim intent-grain id used during migration drafting; superseded by named identifiers before merge",
+      "scenarios": []
+    },
+    "01-REQ-122": {
+      "target": "game-rules/turn-events",
+      "note": "interim intent-grain id used during migration drafting; superseded by named identifiers before merge",
+      "scenarios": []
+    },
+    "01-REQ-123": {
+      "target": "game-rules/configuration-parameters",
+      "note": "interim intent-grain id used during migration drafting; superseded by named identifiers before merge",
+      "scenarios": []
+    },
+    "01-REQ-124": {
+      "target": "game-rules/item-identity",
+      "note": "interim intent-grain id used during migration drafting; superseded by named identifiers before merge",
+      "scenarios": []
+    }
+  },
+  "reviews": {
+    "01-REVIEW-001": {
+      "scenarios": [],
+      "note": "rationale only; see the archived decision log"
+    },
+    "01-REVIEW-002": {
+      "scenarios": ["game-rules/collisions-and-severing#dead-bodies-remain-lethal-all-turn"]
+    },
+    "01-REVIEW-003": {
+      "scenarios": ["game-rules/team-potion-effects#three-turn-expiry"]
+    },
+    "01-REVIEW-004": {
+      "scenarios": [],
+      "note": "rationale only; see the archived decision log"
+    },
+    "01-REVIEW-005": {
+      "scenarios": [],
+      "note": "rationale only; see the archived decision log"
+    },
+    "01-REVIEW-006": {
+      "scenarios": [
+        "game-rules/movement#direction-precedence",
+        "game-rules/movement#no-steering-assistance"
+      ]
+    },
+    "01-REVIEW-007": {
+      "scenarios": [],
+      "note": "rationale only; see the archived decision log"
+    },
+    "01-REVIEW-008": {
+      "scenarios": [
+        "game-rules/food-and-growth#duplication-after-severing",
+        "game-rules/food-and-growth#growth-counts-from-the-next-snapshot"
+      ]
+    },
+    "01-REVIEW-009": {
+      "scenarios": [],
+      "note": "rationale only; see the archived decision log"
+    },
+    "01-REVIEW-010": {
+      "scenarios": [],
+      "note": "rationale only; see the archived decision log"
+    },
+    "01-REVIEW-011": {
+      "scenarios": [],
+      "note": "rationale only; see the archived decision log"
+    },
+    "01-REVIEW-012": {
+      "scenarios": ["game-rules/configuration-parameters#disable-sentinels"]
+    },
+    "01-REVIEW-013": {
+      "scenarios": ["game-rules/domain-vocabulary"]
+    },
+    "01-REVIEW-014": {
+      "scenarios": ["game-rules/turn-resolution-model#snapshot-purity"]
+    },
+    "01-REVIEW-015": {
+      "scenarios": ["game-rules/team-potion-effects#rebuild-shape"]
+    },
+    "01-REVIEW-016": {
+      "scenarios": [],
+      "note": "rationale only; see the archived decision log"
+    },
+    "01-REVIEW-017": {
+      "scenarios": [
+        "game-rules/item-spawning#eligibility",
+        "game-rules/configuration-parameters#cross-runtime-expressibility"
+      ]
+    },
+    "01-REVIEW-018": {
+      "scenarios": [
+        "game-rules/board-geometry#construction",
+        "game-rules/scoring#proportional-par",
+        "game-rules/configuration-parameters#bounds-live-at-the-surfaces"
+      ]
+    },
+    "01-REVIEW-019": {
+      "scenarios": ["game-rules/chess-timer#carve-out-arithmetic"]
+    },
+    "01-REVIEW-020": {
+      "scenarios": [
+        "game-rules/board-generation-retry#failure-conditions",
+        "game-rules/board-generation-retry#infeasible-configuration"
+      ]
+    },
+    "01-REVIEW-021": {
+      "scenarios": ["game-rules/turn-resolution-model#order-independence"]
+    },
+    "01-REVIEW-022": {
+      "scenarios": [
+        "game-rules/turn-resolution-model#snapshot-purity",
+        "game-rules/team-potion-effects#sacrificial-collection",
+        "game-rules/team-potion-effects#collector-marked-even-in-death"
+      ]
+    },
+    "01-REVIEW-023": {
+      "scenarios": [
+        "game-rules/item-identity#ids-never-collide",
+        "game-rules/item-identity#consumption-removes-and-reports",
+        "game-rules/item-identity#one-item-per-cell"
+      ],
+      "resolvedBy": "main commit 113ddd3 (item lifetimes, task #7)"
+    }
+  }
+}

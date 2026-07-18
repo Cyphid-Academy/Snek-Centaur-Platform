@@ -1,5 +1,5 @@
 // Win-condition evaluation against the committed end-of-turn state.
-// spec: 01 §2.10 (01-REQ-053..058).
+// spec: 01 §2.10 (game-rules/scoring..058).
 import type { CentaurTeamId, GameOutcome, GameRuntimeConfig, TurnNumber } from "../types.js";
 
 /** The structural subset of snake state the win check reads. */
@@ -18,7 +18,7 @@ export function checkWinConditions(
 ): GameOutcome {
   const n = roster.length;
   if (n === 0) {
-    // All-forfeit degenerate case (01-REQ-053a) — unreachable through
+    // All-forfeit degenerate case (game-rules/scoring) — unreachable through
     // resolveTurn with snakes present; kept for arithmetic completeness.
     return { kind: "draw", tiedCentaurTeamIds: [], scores: new Map() };
   }
@@ -38,7 +38,7 @@ export function checkWinConditions(
   }
 
   if (aliveTeams.length === 0) {
-    // Simultaneous elimination (01-REQ-055, 01-REQ-056): teams alive at the
+    // Simultaneous elimination (game-rules/game-end-conditions): teams alive at the
     // start of this turn score par 1.0; earlier-eliminated teams score 0.
     const scores = new Map<CentaurTeamId, number>(
       roster.map((t) => [t, aliveTeamsAtStart.has(t) ? 1.0 : 0.0]),
@@ -47,7 +47,7 @@ export function checkWinConditions(
   }
 
   if (aliveTeams.length === 1) {
-    // Last team standing (01-REQ-054)
+    // Last team standing (game-rules/game-end-conditions)
     const winner = aliveTeams[0] as CentaurTeamId;
     const scores = new Map<CentaurTeamId, number>(
       roster.map((t) => [t, t === winner ? 1.0 * n : 0.0]),
@@ -56,7 +56,7 @@ export function checkWinConditions(
   }
 
   if (config.maxTurns > 0 && turnNumber === config.maxTurns - 1) {
-    // Turn limit (01-REQ-057, 01-REQ-053): normalised body-share × team count
+    // Turn limit (game-rules/game-end-conditions, game-rules/scoring): normalised body-share × team count
     const totalAliveSegments = aliveTeams.reduce(
       (sum, t) => sum + (aggregateLength.get(t) as number),
       0,
@@ -70,7 +70,7 @@ export function checkWinConditions(
     return winnerOrDraw(roster, scores);
   }
 
-  return { kind: "in_progress" }; // 01-REQ-058
+  return { kind: "in_progress" }; // game-rules/game-end-conditions
 }
 
 function winnerOrDraw(

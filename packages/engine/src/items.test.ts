@@ -4,7 +4,7 @@ import { ITEM_ID_STRIDE, itemAt, itemIdFor, itemsByCell } from "./items.js";
 import { emptyBoard, makeItem } from "./testkit.js";
 import { ItemType } from "./types.js";
 
-describe("itemsByCell / itemAt (01-REQ-007)", () => {
+describe("itemsByCell / itemAt (game-rules/item-identity)", () => {
   const board = emptyBoard(11);
 
   it("keys each item by its canonical cell index", () => {
@@ -24,7 +24,7 @@ describe("itemsByCell / itemAt (01-REQ-007)", () => {
   });
 });
 
-describe("itemIdFor (01-REQ-078)", () => {
+describe("itemIdFor (game-rules/item-identity)", () => {
   it("allocates turn-namespaced ids", () => {
     expect(itemIdFor(0, 0)).toBe(0); // game setup
     expect(itemIdFor(0, 3)).toBe(3);

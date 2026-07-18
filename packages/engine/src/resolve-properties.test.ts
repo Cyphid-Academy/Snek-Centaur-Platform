@@ -1,5 +1,5 @@
 // Property tests for the staged turn-resolution model:
-// 1. Rule-order independence (01-REQ-041): any permutation of the
+// 1. Rule-order independence (game-rules/turn-resolution-model): any permutation of the
 //    interaction rules yields an identical TurnResolution — machine-checking
 //    the spec's core order-free guarantee across whole fuzzed games.
 // 2. Multi-turn invariant fuzzing: seeded random games hold the structural
@@ -98,7 +98,7 @@ function playFuzzGame(
   return { turns: FUZZ_CONFIG.runtime.maxTurns, events };
 }
 
-describe("rule-order independence (01-REQ-041)", () => {
+describe("rule-order independence (game-rules/turn-resolution-model)", () => {
   it("yields identical whole-game results under shuffled interaction-rule orders", () => {
     for (const gameSeedN of [21, 22, 23]) {
       const baseline = playFuzzGame(seed(gameSeedN), null);
@@ -119,10 +119,10 @@ describe("multi-turn structural invariants (01 §3.9)", () => {
       playFuzzGame(seed(gameSeedN), null, (state, events, t) => {
         const headCells = new Set<string>();
         for (const snake of state.snakes) {
-          // ≤1 active effect per family (01-REQ-028)
+          // ≤1 active effect per family (game-rules/team-potion-effects)
           const families = state ? snake.activeEffects.map((e) => e.family) : [];
           expect(new Set(families).size).toBe(families.length);
-          // No effect may outlive its window (expiry at commit, 01-REVIEW-003)
+          // No effect may outlive its window (expiry at commit — game-rules/team-potion-effects#three-turn-expiry)
           for (const e of snake.activeEffects) {
             sawEffect = true;
             expect(e.expiryTurn).toBeGreaterThan(t);
@@ -161,8 +161,8 @@ describe("multi-turn structural invariants (01 §3.9)", () => {
   it("never re-issues an item id and keys every item by its own cell", () => {
     for (const gameSeedN of [41, 42]) {
       // Once an id leaves the board (consumed) it must never reappear
-      // (01-REQ-078 turn-namespaced allocation), and every map entry must
-      // sit under its own cell's index (01-REQ-007 single occupancy).
+      // (game-rules/item-identity turn-namespaced allocation), and every map entry must
+      // sit under its own cell's index (game-rules/item-identity single occupancy).
       const everSeen = new Map<number, string>(); // itemId -> home cell
       const departed = new Set<number>();
       playFuzzGame(seed(gameSeedN), null, (state) => {

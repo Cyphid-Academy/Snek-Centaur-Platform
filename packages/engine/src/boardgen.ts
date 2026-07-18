@@ -1,10 +1,10 @@
-// Board generation pipeline. spec: 01 §2.4 (01-REQ-010..017, 01-REQ-061)
-// and snake initialization per 01 §2.6 (01-REQ-018..021).
+// Board generation pipeline. spec: 01 §2.4 (game-rules/hazards..017, game-rules/board-generation-retry)
+// and snake initialization per 01 §2.6 (game-rules/initial-snakes..021).
 //
 // One attempt runs the named stage functions below in order against a
 // mutable cell grid; each stage draws from its own sub-seed, so the stages
 // are individually reproducible and testable. The attempt loop retries with
-// per-attempt sub-seeds (01-REQ-061).
+// per-attempt sub-seeds (game-rules/board-generation-retry).
 import { cellIndex, isInner, parityOf } from "./board.js";
 import { itemIdFor } from "./items.js";
 import { fractalNoise2D, makePerlin } from "./perlin.js";
@@ -41,18 +41,18 @@ interface AttemptFailure {
 
 const TWO_PI = 2 * Math.PI;
 const LETTER_A = "A".charCodeAt(0);
-const GENERATION_ATTEMPTS = 4; // 1 + three retries (01-REQ-061)
+const GENERATION_ATTEMPTS = 4; // 1 + three retries (game-rules/board-generation-retry)
 
 /**
  * Generate the board and initial game entities for one game.
  *
  * Deviation from the drafted signature (01 §3.8, documented decision): takes
  * the full `GameConfig` rather than `GameOrchestrationConfig` alone, because
- * snake initialization requires `runtime.maxHealth` (01-REQ-021) which lives
+ * snake initialization requires `runtime.maxHealth` (game-rules/initial-snakes) which lives
  * in the runtime half. The Convex caller holds the full config at
  * provisioning time (02 §2.14), so this costs nothing.
  */
-// spec: 01-REQ-061 — one deterministic sub-seeded attempt, up to 3 retries.
+// spec: game-rules/board-generation-retry — one deterministic sub-seeded attempt, up to 3 retries.
 export function generateBoardAndInitialState(
   config: GameConfig,
   teams: ReadonlyArray<TeamRegistration>,
@@ -114,7 +114,7 @@ function runAttempt(
     rngFromSeed(subSeed(attemptSeed, "territory-angle")),
   );
 
-  // Stage 4 — Parity choice. spec: 01-REQ-016
+  // Stage 4 — Parity choice. spec: game-rules/starting-placement
   const parity = rngFromSeed(subSeed(attemptSeed, "parity")).nextIntExclusive(2) as 0 | 1;
 
   const headsResult = pickStartingPositions(
@@ -144,7 +144,7 @@ function runAttempt(
   return { board, snakes, items: foodResult };
 }
 
-// Base grid: 1-cell wall border, Normal inner cells. spec: 01-REQ-008
+// Base grid: 1-cell wall border, Normal inner cells. spec: game-rules/board-geometry
 function buildBaseGrid(boardSize: number): { cells: CellType[]; innerCells: Cell[] } {
   const cells: CellType[] = new Array(boardSize * boardSize).fill(CellType.Normal);
   const board: Board = { boardSize, cells };
@@ -162,7 +162,7 @@ function buildBaseGrid(boardSize: number): { cells: CellType[]; innerCells: Cell
   return { cells, innerCells };
 }
 
-// Stage 1 — Hazards. spec: 01-REQ-010, 01-REQ-011
+// Stage 1 — Hazards. spec: game-rules/hazards
 function placeHazards(
   board: Board,
   cells: CellType[],
@@ -183,7 +183,7 @@ function placeHazards(
   return null;
 }
 
-// Stage 2 — Fertile tiles. spec: 01-REQ-012, 01-REQ-013, 01 §2.5
+// Stage 2 — Fertile tiles. spec: game-rules/fertile-ground, 01 §2.5
 function selectFertileCells(
   board: Board,
   cells: CellType[],
@@ -211,7 +211,7 @@ function selectFertileCells(
   }
 }
 
-// Stage 3 — Territory sectors. spec: 01-REQ-014
+// Stage 3 — Territory sectors. spec: game-rules/starting-placement
 function makeSectorAssigner(
   boardSize: number,
   teamCount: number,
@@ -229,7 +229,7 @@ function makeSectorAssigner(
   };
 }
 
-// Stage 5 — Starting positions. spec: 01-REQ-015, 01-REQ-016
+// Stage 5 — Starting positions. spec: game-rules/starting-placement
 function pickStartingPositions(
   board: Board,
   cells: ReadonlyArray<CellType>,
@@ -262,7 +262,7 @@ function pickStartingPositions(
   return headsByTeam;
 }
 
-// Snake initialization. spec: 01-REQ-018..021, 01 §2.6
+// Snake initialization. spec: game-rules/initial-snakes..021, 01 §2.6
 function initializeSnakes(
   teams: ReadonlyArray<TeamRegistration>,
   snakesPerTeam: number,
@@ -275,10 +275,10 @@ function initializeSnakes(
     heads.forEach((head, i) => {
       snakes.push({
         snakeId: (teamIdx * snakesPerTeam + i) as SnakeId,
-        letter: String.fromCharCode(LETTER_A + i), // 'A' + index within team (01-REQ-018)
+        letter: String.fromCharCode(LETTER_A + i), // 'A' + index within team (game-rules/initial-snakes)
         centaurTeamId: team.centaurTeamId,
-        body: [head, head, head], // length 3, stacked. spec: 01-REQ-020
-        health: maxHealth, // spec: 01-REQ-021
+        body: [head, head, head], // length 3, stacked. spec: game-rules/initial-snakes
+        health: maxHealth, // spec: game-rules/initial-snakes
         activeEffects: [],
         lastDirection: null,
         alive: true,
@@ -288,7 +288,7 @@ function initializeSnakes(
   return snakes;
 }
 
-// Stage 6 — Initial food. spec: 01-REQ-017
+// Stage 6 — Initial food. spec: game-rules/initial-food
 function placeInitialFood(
   board: Board,
   cells: ReadonlyArray<CellType>,
@@ -308,7 +308,7 @@ function placeInitialFood(
     return { code: "INITIAL_FOOD_SHORTAGE", eligibleCellCount: eligible.length };
   }
   rng.shuffle(eligible);
-  // Setup items allocate in id namespace 0 (01-REQ-078); turn-resolution
+  // Setup items allocate in id namespace 0 (game-rules/item-identity); turn-resolution
   // spawns start at namespace 1, so these ids never collide with later ones.
   return eligible.slice(0, snakes.length).map((cell, i) => ({
     itemId: itemIdFor(0, i),
@@ -317,7 +317,7 @@ function placeInitialFood(
   }));
 }
 
-// BFS over 4-connected non-hazard inner cells. spec: 01-REQ-010
+// BFS over 4-connected non-hazard inner cells. spec: game-rules/hazards
 function nonHazardInnerConnected(board: Board, innerCells: ReadonlyArray<Cell>): boolean {
   const open = innerCells.filter((c) => board.cells[cellIndex(board, c)] !== CellType.Hazard);
   const first = open[0];

@@ -4,10 +4,10 @@ This package is `@cyphid/snek-stdb`: the SpacetimeDB TypeScript module. It is th
 
 ## Spec scope
 
-- **Module 04** (`spec/04-stdb-engine.md`) — reducers, schema, RLS, chess timer, subscription queries.
-- **Module 01** (`spec/01-game-rules.md`) — consumed via `@cyphid/snek-engine`.
-- **Module 02** (`spec/02-platform-architecture.md`) — lifecycle and identity context.
-- **Module 03** (`spec/03-auth-and-identity.md`) — OIDC/JWT validation, RLS identity model.
+- **Module 04** (`legacy-spec-archive/spec/04-stdb-engine.md`) — reducers, schema, RLS, chess timer, subscription queries.
+- **Module 01 / `game-rules` capability** (`openspec/specs/game-rules/spec.md`) — consumed via `@cyphid/snek-engine`.
+- **Module 02** (`legacy-spec-archive/spec/02-platform-architecture.md`) — lifecycle and identity context.
+- **Module 03** (`legacy-spec-archive/spec/03-auth-and-identity.md`) — OIDC/JWT validation, RLS identity model.
 
 ## What goes here
 
@@ -24,11 +24,11 @@ This package is `@cyphid/snek-stdb`: the SpacetimeDB TypeScript module. It is th
 
 ## Implementation notes
 
-Before implementing, read `spec/04-stdb-engine.md` in full. The SpacetimeDB SDK for TypeScript is distinct from normal Node/Bun TypeScript — reducers run inside the STDB runtime and cannot use arbitrary Node APIs.
+Before implementing, read `legacy-spec-archive/spec/04-stdb-engine.md` in full. The SpacetimeDB SDK for TypeScript is distinct from normal Node/Bun TypeScript — reducers run inside the STDB runtime and cannot use arbitrary Node APIs.
 
 Run `pnpm codegen` to regenerate SpacetimeDB bindings once real codegen is wired up (currently a no-op stub).
 
 ## Key files
 
 - `src/index.ts` — reducer and schema exports
-- `spec/04-stdb-engine.md` — binding source of truth
+- `legacy-spec-archive/spec/04-stdb-engine.md` — binding source of truth

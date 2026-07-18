@@ -1,7 +1,7 @@
 // The authoritative turn resolver — orchestration of the staged model of
 // 01 §2.8: snapshot → move projection → head-to-head precedence → parallel
 // interaction rules → derived rules → deterministic commit → spawning →
-// win check → event derivation (01-REQ-041..052, 01-REQ-062).
+// win check → event derivation (game-rules/turn-resolution-model..052, game-rules/food-and-growth).
 import type {
   GameOutcome,
   GameRuntimeConfig,
@@ -35,7 +35,7 @@ export interface TurnResolution {
  * `state.clocks` passes through untouched: the chess timer is driven by
  * module 04 between turns (01 §2.9).
  */
-// spec: 01-REQ-041 — staged resolution, commit as sole writer.
+// spec: game-rules/turn-resolution-model — staged resolution, commit as sole writer.
 export function resolveTurn(
   state: GameState,
   stagedMoves: ReadonlyMap<SnakeId, StagedMove>,
@@ -48,7 +48,7 @@ export function resolveTurn(
 
 /**
  * The orchestrator, parameterised by the interaction-rule list. Exposed for
- * the order-shuffle property test that machine-checks 01-REQ-041's
+ * the order-shuffle property test that machine-checks game-rules/turn-resolution-model's
  * order-independence guarantee; production callers use resolveTurn.
  */
 export function resolveTurnWithRules(

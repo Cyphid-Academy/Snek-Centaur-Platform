@@ -30,7 +30,7 @@ import { join } from "node:path";
 import { buildSpecIndex, makeResolver, openChangeDeltaFiles } from "./spec-index.mjs";
 
 const root = new URL("..", import.meta.url).pathname;
-const MIGRATED_MODULES = new Set([]); // numeric prefixes tombstoned as modules migrate
+const MIGRATED_MODULES = new Set(["01"]); // numeric prefixes now tombstoned
 
 const walk = (dir, out = []) => {
   if (!existsSync(dir)) return out;

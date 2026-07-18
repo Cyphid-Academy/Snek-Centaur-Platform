@@ -19,7 +19,7 @@ import {
 import type { SnakeState } from "./types.js";
 import { Direction, ItemType } from "./types.js";
 
-describe("Move projection — direction (01-REQ-042)", () => {
+describe("Move projection — direction (game-rules/movement)", () => {
   it("uses the staged move and attributes it in the snake_moved event", () => {
     const s = makeSnake({
       snakeId: sid(0),
@@ -87,7 +87,7 @@ describe("Move projection — direction (01-REQ-042)", () => {
   });
 });
 
-describe("Move projection — body advance and growth (01-REQ-043, 01-REQ-062)", () => {
+describe("Move projection — body advance and growth (game-rules/movement, game-rules/food-and-growth)", () => {
   it("advances the head and drops the tail, keeping length constant", () => {
     const s = makeSnake({
       snakeId: sid(0),
@@ -106,7 +106,7 @@ describe("Move projection — body advance and growth (01-REQ-043, 01-REQ-062)",
     expect(snakeById(nextState, 0).lastDirection).toBe(Direction.Up);
   });
 
-  it("advances a grown snake by dropping only one tail copy (01-REQ-043)", () => {
+  it("advances a grown snake by dropping only one tail copy (game-rules/movement)", () => {
     // Doubled tail from an earlier meal: the cell stays occupied after a move.
     const s = makeSnake({
       snakeId: sid(0),
@@ -126,7 +126,7 @@ describe("Move projection — body advance and growth (01-REQ-043, 01-REQ-062)",
     ]);
   });
 
-  it("grows exactly once, as a doubled tail at the eating turn's commit (01-REQ-062)", () => {
+  it("grows exactly once, as a doubled tail at the eating turn's commit (game-rules/food-and-growth)", () => {
     const s = makeSnake({
       snakeId: sid(0),
       body: [
@@ -160,7 +160,7 @@ describe("Move projection — body advance and growth (01-REQ-043, 01-REQ-062)",
   });
 });
 
-describe("Collision rules (01-REQ-044)", () => {
+describe("Collision rules (game-rules/collisions-and-severing)", () => {
   it("kills a snake whose head enters a wall (044a)", () => {
     const s = makeSnake({
       snakeId: sid(0),
@@ -428,7 +428,7 @@ describe("Collision rules (01-REQ-044)", () => {
     expect(snakeById(nextState, 1).alive).toBe(true);
   });
 
-  it("keeps a wall-dying snake's body lethal in the same phase (simultaneity, 01-REVIEW-002)", () => {
+  it("keeps a wall-dying snake's body lethal in the same phase (game-rules/collisions-and-severing#dead-bodies-remain-lethal-all-turn)", () => {
     // A drives into the wall; B simultaneously enters A's body. Both die.
     const a = makeSnake({
       snakeId: sid(0),
@@ -472,7 +472,7 @@ describe("Collision rules (01-REQ-044)", () => {
     expect(causes).toContainEqual([sid(1), "body_collision"]);
   });
 
-  it("ignores effects gained this turn for this turn's collisions (01-REQ-033)", () => {
+  it("ignores effects gained this turn for this turn's collisions (game-rules/turn-resolution-model)", () => {
     // Attacker collects an invuln potion THIS turn and hits a body: still level 0 → dies.
     const attacker = makeSnake({
       snakeId: sid(0),
@@ -506,7 +506,7 @@ describe("Collision rules (01-REQ-044)", () => {
   });
 });
 
-describe("Health rules (01-REQ-046)", () => {
+describe("Health rules (game-rules/health-and-starvation)", () => {
   it("subtracts 1 health per turn unconditionally (046a)", () => {
     const s = makeSnake({ snakeId: sid(0), health: 42 });
     const { nextState } = doResolve(state([s]), moves([[0, Direction.Up]]));
@@ -556,7 +556,7 @@ describe("Health rules (01-REQ-046)", () => {
     expect(new Set(died?.sources)).toEqual(new Set(["tick", "hazard"]));
   });
 
-  it("restores health to max and grows on food (046c, 01-REQ-025)", () => {
+  it("restores health to max and grows on food (046c, game-rules/food-and-growth)", () => {
     const s = makeSnake({ snakeId: sid(0), health: 30 });
     const head = s.body[0];
     if (head === undefined) throw new Error("no head");
@@ -720,7 +720,7 @@ describe("Health rules (01-REQ-046)", () => {
   });
 });
 
-describe("Potion rule (01-REQ-047, 01-REQ-026/027)", () => {
+describe("Potion rule (game-rules/team-potion-effects/027)", () => {
   function teamPair() {
     const collector = makeSnake({
       snakeId: sid(0),
@@ -804,7 +804,7 @@ describe("Potion rule (01-REQ-047, 01-REQ-026/027)", () => {
     ]);
   });
 
-  it("treats the two potion families independently (01-REQ-028)", () => {
+  it("treats the two potion families independently (game-rules/team-potion-effects)", () => {
     const [collector, mate] = teamPair();
     const potions = [
       makeItem(0, ItemType.InvulnPotion, { x: 3, y: 4 }),

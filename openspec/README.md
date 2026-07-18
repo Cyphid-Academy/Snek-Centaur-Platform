@@ -35,7 +35,7 @@ binding spec (and its numeric `MM-REQ-NNN` identifiers remain citable).
 
 | Module | Capability carving | Status | Binding source |
 |--------|--------------------|--------|----------------|
-| 01-game-rules | *decided at migration* | Pending | `legacy-spec-archive/spec/01-game-rules.md` |
+| 01-game-rules | `specs/game-rules/` (single capability, author decision) | **Migrated** | `openspec/specs/game-rules/spec.md` |
 | 02-platform-architecture | *decided at migration* | Pending | `legacy-spec-archive/spec/02-platform-architecture.md` |
 | 03-auth-and-identity | *decided at migration* | Pending | `legacy-spec-archive/spec/03-auth-and-identity.md` |
 | 04-stdb-engine | *decided at migration* | Pending | `legacy-spec-archive/spec/04-stdb-engine.md` |
