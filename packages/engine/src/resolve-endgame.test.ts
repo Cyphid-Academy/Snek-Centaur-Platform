@@ -15,7 +15,7 @@ import {
 } from "./testkit.js";
 import { CellType, Direction, ItemType } from "./types.js";
 
-describe("Item spawning (01-REQ-048, 01-REQ-049)", () => {
+describe("Item spawning (game-rules/item-spawning)", () => {
   it("spawns exactly floor(rate) items for an integer rate, on unoccupied inner cells", () => {
     const s = redSnake(0, 5);
     const existing = makeItem(5, ItemType.Food, { x: 8, y: 8 });
@@ -114,8 +114,8 @@ describe("Item spawning (01-REQ-048, 01-REQ-049)", () => {
   });
 });
 
-describe("Win conditions (01-REQ-053..058)", () => {
-  it("declares last-team-standing victory with score 1.0 x N (01-REQ-054)", () => {
+describe("Win conditions (game-rules/scoring..058)", () => {
+  it("declares last-team-standing victory with score 1.0 x N (game-rules/game-end-conditions)", () => {
     const red = redSnake(0, 5);
     const blueDoomed = {
       ...blueSnake(1, 1),
@@ -143,7 +143,7 @@ describe("Win conditions (01-REQ-053..058)", () => {
     expect(outcome.kind).toBe("in_progress");
   });
 
-  it("scores par 1.0 for all teams alive at the start of a simultaneous elimination (01-REQ-055)", () => {
+  it("scores par 1.0 for all teams alive at the start of a simultaneous elimination (game-rules/game-end-conditions)", () => {
     const red = { ...redSnake(0, 1), lastDirection: Direction.Left };
     const blue = { ...blueSnake(1, 9), lastDirection: Direction.Right };
     const { outcome } = doResolve(state([red, blue]), new Map());
@@ -153,7 +153,7 @@ describe("Win conditions (01-REQ-053..058)", () => {
     expect(outcome.scores.get(tid("blue"))).toBe(1);
   });
 
-  it("scores 0 for teams eliminated on an earlier turn (01-REQ-055)", () => {
+  it("scores 0 for teams eliminated on an earlier turn (game-rules/game-end-conditions)", () => {
     const deadGreen = makeSnake({
       snakeId: sid(2),
       centaurTeamId: tid("green"),
@@ -167,7 +167,7 @@ describe("Win conditions (01-REQ-053..058)", () => {
     expect(outcome.scores.get(tid("green"))).toBe(0);
   });
 
-  it("handles simultaneous elimination on turn 0 with par for everyone (01-REQ-056)", () => {
+  it("handles simultaneous elimination on turn 0 with par for everyone (game-rules/game-end-conditions)", () => {
     const red = { ...redSnake(0, 1), lastDirection: Direction.Left };
     const blue = { ...blueSnake(1, 9), lastDirection: Direction.Right };
     const { outcome } = doResolve(state([red, blue]), new Map(), { turnNumber: 0 });
@@ -176,7 +176,7 @@ describe("Win conditions (01-REQ-053..058)", () => {
     expect(outcome.scores.get(tid("blue"))).toBe(1);
   });
 
-  it("ends at the turn limit with normalised body-share scores (01-REQ-057, 01-REQ-053)", () => {
+  it("ends at the turn limit with normalised body-share scores (game-rules/game-end-conditions, game-rules/scoring)", () => {
     // Red 4 segments, blue 3: total 7. Red = 4/7*2, blue = 3/7*2.
     const base = redSnake(0, 3);
     const red = { ...base, body: [...base.body, base.body[2] as { x: number; y: number }] };
@@ -195,7 +195,7 @@ describe("Win conditions (01-REQ-053..058)", () => {
     expect(outcome.scores.get(tid("blue"))).toBeCloseTo((3 / 7) * 2, 10);
   });
 
-  it("does not end before the turn limit (01-REQ-057) and never with maxTurns 0 (01-REQ-058)", () => {
+  it("does not end before the turn limit (game-rules/game-end-conditions) and never with maxTurns 0 (game-rules/game-end-conditions)", () => {
     const mk = () => state([redSnake(0, 3), blueSnake(1, 7)]);
     const m = () =>
       moves([
@@ -225,7 +225,7 @@ describe("Win conditions (01-REQ-053..058)", () => {
   });
 });
 
-describe("Event ordering (01-REQ-052)", () => {
+describe("Event ordering (game-rules/turn-events)", () => {
   it("orders events by phase, then ascending snakeId within a phase", () => {
     // Snake 1 (lower x) and snake 0 both move; snake 0 dies on a wall; food
     // spawning follows. Kind order must follow phase order regardless of

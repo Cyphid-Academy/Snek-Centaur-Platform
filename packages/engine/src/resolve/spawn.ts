@@ -1,5 +1,5 @@
 // Item spawning (01 §2.8 stage 6): seeded generation against the committed
-// occupancy. spec: 01-REQ-048, 01-REQ-049, 01-REQ-078.
+// occupancy. spec: game-rules/item-spawning, game-rules/item-identity.
 import { cellIndex, fertileGroundEnabled } from "../board.js";
 import { itemIdFor } from "../items.js";
 import type { Rng } from "../rng.js";
@@ -12,7 +12,7 @@ import type { EventBuffer } from "./events.js";
 export function runSpawning(ctx: TurnContext, turnSeed: Uint8Array, events: EventBuffer): void {
   const { board, config, items } = ctx;
   // Spawned items first exist at the boundary after this turn: id namespace
-  // turnNumber + 1, in spawn order within the turn (01-REQ-078).
+  // turnNumber + 1, in spawn order within the turn (game-rules/item-identity).
   let spawnedThisTurn = 0;
 
   const eligibleSpawnCells = (fertileOnly: boolean): Cell[] => {
@@ -30,7 +30,7 @@ export function runSpawning(ctx: TurnContext, turnSeed: Uint8Array, events: Even
         const cell = { x, y };
         const key = cellIndex(board, cell);
         // The items map already reflects this turn's earlier spawns, so a
-        // later family can never stack onto a just-spawned cell (01-REQ-007).
+        // later family can never stack onto a just-spawned cell (game-rules/item-identity).
         if (occupied.has(key) || items.has(key)) continue;
         cells.push(cell);
       }
@@ -69,7 +69,7 @@ export function runSpawning(ctx: TurnContext, turnSeed: Uint8Array, events: Even
     rngFood,
     eligibleSpawnCells(fertileGroundEnabled(board)),
   );
-  // Potion eligibility is not fertile-restricted (01-REQ-049; DECISIONS.md §2.1).
+  // Potion eligibility is not fertile-restricted (game-rules/item-spawning; DECISIONS.md §2.1).
   const rngPotion = rngFromSeed(subSeed(turnSeed, "phase-8-potions"));
   spawnItems(
     ItemType.InvulnPotion,

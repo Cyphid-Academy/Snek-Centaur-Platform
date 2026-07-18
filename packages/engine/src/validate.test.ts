@@ -48,7 +48,7 @@ describe("isValidMove", () => {
   });
 
   it("treats a duplicated tail cell as staying occupied after the move", () => {
-    // Doubled tail from growth (01-REQ-062): only one copy drops this turn,
+    // Doubled tail from growth (game-rules/food-and-growth): only one copy drops this turn,
     // so the tail cell remains occupied and the move into it is fatal.
     const loop = makeSnake({
       snakeId: sid(0),

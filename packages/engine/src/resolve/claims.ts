@@ -57,8 +57,8 @@ export interface PotionCollection {
   readonly family: EffectFamily;
 }
 
-// spec: 01-REQ-046c, 01-REQ-047 — the commit removes the entry from the
-// present-items map (01-REQ-007); rules never write it.
+// spec: game-rules/food-and-growth, game-rules/team-potion-effects — the commit removes the entry from the
+// present-items map (game-rules/item-identity); rules never write it.
 export interface ConsumptionClaim {
   readonly itemId: ItemId;
   readonly cellIndex: CellIndex;
@@ -123,7 +123,7 @@ export class ClaimSet {
 
   // Multiple attackers severing one victim collapse to the head-closest
   // (minimum) contact index; every pair still gets its own record/event.
-  // spec: 01-REQ-044c
+  // spec: game-rules/collisions-and-severing
   sever(record: SeverRecord, contactIndex: number): void {
     const prev = this.severMinIndex.get(record.victimSnakeId);
     this.severMinIndex.set(
@@ -206,7 +206,7 @@ export class ClaimSet {
   }
 
   // Canonical source order: claims form a set, so reported source lists must
-  // not depend on rule evaluation order (01-REQ-041 order independence).
+  // not depend on rule evaluation order (game-rules/turn-resolution-model order independence).
   damageSources(id: SnakeId): DamageSource[] {
     const present = new Set((this.damageMap.get(id) ?? []).map((d) => d.source));
     return DAMAGE_SOURCE_ORDER.filter((src) => present.has(src));

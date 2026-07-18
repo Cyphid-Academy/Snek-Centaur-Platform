@@ -1,16 +1,16 @@
 // Effect-domain helpers: derived values (pure O(k≤2) functions over
 // `activeEffects` — the ONLY effect reads the interaction rules perform,
 // spec: 01 §2.7) plus the effect-collection primitives that maintain the
-// ≤1-per-family invariant (01-REQ-028).
+// ≤1-per-family invariant (game-rules/team-potion-effects).
 import type { EffectFamily, PotionEffect, SnakeState } from "./types.js";
 import { ItemType } from "./types.js";
 
-// spec: 01-REVIEW-003 / 01-REQ-026/027 — effects granted at turn T's commit
+// spec: game-rules/team-potion-effects#three-turn-expiry — effects granted at turn T's commit
 // carry expiryTurn = T + EFFECT_DURATION_TURNS and are active on the three
 // following turns.
 export const EFFECT_DURATION_TURNS = 3;
 
-// spec: 01-REQ-047 — the potion-type → effect-family mapping.
+// spec: game-rules/team-potion-effects — the potion-type → effect-family mapping.
 export function familyOfPotion(
   itemType: typeof ItemType.InvulnPotion | typeof ItemType.InvisPotion,
 ): EffectFamily {
@@ -18,7 +18,7 @@ export function familyOfPotion(
 }
 
 /**
- * Remove the (at most one, per 01-REQ-028) effect of `family` from a
+ * Remove the (at most one, per game-rules/team-potion-effects) effect of `family` from a
  * collection. Returns the removed effect, or undefined when none was held —
  * the single home of the family-removal surgery used by the commit's
  * cancel / replace / expiry passes.
@@ -32,7 +32,7 @@ export function removeFamily(
   return { effects: effects.filter((e) => e.family !== family), removed };
 }
 
-// spec: 01-REQ-022
+// spec: game-rules/collisions-and-severing
 export function invulnerabilityLevel(snake: SnakeState): -1 | 0 | 1 {
   for (const e of snake.activeEffects) {
     if (e.family === "invulnerability") {
@@ -42,7 +42,7 @@ export function invulnerabilityLevel(snake: SnakeState): -1 | 0 | 1 {
   return 0;
 }
 
-// spec: 01-REQ-023 — the invisibility collector (debuff-holder) stays visible.
+// spec: game-rules/invisibility — the invisibility collector (debuff-holder) stays visible.
 export function isVisible(snake: SnakeState): boolean {
   for (const e of snake.activeEffects) {
     if (e.family === "invisibility" && e.state === "buff") {

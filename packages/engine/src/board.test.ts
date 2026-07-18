@@ -4,7 +4,7 @@ import { emptyBoard } from "./testkit.js";
 import { CellType, Direction } from "./types.js";
 
 describe("cellIndex", () => {
-  // spec: 01-REQ-008 / DOWNSTREAM IMPACT note 3 — row-major y * boardSize + x
+  // spec: game-rules/board-geometry / DOWNSTREAM IMPACT note 3 — row-major y * boardSize + x
   it("uses row-major y * boardSize + x indexing", () => {
     const board = emptyBoard(7);
     expect(cellIndex(board, { x: 0, y: 0 })).toBe(0);
@@ -15,7 +15,7 @@ describe("cellIndex", () => {
 });
 
 describe("isInner", () => {
-  // spec: 01-REQ-009 — inner cells are the (boardSize-2)^2 cells off the border
+  // spec: game-rules/board-geometry — inner cells are the (boardSize-2)^2 cells off the border
   it("classifies border cells as not inner", () => {
     const board = emptyBoard(7);
     expect(isInner(board, { x: 0, y: 3 })).toBe(false);
@@ -34,7 +34,7 @@ describe("isInner", () => {
 });
 
 describe("parityOf", () => {
-  // spec: 01-REQ-016 — parity is (x + y) mod 2
+  // spec: game-rules/starting-placement — parity is (x + y) mod 2
   it("computes (x + y) mod 2", () => {
     expect(parityOf({ x: 0, y: 0 })).toBe(0);
     expect(parityOf({ x: 1, y: 0 })).toBe(1);
@@ -44,7 +44,7 @@ describe("parityOf", () => {
 });
 
 describe("fertileGroundEnabled", () => {
-  // spec: 01-REQ-048 / resolved 01-REVIEW-017 — derived from the board, not config
+  // spec: game-rules/item-spawning#eligibility — derived from the board, not config
   it("is false for a board with no Fertile cells", () => {
     expect(fertileGroundEnabled(emptyBoard(7))).toBe(false);
   });

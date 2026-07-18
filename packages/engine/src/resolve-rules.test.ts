@@ -40,7 +40,7 @@ function build(
   return { ctx, claims };
 }
 
-describe("wallRule (01-REQ-044a)", () => {
+describe("wallRule (game-rules/collisions-and-severing)", () => {
   it("claims certain death for a head on a wall cell and nothing else", () => {
     const doomed = makeSnake({
       snakeId: sid(0),
@@ -65,7 +65,7 @@ describe("wallRule (01-REQ-044a)", () => {
   });
 });
 
-describe("selfCollisionRule (01-REQ-044b)", () => {
+describe("selfCollisionRule (game-rules/collisions-and-severing)", () => {
   it("claims death for a head entering its own moved body, but not a tail-chase", () => {
     const selfHit = makeSnake({
       snakeId: sid(0),
@@ -100,7 +100,7 @@ describe("selfCollisionRule (01-REQ-044b)", () => {
   });
 });
 
-describe("bodyCollisionRule (01-REQ-044c)", () => {
+describe("bodyCollisionRule (game-rules/collisions-and-severing)", () => {
   function combatants(attackerBuffed: boolean) {
     const attacker = makeSnake({
       snakeId: sid(0),
@@ -160,7 +160,7 @@ describe("bodyCollisionRule (01-REQ-044c)", () => {
   });
 });
 
-describe("hazardRule and healthTickRule (01-REQ-046a/b)", () => {
+describe("hazardRule and healthTickRule (game-rules/health-and-starvation/b)", () => {
   it("claims hazard damage plus disruption only for heads on hazard cells", () => {
     const board = emptyBoard(11);
     const cells = [...board.cells];
@@ -194,7 +194,7 @@ describe("hazardRule and healthTickRule (01-REQ-046a/b)", () => {
   });
 });
 
-describe("foodRule and potionRule (01-REQ-046c, 01-REQ-047)", () => {
+describe("foodRule and potionRule (game-rules/food-and-growth, game-rules/team-potion-effects)", () => {
   it("consumes food and claims heal + growth for the entrant", () => {
     const eater = makeSnake({ snakeId: sid(0) }); // head (3,3) → (3,2)
     const food = makeItem(0, ItemType.Food, { x: 3, y: 2 });
@@ -241,7 +241,7 @@ describe("foodRule and potionRule (01-REQ-046c, 01-REQ-047)", () => {
   });
 });
 
-describe("runDerivedRules (01-REQ-046d, 01-REQ-045)", () => {
+describe("runDerivedRules (game-rules/health-and-starvation, game-rules/team-potion-effects)", () => {
   it("resolves health, derives health deaths, and triggers cancellation from them", () => {
     // Collector debuff-holder at 1 health: the tick alone kills it, and that
     // health-depletion disruption must cancel the family team-wide.
@@ -286,7 +286,7 @@ describe("runDerivedRules (01-REQ-046d, 01-REQ-045)", () => {
   });
 });
 
-describe("head-to-head precedence at context build (01-REQ-044d)", () => {
+describe("head-to-head precedence at context build (game-rules/head-to-head-precedence)", () => {
   it("withdraws losing heads from H* while keeping their bodies on the board", () => {
     const short = makeSnake({
       snakeId: sid(0),

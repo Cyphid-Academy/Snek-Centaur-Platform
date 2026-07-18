@@ -4,8 +4,8 @@ This package is `@cyphid/snek-engine`: the shared game engine. It is the single 
 
 ## Spec scope
 
-- **Module 01** (`spec/01-game-rules.md`) — all domain types and the full staged turn-resolution model.
-- **Module 02** (`spec/02-platform-architecture.md`) — `02-REQ-034` mandates this shared codebase.
+- **Module 01 / `game-rules` capability** (`openspec/specs/game-rules/spec.md`) — all domain types and the full staged turn-resolution model.
+- **Module 02** (`legacy-spec-archive/spec/02-platform-architecture.md`) — `02-REQ-034` mandates this shared codebase.
 
 ## What goes here
 
@@ -56,8 +56,8 @@ Structural invariants to preserve (01 §2.8, resolved 01-REVIEW-022):
 - `src/resolve-properties.test.ts` — rule-order-shuffle property test and the
   multi-turn invariant fuzzer; run these after ANY resolver change
 - `DECISIONS.md` — implementation decision log
-- `spec/01-game-rules.md` — binding source of truth
-- `spec/02-platform-architecture.md` § Shared Engine Codebase
+- `openspec/specs/game-rules/spec.md` — binding source of truth
+- `legacy-spec-archive/spec/02-platform-architecture.md` § Shared Engine Codebase
 
 ## Adding a mechanic
 

@@ -1,4 +1,4 @@
-// Present-items helpers. spec: 01-REQ-007, 01-REQ-078, 01 §3.2.
+// Present-items helpers. spec: game-rules/item-identity, 01 §3.2.
 //
 // GameState.items is the cell-keyed present-items projection of module 04's
 // item_lifetimes record: consumed items are simply absent. Flat ItemState
@@ -7,7 +7,7 @@
 import { cellIndex } from "./board.js";
 import type { Board, Cell, CellIndex, ItemId, ItemState, ItemsByCell } from "./types.js";
 
-// spec: 01-REQ-078 — ids are allocated per turn namespace: game setup uses
+// spec: game-rules/item-identity — ids are allocated per turn namespace: game setup uses
 // namespace 0; turn T's resolution allocates in namespace T + 1 (the turn
 // boundary at which its spawns first exist). Uniqueness therefore never
 // depends on observing consumed items.
@@ -15,8 +15,8 @@ export const ITEM_ID_STRIDE = 256;
 
 export function itemIdFor(namespace: number, k: number): ItemId {
   if (k >= ITEM_ID_STRIDE) {
-    // Reachable only with spawn rates far outside the 01-REQ-071..073 ranges;
-    // fail loudly rather than allocate a colliding id (01-REQ-078).
+    // Reachable only with spawn rates far outside the game-rules/configuration-parameters..073 ranges;
+    // fail loudly rather than allocate a colliding id (game-rules/item-identity).
     throw new Error(`item id namespace ${namespace} exhausted (${k} >= ${ITEM_ID_STRIDE})`);
   }
   return (namespace * ITEM_ID_STRIDE + k) as ItemId;
@@ -25,7 +25,7 @@ export function itemIdFor(namespace: number, k: number): ItemId {
 /**
  * Build the logical cell-keyed map from a flat list of present items.
  * Throws if two items share a cell — the single-occupancy invariant of
- * 01-REQ-007 must already hold in any valid wire-form list.
+ * game-rules/item-identity must already hold in any valid wire-form list.
  */
 export function itemsByCell(board: Board, items: Iterable<ItemState>): ItemsByCell {
   const map = new Map<CellIndex, ItemState>();
