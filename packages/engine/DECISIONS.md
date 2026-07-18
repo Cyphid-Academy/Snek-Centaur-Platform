@@ -1,6 +1,6 @@
 # Module 01 Implementation — Decision Log
 
-Implementation-level decisions embodied in `@cyphid/snek-engine` that are not fully pinned by spec module 01. Spec-level decisions live in the spec decision logs (`spec/review/*.review.md`); this file records only choices made at the code level, so a reader can distinguish "the spec requires this" from "the implementation chose this".
+Implementation-level decisions embodied in `@cyphid/snek-engine` that are not fully pinned by spec module 01. Spec-level decisions live in the spec decision logs (`legacy-spec-archive/review/*.review.md`); this file records only choices made at the code level, so a reader can distinguish "the spec requires this" from "the implementation chose this".
 
 ---
 

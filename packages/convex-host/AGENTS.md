@@ -4,10 +4,10 @@ This package is `@cyphid/snek-convex-host`: the Convex deployment that mounts bo
 
 ## Spec scope
 
-- **Module 02** (`spec/02-platform-architecture.md`) — `02-REQ-002` establishes that authorisation lives at the host layer.
-- **Module 03** (`spec/03-auth-and-identity.md`) — Google OAuth, game credentials, OIDC token issuance.
-- **Module 05** (`spec/05-convex-platform.md`) — HTTP API, game lifecycle (delegated to component).
-- **Module 06** (`spec/06-centaur-state.md`) — Centaur state mutations (delegated to component).
+- **Module 02** (`legacy-spec-archive/spec/02-platform-architecture.md`) — `02-REQ-002` establishes that authorisation lives at the host layer.
+- **Module 03** (`legacy-spec-archive/spec/03-auth-and-identity.md`) — Google OAuth, game credentials, OIDC token issuance.
+- **Module 05** (`legacy-spec-archive/spec/05-convex-platform.md`) — HTTP API, game lifecycle (delegated to component).
+- **Module 06** (`legacy-spec-archive/spec/06-centaur-state.md`) — Centaur state mutations (delegated to component).
 
 ## What goes here
 
@@ -27,11 +27,11 @@ The recommended plan is:
    - Per-Centaur-Team game credential generation and validation (spec: `03-REQ-050`).
    - STDB OIDC token issuance (Convex acts as OIDC issuer; SpacetimeDB validates via OIDC discovery).
 
-When implementing auth, read `spec/03-auth-and-identity.md` in full first.
+When implementing auth, read `legacy-spec-archive/spec/03-auth-and-identity.md` in full first.
 
 ## Key files
 
 - `src/index.ts` — re-exports and placeholder host function
 - `convex/convex.config.ts` — component mounting (stub)
-- `spec/02-platform-architecture.md`
-- `spec/03-auth-and-identity.md`
+- `legacy-spec-archive/spec/02-platform-architecture.md`
+- `legacy-spec-archive/spec/03-auth-and-identity.md`

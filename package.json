@@ -12,10 +12,16 @@
     "format": "biome check --write .",
     "test": "vitest run",
     "dev": "pnpm --filter @cyphid/centaur-server-reference dev",
-    "build": "pnpm -r build"
+    "build": "pnpm -r build",
+    "spec:validate": "openspec validate --specs --strict",
+    "spec:citations": "node scripts/check-spec-citations.mjs",
+    "spec:freshness": "node scripts/check-change-freshness.mjs",
+    "spec:fold": "node scripts/fold-change.mjs",
+    "spec:check": "pnpm spec:validate && pnpm spec:citations && pnpm spec:freshness"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
+    "@fission-ai/openspec": "^1.6.0",
     "typescript": "^5.7.3",
     "vite": "^6.4.2",
     "vitest": "^3.2.4"

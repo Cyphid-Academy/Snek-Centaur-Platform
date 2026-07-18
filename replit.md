@@ -3,7 +3,7 @@
 Agent context is split by concern:
 
 - **Implementation work** (TypeScript, packages, CI, infra): read root `AGENTS.md`.
-- **Spec authoring** (editing `spec/` module files, REVIEW items): read `spec/AGENTS.md`.
+- **Spec work**: read `openspec/README.md` (workflow, conventions, cutover table) and `openspec/config.yaml`. The pre-OpenSpec corpus is quarantined in `legacy-spec-archive/` (binding for unmigrated modules).
 - **Package-scoped work**: read the `AGENTS.md` inside the relevant `packages/*/` or `apps/*/` directory.
 
 Any updates to agent context must be written to the appropriate `AGENTS.md` — not here. This file is only for context genuinely specific to the Replit environment.

@@ -1,0 +1,133 @@
+schema: spec-driven
+
+context: |
+  Team Snek Centaur Platform — spec-first monorepo (pnpm, TypeScript strict,
+  Biome, Vitest). Three runtimes: SpacetimeDB (per-game, transient), Convex
+  (persistent), Centaur Servers (per-team). See root AGENTS.md for
+  implementation conventions and the package map.
+
+  The openspec/specs/ corpus is the BINDING source of truth for system
+  behaviour. Knowledge lives in exactly four layers (strict OpenSpec):
+  1. specs/<capability>/spec.md — Purpose + Requirements + scenarios (WHAT).
+  2. The code — the canonical current HOW, including canonical types.
+  3. Each change's design.md — decision rationale, frozen in
+     changes/archive/ (the permanent WHY).
+  4. This context block — small always-relevant facts only.
+  There are no capability-level design documents. If a design choice's
+  quality depends on an invariant future implementers could violate, that
+  invariant is a REQUIREMENT — mint it in the same change (see rules).
+
+  Identifier grammar (treat like code identifiers):
+  - A requirement is `<capability>/<requirement-slug>`; its definition
+    header is `### Requirement: <capability>/<slug>` (full path, matching
+    the folder). Scenarios are `#### Scenario: #<scenario-slug>` and are
+    referenced as `<capability>/<slug>#<scenario-slug>`.
+  - Slugs are kebab-case and FROZEN once merged — renames only via RENAMED
+    deltas with a same-commit reference sweep (code + specs). The lint
+    (`pnpm spec:check`) validates every reference.
+  - Code cites specs as `// spec: <capability>/<slug>[#<scenario>]` and
+    archived decision rationale as `// design: <archived-change-folder>`.
+  - Removed requirements' slugs are never re-minted with a different
+    meaning; numeric-era identifiers are tombstoned in the identifier map
+    (legacy-spec-archive/maps/identifier-map.json).
+
+  Capability dependency rule: a capability's spec may only reference its
+  dependencies, never peers or downstream capabilities. The capability set
+  GROWS as modules migrate — capabilities are semantic feature
+  delineations, while legacy module boundaries were implementation
+  sequencing, so modules are NOT assumed to map 1:1 to capabilities: each
+  migration begins with a carving decision made WITH the human author (one
+  new capability, several, and/or deltas to existing capabilities),
+  recorded in that migration change's proposal and in the cutover table.
+  Capabilities so far: (none — the first lands with module 01's migration).
+
+  MIGRATION NOTE: modules migrate from legacy-spec-archive/spec/ one at a
+  time (cutover table: openspec/README.md). For unmigrated modules the
+  archived file is BINDING and its numeric MM-REQ-NNN identifiers remain
+  citable. Migrated modules' numeric identifiers are retired; translations
+  live in legacy-spec-archive/maps/.
+
+  Authoring grain (intent grain): one behaviour per requirement, stated in
+  1-3 plain sentences an author can vet at a read; edge-case semantics are
+  carried by named scenarios (each one a case someone would be upset to see
+  broken — never a restatement); mechanism belongs in code, with rationale
+  in the change's design.md. A capability's Requirements section should be
+  readable end-to-end in one sitting. Spec bodies state current truth only —
+  no journey narration, and NEVER any reference to legacy-spec-archive,
+  numeric-era identifiers, or implementation locations (lint-enforced):
+  the identifier map is the sole bridge to the past, and code cites specs,
+  never the reverse.
+
+  Change lifecycle: propose → the human author reviews the change artifacts
+  (Open Questions resolved, deltas approved) → implement — the code and the
+  still-open change folder land in the same PR, and the reference lint
+  resolves citations against specs/ OVERLAID with open changes' deltas, so
+  code may already cite identifiers the deltas introduce or rename →
+  archive → merge. Archiving is the terminal act of a change and the ONLY
+  way specs/ advances, STANDARDISED as the last commit of the PR once
+  review is resolved — but executed only on an explicit human instruction:
+  an AI agent SHOULD point out when every thread is resolved and the change
+  looks ready to archive, but MUST NEVER archive unprompted. Mechanics:
+  `pnpm spec:fold <change>` (full-block delta folding, gated on seed
+  freshness) then `openspec archive --skip-specs -y <change>` (validate +
+  move the folder) — never stock `openspec archive` spec application, whose
+  scenario-presence guard rejects the scenario removals/renames that
+  full-block authoring expresses legitimately.
+
+  Concurrency: `openspec archive` replaces MODIFIED blocks by header match
+  with NO three-way merge, so a delta authored against a stale base can
+  silently clobber an interleaved edit. Guards: the reference lint fails
+  when two open changes touch the same requirement, and pnpm spec:freshness
+  verifies each open change's seeded blocks (the seed commit of two-commit
+  authoring) still match specs/ — spec:fold enforces the same check as a
+  hard precondition, so a stale fold cannot happen even if the continuous
+  runs were skipped. With archiving as the PR's final commit,
+  the main staleness event is rebasing the PR onto an advanced main — run
+  spec:freshness after every rebase; on staleness, re-seed (rewrite the
+  seed/edit pair against the new base) and have the word-diff re-reviewed.
+
+rules:
+  proposal:
+    - If you encounter an ambiguity, contradiction, gap, or are proposing an
+      addition beyond what settled sources say, record it in an
+      "## Open Questions" section (Context / Question / Options) — do not
+      silently resolve it. Open Questions must be resolved by a human before
+      specs deltas are created; record the Decision in place when resolved.
+  specs:
+    - New requirements take a fresh kebab-case slug under their capability;
+      never re-mint a removed slug or a tombstoned numeric identifier.
+    - Requirement headers and scenario slugs are frozen once merged; renames
+      only via RENAMED deltas plus a same-commit sweep of every reference
+      (run pnpm spec:check to find them).
+    - MODIFIED deltas must copy the ENTIRE requirement block — header, body,
+      and all scenarios — then edit.
+    - "TWO-COMMIT DELTA AUTHORING (AI responsibility): introduce a delta
+      that modifies existing requirements across exactly two commits — the
+      first seeds the delta file with the affected requirement blocks copied
+      VERBATIM from specs/, the second applies the edits — so the second
+      commit's diff is a native word-level review diff of the requirement
+      changes. If the deltas are revised later (e.g. review feedback),
+      rewrite history to keep the seed/edit pair intact instead of stacking
+      correction commits."
+  design:
+    - "CONSTRAINT-MINING (mandatory final step): for each decision, ask —
+      does its quality depend on an invariant future implementers could
+      silently violate? Every yes becomes an ADDED requirement (minimally
+      constraining, with a scenario) in THIS change's specs deltas."
+    - Every decision should state what breaks if reversed; alternatives
+      considered stay here (the archive is the permanent record — spec
+      bodies never carry rationale).
+    - 'Performance-motivated choices are plastic, not requirements. Warn
+      future implementers via doc comments on the interfaces they protect,
+      referencing this change ("// design: <archived-change-folder>") so
+      reconsidering the choice loads the insight that produced it.'
+    - A change MAY exist to formalize design documentation alone (design.md
+      + tasks, no spec deltas) — e.g. when implementing from the legacy
+      spec's Design sections and the rationale needs a citable archive home.
+  tasks:
+    - 'Include a task to add/update "// spec:" citations for code touched,
+      and "// design:" references where performance/architecture insight
+      warrants them (finalize these when the change is archived, since the
+      archive folder name carries the date prefix).'
+    - Include a task to run `pnpm spec:check` (validation + reference lint)
+      before the change is considered complete.

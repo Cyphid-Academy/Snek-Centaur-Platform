@@ -1,4 +1,4 @@
-// spec: 05-REQ-010, 05-REQ-020, 05-REQ-030, 05-REQ-040
+// spec: 05-REQ-004, 05-REQ-020, 05-REQ-030, 05-REQ-040
 // Convex schema for snek-platform component.
 // Tables: users, centaur_teams, rooms, games, replays, api_keys, webhooks.
 //

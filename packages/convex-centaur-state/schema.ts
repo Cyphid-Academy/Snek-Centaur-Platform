@@ -1,4 +1,4 @@
-// spec: 06-REQ-010, 06-REQ-020, 06-REQ-030, 06-REQ-040, 06-REQ-050
+// spec: 06-REQ-010, 06-REQ-020, 06-REQ-030, 06-REQ-040, 06-REQ-033
 // Convex schema for centaur-state component.
 // Tables: snake_config, snake_drives, heuristic_config,
 //         snake_heuristic_overrides, bot_params, centaur_action_log.

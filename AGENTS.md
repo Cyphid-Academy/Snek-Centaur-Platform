@@ -2,7 +2,13 @@
 
 This is the top-level agent context for **implementation work** in the Snek Centaur Platform monorepo.
 
-- For **spec authoring** (editing `spec/` module files, REVIEW items, SPEC-INSTRUCTIONS): read `spec/AGENTS.md`.
+> **Spec system.** The binding spec lives in `openspec/specs/` (strict
+> OpenSpec; conventions in `openspec/config.yaml`, workflow and cutover
+> table in `openspec/README.md`). The pre-OpenSpec corpus is quarantined in
+> `legacy-spec-archive/` and remains binding for modules not yet migrated.
+> Spec changes flow through `/opsx:*` change folders. Run `pnpm spec:check`
+> after any change touching spec content or spec references.
+
 - For **package-scoped implementation**: read the `AGENTS.md` in the relevant `packages/*/` or `apps/*/` directory.
 - This file covers repo-wide implementation conventions that apply everywhere.
 
@@ -18,7 +24,7 @@ The platform runs across three distinct runtimes:
 | Convex | User accounts, rooms, replays, bot state, game orchestration | Global (persistent) |
 | Centaur Servers | Bot computation + operator UI + game invitation acceptance | Per-team |
 
-Full architectural detail is in `spec/02-platform-architecture.md`. The spec is the binding source of truth for every behavioural and structural decision.
+Full architectural detail is in `legacy-spec-archive/spec/02-platform-architecture.md` (binding until that module migrates). The spec is the binding source of truth for every behavioural and structural decision.
 
 ## Package Map
 
@@ -38,14 +44,16 @@ The `apps/centaur-server-reference/` directory is the **canonical** source of th
 
 ## Code-to-Spec Citation Convention
 
-Every non-trivial implementation decision that traces to a requirement must carry a comment:
+Every non-trivial implementation decision that traces to a requirement must carry a comment. Spec identifiers are treated like code identifiers:
 
 ```typescript
-// spec: MM-REQ-NNN
-// spec: MM-REQ-NNN, MM-REQ-MMM  (multi-clause)
+// spec: game-rules/team-potion-effects                       (a requirement)
+// spec: game-rules/team-potion-effects#sacrificial-collection (edge case pinned by a scenario)
+// spec: 04-REQ-014                                            (unmigrated module — numeric legacy ID)
+// design: 2026-07-18-cache-normalized-outputs                 (rationale in an archived change folder)
 ```
 
-Use the module number and requirement ID from `spec/` files. This is convention, not yet lint-enforced.
+Named identifiers come from `openspec/specs/<capability>/spec.md` headers; numeric IDs are valid only for modules still pending migration (cutover table in `openspec/README.md`). All forms are lint-enforced by `pnpm spec:citations` — stale or unknown references fail, and retired numeric IDs point you to `legacy-spec-archive/maps/`.
 
 ## Tooling Conventions
 

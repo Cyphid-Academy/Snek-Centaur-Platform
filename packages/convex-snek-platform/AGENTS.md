@@ -4,8 +4,8 @@ This package is `@cyphid/convex-snek-platform`: a Convex Component that owns the
 
 ## Spec scope
 
-- **Module 05** (`spec/05-convex-platform.md`) — platform schema, game lifecycle orchestration, HTTP API, webhooks.
-- **Module 03** (`spec/03-auth-and-identity.md`) — identity types, Google OAuth, game invitation flow.
+- **Module 05** (`legacy-spec-archive/spec/05-convex-platform.md`) — platform schema, game lifecycle orchestration, HTTP API, webhooks.
+- **Module 03** (`legacy-spec-archive/spec/03-auth-and-identity.md`) — identity types, Google OAuth, game invitation flow.
 
 ## What goes here
 
@@ -29,5 +29,5 @@ This is a Convex Component, not a full Convex deployment. It is mounted by `conv
 ## Key files
 
 - `src/index.ts` — exported types and component config stub
-- `spec/05-convex-platform.md` — binding source of truth
-- `spec/03-auth-and-identity.md` — auth and identity context
+- `legacy-spec-archive/spec/05-convex-platform.md` — binding source of truth
+- `legacy-spec-archive/spec/03-auth-and-identity.md` — auth and identity context
