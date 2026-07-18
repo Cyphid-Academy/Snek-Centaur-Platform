@@ -30,7 +30,11 @@ export type {
   CentaurTeamClockState,
   GameState,
   ItemsByCell,
-  ItemState,
+  FoodItem,
+  Item,
+  ItemBase,
+  PotionItem,
+  PotionType,
   PotionEffect,
   SnakeState,
 } from "./types.js";

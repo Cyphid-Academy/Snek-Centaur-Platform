@@ -3,6 +3,7 @@
 // health resolution → death union → body mutation (move → sever → grow) →
 // effect resolution (cancel → rebuild → expire) → item removal for
 // consumption claims — and derives the events that describe what it did.
+import { cellIndex } from "../board.js";
 import { EFFECT_DURATION_TURNS, removeFamily } from "../effects.js";
 import type { PotionEffect, SnakeId, TurnNumber } from "../types.js";
 import type { ClaimSet } from "./claims.js";
@@ -73,13 +74,20 @@ export function commit(ctx: TurnContext, claims: ClaimSet, events: EventBuffer):
     events.emit({ kind: "snake_severed", ...record }, record.victimSnakeId);
   }
 
-  for (const [id, { cell, itemId }] of claims.foodEaten) {
+  for (const [id, itemId] of claims.foodEaten) {
+    const item = must(ctx.itemById.get(itemId), `consumed item ${itemId}`);
     // MaxHealth minus what the snake would have resolved to without the heal.
     const withoutHeal =
       must(ctx.snapshotHealth.get(id), `snapshot health for snake ${id}`) - claims.totalDamage(id);
     const resolved = must(claims.resolvedHealth(id), `resolved health for snake ${id}`);
     events.emit(
-      { kind: "food_eaten", snakeId: id, itemId, cell, healthRestored: resolved - withoutHeal },
+      {
+        kind: "food_eaten",
+        snakeId: id,
+        itemId,
+        cell: item.cell,
+        healthRestored: resolved - withoutHeal,
+      },
       id,
     );
   }
@@ -149,7 +157,7 @@ export function commit(ctx: TurnContext, claims: ClaimSet, events: EventBuffer):
         kind: "potion_collected",
         snakeId: collection.snakeId,
         itemId: collection.itemId,
-        cell: collection.cell,
+        cell: must(ctx.itemById.get(collection.itemId), `collected item ${collection.itemId}`).cell,
         potionType: collection.potionType,
         affectedTeammateIds: recipients.filter((id) => id !== collection.snakeId),
       },
@@ -172,7 +180,10 @@ export function commit(ctx: TurnContext, claims: ClaimSet, events: EventBuffer):
   }
 
   // ---- Item removal for consumption claims. spec: game-rules/item-identity, 046c, 047 ----
-  for (const consumption of claims.consumptions()) {
-    ctx.items.delete(consumption.cellIndex);
+  for (const itemId of claims.consumptions()) {
+    // Resolve the reference against the snapshot index — a dangling id is a
+    // rule bug and fails loudly here.
+    const item = must(ctx.itemById.get(itemId), `consumed item ${itemId}`);
+    ctx.items.delete(cellIndex(ctx.board, item.cell));
   }
 }

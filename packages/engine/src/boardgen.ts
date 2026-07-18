@@ -6,7 +6,7 @@
 // are individually reproducible and testable. The attempt loop retries with
 // per-attempt sub-seeds (game-rules/board-generation-retry).
 import { cellIndex, isInner, parityOf } from "./board.js";
-import { itemIdFor } from "./items.js";
+import { SETUP_SPAWN_TURN } from "./items.js";
 import { fractalNoise2D, makePerlin } from "./perlin.js";
 import type { Rng } from "./rng.js";
 import { rngFromSeed, subSeed } from "./rng.js";
@@ -15,8 +15,8 @@ import type {
   BoardGenerationFailure,
   Cell,
   CentaurTeamId,
+  FoodItem,
   GameConfig,
-  ItemState,
   SnakeId,
   SnakeState,
 } from "./types.js";
@@ -25,7 +25,7 @@ import { CellType, ItemType } from "./types.js";
 export interface GeneratedInitialState {
   readonly board: Board;
   readonly snakes: ReadonlyArray<SnakeState>;
-  readonly items: ReadonlyArray<ItemState>;
+  readonly items: ReadonlyArray<FoodItem>;
 }
 
 export interface TeamRegistration {
@@ -136,7 +136,9 @@ function runAttempt(
     cells,
     innerCells,
     snakes,
-    fertileGround.density > 0,
+    teams,
+    snakesPerTeam,
+    sectorOf,
     rngFromSeed(subSeed(attemptSeed, "initial-food")),
   );
   if ("code" in foodResult) return foodResult;
@@ -288,33 +290,49 @@ function initializeSnakes(
   return snakes;
 }
 
-// Stage 6 — Initial food. spec: game-rules/initial-food
-function placeInitialFood(
+// Stage 6 — Initial food: snakesPerTeam items per starting territory,
+// eligibility ignoring fertile designations.
+// spec: game-rules/initial-food#food-count-per-territory
+// Exported for direct unit testing of the shortage branch.
+export function placeInitialFood(
   board: Board,
   cells: ReadonlyArray<CellType>,
   innerCells: ReadonlyArray<Cell>,
   snakes: ReadonlyArray<SnakeState>,
-  restrictToFertile: boolean,
+  teams: ReadonlyArray<TeamRegistration>,
+  snakesPerTeam: number,
+  sectorOf: (cell: Cell) => number,
   rng: Rng,
-): ItemState[] | AttemptFailure {
+): FoodItem[] | AttemptFailure {
   const occupied = new Set(snakes.map((s) => cellIndex(board, s.body[0] as Cell)));
-  const eligible = innerCells.filter((cell) => {
-    const type = cells[cellIndex(board, cell)];
-    if (type === CellType.Hazard) return false;
-    if (restrictToFertile && type !== CellType.Fertile) return false;
-    return !occupied.has(cellIndex(board, cell));
-  });
-  if (eligible.length < snakes.length) {
-    return { code: "INITIAL_FOOD_SHORTAGE", eligibleCellCount: eligible.length };
+  const items: FoodItem[] = [];
+  let spawnIndex = 0;
+  for (let t = 0; t < teams.length; t++) {
+    const eligible = innerCells.filter((cell) => {
+      if (sectorOf(cell) !== t) return false;
+      if (cells[cellIndex(board, cell)] === CellType.Hazard) return false;
+      return !occupied.has(cellIndex(board, cell));
+    });
+    if (eligible.length < snakesPerTeam) {
+      return {
+        code: "INITIAL_FOOD_SHORTAGE",
+        centaurTeamId: (teams[t] as TeamRegistration).centaurTeamId,
+        eligibleCellCount: eligible.length,
+      };
+    }
+    rng.shuffle(eligible);
+    for (const cell of eligible.slice(0, snakesPerTeam)) {
+      // Setup items take spawn boundary 0; turn-resolution spawns start at
+      // boundary 1, so these identities never collide with later ones.
+      items.push({
+        spawnTurn: SETUP_SPAWN_TURN,
+        spawnIndex: spawnIndex++,
+        itemType: ItemType.Food,
+        cell,
+      });
+    }
   }
-  rng.shuffle(eligible);
-  // Setup items allocate in id namespace 0 (game-rules/item-identity); turn-resolution
-  // spawns start at namespace 1, so these ids never collide with later ones.
-  return eligible.slice(0, snakes.length).map((cell, i) => ({
-    itemId: itemIdFor(0, i),
-    itemType: ItemType.Food,
-    cell,
-  }));
+  return items;
 }
 
 // BFS over 4-connected non-hazard inner cells. spec: game-rules/hazards

@@ -2,6 +2,7 @@
 // rules (01 §2.8 stages 3-4). Each test builds a TurnContext from a small
 // state, runs ONE rule, and inspects the claim set directly — no commit.
 import { describe, expect, it } from "vitest";
+import { itemIdOf } from "./items.js";
 import { ClaimSet } from "./resolve/claims.js";
 import { buildTurnContext } from "./resolve/context.js";
 import type { TurnContext } from "./resolve/context.js";
@@ -205,7 +206,7 @@ describe("foodRule and potionRule (game-rules/food-and-growth, game-rules/team-p
     foodRule(ctx, claims);
     expect(claims.hasHeal(sid(0))).toBe(true);
     expect(claims.hasGrow(sid(0))).toBe(true);
-    expect(claims.consumptions().map((c) => c.itemId)).toEqual([food.itemId]);
+    expect(claims.consumptions()).toEqual([itemIdOf(food)]);
     expect(ctx.items.size).toBe(1); // rules never write the items map
     expect(claims.disruptions).toHaveLength(0); // eating is not a disruption
   });

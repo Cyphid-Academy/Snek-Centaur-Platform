@@ -5,6 +5,7 @@
 // plus the claim set.
 import { advance, cellIndex, cellKey } from "../board.js";
 import { invulnerabilityLevel } from "../effects.js";
+import { itemIdOf } from "../items.js";
 import { rngFromSeed, subSeed } from "../rng.js";
 import type {
   Agent,
@@ -15,7 +16,8 @@ import type {
   Direction,
   GameRuntimeConfig,
   GameState,
-  ItemState,
+  Item,
+  ItemId,
   SnakeId,
   StagedMove,
   TurnNumber,
@@ -56,14 +58,19 @@ export interface TurnContext {
    * Rules never write it (consumption is a claim); the commit removes
    * consumption-claimed entries and spawning inserts new ones.
    */
-  readonly items: Map<CellIndex, ItemState>;
+  readonly items: Map<CellIndex, Item>;
+  /**
+   * Snapshot items by derived id — the reference index that claims (which
+   * carry ItemIds, never item objects) are resolved against at commit.
+   */
+  readonly itemById: ReadonlyMap<ItemId, Item>;
   /** Snakes alive in the snapshot, ascending snakeId. */
   readonly aliveInS: ReadonlyArray<WorkSnake>;
   readonly moved: ReadonlyMap<SnakeId, MoveProjection>;
   /** H* (game-rules/head-to-head-precedence): alive movers whose head survived head-to-head. */
   readonly survivingHeads: ReadonlyArray<SurvivingHead>;
   /** The nullable single item occupant of a cell (game-rules/item-identity). */
-  readonly itemAt: (cell: Cell) => ItemState | null;
+  readonly itemAt: (cell: Cell) => Item | null;
   /**
    * Non-head segments of moved bodies at a cell — the body-collision targets
    * of game-rules/collisions-and-severing, including head-to-head losers' bodies. Entries are
@@ -101,7 +108,8 @@ export function buildTurnContext(
   const snakes = state.snakes.map(toWorkSnake);
   snakes.sort((a, b) => a.snakeId - b.snakeId); // deterministic iteration
   const byId = new Map<SnakeId, WorkSnake>(snakes.map((s) => [s.snakeId, s]));
-  const items = new Map<CellIndex, ItemState>(state.items);
+  const items = new Map<CellIndex, Item>(state.items);
+  const itemById = new Map<ItemId, Item>([...items.values()].map((i) => [itemIdOf(i), i]));
   const aliveInS = snakes.filter((s) => s.alive);
 
   // Roster and start-of-turn aliveness for the win check. Forfeit exclusion
@@ -197,7 +205,7 @@ export function buildTurnContext(
     segmentIndex.get(cellKey(cell)) ?? EMPTY_SEGMENTS;
 
   // The cell-keyed items map IS the lookup structure — one nullable occupant.
-  const itemAt = (cell: Cell): ItemState | null => items.get(cellIndex(state.board, cell)) ?? null;
+  const itemAt = (cell: Cell): Item | null => items.get(cellIndex(state.board, cell)) ?? null;
 
   return {
     board: state.board,
@@ -206,6 +214,7 @@ export function buildTurnContext(
     snakes,
     byId,
     items,
+    itemById,
     aliveInS,
     moved,
     survivingHeads,

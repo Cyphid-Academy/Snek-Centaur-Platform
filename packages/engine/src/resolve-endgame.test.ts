@@ -31,7 +31,8 @@ describe("Item spawning (game-rules/item-spawning)", () => {
     );
     const cellsSeen = new Set<string>(["8,8"]);
     for (const e of spawned) {
-      expect(e.itemId).toBeGreaterThan(5); // ids continue past existing max
+      expect(e.spawnTurn).toBe(2); // spawned by turn 1's resolution (game-rules/item-identity)
+      expect(e.spawnIndex).toBeGreaterThanOrEqual(0);
       expect(bodyCells.has(`${e.cell.x},${e.cell.y}`)).toBe(false);
       expect(cellsSeen.has(`${e.cell.x},${e.cell.y}`)).toBe(false); // distinct
       cellsSeen.add(`${e.cell.x},${e.cell.y}`);

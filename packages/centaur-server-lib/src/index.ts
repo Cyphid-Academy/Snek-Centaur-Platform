@@ -8,7 +8,7 @@ export type {
   GameState,
   SnakeState,
   Board,
-  ItemState,
+  Item,
   ItemsByCell,
   PotionEffect,
   EffectFamily,

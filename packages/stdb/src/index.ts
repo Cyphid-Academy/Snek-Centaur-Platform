@@ -11,7 +11,7 @@ export type {
   TurnEvent,
   SnakeState,
   Board,
-  ItemState,
+  Item,
   ItemsByCell,
 } from "@cyphid/snek-engine";
 // GameState.items assembly from active item_lifetimes rows (04 §2.6).

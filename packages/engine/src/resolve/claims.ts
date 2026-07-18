@@ -4,13 +4,12 @@
 // committed effect, which is what makes rule evaluation order-free.
 import type {
   Cell,
-  CellIndex,
   CentaurTeamId,
   DamageSource,
   DeathCause,
   EffectFamily,
   ItemId,
-  ItemType,
+  PotionType,
   SnakeId,
 } from "../types.js";
 
@@ -51,17 +50,11 @@ export interface RebuildClaim {
 
 export interface PotionCollection {
   readonly snakeId: SnakeId;
+  // Reference by derived id (game-rules/item-identity) — the commit resolves
+  // it against the snapshot's itemById index.
   readonly itemId: ItemId;
-  readonly cell: Cell;
-  readonly potionType: typeof ItemType.InvulnPotion | typeof ItemType.InvisPotion;
+  readonly potionType: PotionType;
   readonly family: EffectFamily;
-}
-
-// spec: game-rules/food-and-growth, game-rules/team-potion-effects — the commit removes the entry from the
-// present-items map (game-rules/item-identity); rules never write it.
-export interface ConsumptionClaim {
-  readonly itemId: ItemId;
-  readonly cellIndex: CellIndex;
 }
 
 export interface CancelPair {
@@ -85,8 +78,11 @@ export class ClaimSet {
   readonly disruptions: Array<{ readonly snakeId: SnakeId; readonly cause: DisruptionCause }> = [];
   private readonly rebuildMap = new Map<string, RebuildClaim>();
   readonly potionCollections: PotionCollection[] = [];
-  readonly foodEaten = new Map<SnakeId, { readonly cell: Cell; readonly itemId: ItemId }>();
-  private readonly consumptionList: ConsumptionClaim[] = [];
+  readonly foodEaten = new Map<SnakeId, ItemId>();
+  // spec: game-rules/food-and-growth, game-rules/team-potion-effects — the
+  // commit resolves these references and removes the entries from the
+  // present-items map (game-rules/item-identity); rules never write it.
+  private readonly consumptionList: ItemId[] = [];
   // Derived-stage outputs (01 §2.8 stage 4) — still claims, written before
   // the commit runs.
   private readonly resolvedHealthMap = new Map<SnakeId, number>();
@@ -135,14 +131,14 @@ export class ClaimSet {
     this.disrupt(record.victimSnakeId, "severed");
   }
 
-  consume(itemId: ItemId, cellIndex: CellIndex): void {
-    this.consumptionList.push({ itemId, cellIndex });
+  consume(itemId: ItemId): void {
+    this.consumptionList.push(itemId);
   }
 
-  eatFood(id: SnakeId, cell: Cell, itemId: ItemId): void {
+  eatFood(id: SnakeId, itemId: ItemId): void {
     this.healed.add(id);
     this.grown.add(id);
-    this.foodEaten.set(id, { cell, itemId });
+    this.foodEaten.set(id, itemId);
   }
 
   collectPotion(team: CentaurTeamId, collection: PotionCollection): void {
@@ -182,9 +178,10 @@ export class ClaimSet {
     );
   }
 
-  // Canonical itemId order — same set discipline as cancellations().
-  consumptions(): ConsumptionClaim[] {
-    return [...this.consumptionList].sort((a, b) => a.itemId - b.itemId);
+  // Set discipline as with cancellations(): the commit resolves and orders
+  // these references canonically before applying them.
+  consumptions(): ItemId[] {
+    return [...this.consumptionList];
   }
 
   // ---- queries ----

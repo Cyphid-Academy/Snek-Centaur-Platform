@@ -1,7 +1,7 @@
 // Mutable working copies of the domain state, used only inside turn
 // resolution. Inputs to resolveTurn are never mutated; the commit stage
 // writes to these copies and the orchestrator snapshots them back out.
-// Items need no work copy: ItemState records are immutable — the working
+// Items need no work copy: Item records are immutable — the working
 // items *map* is the mutable container (commit deletes, spawning inserts).
 import type { Cell, PotionEffect, SnakeState } from "../types.js";
 
