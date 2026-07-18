@@ -1,18 +1,19 @@
 // Item spawning (01 §2.8 stage 6): seeded generation against the committed
 // occupancy. spec: game-rules/item-spawning, game-rules/item-identity.
 import { cellIndex, fertileGroundEnabled } from "../board.js";
-import { itemIdFor } from "../items.js";
+import { spawnTurnAfter } from "../items.js";
 import type { Rng } from "../rng.js";
 import { rngFromSeed, subSeed } from "../rng.js";
-import type { Cell } from "../types.js";
-import { CellType, ItemType } from "../types.js";
+import type { Cell, Item, TurnEvent } from "../types.js";
+import { CellType, ItemType, assertNever } from "../types.js";
 import type { TurnContext } from "./context.js";
 import type { EventBuffer } from "./events.js";
 
 export function runSpawning(ctx: TurnContext, turnSeed: Uint8Array, events: EventBuffer): void {
   const { board, config, items } = ctx;
-  // Spawned items first exist at the boundary after this turn: id namespace
-  // turnNumber + 1, in spawn order within the turn (game-rules/item-identity).
+  // Spawned items first exist at the boundary after this turn — their
+  // spawnTurn per game-rules/item-identity.
+  const spawnTurn = spawnTurnAfter(ctx.turnNumber);
   let spawnedThisTurn = 0;
 
   const eligibleSpawnCells = (fertileOnly: boolean): Cell[] => {
@@ -39,7 +40,7 @@ export function runSpawning(ctx: TurnContext, turnSeed: Uint8Array, events: Even
   };
 
   const spawnItems = (
-    itemType: typeof ItemType.Food | typeof ItemType.InvulnPotion | typeof ItemType.InvisPotion,
+    itemType: Item["itemType"],
     rate: number,
     rng: Rng,
     eligible: Cell[],
@@ -51,14 +52,13 @@ export function runSpawning(ctx: TurnContext, turnSeed: Uint8Array, events: Even
     if (count <= 0) return;
     rng.shuffle(eligible);
     for (const cell of eligible.slice(0, count)) {
-      const itemId = itemIdFor(ctx.turnNumber + 1, spawnedThisTurn++);
-      items.set(cellIndex(board, cell), { itemId, itemType, cell });
-      events.emit(
+      const spawnIndex = spawnedThisTurn++;
+      const item: Item =
         itemType === ItemType.Food
-          ? { kind: "food_spawned", itemId, cell }
-          : { kind: "potion_spawned", itemId, cell, potionType: itemType },
-        itemId,
-      );
+          ? { spawnTurn, spawnIndex, itemType, cell }
+          : { spawnTurn, spawnIndex, itemType, cell };
+      items.set(cellIndex(board, cell), item);
+      events.emit(spawnEventFor(item), spawnIndex);
     }
   };
 
@@ -83,4 +83,30 @@ export function runSpawning(ctx: TurnContext, turnSeed: Uint8Array, events: Even
     rngPotion,
     eligibleSpawnCells(false),
   );
+}
+
+// Birth record per item kind — an exhaustive switch over the sealed Item
+// union; the assertNever arm turns any future item kind into a compile
+// error here (game-rules/domain-vocabulary closed sets).
+function spawnEventFor(item: Item): TurnEvent {
+  switch (item.itemType) {
+    case ItemType.Food:
+      return {
+        kind: "food_spawned",
+        spawnTurn: item.spawnTurn,
+        spawnIndex: item.spawnIndex,
+        cell: item.cell,
+      };
+    case ItemType.InvulnPotion:
+    case ItemType.InvisPotion:
+      return {
+        kind: "potion_spawned",
+        spawnTurn: item.spawnTurn,
+        spawnIndex: item.spawnIndex,
+        cell: item.cell,
+        potionType: item.itemType,
+      };
+    default:
+      return assertNever(item);
+  }
 }

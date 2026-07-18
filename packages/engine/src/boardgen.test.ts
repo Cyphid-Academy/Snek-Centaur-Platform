@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { cellIndex, isInner, parityOf } from "./board.js";
-import { generateBoardAndInitialState } from "./boardgen.js";
+import { generateBoardAndInitialState, placeInitialFood } from "./boardgen.js";
+import { rngFromSeed } from "./rng.js";
 import { seed, tid } from "./testkit.js";
 import type { GameConfig } from "./types.js";
 import { CellType, DEFAULT_GAME_CONFIG, ItemType } from "./types.js";
@@ -185,9 +186,9 @@ describe("snake initialization", () => {
 
 describe("initial food", () => {
   // spec: game-rules/initial-food
-  it("spawns one food per snake on eligible cells", () => {
+  it("spawns snakesPerTeam food per starting territory on eligible cells", () => {
     const { board, snakes, items } = generateOk(cfg({ snakesPerTeam: 3 }));
-    expect(items).toHaveLength(6);
+    expect(items).toHaveLength(6); // 2 teams x 3 (game-rules/initial-food#food-count-per-territory)
     const occupied = new Set(snakes.map((s) => `${s.body[0]?.x},${s.body[0]?.y}`));
     const itemCells = new Set<string>();
     for (const item of items) {
@@ -198,14 +199,18 @@ describe("initial food", () => {
       itemCells.add(`${item.cell.x},${item.cell.y}`);
     }
     expect(itemCells.size).toBe(6); // distinct cells
-    expect(new Set(items.map((i) => i.itemId)).size).toBe(6);
+    expect(new Set(items.map((i) => `${i.spawnTurn}:${i.spawnIndex}`)).size).toBe(6);
   });
 
-  it("restricts initial food to fertile cells when fertile ground is enabled", () => {
-    const { board, items } = generateOk(cfg({ fertileDensity: 40 }));
-    for (const item of items) {
-      expect(board.cells[cellIndex(board, item.cell)]).toBe(CellType.Fertile);
-    }
+  // spec: game-rules/initial-food#food-count-per-territory — fertile designations ignored
+  it("ignores fertile scarcity (a config that would starve fertile-restricted placement succeeds)", () => {
+    const result = generateBoardAndInitialState(
+      cfg({ boardSize: 9, snakesPerTeam: 3, fertileDensity: 1 }),
+      [{ centaurTeamId: tid("red"), name: "Red" }],
+      seed(1),
+    );
+    if ("code" in result) throw new Error(`expected success, got ${result.code}`);
+    expect(result.items).toHaveLength(3); // 1 team x 3 snakes
   });
 });
 
@@ -234,16 +239,41 @@ describe("determinism and retry", () => {
     expect(result.details.centaurTeamId).toBeDefined();
   });
 
-  // spec: game-rules/board-generation-retry — food-eligibility infeasibility
-  it("reports INITIAL_FOOD_SHORTAGE when fertile cells cannot hold one food per snake", () => {
-    const result = generateBoardAndInitialState(
-      cfg({ boardSize: 9, snakesPerTeam: 3, fertileDensity: 1 }),
-      [{ centaurTeamId: tid("red"), name: "Red" }],
-      seed(1),
+  // spec: game-rules/board-generation-retry#failure-conditions — a territory
+  // with no eligible initial-food cell fails the attempt (direct unit test:
+  // the condition is unreachable from in-range configurations).
+  it("fails placement when a starting territory has no eligible cell", () => {
+    const boardSize = 5;
+    const cells: CellType[] = new Array(boardSize * boardSize).fill(CellType.Normal);
+    const board = { boardSize, cells };
+    const innerCells: { x: number; y: number }[] = [];
+    for (let y = 0; y < boardSize; y++)
+      for (let x = 0; x < boardSize; x++) {
+        if (x === 0 || y === 0 || x === boardSize - 1 || y === boardSize - 1)
+          cells[y * boardSize + x] = CellType.Wall;
+        else innerCells.push({ x, y });
+      }
+    const teams = [
+      { centaurTeamId: tid("red"), name: "Red" },
+      { centaurTeamId: tid("blue"), name: "Blue" },
+    ];
+    // Territory 0 is exactly the cell (1,1), fully occupied by a snake head.
+    const sectorOf = (cell: { x: number; y: number }) => (cell.x === 1 && cell.y === 1 ? 0 : 1);
+    const snakes = [{ body: [{ x: 1, y: 1 }] }] as unknown as Parameters<
+      typeof placeInitialFood
+    >[3];
+    const result = placeInitialFood(
+      board,
+      cells,
+      innerCells,
+      snakes,
+      teams,
+      1,
+      sectorOf,
+      rngFromSeed(seed(1)),
     );
     if (!("code" in result)) throw new Error("expected failure");
     expect(result.code).toBe("INITIAL_FOOD_SHORTAGE");
-    expect(result.attemptsUsed).toBe(4);
-    expect(result.details.eligibleCellCount).toBeLessThan(3);
+    expect(result.centaurTeamId).toBe(tid("red"));
   });
 });

@@ -48,7 +48,11 @@ export interface Cell {
 // accidentally mixed at call sites.
 export type SnakeId = number & { readonly __brand: "SnakeId" };
 export type CentaurTeamId = string & { readonly __brand: "CentaurTeamId" };
-export type ItemId = number & { readonly __brand: "ItemId" };
+// ItemId is a DERIVED scalar rendering "spawnTurn:spawnIndex" of the item
+// identity pair (game-rules/item-identity) — computed via itemIdOf for
+// display/keying, never stored: the identity lives as the ItemIdentity
+// fields on the item itself.
+export type ItemId = string & { readonly __brand: "ItemId" };
 export type TurnNumber = number & { readonly __brand: "TurnNumber" };
 export type UserId = string & { readonly __brand: "UserId" };
 // Canonical flat cell index, `y * boardSize + x` (DOWNSTREAM IMPACT note 3).
@@ -93,16 +97,41 @@ export interface SnakeState {
 // items collection at commit; there is no consumed flag. The full lifetime
 // (spawn/destruction turns) is module 04's item_lifetimes record, maintained
 // from spawn/consumption events.
-export interface ItemState {
-  readonly itemId: ItemId;
-  readonly itemType: ItemType;
+// The potion half of the closed item-type set.
+export type PotionType = typeof ItemType.InvulnPotion | typeof ItemType.InvisPotion;
+
+// Common item supertype: the identity pair plus location. Concrete item
+// kinds extend it, discriminated by itemType; `Item` below is the sealed
+// union (the closed set of game-rules/domain-vocabulary, compiler-enforced
+// via never-checked switches — see assertNever).
+export interface ItemBase {
+  // The turn boundary at which the item first exists: game setup spawns at
+  // boundary 0; items spawned by turn T's resolution first exist at T + 1.
+  readonly spawnTurn: TurnNumber;
+  // Index within that boundary's spawn order, from 0.
+  readonly spawnIndex: number;
   readonly cell: Cell;
+}
+
+export interface FoodItem extends ItemBase {
+  readonly itemType: typeof ItemType.Food;
+}
+
+export interface PotionItem extends ItemBase {
+  readonly itemType: PotionType;
+}
+
+export type Item = FoodItem | PotionItem;
+
+/** Exhaustiveness backstop: only typechecks while every union member is handled. */
+export function assertNever(x: never): never {
+  throw new Error(`unreachable: ${JSON.stringify(x)}`);
 }
 
 // spec: game-rules/item-identity, 01 §3.2 — the present-items component of game state,
 // keyed by canonical cell index so a second occupant of a cell is
 // unrepresentable. Build from flat lists via itemsByCell (items.ts).
-export type ItemsByCell = ReadonlyMap<CellIndex, ItemState>;
+export type ItemsByCell = ReadonlyMap<CellIndex, Item>;
 
 // spec: game-rules/board-geometry. Flat row-major cell array; index is
 // `y * boardSize + x` (module 01 DOWNSTREAM IMPACT note 3).
@@ -234,28 +263,33 @@ export type TurnEvent =
   | {
       readonly kind: "food_eaten";
       readonly snakeId: SnakeId;
-      readonly itemId: ItemId; // the consumed item (game-rules/food-and-growth)
+      // Reference to the consumed item by derived id (game-rules/item-identity);
+      // the item's full data travelled on its spawn record.
+      readonly itemId: ItemId;
       readonly cell: Cell;
       readonly healthRestored: number;
     }
   | {
       readonly kind: "potion_collected";
       readonly snakeId: SnakeId;
-      readonly itemId: ItemId; // the consumed item (game-rules/team-potion-effects)
+      // Reference to the consumed item by derived id (game-rules/item-identity).
+      readonly itemId: ItemId;
       readonly cell: Cell;
-      readonly potionType: typeof ItemType.InvulnPotion | typeof ItemType.InvisPotion;
+      readonly potionType: PotionType;
       readonly affectedTeammateIds: ReadonlyArray<SnakeId>;
     }
   | {
       readonly kind: "food_spawned";
-      readonly itemId: ItemId;
+      readonly spawnTurn: TurnNumber;
+      readonly spawnIndex: number;
       readonly cell: Cell;
     }
   | {
       readonly kind: "potion_spawned";
-      readonly itemId: ItemId;
+      readonly spawnTurn: TurnNumber;
+      readonly spawnIndex: number;
       readonly cell: Cell;
-      readonly potionType: typeof ItemType.InvulnPotion | typeof ItemType.InvisPotion;
+      readonly potionType: PotionType;
     }
   | {
       readonly kind: "effect_applied";

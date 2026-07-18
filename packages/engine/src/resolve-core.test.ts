@@ -5,7 +5,6 @@ import {
   effect,
   emptyBoard,
   eventsOfKind,
-  iid,
   itemList,
   makeItem,
   makeSnake,
@@ -571,7 +570,8 @@ describe("Health rules (game-rules/health-and-starvation)", () => {
     const eaten = eventsOfKind(events, "food_eaten");
     expect(eaten).toHaveLength(1);
     expect(eaten[0]?.healthRestored).toBe(100 - 29); // after the tick
-    expect(eaten[0]?.itemId).toBe(iid(0)); // consumed item's identity on the event
+    // reference to the consumed item by derived id (game-rules/item-identity)
+    expect(eaten[0]?.itemId).toBe("0:0");
   });
 
   it("nets to max health on a food-on-hazard cell (046c)", () => {

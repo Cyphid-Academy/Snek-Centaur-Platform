@@ -19,6 +19,7 @@
     "bench": "vitest bench --run"
   },
   "devDependencies": {
+    "fast-check": "^4.9.0",
     "typescript": "*",
     "vitest": "*"
   },

@@ -1,5 +1,5 @@
 // Shared test helpers. Not exported from the package.
-import { itemsByCell } from "./items.js";
+import { compareIdentity, itemsByCell } from "./items.js";
 import { resolveTurn } from "./resolve.js";
 import type {
   Agent,
@@ -9,9 +9,7 @@ import type {
   Direction,
   GameRuntimeConfig,
   GameState,
-  ItemId,
-  ItemState,
-  ItemType,
+  Item,
   PotionEffect,
   SnakeId,
   SnakeState,
@@ -20,11 +18,10 @@ import type {
   TurnNumber,
   UserId,
 } from "./types.js";
-import { CellType, DEFAULT_GAME_CONFIG } from "./types.js";
+import { CellType, DEFAULT_GAME_CONFIG, ItemType } from "./types.js";
 
 export const sid = (n: number): SnakeId => n as SnakeId;
 export const tid = (s: string): CentaurTeamId => s as CentaurTeamId;
-export const iid = (n: number): ItemId => n as ItemId;
 export const uid = (s: string): UserId => s as UserId;
 export const turn = (n: number): TurnNumber => n as TurnNumber;
 
@@ -84,8 +81,12 @@ export function makeSnake(overrides: SnakeOverrides = {}): SnakeState {
   };
 }
 
-export function makeItem(itemId: number, itemType: ItemType, cell: Cell): ItemState {
-  return { itemId: iid(itemId), itemType, cell };
+/** A setup-boundary item (spawnTurn 0) with the given spawn index. */
+export function makeItem(spawnIndex: number, itemType: Item["itemType"], cell: Cell): Item {
+  const spawnTurn = turn(0);
+  return itemType === ItemType.Food
+    ? { spawnTurn, spawnIndex, itemType, cell }
+    : { spawnTurn, spawnIndex, itemType, cell };
 }
 
 export function effect(
@@ -114,7 +115,7 @@ export const TEST_OPERATOR: Agent = { kind: "operator", operatorUserId: uid("use
 /** State-builder overrides; `items` takes the flat wire form for brevity. */
 export interface StateOverrides {
   readonly board?: Board;
-  readonly items?: ReadonlyArray<ItemState>;
+  readonly items?: ReadonlyArray<Item>;
   readonly clocks?: GameState["clocks"];
 }
 
@@ -129,8 +130,8 @@ export function makeState(snakes: SnakeState[], extra: StateOverrides = {}): Gam
 }
 
 /** Present items of a state (or resolution result) as a flat list. */
-export function itemList(s: { items: GameState["items"] }): ItemState[] {
-  return [...s.items.values()].sort((a, b) => a.itemId - b.itemId);
+export function itemList(s: { items: GameState["items"] }): Item[] {
+  return [...s.items.values()].sort(compareIdentity);
 }
 
 export function stagedMoves(

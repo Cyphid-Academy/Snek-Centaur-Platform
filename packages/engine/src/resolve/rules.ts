@@ -8,8 +8,9 @@
 //
 // Adding a mechanic = adding a rule here (plus, for a new claim type, one
 // clause in commit.ts). No pipeline position to choose.
-import { cellAt, cellIndex, sameCell } from "../board.js";
+import { cellAt, sameCell } from "../board.js";
 import { familyOfPotion, invulnerabilityLevel } from "../effects.js";
+import { itemIdOf } from "../items.js";
 import { CellType, ItemType } from "../types.js";
 import type { ClaimSet } from "./claims.js";
 import type { TurnContext } from "./context.js";
@@ -99,8 +100,10 @@ export const foodRule: InteractionRule = (ctx, claims) => {
   for (const { snake, head } of ctx.survivingHeads) {
     const item = ctx.itemAt(head);
     if (item === null || item.itemType !== ItemType.Food) continue;
-    claims.consume(item.itemId, cellIndex(ctx.board, head));
-    claims.eatFood(snake.snakeId, head, item.itemId);
+    // item: FoodItem — referenced onward by derived id only.
+    const itemId = itemIdOf(item);
+    claims.consume(itemId);
+    claims.eatFood(snake.snakeId, itemId);
   }
 };
 
@@ -110,14 +113,13 @@ export const potionRule: InteractionRule = (ctx, claims) => {
   for (const { snake, head } of ctx.survivingHeads) {
     const item = ctx.itemAt(head);
     if (item === null || item.itemType === ItemType.Food) continue;
-    const potionType = item.itemType;
-    claims.consume(item.itemId, cellIndex(ctx.board, head));
+    // item: PotionItem — the narrowed itemType needs no re-assertion.
+    claims.consume(itemIdOf(item));
     claims.collectPotion(snake.centaurTeamId, {
       snakeId: snake.snakeId,
-      itemId: item.itemId,
-      cell: head,
-      potionType,
-      family: familyOfPotion(potionType),
+      itemId: itemIdOf(item),
+      potionType: item.itemType,
+      family: familyOfPotion(item.itemType),
     });
   }
 };

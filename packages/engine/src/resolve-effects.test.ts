@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { itemIdOf } from "./items.js";
 import {
   doResolve,
   effect,
@@ -420,7 +421,8 @@ describe("collection and death in the same turn (game-rules/team-potion-effects#
       { family: "invulnerability", state: "debuff", expiryTurn: turn(7) },
     ]);
     expect(eventsOfKind(events, "potion_collected")[0]?.snakeId).toBe(sid(1));
-    expect(eventsOfKind(events, "potion_collected")[0]?.itemId).toBe(potion.itemId);
+    const collectedEvent = eventsOfKind(events, "potion_collected")[0];
+    expect(collectedEvent?.itemId).toBe(itemIdOf(potion));
   });
 });
 

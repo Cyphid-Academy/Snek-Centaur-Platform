@@ -1,45 +1,40 @@
-// Property tests for the staged turn-resolution model:
-// 1. Rule-order independence (game-rules/turn-resolution-model): any permutation of the
-//    interaction rules yields an identical TurnResolution — machine-checking
-//    the spec's core order-free guarantee across whole fuzzed games.
-// 2. Multi-turn invariant fuzzing: seeded random games hold the structural
-//    invariants of 01 §3.9 on every turn.
+// Property tests for the staged turn-resolution model, driven by fast-check
+// over configurations drawn from the FULL documented parameter ranges, 2-6
+// teams, and arbitrary seeds (see arbitraries.ts):
+// 1. Rule-order independence (game-rules/turn-resolution-model#order-independence): any
+//    permutation of the interaction rules yields an identical TurnResolution
+//    across whole fuzzed games.
+// 2. Multi-turn structural invariants: every reachable state honours the
+//    per-family effect bound, the effect expiry window, health bounds, and
+//    head uniqueness; events arrive in canonical class order.
+// 3. Item identity (game-rules/item-identity#ids-never-collide): the (spawnTurn, spawnIndex)
+//    pair is never re-issued, never moves, and keys its own cell; and
+//    re-resolving a turn emits an identical event sequence
+//    (game-rules/turn-events#deterministic-order).
+// Directed coverage of the interesting paths (potions guaranteed to be
+// collected, exact health/head-to-head outcomes) lives in
+// resolve-rules-properties.test.ts via constructive generators.
+import * as fc from "fast-check";
 import { describe, expect, it } from "vitest";
+import { gameConfigArb, gameSeedArb, teamsArb } from "./arbitraries.js";
 import { cellIndex } from "./board.js";
+import type { TeamRegistration } from "./boardgen.js";
 import { generateBoardAndInitialState } from "./boardgen.js";
 import { EFFECT_DURATION_TURNS } from "./effects.js";
-import { itemsByCell } from "./items.js";
+import { itemIdOf, itemsByCell } from "./items.js";
 import { resolveTurn, resolveTurnWithRules } from "./resolve/index.js";
 import type { InteractionRule } from "./resolve/rules.js";
 import { INTERACTION_RULES } from "./resolve/rules.js";
 import { rngFromSeed, subSeed } from "./rng.js";
-import { seed, tid } from "./testkit.js";
+import { seed } from "./testkit.js";
 import type { GameConfig, GameState, TurnEvent, TurnNumber } from "./types.js";
-import { DEFAULT_GAME_CONFIG } from "./types.js";
 
-// A busy configuration: hazards, fertile ground, generous spawns, and a low
-// maxHealth so starvation, collisions, severs, potions and cancellations all
-// occur within a short fuzzed game.
-const FUZZ_CONFIG: GameConfig = {
-  orchestration: {
-    boardSize: 13,
-    snakesPerTeam: 2,
-    hazardPercentage: 10,
-    fertileGround: { density: 25, clustering: 8 },
-  },
-  runtime: {
-    ...DEFAULT_GAME_CONFIG.runtime,
-    maxHealth: 25,
-    maxTurns: 40,
-    foodSpawnRate: 1,
-    invulnPotionSpawnRate: 0.2,
-    invisPotionSpawnRate: 0.2,
-  },
-};
-const TEAMS = [
-  { centaurTeamId: tid("red"), name: "Red" },
-  { centaurTeamId: tid("blue"), name: "Blue" },
-];
+// Harness bound, NOT a spec range: maxTurns is generated from its full
+// documented range, but each fuzzed game simulates at most this many turns
+// to keep wall-clock in check. Games still end earlier on any win condition
+// or a smaller generated maxTurns.
+const SIMULATED_TURN_BUDGET = 25;
+
 const EVENT_CLASS_ORDER: ReadonlyArray<TurnEvent["kind"]> = [
   "snake_moved",
   "snake_died",
@@ -52,9 +47,20 @@ const EVENT_CLASS_ORDER: ReadonlyArray<TurnEvent["kind"]> = [
   "effect_cancelled",
 ];
 
-function initialState(gameSeed: Uint8Array): GameState {
-  const generated = generateBoardAndInitialState(FUZZ_CONFIG, TEAMS, gameSeed);
-  if ("code" in generated) throw new Error(`board generation failed: ${generated.code}`);
+const fuzzArb = fc.record({
+  config: gameConfigArb,
+  teams: teamsArb,
+  gameSeed: gameSeedArb,
+});
+interface FuzzDraw {
+  config: GameConfig;
+  teams: TeamRegistration[];
+  gameSeed: Uint8Array;
+}
+
+function initialState(draw: FuzzDraw): GameState | null {
+  const generated = generateBoardAndInitialState(draw.config, draw.teams, draw.gameSeed);
+  if ("code" in generated) return null;
   return {
     board: generated.board,
     snakes: generated.snakes,
@@ -69,118 +75,157 @@ function shuffledRules(seedN: number): InteractionRule[] {
   return rules;
 }
 
+function turnsToSimulate(config: GameConfig): number {
+  const { maxTurns } = config.runtime;
+  return maxTurns === 0 ? SIMULATED_TURN_BUDGET : Math.min(maxTurns, SIMULATED_TURN_BUDGET);
+}
+
 /** Run a fuzz game turn-by-turn, invoking `check` after every resolution. */
 function playFuzzGame(
-  gameSeed: Uint8Array,
+  draw: FuzzDraw,
   rules: ReadonlyArray<InteractionRule> | null,
   check?: (state: GameState, events: ReadonlyArray<TurnEvent>, t: number) => void,
-): { turns: number; events: TurnEvent[][] } {
-  let state = initialState(gameSeed);
+): { turns: number; events: TurnEvent[][] } | null {
+  const initial = initialState(draw);
+  if (initial === null) return null; // infeasible draw — discard via fc.pre
+  let state: GameState = initial;
   const events: TurnEvent[][] = [];
-  for (let t = 0; t < FUZZ_CONFIG.runtime.maxTurns; t++) {
-    const turnSeed = subSeed(gameSeed, `turn:${t}`);
+  const budget = turnsToSimulate(draw.config);
+  for (let t = 0; t < budget; t++) {
+    const turnSeed = subSeed(draw.gameSeed, `turn:${t}`);
     const result =
       rules === null
-        ? resolveTurn(state, new Map(), t as TurnNumber, turnSeed, FUZZ_CONFIG.runtime)
+        ? resolveTurn(state, new Map(), t as TurnNumber, turnSeed, draw.config.runtime)
         : resolveTurnWithRules(
             rules,
             state,
             new Map(),
             t as TurnNumber,
             turnSeed,
-            FUZZ_CONFIG.runtime,
+            draw.config.runtime,
           );
     state = result.nextState;
     events.push([...result.events]);
     check?.(state, result.events, t);
     if (result.outcome.kind !== "in_progress") return { turns: t + 1, events };
   }
-  return { turns: FUZZ_CONFIG.runtime.maxTurns, events };
+  return { turns: budget, events };
 }
 
-describe("rule-order independence (game-rules/turn-resolution-model)", () => {
+describe("rule-order independence (game-rules/turn-resolution-model#order-independence)", () => {
   it("yields identical whole-game results under shuffled interaction-rule orders", () => {
-    for (const gameSeedN of [21, 22, 23]) {
-      const baseline = playFuzzGame(seed(gameSeedN), null);
-      for (const shuffleSeedN of [1, 2, 3]) {
-        const shuffled = playFuzzGame(seed(gameSeedN), shuffledRules(shuffleSeedN));
-        expect(shuffled.turns).toBe(baseline.turns);
-        expect(shuffled.events).toEqual(baseline.events);
-      }
-    }
+    fc.assert(
+      fc.property(fuzzArb, fc.integer({ min: 1, max: 1000 }), (draw, shuffleSeedN) => {
+        const baseline = playFuzzGame(draw, null);
+        fc.pre(baseline !== null);
+        const shuffled = playFuzzGame(draw, shuffledRules(shuffleSeedN));
+        expect(shuffled).toEqual(baseline);
+      }),
+      { numRuns: 6 },
+    );
   });
 });
 
-describe("multi-turn structural invariants (01 §3.9)", () => {
-  it("holds the invariants on every turn of seeded fuzz games", () => {
-    let sawDeath = false;
-    let sawEffect = false;
-    for (const gameSeedN of [31, 32, 33, 34, 35, 36]) {
-      playFuzzGame(seed(gameSeedN), null, (state, events, t) => {
-        const headCells = new Set<string>();
-        for (const snake of state.snakes) {
-          // ≤1 active effect per family (game-rules/team-potion-effects)
-          const families = state ? snake.activeEffects.map((e) => e.family) : [];
-          expect(new Set(families).size).toBe(families.length);
-          // No effect may outlive its window (expiry at commit — game-rules/team-potion-effects#three-turn-expiry)
-          for (const e of snake.activeEffects) {
-            sawEffect = true;
-            expect(e.expiryTurn).toBeGreaterThan(t);
-            expect(e.expiryTurn).toBeLessThanOrEqual(t + EFFECT_DURATION_TURNS);
+describe("multi-turn structural invariants", () => {
+  it("holds the invariants on every turn of fuzzed games", () => {
+    fc.assert(
+      fc.property(fuzzArb, (draw) => {
+        const played = playFuzzGame(draw, null, (state, events, t) => {
+          const headCells = new Set<string>();
+          for (const snake of state.snakes) {
+            // ≤1 active effect per family (game-rules/team-potion-effects)
+            const families = snake.activeEffects.map((e) => e.family);
+            expect(new Set(families).size).toBe(families.length);
+            // No effect may outlive its window (game-rules/team-potion-effects#three-turn-expiry)
+            for (const e of snake.activeEffects) {
+              expect(e.expiryTurn).toBeGreaterThan(t);
+              expect(e.expiryTurn).toBeLessThanOrEqual(t + EFFECT_DURATION_TURNS);
+            }
+            if (!snake.alive) continue;
+            // Alive snakes: non-empty body, health in (0, maxHealth]
+            expect(snake.body.length).toBeGreaterThanOrEqual(1);
+            expect(snake.health).toBeGreaterThan(0);
+            expect(snake.health).toBeLessThanOrEqual(draw.config.runtime.maxHealth);
+            // Alive heads pairwise distinct (game-rules/head-to-head-precedence#unique-entrancy)
+            const head = snake.body[0];
+            const key = `${head?.x},${head?.y}`;
+            expect(headCells.has(key)).toBe(false);
+            headCells.add(key);
           }
-          if (!snake.alive) {
-            sawDeath = true;
-            continue;
-          }
-          // Alive snakes: non-empty body, health in (0, maxHealth]
-          expect(snake.body.length).toBeGreaterThanOrEqual(1);
-          expect(snake.health).toBeGreaterThan(0);
-          expect(snake.health).toBeLessThanOrEqual(FUZZ_CONFIG.runtime.maxHealth);
-          // Alive heads pairwise distinct (head-to-head leaves ≤1 per cell)
-          const head = snake.body[0];
-          const key = `${head?.x},${head?.y}`;
-          expect(headCells.has(key)).toBe(false);
-          headCells.add(key);
-        }
-        // Events arrive in canonical class order (01 §2.11)
-        const ranks = events.map((e) => EVENT_CLASS_ORDER.indexOf(e.kind));
-        expect([...ranks].sort((a, b) => a - b)).toEqual(ranks);
-        // Exactly one snake_moved per alive-at-start snake, one death event
-        // max per snake
-        const deathIds = events
-          .filter((e) => e.kind === "snake_died")
-          .map((e) => (e as Extract<TurnEvent, { kind: "snake_died" }>).snakeId);
-        expect(new Set(deathIds).size).toBe(deathIds.length);
-      });
-    }
-    // The fuzz configuration must actually exercise the interesting paths.
-    expect(sawDeath).toBe(true);
-    expect(sawEffect).toBe(true);
+          // Events arrive in canonical class order (game-rules/turn-events)
+          const ranks = events.map((e) => EVENT_CLASS_ORDER.indexOf(e.kind));
+          expect([...ranks].sort((a, b) => a - b)).toEqual(ranks);
+          // At most one death event per snake
+          const deathIds = events
+            .filter((e) => e.kind === "snake_died")
+            .map((e) => (e as Extract<TurnEvent, { kind: "snake_died" }>).snakeId);
+          expect(new Set(deathIds).size).toBe(deathIds.length);
+        });
+        fc.pre(played !== null);
+      }),
+      { numRuns: 10 },
+    );
   });
 
-  it("never re-issues an item id and keys every item by its own cell", () => {
-    for (const gameSeedN of [41, 42]) {
-      // Once an id leaves the board (consumed) it must never reappear
-      // (game-rules/item-identity turn-namespaced allocation), and every map entry must
-      // sit under its own cell's index (game-rules/item-identity single occupancy).
-      const everSeen = new Map<number, string>(); // itemId -> home cell
-      const departed = new Set<number>();
-      playFuzzGame(seed(gameSeedN), null, (state) => {
-        const presentIds = new Set<number>();
-        for (const [key, item] of state.items) {
-          expect(key).toBe(cellIndex(state.board, item.cell));
-          expect(presentIds.has(item.itemId)).toBe(false); // ids unique on board
-          presentIds.add(item.itemId);
-          expect(departed.has(item.itemId)).toBe(false); // no resurrection
-          const home = `${item.cell.x},${item.cell.y}`;
-          const prior = everSeen.get(item.itemId);
-          if (prior !== undefined) expect(prior).toBe(home); // ids never move
-          everSeen.set(item.itemId, home);
+  it("never re-issues an item identity and keys every item by its own cell", () => {
+    fc.assert(
+      fc.property(fuzzArb, (draw) => {
+        // Once an identity leaves the board (consumed) it must never
+        // reappear (game-rules/item-identity#ids-never-collide), and every map entry must
+        // sit under its own cell's index (game-rules/item-identity#one-item-per-cell).
+        const everSeen = new Map<string, string>(); // identity -> home cell
+        const departed = new Set<string>();
+        const played = playFuzzGame(draw, null, (state) => {
+          const presentIds = new Set<string>();
+          for (const [key, item] of state.items) {
+            const id = itemIdOf(item);
+            expect(key).toBe(cellIndex(state.board, item.cell));
+            expect(presentIds.has(id)).toBe(false); // identities unique on board
+            presentIds.add(id);
+            expect(departed.has(id)).toBe(false); // no resurrection
+            const home = `${item.cell.x},${item.cell.y}`;
+            const prior = everSeen.get(id);
+            if (prior !== undefined) expect(prior).toBe(home); // identities never move
+            everSeen.set(id, home);
+          }
+          for (const id of everSeen.keys()) {
+            if (!presentIds.has(id)) departed.add(id);
+          }
+        });
+        fc.pre(played !== null);
+      }),
+      { numRuns: 8 },
+    );
+  });
+
+  it("re-resolving any turn emits an identical event sequence (game-rules/turn-events#deterministic-order)", () => {
+    fc.assert(
+      fc.property(fuzzArb, (draw) => {
+        let state = initialState(draw);
+        fc.pre(state !== null);
+        const budget = Math.min(turnsToSimulate(draw.config), 10);
+        for (let t = 0; t < budget && state !== null; t++) {
+          const turnSeed = subSeed(draw.gameSeed, `turn:${t}`);
+          const once = resolveTurn(
+            state,
+            new Map(),
+            t as TurnNumber,
+            turnSeed,
+            draw.config.runtime,
+          );
+          const twice = resolveTurn(
+            state,
+            new Map(),
+            t as TurnNumber,
+            turnSeed,
+            draw.config.runtime,
+          );
+          expect(twice.events).toEqual(once.events);
+          expect(twice.nextState).toEqual(once.nextState);
+          state = once.outcome.kind === "in_progress" ? once.nextState : null;
         }
-        for (const id of everSeen.keys()) {
-          if (!presentIds.has(id)) departed.add(id);
-        }
-      });
-    }
+      }),
+      { numRuns: 5 },
+    );
   });
 });

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { cellIndex } from "./board.js";
-import { ITEM_ID_STRIDE, itemAt, itemIdFor, itemsByCell } from "./items.js";
-import { emptyBoard, makeItem } from "./testkit.js";
+import { SETUP_SPAWN_TURN, itemAt, itemIdOf, itemsByCell, spawnTurnAfter } from "./items.js";
+import { emptyBoard, makeItem, turn } from "./testkit.js";
 import { ItemType } from "./types.js";
 
 describe("itemsByCell / itemAt (game-rules/item-identity)", () => {
@@ -24,15 +24,23 @@ describe("itemsByCell / itemAt (game-rules/item-identity)", () => {
   });
 });
 
-describe("itemIdFor (game-rules/item-identity)", () => {
-  it("allocates turn-namespaced ids", () => {
-    expect(itemIdFor(0, 0)).toBe(0); // game setup
-    expect(itemIdFor(0, 3)).toBe(3);
-    expect(itemIdFor(1, 0)).toBe(ITEM_ID_STRIDE); // turn 0's spawns
-    expect(itemIdFor(5, 2)).toBe(5 * ITEM_ID_STRIDE + 2);
+describe("item identity (game-rules/item-identity)", () => {
+  it("defines the spawn boundaries: setup at 0, turn T's spawns at T + 1", () => {
+    expect(SETUP_SPAWN_TURN).toBe(0);
+    expect(spawnTurnAfter(turn(0))).toBe(1); // turn 0's resolution spawns
+    expect(spawnTurnAfter(turn(5))).toBe(6);
   });
 
-  it("fails loudly on namespace exhaustion instead of colliding", () => {
-    expect(() => itemIdFor(1, ITEM_ID_STRIDE)).toThrow(/exhausted/);
+  it("derives the scalar id from the identity pair", () => {
+    expect(itemIdOf({ spawnTurn: turn(0), spawnIndex: 3 })).toBe("0:3");
+    expect(itemIdOf({ spawnTurn: turn(5), spawnIndex: 2 })).toBe("5:2");
+  });
+
+  // spec: game-rules/item-identity#ids-never-collide
+  it("never collides across spawn turns and indices", () => {
+    const ids = new Set<string>();
+    for (let t = 0; t < 40; t++)
+      for (let k = 0; k < 40; k++) ids.add(itemIdOf({ spawnTurn: turn(t), spawnIndex: k }));
+    expect(ids.size).toBe(1600);
   });
 });
