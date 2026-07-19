@@ -23,6 +23,8 @@ type IdentityPair = Pick<ItemBase, "spawnTurn" | "spawnIndex">;
 // spawns at boundary SETUP_SPAWN_TURN; turn T's resolution spawns at
 // spawnTurnAfter(T), the boundary at which those items first exist.
 // Uniqueness of the pair is inherent in the construction.
+// design: 2026-07-19-game-rules-vetting-corrections — sealed union,
+// computed scalar id, reference-by-id discipline.
 export const SETUP_SPAWN_TURN = 0 as TurnNumber;
 
 export function spawnTurnAfter(turnNumber: TurnNumber): TurnNumber {

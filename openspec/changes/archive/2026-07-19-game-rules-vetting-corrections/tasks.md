@@ -10,5 +10,5 @@
 - [x] 2.4 pnpm spec:check, module-01 migration audit, and the full battery green
 
 ## 3. At archive (human-initiated)
-- [ ] 3.1 `openspec archive` as this PR's final commit, on the author's explicit instruction — deltas fold into specs/
-- [ ] 3.2 Date-prefix the change name in identifier-map notes to the archived folder name
+- [x] 3.1 Archive as this PR's final commit, on the author's explicit instruction — `pnpm spec:fold game-rules-vetting-corrections` folded the deltas into specs/, then `openspec archive --skip-specs -y` moved the folder (the documented flow: openspec/README.md)
+- [x] 3.2 Date-prefix the change name in identifier-map notes to the archived folder name
