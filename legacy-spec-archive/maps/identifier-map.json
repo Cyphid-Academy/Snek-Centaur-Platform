@@ -51,7 +51,7 @@
     "01-REQ-011": {
       "target": "game-rules/hazards",
       "scenarios": ["game-rules/hazards#permanence"],
-      "note": "the legacy item/hazard-coexistence clause was vacuous (spawn eligibility excludes hazard cells) and was removed by the game-rules-vetting-corrections change"
+      "note": "the legacy item/hazard-coexistence clause was vacuous (spawn eligibility excludes hazard cells) and was removed by the 2026-07-19-game-rules-vetting-corrections change"
     },
     "01-REQ-012": {
       "target": "game-rules/fertile-ground",
@@ -76,7 +76,7 @@
     "01-REQ-017": {
       "target": "game-rules/initial-food",
       "scenarios": ["game-rules/initial-food#food-count-per-territory"],
-      "note": "behaviour amended by the game-rules-vetting-corrections change: snakesPerTeam items per starting territory, fertile-unrestricted (legacy: one per snake, globally placed, fertile-restricted)"
+      "note": "behaviour amended by the 2026-07-19-game-rules-vetting-corrections change: snakesPerTeam items per starting territory, fertile-unrestricted (legacy: one per snake, globally placed, fertile-restricted)"
     },
     "01-REQ-018": {
       "target": "game-rules/initial-snakes",
@@ -230,7 +230,7 @@
     "01-REQ-046c": {
       "target": "game-rules/food-and-growth",
       "scenarios": ["game-rules/food-and-growth#duplication-after-severing"],
-      "note": "the legacy food-on-hazard clause was vacuous and was removed by the game-rules-vetting-corrections change"
+      "note": "the legacy food-on-hazard clause was vacuous and was removed by the 2026-07-19-game-rules-vetting-corrections change"
     },
     "01-REQ-046d": {
       "target": "game-rules/health-and-starvation",
@@ -383,7 +383,7 @@
         "game-rules/item-identity#ids-never-collide",
         "game-rules/item-identity#consumption-removes-and-reports"
       ],
-      "note": "identity scheme amended by the game-rules-vetting-corrections change"
+      "note": "identity scheme amended by the 2026-07-19-game-rules-vetting-corrections change"
     },
     "01-REQ-029": {
       "target": null,
