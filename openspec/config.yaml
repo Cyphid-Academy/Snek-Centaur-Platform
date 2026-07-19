@@ -104,6 +104,18 @@ rules:
       (run pnpm spec:check to find them).
     - MODIFIED deltas must copy the ENTIRE requirement block — header, body,
       and all scenarios — then edit.
+    - "NEW-CAPABILITY DELTAS: a delta file for a capability with no existing
+      specs/<capability>/spec.md mints that capability. It must open with a
+      `## Purpose` preamble (the capability's Purpose section, including its
+      'Depends on:' line) above `## ADDED Requirements`, and must be
+      ADDED-only — spec:fold creates the capability's spec.md from it at
+      archive time. The preamble is the explicit mint marker: a missing
+      capability without one is treated as a typo'd folder name and fails
+      the freshness check, and a preamble whose capability already exists
+      fails it too (another change minted the capability first — reconcile
+      the Purpose by hand and drop the preamble). Include a task to add the
+      minted capability to this file's context-block capability list at
+      archive."
     - "TWO-COMMIT DELTA AUTHORING (AI responsibility): introduce a delta
       that modifies existing requirements across exactly two commits — the
       first seeds the delta file with the affected requirement blocks copied

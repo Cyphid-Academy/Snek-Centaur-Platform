@@ -18,6 +18,15 @@
 //      standardised as a PR's final commit — makes the change stale:
 //      re-seed (rewrite the seed/edit pair against the new base) and
 //      re-review the word-diff.
+//   3. NEW-CAPABILITY SHAPE — a delta whose capability has no
+//      specs/<capability>/spec.md is only well-formed as a mint: it must
+//      open with a `## Purpose` preamble (the explicit mint marker —
+//      without it the folder name is assumed to be a typo) and be
+//      ADDED-only. Conversely a preamble whose capability already exists
+//      is stale (another change minted the capability first, e.g. across
+//      a rebase): the Purpose was never reconciled, so reconcile by hand
+//      and drop the preamble. These checks need no git history, so they
+//      run on uncommitted deltas too.
 // Delta files not yet committed are skipped with a note (a change being
 // authored right now has no seed to compare).
 //
@@ -61,9 +70,36 @@ export function freshnessProblemsFor(root, changeName) {
     ({ file }) => !changeName || file.includes(`/changes/${changeName}/`),
   );
 
-  for (const { file } of deltas) {
+  for (const { file, cap } of deltas) {
     const rel = relative(root, file);
     const change = rel.match(/changes\/([^/]+)\//)?.[1] ?? rel;
+
+    // 3. New-capability shape (structural — independent of git history).
+    const current = parseDeltaOps(readFileSync(file, "utf8"));
+    const capExists = existsSync(join(root, "openspec", "specs", cap, "spec.md"));
+    if (!capExists) {
+      if (!current.preamble) {
+        problems.push(
+          `${change}: capability "${cap}" does not exist in specs/ and the delta has no "## Purpose" preamble — fix the capability folder name, or add a Purpose preamble to mint a new capability`,
+        );
+      } else if (!current.preamble.startsWith("## Purpose")) {
+        problems.push(
+          `${change}: "${cap}" delta preamble must begin with "## Purpose" to mint a new capability`,
+        );
+      }
+      if (current.renamed.length > 0 || current.removed.length > 0 || current.modified.size > 0) {
+        problems.push(
+          `${change}: delta targets nonexistent capability "${cap}" with RENAMED/REMOVED/MODIFIED entries — a delta minting a capability must be ADDED-only`,
+        );
+      } else if (current.preamble && current.added.size === 0) {
+        problems.push(`${change}: new capability "${cap}" has no ADDED requirements`);
+      }
+    } else if (current.preamble) {
+      problems.push(
+        `${change}: "${cap}" delta carries a new-capability "## Purpose" preamble but openspec/specs/${cap}/spec.md already exists — another change minted the capability first; reconcile the Purpose by hand and re-author the delta without the preamble`,
+      );
+    }
+
     let seedContent;
     try {
       const commits = execSync(`git log --reverse --format=%H -- "${rel}"`, {
@@ -85,7 +121,6 @@ export function freshnessProblemsFor(root, changeName) {
       continue;
     }
     const seed = parseDeltaOps(seedContent);
-    const current = parseDeltaOps(readFileSync(file, "utf8"));
 
     // 1. Two-commit policy: current MODIFIED set must be seeded.
     for (const name of current.modified.keys()) {

@@ -106,7 +106,10 @@ export function makeResolver(index) {
  * Parse a delta spec file into its per-operation collections. MODIFIED and
  * ADDED map requirement name -> raw block (header line through the line
  * before the next header/section); REMOVED lists header names; RENAMED
- * lists { from, to } pairs.
+ * lists { from, to } pairs. `preamble` is everything before the first
+ * operation section, trimmed — non-empty only for a delta that mints a new
+ * capability, where it carries the capability's `## Purpose` section
+ * (spec:fold builds specs/<capability>/spec.md from it).
  */
 export function parseDeltaOps(content) {
   const lines = content.replace(/\r\n?/g, "\n").split("\n");
@@ -114,6 +117,7 @@ export function parseDeltaOps(content) {
   const modified = new Map();
   const removed = [];
   const renamed = [];
+  const preambleLines = [];
   let section = null;
   let blockName = null;
   let blockLines = [];
@@ -132,6 +136,10 @@ export function parseDeltaOps(content) {
     if (sec) {
       flush();
       section = sec[1];
+      continue;
+    }
+    if (section === null) {
+      preambleLines.push(line);
       continue;
     }
     const req = line.match(/^### Requirement: ([a-z0-9-]+\/[a-z0-9-]+)\s*$/);
@@ -158,7 +166,7 @@ export function parseDeltaOps(content) {
     if (blockName !== null) blockLines.push(line);
   }
   flush();
-  return { added, modified, removed, renamed };
+  return { added, modified, removed, renamed, preamble: preambleLines.join("\n").trim() };
 }
 
 /**
