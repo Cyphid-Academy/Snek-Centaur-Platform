@@ -376,7 +376,7 @@
                   y={s.body[0].y * CELL + 2}
                   width={CELL - 4}
                   height={CELL - 4}
-                  rx="7"
+                  rx={CELL / 2 - 2}
                   fill={TEAM_HEAD[s.centaurTeamId]}
                 />
               {/if}
