@@ -23,22 +23,26 @@ The visual tester SHALL be a dedicated application for game-rules testing, separ
 - **THEN** the visual tester is not part of them and nothing in them depends on it
 
 ### Requirement: visual-tester/board-editor
-The tool SHALL provide a map editor over every component of game state: per-cell terrain (Hazard/Fertile/Normal within the fixed Wall ring per game-rules/board-geometry), board size, snakes (add/remove, team and letter, ordered body cells, health, active effects, last direction, alive flag), items (place/remove any item type on any cell), the runtime game configuration, and the game seed. The editor SHALL permit any structurally valid state — including states board generation would never produce — enforcing only structural validity: in-bounds cells and the closed domain vocabulary per game-rules/domain-vocabulary.
+The tool SHALL provide a map editor over every authorable component of game state: per-cell terrain (Hazard/Fertile/Normal within the fixed Wall ring per game-rules/board-geometry), board size, snakes (add/remove, team and letter, ordered body cells of any length ≥ 1, health, active effects), items (place/remove any item type on any cell), the runtime game configuration, and the game seed. Two snake fields are lifecycle-derived and never directly editable: a snake present in the editor is alive — death arises only from turn resolution — and last direction is null in a hand-authored state, otherwise the direction the snake last moved. The editor SHALL permit any structurally valid state — including states board generation would never produce — enforcing only structural validity: in-bounds cells and the closed domain vocabulary per game-rules/domain-vocabulary.
 
 #### Scenario: #arbitrary-states-allowed
-- **WHEN** a tester authors a state unreachable by board generation (e.g. disconnected hazard regions, adjacent starting heads, a 1-segment snake)
+- **WHEN** a tester authors a state board generation would never produce — disconnected hazard regions, adjacent heads, or a single-segment snake
 - **THEN** the editor accepts it, so resolver edge cases can be exercised directly
+
+#### Scenario: #derived-lifecycle-fields
+- **WHEN** a snake is authored in the editor
+- **THEN** it is alive with null last direction, neither field being directly editable; both are thereafter carried exclusively by turn resolution
 
 #### Scenario: #structural-validity-enforced
 - **WHEN** an edit would place a cell out of bounds or use a value outside the domain vocabulary
 - **THEN** the edit is rejected at the editor boundary and the state is unchanged
 
 ### Requirement: visual-tester/move-staging
-The tool SHALL allow manually staging a move direction for each living snake and leaving any snake unstaged, and SHALL indicate per staged move whether it passes the engine's move pre-validation — without blocking invalid or unstaged moves from simulation.
+The tool SHALL allow manually staging a move direction for each living snake and leaving any snake unstaged. Every direction is stageable — the game rules never reject a staged move — and the tool SHALL mark, as a purely advisory hint, staged moves the engine's pre-validation identifies as certain death from the snake's own deterministic future, submitting them unchanged on simulation.
 
-#### Scenario: #invalid-moves-stageable
-- **WHEN** a tester stages a move the engine's pre-validation rejects (e.g. reversing into the neck)
-- **THEN** the tool marks it as invalid but still submits it unchanged on simulation, so the resolver's own handling is what gets exercised
+#### Scenario: #certain-death-moves-stageable
+- **WHEN** a tester stages a move whose death is certain from the snake's own body or the wall (e.g. reversing into the still-occupied neck cell)
+- **THEN** the tool marks it as certain death but submits it unchanged, so the resolver's own collision handling per game-rules/collisions-and-severing is what gets exercised
 
 #### Scenario: #unstaged-snakes-omitted
 - **WHEN** a snake is left unstaged and the turn is simulated
@@ -80,9 +84,13 @@ The tool SHALL save the current session as a new named Test Sequence conforming 
 - **WHEN** the tester saves the session
 - **THEN** the stored document records the session's initial state, per-turn staged moves, and per-turn resolver outputs as the sequence's expectations
 
-#### Scenario: #paste-import-validated
+#### Scenario: #paste-import-accepted
+- **WHEN** pasted JSON passes validation
+- **THEN** it becomes a new saved Test Sequence, immediately listed and loadable like any other
+
+#### Scenario: #paste-import-rejected
 - **WHEN** pasted JSON fails validation
-- **THEN** no sequence is created and the validation errors are shown; valid JSON becomes a new saved sequence
+- **THEN** no sequence is created and the validation errors are shown
 
 #### Scenario: #copy-json
 - **WHEN** the tester invokes copy on a saved sequence

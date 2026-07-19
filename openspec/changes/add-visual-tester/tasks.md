@@ -19,8 +19,8 @@
 
 ## 4. Editor & simulation UI
 
-- [ ] 4.1 Board renderer + map editor: terrain painting, board size, items, snakes (body, health, effects, direction, alive, team/letter), runtime config, game seed; structural-validity enforcement at the editor boundary; boardgen-seeded new-session convenience (`visual-tester/board-editor`)
-- [ ] 4.2 Move staging panel with `isValidMove` indication, invalid/unstaged moves passed through unchanged (`visual-tester/move-staging`)
+- [ ] 4.1 Board renderer + map editor: terrain painting, board size, items, snakes (body of any length ≥ 1, health, effects, team/letter; alive and last direction lifecycle-derived, never editable), runtime config, game seed; structural-validity enforcement at the editor boundary; boardgen-seeded new-session convenience (`visual-tester/board-editor`)
+- [ ] 4.2 Move staging panel with `isValidMove`-based certain-death marking (advisory only), all staged/unstaged moves passed through unchanged (`visual-tester/move-staging`)
 - [ ] 4.3 Simulate-turn action recording full resolver output; repeatable (`visual-tester/turn-simulation`)
 - [ ] 4.4 In-memory session history + scrub bar; immutable per-turn snapshots with a no-cross-turn-mutation test (`visual-tester/session-history`)
 - [ ] 4.5 History rewrite: edit at turn k truncates k+1..n, simulation continues from k (`visual-tester/history-rewrite`)
