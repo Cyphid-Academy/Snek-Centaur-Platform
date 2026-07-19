@@ -222,15 +222,19 @@
 
   function snakeStyle(s: SnakeState): SnakeStyle {
     if (!s.alive) return { opacity: 0.15, stroke: null, dash: null };
+
+    const opacity = isVisible(s) ? 1 : 0.35;
     const level = invulnerabilityLevel(s);
-    const invisDebuff = s.activeEffects.some(
+
+    if (level === -1) return { opacity, stroke: "#fbbf24", dash: "4 3" };
+    if (level > 0)    return { opacity, stroke: "#fbbf24", dash: null };
+
+    const isInvisCollector = s.activeEffects.some(
       (e) => e.family === "invisibility" && e.state === "debuff",
     );
-    return {
-      opacity: isVisible(s) ? 1 : 0.35,
-      stroke: level !== 0 ? "#fbbf24" : invisDebuff ? "#22d3ee" : null,
-      dash: level === -1 || (level === 0 && invisDebuff) ? "4 3" : null,
-    };
+    if (isInvisCollector) return { opacity, stroke: "#22d3ee", dash: "4 3" };
+
+    return { opacity, stroke: null, dash: null };
   }
 
   function effectBadges(s: SnakeState): string {
