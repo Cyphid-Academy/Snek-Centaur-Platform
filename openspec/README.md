@@ -66,7 +66,7 @@ Spec-affecting work flows through OpenSpec changes: `/opsx:explore` →
 `/opsx:propose` → **author review of the change artifacts** (Open Questions
 resolved, deltas approved) → `/opsx:apply` — implementation lands in the
 same PR as the still-open change folder → `openspec archive` as the PR's
-final commit → merge. Three conventions bind agents:
+final commit → merge. Four conventions bind agents:
 
 - **Two-commit delta authoring.** A delta that modifies existing
   requirements is introduced across exactly two commits: the first seeds
@@ -76,6 +76,22 @@ final commit → merge. Three conventions bind agents:
   requirements. This is an AI responsibility — and if the deltas are
   revised after review, the AI rewrites history to keep the seed/edit pair
   intact rather than stacking correction commits.
+- **New capabilities are minted by their change's delta.** A delta file
+  whose capability has no `specs/<capability>/spec.md` yet must open with
+  a `## Purpose` preamble — the capability's Purpose section, including
+  its "Depends on:" line — above `## ADDED Requirements`, and must be
+  ADDED-only. `pnpm spec:fold` creates the capability's spec.md from it
+  (`# <capability> Specification` + Purpose + Requirements); the stock
+  validator, the reference lint's overlay, and the fold op-parser all
+  ignore the preamble until then. The preamble is the explicit mint
+  marker, and it is guarded from both sides (continuously by `pnpm
+  spec:freshness`, and as fold's hard precondition): a missing capability
+  *without* a preamble fails — otherwise a typo'd capability folder name
+  would silently mint a bogus capability — and a preamble whose capability
+  *already exists* fails, because another change minted it first (e.g.
+  across a rebase) and the Purpose was never reconciled. Minting a
+  capability also means adding it to the capability list in
+  `config.yaml`'s context block at archive time.
 - **Archiving is the PR's final commit, on a human decision.** Archiving
   folds the deltas into `specs/` (the only way `specs/` ever advances) and
   is the terminal act of a change — standardised as the **last commit of

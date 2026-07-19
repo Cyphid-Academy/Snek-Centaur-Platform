@@ -22,11 +22,21 @@
 // re-applying deltas: `openspec archive --skip-specs -y <change>` (still
 // validates the change and moves it to changes/archive/ with a date prefix).
 //
+// NEW CAPABILITIES are minted by fold: a delta whose capability has no
+// specs/<capability>/spec.md yet must open with a `## Purpose` preamble
+// (the explicit mint marker) and be ADDED-only, and fold creates the
+// capability's spec.md from it (`# <capability> Specification` + Purpose +
+// Requirements). The guards live in the freshness precondition below: a
+// missing capability without a preamble fails loudly (assumed folder-name
+// typo — the alternative is silently minting a bogus capability), and a
+// preamble whose capability already exists fails loudly (another change
+// minted it first; the Purpose was never reconciled against it).
+//
 // Apply order and loud-failure rules mirror the stock machinery
 // (RENAMED → REMOVED → MODIFIED → ADDED; unknown or colliding headers
 // abort), minus the scenario guard that full-block authoring supersedes.
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { freshnessProblemsFor } from "./check-change-freshness.mjs";
 import { openChangeDeltaFiles, parseDeltaOps } from "./spec-index.mjs";
@@ -133,9 +143,33 @@ export function foldChange(root, changeName) {
     const ops = parseDeltaOps(readFileSync(file, "utf8"));
     validateOps(cap, ops);
     const target = join(root, "openspec", "specs", cap, "spec.md");
-    if (!existsSync(target))
+    if (!existsSync(target)) {
+      // Mint path. The freshness precondition above already guaranteed the
+      // shape (Purpose preamble present, ADDED-only, non-empty); the checks
+      // here are defence in depth against being called with a bypassed
+      // precondition.
+      if (!ops.preamble || !ops.preamble.startsWith("## Purpose"))
+        fail(`${cap}: cannot mint a capability without a "## Purpose" delta preamble`);
+      if (ops.renamed.length > 0 || ops.removed.length > 0 || ops.modified.size > 0)
+        fail(`${cap}: a delta minting a capability must be ADDED-only`);
+      if (ops.added.size === 0) fail(`${cap}: new capability "${cap}" has no ADDED requirements`);
+      mkdirSync(dirname(target), { recursive: true });
+      const blocks = [...ops.added].map(([name, raw]) => ({ name, raw }));
+      writeFileSync(
+        target,
+        recompose({
+          before: `# ${cap} Specification\n\n${ops.preamble}`,
+          preamble: "",
+          blocks,
+          after: "",
+        }),
+      );
+      console.log(`Created openspec/specs/${cap}/spec.md: ${ops.added.size} added.`);
+      continue;
+    }
+    if (ops.preamble)
       fail(
-        `${cap}: openspec/specs/${cap}/spec.md does not exist — new capabilities are created by their migration change, not by fold`,
+        `${cap}: delta carries a new-capability "## Purpose" preamble but openspec/specs/${cap}/spec.md already exists — reconcile the Purpose by hand and re-author the delta without the preamble`,
       );
     const spec = splitSpec(readFileSync(target, "utf8"));
     if (spec === null) fail(`${cap}: spec.md has no "## Requirements" section`);
