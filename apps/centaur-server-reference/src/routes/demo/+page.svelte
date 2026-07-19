@@ -20,6 +20,7 @@
     TurnEvent,
   } from "@cyphid/snek-centaur-server-lib";
   import { computeBotMoves } from "$lib/snek/bot";
+  import SnakeBody from "$lib/snek/SnakeBody.svelte";
 
   const TEAMS = [
     { centaurTeamId: "red" as CentaurTeamId, name: "Red" },
@@ -360,19 +361,25 @@
           {#each view.snakes as s (s.snakeId)}
             {@const style = snakeStyle(s)}
             <g opacity={style.opacity}>
-              {#each s.body as seg, i (i)}
+              <SnakeBody
+                segments={s.body}
+                cellSize={CELL}
+                padding={2}
+                fill={s.alive ? TEAM_BODY[s.centaurTeamId] : "#475569"}
+                stroke={style.stroke}
+                strokeWidth={2}
+                dash={style.dash}
+              />
+              {#if s.body[0] !== undefined && s.alive}
                 <rect
-                  x={seg.x * CELL + 2}
-                  y={seg.y * CELL + 2}
+                  x={s.body[0].x * CELL + 2}
+                  y={s.body[0].y * CELL + 2}
                   width={CELL - 4}
                   height={CELL - 4}
                   rx="7"
-                  fill={s.alive ? (i === 0 ? TEAM_HEAD[s.centaurTeamId] : TEAM_BODY[s.centaurTeamId]) : "#475569"}
-                  stroke={style.stroke}
-                  stroke-width={style.stroke === null ? 0 : 2}
-                  stroke-dasharray={style.dash}
+                  fill={TEAM_HEAD[s.centaurTeamId]}
                 />
-              {/each}
+              {/if}
               {#if s.body[0] !== undefined}
                 <text
                   x={s.body[0].x * CELL + CELL / 2}
