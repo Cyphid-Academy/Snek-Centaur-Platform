@@ -1,0 +1,29 @@
+{
+  "name": "@cyphid/visual-tester",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev --port 5001 --host",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "svelte-kit sync && tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@cyphid/snek-engine": "workspace:*",
+    "clipper2-ts": "2.0.1-18",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-node": "^5.2.12",
+    "@sveltejs/kit": "^2.15.2",
+    "@sveltejs/vite-plugin-svelte": "^5.0.0",
+    "@types/node": "^25.9.0",
+    "jsdom": "^29.1.1",
+    "svelte": "^5.20.2",
+    "typescript": "*",
+    "vite": "^6.0.6",
+    "vitest": "*"
+  }
+}

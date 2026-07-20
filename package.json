@@ -7,11 +7,12 @@
     "node": ">=20"
   },
   "scripts": {
-    "typecheck": "tsc -b && pnpm --filter @cyphid/centaur-server-reference typecheck",
+    "typecheck": "tsc -b && pnpm --filter @cyphid/centaur-server-reference typecheck && pnpm --filter @cyphid/visual-tester typecheck",
     "lint": "biome check .",
     "format": "biome check --write .",
-    "test": "vitest run",
+    "test": "vitest run && pnpm --filter @cyphid/visual-tester test",
     "dev": "pnpm --filter @cyphid/centaur-server-reference dev",
+    "dev:tester": "pnpm --filter @cyphid/visual-tester dev",
     "build": "pnpm -r build",
     "spec:validate": "openspec validate --specs --strict",
     "spec:citations": "node scripts/check-spec-citations.mjs",

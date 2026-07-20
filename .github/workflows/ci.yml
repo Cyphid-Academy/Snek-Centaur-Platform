@@ -50,6 +50,9 @@ jobs:
           node-version: "20"
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Workspace consumers resolve @cyphid/snek-engine through its published
+      # exports (dist/), so build it before running tests that import it.
+      - run: pnpm --filter @cyphid/snek-engine build
       - run: pnpm test
 
   spec-check:
