@@ -78,9 +78,25 @@ Named identifiers come from `openspec/specs/<capability>/spec.md` headers; numer
 | `pnpm dev` | Starts the Centaur Server reference app |
 | `pnpm build` | Builds all packages |
 
-## Squash-Merge Commit Messages
+## Commit History & Message Grammar
 
-Project tasks are squash-merged to `main`. The commit message must describe the **entire task** — every file changed, every decision made, every cascade — not just the last edit. Re-read the task scope before staging the final commit.
+`main` is **semi-linear**, and how a PR lands depends on its shape:
+
+- **Multi-commit PR** (a phase-structured change, or a seed/edit pair) → **Create a merge commit**. The merge node carries the clickable `#<PR>` link while the PR's **phase commits are preserved intact** beneath it (its second parent). Read PR-level history with `git log --first-parent` (one line per merged PR); expand a PR with `git show <merge>` or `git log <merge>^1..<merge>^2`.
+- **Single-commit PR** → **Squash and merge**. A merge commit would wrap the lone commit in a redundant second node (the same change appearing twice on `main`), so squash lands exactly one commit, subject `… (#<PR>)`, carrying the link without the extra node.
+
+Both squash and merge-commit are enabled; **rebase-merge stays off** (it drops the PR link). Never squash a multi-commit PR — it destroys the phase commits. A spec-affecting change lands as a small **ordered set of phase commits** rather than one squash, so each phase is reviewable on its own and the history reads as the change's shape:
+
+- **`Open change <name>: …`** — the proposal artifacts (proposal, design, tasks, spec deltas).
+- **`Seed <name> deltas verbatim` → `Edit <name> deltas: …`** — the two-commit seed/edit pair, required only when the change **modifies** existing requirements (ADDED-only deltas skip it; see `openspec/README.md`).
+- **`Implement <name>: …`** — the code, tests, and any design/spec refinements found while building.
+- **`Archive <name>: …`** — the terminal fold into `specs/`, on explicit human instruction.
+
+**Subject grammar:** sentence-case imperative, led by a phase verb from that fixed vocabulary — `Open change` / `Seed` / `Edit` / `Implement` / `Archive` for the change lifecycle, plus `Propose`, `Migrate`, `Document`, `Adopt`, and similar for non-lifecycle work. This is a domain vocabulary tuned to the OpenSpec workflow, and it is deliberately **not** Conventional Commits (`feat:` / `fix:` / …): the automation those prefixes exist for (semantic-release, commitlint) is not in use, and the semantic layer already lives in `specs/`, archived change folders, and `// spec:` citations. No type prefixes.
+
+**Body:** explain **what and why**. The `Implement` commit is where the whole-task description belongs — every file changed, every decision made, every cascade, not just the last edit; re-read the change scope before writing it. Decisions that were explored and abandoned (a swapped library, a reversed approach) live as rationale in `design.md`, not as dead-end commits — clean history carries the final tree, and provenance stays in the design record.
+
+**Merging:** the PR branch MUST be up to date with `main` before merge — rebase it onto the latest `main` (re-seed any stale delta per the two-commit rule; run `pnpm spec:freshness`), push, then merge (merge commit for multi-commit, squash for single-commit). Never bring `main` *into* the branch with a plain merge (it injects a merge commit and pollutes the phase structure) — rebase, or use GitHub's "Update with rebase". Repo settings and the `main` ruleset allow **squash and merge-commit** (not rebase-merge), require the branch to be up to date, and require CI (`lint`, `typecheck`, `test`, `spec-check`) to pass; "Require linear history" is deliberately **off** (it would forbid the merge commit that carries the PR link).
 
 ## Convex Auth Note
 
