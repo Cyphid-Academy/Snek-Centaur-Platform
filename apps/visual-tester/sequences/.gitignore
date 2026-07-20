@@ -1,0 +1,3 @@
+# Scratch (working) Test Sequences are not version-controlled — only promoted
+# fixtures in this folder are. See design D6 in the add-visual-tester change.
+/scratch/

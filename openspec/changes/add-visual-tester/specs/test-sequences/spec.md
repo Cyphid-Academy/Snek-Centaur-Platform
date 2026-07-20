@@ -53,7 +53,7 @@ Replaying a Test Sequence SHALL derive each turn's seed from the document's game
 - **THEN** every computed next state, event list, and outcome is identical between the two replays
 
 ### Requirement: test-sequences/validation
-A JSON document SHALL be accepted as a Test Sequence only if it passes schema validation: structural conformance to the format, closed-vocabulary conformance for every domain value per game-rules/domain-vocabulary, and referential integrity (every snake referenced by a staged move exists in the state that turn resolves from). Rejection SHALL identify each failing document path with a human-readable reason.
+A JSON document SHALL be accepted as a Test Sequence only if it passes schema validation: structural conformance to the format, closed-vocabulary conformance for every domain value per game-rules/domain-vocabulary, and referential integrity (every snake referenced by a staged move exists in the state that turn resolves from). Structural conformance includes snake-body contiguity: each consecutive pair of body segments is orthogonally adjacent or shares a cell, the only shapes producible under game-rules/movement. Rejection SHALL identify each failing document path with a human-readable reason.
 
 #### Scenario: #invalid-document-creates-nothing
 - **WHEN** a document fails validation on import

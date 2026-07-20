@@ -1,1 +1,4 @@
 - [Workflow git quirks](workflow-git-quirks.md) — workflow shells lack git identity (fixed via ~/.gitconfig); destructive git runs only via workflows; clear stale .git locks via code sandbox.
+- [jsonb canonical fidelity](jsonb-canonical-fidelity.md) — jsonb reorders keys; canonical codecs must rebuild every nested object with fixed key order, no pass-throughs.
+- [Uncommitted-file loss recovery](uncommitted-file-recovery.md) — platform rollback can wipe uncommitted files mid-session; recover contents from the session transcript JSONL (write calls + cat outputs).
+- [Visual tester e2e on Replit](visual-tester-e2e.md) — port 5001 isn't proxy-routable; for UI tests spin up a temp workflow on 5173, run, then remove it.
