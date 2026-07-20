@@ -53,3 +53,6 @@ attached_assets/
 
 # pnpm
 .pnpm-store/
+
+# Scripted rebase plan (local-only)
+.rebase-plan.txt

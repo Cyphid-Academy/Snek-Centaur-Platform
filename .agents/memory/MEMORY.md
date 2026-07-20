@@ -1,0 +1,1 @@
+- [Workflow git quirks](workflow-git-quirks.md) — workflow shells lack git identity (fixed via ~/.gitconfig); destructive git runs only via workflows; clear stale .git locks via code sandbox.

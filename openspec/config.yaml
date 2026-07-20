@@ -123,7 +123,9 @@ rules:
       commit's diff is a native word-level review diff of the requirement
       changes. If the deltas are revised later (e.g. review feedback),
       rewrite history to keep the seed/edit pair intact instead of stacking
-      correction commits."
+      correction commits. In the Replit environment, do the rewrite with
+      the scripted-rebase tooling (replit.md, 'Scripted history
+      rewriting')."
   design:
     - "CONSTRAINT-MINING (mandatory final step): for each decision, ask —
       does its quality depend on an invariant future implementers could

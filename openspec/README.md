@@ -75,7 +75,9 @@ final commit → merge. Four conventions bind agents:
   a native word-level review diff of exactly what the change does to the
   requirements. This is an AI responsibility — and if the deltas are
   revised after review, the AI rewrites history to keep the seed/edit pair
-  intact rather than stacking correction commits.
+  intact rather than stacking correction commits. (In the Replit
+  environment, use the scripted-rebase tooling for this — see
+  `replit.md` → "Scripted history rewriting".)
 - **New capabilities are minted by their change's delta.** A delta file
   whose capability has no `specs/<capability>/spec.md` yet must open with
   a `## Purpose` preamble — the capability's Purpose section, including
@@ -120,7 +122,9 @@ final commit → merge. Four conventions bind agents:
   PR's final commit, the main staleness event is **rebasing the PR onto an
   advanced main** — run `pnpm spec:freshness` after every rebase; if it
   reports staleness, re-seed (rewrite the seed/edit pair against the new
-  base) and have the word-diff re-reviewed.
+  base) and have the word-diff re-reviewed. (Replit environment: the
+  scripted-rebase tooling in `replit.md` → "Scripted history rewriting"
+  performs these rewrites non-interactively.)
 
 Design-time work ends with
 **constraint-mining** (see `config.yaml` design rules): any decision whose
