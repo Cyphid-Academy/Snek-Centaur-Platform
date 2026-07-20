@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+arm_file=".git-workflow-armed-rebase"
+claim="$arm_file.claimed.$$"
+if ! mv "$arm_file" "$claim" 2>/dev/null; then
+  echo "Not armed: this destructive workflow only runs when $arm_file exists." >&2
+  echo "It was likely triggered indirectly (e.g. via the Run button). Doing nothing." >&2
+  exit 0
+fi
+rm -f "$claim"
+
 plan_file=".rebase-plan.txt"
 git_dir=$(git rev-parse --git-dir)
 
@@ -55,4 +64,5 @@ if ! REBASE_TODO_SOURCE="$todo_file" \
   exit 1
 fi
 
-echo "Rebase completed successfully."
+rm -f "$plan_file"
+echo "Rebase completed successfully. Consumed $plan_file."

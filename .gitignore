@@ -56,3 +56,4 @@ attached_assets/
 
 # Scripted rebase plan (local-only)
 .rebase-plan.txt
+.git-workflow-armed-*

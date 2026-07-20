@@ -1,5 +1,13 @@
 # Replit Agent — Pointer File
 
+## User preferences
+
+- **Never autonomously create workflows as workarounds for obstacles.** When
+  you hit an obstacle where a new workflow looks like the right solution
+  (e.g. to get around agent-shell restrictions), you may propose the
+  strategy — then stop and wait for explicit consent before creating each
+  such workflow.
+
 Agent context is split by concern:
 
 - **Implementation work** (TypeScript, packages, CI, infra): read root `AGENTS.md`.
@@ -33,16 +41,28 @@ revisions or re-seeding after a rebase onto an advanced main — instead of
 stacking correction commits. Interactive rebase needs an editor/TTY, which
 Replit workflows don't have, so use the scripted-rebase tooling:
 
+**Arming requirement:** Replit automatically includes every workflow in the
+"Project" run group, so pressing Run would otherwise trigger these
+destructive workflows. Each script therefore refuses to do anything unless
+its own gitignored arming file exists — `.git-workflow-armed-rebase` for
+Scripted rebase, `.git-workflow-armed-reset` for Hard reset to origin. The
+token is claimed atomically (via `mv`) and consumed on start, so each
+arming permits exactly one run of exactly that workflow, even if both start
+in parallel. Unarmed invocations (e.g. via the Run button) exit harmlessly
+with a "Not armed" message.
+
 1. Write the rebase plan to `.rebase-plan.txt` (gitignored). Line 1 is the
    base ref (e.g. `HEAD~3`); the remaining lines are the rebase todo
    (`pick`/`squash`/`fixup`/`reword`/`drop` lines, same format as
    `git rebase -i`).
-2. Trigger the **Scripted rebase** workflow (runs
+2. Arm the workflow: `touch .git-workflow-armed-rebase`.
+3. Trigger the **Scripted rebase** workflow (runs
    `scripts/run-scripted-rebase.sh`). It applies the todo non-interactively
    and, if the rebase fails (e.g. a conflict), automatically runs
    `git rebase --abort` to restore the previous state. It refuses to run if
-   a rebase/merge/cherry-pick is already in progress.
-3. After any rebase, run `pnpm spec:freshness`; on staleness, re-seed the
+   a rebase/merge/cherry-pick is already in progress. On success it deletes
+   `.rebase-plan.txt` so a stale plan can never be replayed.
+4. After any rebase, run `pnpm spec:freshness`; on staleness, re-seed the
    affected seed/edit pairs and have the word-diff re-reviewed.
 
 Note: this rewrites local branch history only — pushing the rewritten
@@ -69,8 +89,9 @@ whenever this repo is loaded into a new Replit environment.
 
 There is also a **Hard reset to origin** workflow
 (`scripts/hard-reset-to-origin.sh`) that resets the current branch to its
-matching `origin/` branch, failing if none exists. Both workflows are
-manual-trigger only (destructive; they discard local work by design).
+matching `origin/` branch, failing if none exists. It requires its own
+arming file, `.git-workflow-armed-reset`. Both workflows are destructive by
+design and only act when explicitly armed and triggered.
 
 ## Future Workflows (commented out in .replit until needed)
 
