@@ -35,7 +35,7 @@
 // Apply order and loud-failure rules mirror the stock machinery
 // (RENAMED → REMOVED → MODIFIED → ADDED; unknown or colliding headers
 // abort), minus the scenario guard that full-block authoring supersedes.
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { freshnessProblemsFor } from "./check-change-freshness.mjs";
@@ -143,6 +143,54 @@ export function foldChange(root, changeName) {
     const ops = parseDeltaOps(readFileSync(file, "utf8"));
     validateOps(cap, ops);
     const target = join(root, "openspec", "specs", cap, "spec.md");
+
+    // Capability rename: mint `cap` by carrying the source capability's
+    // requirements over (every `<src>/` re-prefixed to `<cap>/` in headers,
+    // bodies, and scenario refs), replacing the heading + Purpose with the
+    // delta's, appending the delta's ADDED, then removing the source folder.
+    if (ops.renamesCapability) {
+      const src = ops.renamesCapability;
+      const srcFile = join(root, "openspec", "specs", src, "spec.md");
+      if (!existsSync(srcFile))
+        fail(`${cap}: RENAMES CAPABILITY source "${src}" has no openspec/specs/${src}/spec.md`);
+      if (existsSync(target)) fail(`${cap}: RENAMES CAPABILITY target "${cap}" already exists`);
+      if (!ops.preamble.startsWith("## Purpose"))
+        fail(
+          `${cap}: capability-rename delta must carry the new capability's "## Purpose" preamble`,
+        );
+      if (ops.renamed.length > 0 || ops.removed.length > 0 || ops.modified.size > 0)
+        fail(
+          `${cap}: capability-rename delta must be ADDED-only besides the carried-over requirements`,
+        );
+      const srcSpec = splitSpec(readFileSync(srcFile, "utf8"));
+      if (srcSpec === null) fail(`${src}: spec.md has no "## Requirements" section`);
+      const reprefix = (s) => s.split(`${src}/`).join(`${cap}/`);
+      const blocks = [
+        ...srcSpec.blocks.map((b) => ({ name: reprefix(b.name), raw: reprefix(b.raw) })),
+        ...[...ops.added].map(([name, raw]) => ({ name, raw })),
+      ];
+      const seen = new Set();
+      for (const b of blocks) {
+        if (seen.has(b.name)) fail(`${cap}: duplicate requirement "${b.name}" after rename`);
+        seen.add(b.name);
+      }
+      mkdirSync(dirname(target), { recursive: true });
+      writeFileSync(
+        target,
+        recompose({
+          before: `# ${cap} Specification\n\n${ops.preamble}`,
+          preamble: reprefix(srcSpec.preamble),
+          blocks,
+          after: reprefix(srcSpec.after),
+        }),
+      );
+      rmSync(join(root, "openspec", "specs", src), { recursive: true, force: true });
+      console.log(
+        `Renamed openspec/specs/${src}/ -> ${cap}/: ${srcSpec.blocks.length} carried, ${ops.added.size} added.`,
+      );
+      continue;
+    }
+
     if (!existsSync(target)) {
       // Mint path. The freshness precondition above already guaranteed the
       // shape (Purpose preamble present, ADDED-only, non-empty); the checks

@@ -78,6 +78,17 @@ export function freshnessProblemsFor(root, changeName) {
     const current = parseDeltaOps(readFileSync(file, "utf8"));
     const capExists = existsSync(join(root, "openspec", "specs", cap, "spec.md"));
     if (!capExists) {
+      // A capability-rename delta mints `cap` by carrying over its source; the
+      // source must exist, and (unlike a fresh mint) it may legitimately have
+      // no ADDED requirements — a pure rename carries the source's set over.
+      if (
+        current.renamesCapability &&
+        !existsSync(join(root, "openspec", "specs", current.renamesCapability, "spec.md"))
+      ) {
+        problems.push(
+          `${change}: RENAMES CAPABILITY source "${current.renamesCapability}" not found in specs/`,
+        );
+      }
       if (!current.preamble) {
         problems.push(
           `${change}: capability "${cap}" does not exist in specs/ and the delta has no "## Purpose" preamble — fix the capability folder name, or add a Purpose preamble to mint a new capability`,
@@ -91,7 +102,7 @@ export function freshnessProblemsFor(root, changeName) {
         problems.push(
           `${change}: delta targets nonexistent capability "${cap}" with RENAMED/REMOVED/MODIFIED entries — a delta minting a capability must be ADDED-only`,
         );
-      } else if (current.preamble && current.added.size === 0) {
+      } else if (current.preamble && current.added.size === 0 && !current.renamesCapability) {
         problems.push(`${change}: new capability "${cap}" has no ADDED requirements`);
       }
     } else if (current.preamble) {

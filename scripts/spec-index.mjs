@@ -88,7 +88,23 @@ export function buildSpecIndex(root, { overlayOpenChanges = false, onError = () 
     }
   }
   if (overlayOpenChanges)
-    for (const { file, cap } of openChangeDeltaFiles(root)) harvestSpecFile(file, cap, index);
+    for (const { file, cap } of openChangeDeltaFiles(root)) {
+      // A capability-rename delta carries the source capability's requirements
+      // over under the new name; surface them so citations to the renamed
+      // identifiers resolve while the change is open (specs/ still holds the
+      // source until the change folds at archive).
+      const { renamesCapability } = parseDeltaOps(readFileSync(file, "utf8"));
+      if (renamesCapability && index.has(renamesCapability)) {
+        const dst = index.get(cap) ?? new Map();
+        index.set(cap, dst);
+        for (const [slug, scen] of index.get(renamesCapability)) {
+          const merged = dst.get(slug) ?? new Set();
+          for (const s of scen) merged.add(s);
+          dst.set(slug, merged);
+        }
+      }
+      harvestSpecFile(file, cap, index);
+    }
   return index;
 }
 
@@ -109,7 +125,12 @@ export function makeResolver(index) {
  * lists { from, to } pairs. `preamble` is everything before the first
  * operation section, trimmed — non-empty only for a delta that mints a new
  * capability, where it carries the capability's `## Purpose` section
- * (spec:fold builds specs/<capability>/spec.md from it).
+ * (spec:fold builds specs/<capability>/spec.md from it). `renamesCapability`
+ * is the source capability name when the preamble carries a
+ * `## RENAMES CAPABILITY: <old>` directive — the delta's capability is that
+ * source renamed: fold carries the source's requirements over (re-prefixed)
+ * and appends the delta's ADDED. The directive is stripped from `preamble`
+ * so the remaining Purpose preamble is validated as an ordinary mint.
  */
 export function parseDeltaOps(content) {
   const lines = content.replace(/\r\n?/g, "\n").split("\n");
@@ -166,7 +187,12 @@ export function parseDeltaOps(content) {
     if (blockName !== null) blockLines.push(line);
   }
   flush();
-  return { added, modified, removed, renamed, preamble: preambleLines.join("\n").trim() };
+  const preambleRaw = preambleLines.join("\n").trim();
+  const DIRECTIVE = /^## RENAMES CAPABILITY:[ \t]*([a-z0-9-]+)[ \t]*$/m;
+  const rc = preambleRaw.match(DIRECTIVE);
+  const renamesCapability = rc ? rc[1] : null;
+  const preamble = renamesCapability ? preambleRaw.replace(DIRECTIVE, "").trim() : preambleRaw;
+  return { added, modified, removed, renamed, renamesCapability, preamble };
 }
 
 /**

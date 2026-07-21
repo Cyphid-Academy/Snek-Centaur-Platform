@@ -7,6 +7,6 @@ import { defineConfig } from "vitest/config";
 // `pnpm test` script when needed.
 export default defineConfig({
   test: {
-    projects: ["packages/*/vitest.config.ts"],
+    projects: ["packages/*/vitest.config.ts", "scripts/vitest.config.ts"],
   },
 });
