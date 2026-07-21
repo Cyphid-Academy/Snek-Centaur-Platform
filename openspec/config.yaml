@@ -42,7 +42,13 @@ context: |
   Capabilities so far: game-rules — root of the dependency structure, no
   dependencies (module 01, carved as a single capability by author
   decision: it is already a coherent semantic unit — the complete rules of
-  the game, independent of storage, networking, and UI).
+  the game, independent of storage, networking, and UI). test-sequences —
+  the UI-free data contract for recorded resolver runs (canonical encoding,
+  validation, production seed derivation, halt-at-first-divergence
+  replay-check); depends on game-rules. visual-tester — the dedicated dev
+  app for authoring board state, staging moves, engine-driven simulation,
+  and running saved Test Sequences with discrepancy annotation; depends on
+  game-rules and test-sequences (leaf capability).
 
   MIGRATION NOTE: modules migrate from legacy-spec-archive/spec/ one at a
   time (cutover table: openspec/README.md). For unmigrated modules the
