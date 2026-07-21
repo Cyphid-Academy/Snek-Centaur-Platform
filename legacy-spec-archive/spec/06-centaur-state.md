@@ -28,7 +28,7 @@
 
 **06-REQ-009**: Edits to the heuristic default configuration shall not retroactively affect any game already in progress. Game-scoped per-snake portfolio state ([06-REQ-013]) is independent of the team's current defaults once the game has begun.
 
-**06-REQ-010** *(negative)*: No runtime other than the Captain of the owning Centaur Team shall write to the heuristic default configuration. This is a restatement of [02-REQ-046] at the data layer and is enforced by function-contract checks in the subsystem.
+**06-REQ-010** *(negative)*: No runtime other than the Captain of the owning Centaur Team shall write to the heuristic default configuration. This is enforced at the data layer by function-contract checks in the subsystem.
 
 ---
 
@@ -43,7 +43,7 @@
 
 These values serve as team-level defaults. At game start, they are copied into the game-scoped state record (`game_centaur_state`) and may be independently adjusted during the game without affecting the team defaults.
 
-**06-REQ-012** *(negative)*: No runtime other than the Captain of the owning Centaur Team shall write to the bot parameter record. This is a restatement of [02-REQ-045] at the data layer and is enforced by function-contract checks in the subsystem.
+**06-REQ-012** *(negative)*: No runtime other than the Captain of the owning Centaur Team shall write to the bot parameter record. This is enforced at the data layer by function-contract checks in the subsystem.
 
 ---
 
