@@ -61,4 +61,4 @@
 
 - [x] 6.1 Add `// spec: test-sequences/...` and `// spec: visual-tester/...` citations on all non-trivial implementation decisions; `// design: <archived-change-folder>` references where D1–D9 rationale warrants (finalize folder name at archive)
 - [x] 6.2 Run `pnpm spec:check`, `pnpm typecheck`, `pnpm lint`, `pnpm test` clean
-- [ ] 6.3 At archive (on explicit author instruction): `pnpm spec:fold add-visual-tester` (mints both capability specs from the deltas' `## Purpose` preambles), add `test-sequences` and `visual-tester` to the capability list in `openspec/config.yaml`'s context block, then `openspec archive --skip-specs -y add-visual-tester` as the PR's final commit
+- [x] 6.3 At archive (on explicit author instruction): `pnpm spec:fold add-visual-tester` (mints both capability specs from the deltas' `## Purpose` preambles), add `test-sequences` and `visual-tester` to the capability list in `openspec/config.yaml`'s context block, then `openspec archive --skip-specs -y add-visual-tester` as the PR's final commit

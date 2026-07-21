@@ -69,3 +69,38 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm spec:check
+
+  # Merge-readiness gate for the "no open changes on main" invariant. This job
+  # always succeeds; the gate is the SEPARATE `no-open-changes` commit status
+  # it posts — `pending` (yellow, blocks merge but is NOT a failure: the archive
+  # step is just not done yet) while any OpenSpec change is unarchived, and
+  # `success` once main is clean. Require the `no-open-changes` status in the
+  # branch ruleset (not this job). Same idea as GitHub's built-in
+  # "branch must be up to date" gate: a merge-readiness condition, not a verdict.
+  open-changes-gate:
+    name: open-changes-gate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      statuses: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Post no-open-changes merge-readiness status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          OPEN=$(node scripts/check-open-changes.mjs --names | tr '\n' ' ' | sed 's/ *$//')
+          if [ -z "$OPEN" ]; then
+            gh api "repos/${{ github.repository }}/statuses/$SHA" \
+              -f state=success -f context=no-open-changes \
+              -f description="No open OpenSpec changes"
+          else
+            DESC="Open change(s): $OPEN - archive before merge"
+            gh api "repos/${{ github.repository }}/statuses/$SHA" \
+              -f state=pending -f context=no-open-changes \
+              -f description="${DESC:0:140}"
+          fi
