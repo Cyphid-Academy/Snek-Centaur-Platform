@@ -98,6 +98,8 @@ Both squash and merge-commit are enabled; **rebase-merge stays off** (it drops t
 
 **Merging:** the PR branch MUST be up to date with `main` before merge — rebase it onto the latest `main` (re-seed any stale delta per the two-commit rule; run `pnpm spec:freshness`), push, then merge (merge commit for multi-commit, squash for single-commit). Never bring `main` *into* the branch with a plain merge (it injects a merge commit and pollutes the phase structure) — rebase, or use GitHub's "Update with rebase". Repo settings and the `main` ruleset allow **squash and merge-commit** (not rebase-merge), require the branch to be up to date, and require CI (`lint`, `typecheck`, `test`, `spec-check`) to pass; "Require linear history" is deliberately **off** (it would forbid the merge commit that carries the PR link).
 
+**No open changes on `main`.** The ruleset also requires the `no-open-changes` status. The CI `open-changes-gate` job posts it: **`pending`** (yellow — blocks merge but is *not* a failure; the archive step is simply not done yet) while any OpenSpec change is unarchived, flipping to **`success`** once the change is archived and `main` is clean again. This is a merge-readiness condition in the spirit of the built-in "branch up to date" gate, not a red verdict on any commit — so a change PR is never falsely marked broken while in progress; it just isn't *mergeable* until its `Archive` commit lands. `scripts/check-open-changes.mjs` runs the same check locally.
+
 ## Convex Auth Note
 
 `convex-host` has a `TODO` comment for `@convex-dev/auth` integration. Do not integrate it until the first Convex implementation task. See `packages/convex-host/AGENTS.md` for details.
