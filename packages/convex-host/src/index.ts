@@ -1,4 +1,4 @@
-// spec: 02-REQ-002
+// spec: global-invariants/single-convex-deployment
 // Convex Host deployment — mounts both Convex Components and adds:
 //   - Auth wrappers (Google OAuth, game credentials)
 //   - Platform HTTP API (bearer token)

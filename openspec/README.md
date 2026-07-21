@@ -12,12 +12,12 @@ in archived change folders. Conventions and rules live in
 Requirements are identified like code symbols:
 
 ```
-game-rules/team-potion-effects                      # a requirement
-game-rules/team-potion-effects#sacrificial-collection   # one of its scenarios
+game-engine/team-potion-effects                      # a requirement
+game-engine/team-potion-effects#sacrificial-collection   # one of its scenarios
 ```
 
 - Definition headers carry the full path: `### Requirement:
-  game-rules/team-potion-effects`; scenarios are `#### Scenario: #<slug>`.
+  game-engine/team-potion-effects`; scenarios are `#### Scenario: #<slug>`.
 - Identifiers are frozen API: renames only via RENAMED deltas with a
   same-commit sweep of all references. Renaming a whole **capability**
   (folder + every requirement's prefix) is a change-folder operation: the
@@ -43,7 +43,7 @@ binding spec (and its numeric `MM-REQ-NNN` identifiers remain citable).
 
 | Module | Capability carving | Status | Binding source |
 |--------|--------------------|--------|----------------|
-| 01-game-rules | `specs/game-rules/` (single capability, author decision) | **Migrated** | `openspec/specs/game-rules/spec.md` |
+| 01-game-rules | `specs/game-engine/` (single capability, author decision) | **Migrated** | `openspec/specs/game-engine/spec.md` |
 | 02-platform-architecture | *decided at migration* | Pending | `legacy-spec-archive/spec/02-platform-architecture.md` |
 | 03-auth-and-identity | *decided at migration* | Pending | `legacy-spec-archive/spec/03-auth-and-identity.md` |
 | 04-stdb-engine | *decided at migration* | Pending | `legacy-spec-archive/spec/04-stdb-engine.md` |

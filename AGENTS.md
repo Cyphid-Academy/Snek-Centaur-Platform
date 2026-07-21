@@ -45,7 +45,7 @@ Full architectural detail is in `legacy-spec-archive/spec/02-platform-architectu
 | `packages/convex-snek-platform/` | `@cyphid/convex-snek-platform` | Convex Component for platform-wide state (users, rooms, games, replays, webhooks). | 03, 05 |
 | `packages/convex-centaur-state/` | `@cyphid/convex-centaur-state` | Convex Component for Centaur subsystem (snake config, drives, action log). | 06 |
 | `packages/convex-host/` | `@cyphid/snek-convex-host` | Convex deployment that mounts both components, adds auth wrappers, HTTP API, game lifecycle. | 02, 03, 05, 06 |
-| `packages/centaur-server-lib/` | `@cyphid/snek-centaur-server-lib` | Bot framework + invitation handler + healthcheck contract + typed Convex clients. Published via GitHub tags for forkers. | 07, 02-REQ-030 |
+| `packages/centaur-server-lib/` | `@cyphid/snek-centaur-server-lib` | Bot framework + invitation handler + healthcheck contract + typed Convex clients. Published via GitHub tags for forkers. | 07 |
 | `apps/centaur-server-reference/` | *(app, not published)* | Svelte 5 reference implementation of the Centaur Server. Mirrored to `cyphid/snek-centaur-server` via `git subtree split`. | 08 |
 
 ## Monorepo Mirror Model
@@ -57,8 +57,8 @@ The `apps/centaur-server-reference/` directory is the **canonical** source of th
 Every non-trivial implementation decision that traces to a requirement must carry a comment. Spec identifiers are treated like code identifiers:
 
 ```typescript
-// spec: game-rules/team-potion-effects                       (a requirement)
-// spec: game-rules/team-potion-effects#sacrificial-collection (edge case pinned by a scenario)
+// spec: game-engine/team-potion-effects                       (a requirement)
+// spec: game-engine/team-potion-effects#sacrificial-collection (edge case pinned by a scenario)
 // spec: 04-REQ-014                                            (unmigrated module — numeric legacy ID)
 // design: 2026-07-18-cache-normalized-outputs                 (rationale in an archived change folder)
 ```

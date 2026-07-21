@@ -3,16 +3,16 @@
 // the path under test is guaranteed to run, then compares the resolver
 // against an independently-computed predicted outcome (see the predictors
 // in arbitraries.ts).
-// 1. Team potion collection (game-rules/team-potion-effects#rebuild-shape): a generated
+// 1. Team potion collection (game-engine/team-potion-effects#rebuild-shape): a generated
 //    collector subset — every collection actually happens, and the rebuild,
 //    events, and item removal are checked exactly. Each constructed state is
 //    also re-resolved under a shuffled rule order
-//    (game-rules/turn-resolution-model#order-independence).
-// 2. Health resolution (game-rules/health-and-starvation) over {empty, hazard, food} target
+//    (game-engine/turn-resolution-model#order-independence).
+// 2. Health resolution (game-engine/health-and-starvation) over {empty, hazard, food} target
 //    cells and the full documented maxHealth/hazardDamage ranges — including
-//    game-rules/health-and-starvation#heal-dominates-same-turn-damage and
+//    game-engine/health-and-starvation#heal-dominates-same-turn-damage and
 //    #starvation-with-sources.
-// 3. Head-to-head (game-rules/head-to-head-precedence#level-then-length-then-mutual-destruction):
+// 3. Head-to-head (game-engine/head-to-head-precedence#level-then-length-then-mutual-destruction):
 //    survivors are exactly the level-then-length filter's output.
 import * as fc from "fast-check";
 import { describe, expect, it } from "vitest";
@@ -63,7 +63,7 @@ const potionArb = fc.record({
   shuffleSeedN: fc.integer({ min: 1, max: 1000 }),
 });
 
-describe("team potion collection (game-rules/team-potion-effects#rebuild-shape)", () => {
+describe("team potion collection (game-engine/team-potion-effects#rebuild-shape)", () => {
   it("a generated collector subset yields exactly the predicted rebuild", () => {
     fc.assert(
       fc.property(potionArb, ({ potionType, teamSize, rawCollectors, shuffleSeedN }) => {
@@ -118,7 +118,7 @@ describe("team potion collection (game-rules/team-potion-effects#rebuild-shape)"
 
         // Collection events reference each consumed item by derived id and
         // carry the affected teammates
-        // (game-rules/item-identity#consumption-removes-and-reports).
+        // (game-engine/item-identity#consumption-removes-and-reports).
         const collected = eventsOfKind(result.events, "potion_collected");
         expect([...collected.map((e) => e.snakeId)].sort(byId)).toEqual(
           redIds.slice(0, collectors).map((i) => sid(i)),
@@ -134,7 +134,7 @@ describe("team potion collection (game-rules/team-potion-effects#rebuild-shape)"
         expect(itemList(result.nextState)).toEqual([]);
 
         // The constructed state resolves identically under a shuffled rule
-        // order (game-rules/turn-resolution-model#order-independence).
+        // order (game-engine/turn-resolution-model#order-independence).
         const rules = [...INTERACTION_RULES];
         rngFromSeed(seed(shuffleSeedN)).shuffle(rules);
         const shuffled = resolveTurnWithRules(rules, state, moves, turn(1), seed(50), QUIET_CONFIG);
@@ -160,7 +160,7 @@ const healthArb = fc.record({
   }),
 });
 
-describe("health resolution (game-rules/health-and-starvation)", () => {
+describe("health resolution (game-engine/health-and-starvation)", () => {
   it("committed health and death cause match the predicted outcome", () => {
     fc.assert(
       fc.property(healthArb, ({ target, maxHealth, rawHealth, hazardDamage }) => {
@@ -199,13 +199,13 @@ describe("health resolution (game-rules/health-and-starvation)", () => {
 
         if (target === "food") {
           // Heal dominates all same-turn damage
-          // (game-rules/health-and-starvation#heal-dominates-same-turn-damage).
-          expect(snake.body).toHaveLength(4); // duplicated tail (game-rules/food-and-growth)
+          // (game-engine/health-and-starvation#heal-dominates-same-turn-damage).
+          expect(snake.body).toHaveLength(4); // duplicated tail (game-engine/food-and-growth)
           return;
         }
         if (!predicted.alive) {
           // Starvation reports every contributing source
-          // (game-rules/health-and-starvation#starvation-with-sources).
+          // (game-engine/health-and-starvation#starvation-with-sources).
           const deaths = eventsOfKind(result.events, "snake_died");
           expect(deaths).toHaveLength(1);
           expect(deaths[0]?.cause).toBe("health_depletion");
@@ -241,7 +241,7 @@ function stackedBody(headX: number, tailX: number, len: number): Cell[] {
   return [{ x: headX, y: 5 }, ...Array.from({ length: len - 1 }, () => ({ x: tailX, y: 5 }))];
 }
 
-describe("head-to-head (game-rules/head-to-head-precedence#level-then-length-then-mutual-destruction)", () => {
+describe("head-to-head (game-engine/head-to-head-precedence#level-then-length-then-mutual-destruction)", () => {
   it("survivors are exactly the level-then-length filter's output", () => {
     fc.assert(
       fc.property(headToHeadArb, ({ levelA, levelB, lenA, lenB }) => {
@@ -281,7 +281,7 @@ describe("head-to-head (game-rules/head-to-head-precedence#level-then-length-the
           [0, 1].filter((i) => !survivors.includes(i)).map((i) => sid(i)),
         );
         // Losers' bodies remain on the board for the whole turn
-        // (game-rules/head-to-head-precedence#withdrawal): the committed
+        // (game-engine/head-to-head-precedence#withdrawal): the committed
         // loser still carries its snapshot body.
         for (const i of [0, 1]) {
           if (!survivors.includes(i)) {

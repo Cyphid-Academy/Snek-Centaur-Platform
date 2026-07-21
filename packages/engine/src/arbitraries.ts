@@ -5,7 +5,7 @@
 // property file draws from the same definitions.
 //
 // Configuration parameters are generated from their FULL documented ranges
-// (game-rules/configuration-parameters, mirrored in CONFIG_RANGES):
+// (game-engine/configuration-parameters, mirrored in CONFIG_RANGES):
 // fast-check biases toward range boundaries, so narrowing ranges by hand
 // hides exactly the extreme cases property testing is best at finding.
 // Bounds that exist only to keep test wall-clock in check (turn budgets,
@@ -20,7 +20,7 @@ import type {
   TurnNumber,
 } from "./types.js";
 
-// Full documented parameter ranges. spec: game-rules/configuration-parameters
+// Full documented parameter ranges. spec: game-engine/configuration-parameters
 export const CONFIG_RANGES = {
   boardSize: { min: 7, max: 32 },
   snakesPerTeam: { min: 1, max: 10 },
@@ -88,7 +88,7 @@ export const teamsArb = fc
   .integer({ min: 2, max: TEAM_POOL.length })
   .map((n) => TEAM_POOL.slice(0, n));
 
-/** Derived invulnerability levels (game-rules/collisions-and-severing). */
+/** Derived invulnerability levels (game-engine/collisions-and-severing). */
 export const invulnLevelArb = fc.constantFrom(-1, 0, 1);
 
 // ---------------------------------------------------------------------------
@@ -97,7 +97,7 @@ export const invulnLevelArb = fc.constantFrom(-1, 0, 1);
 // ---------------------------------------------------------------------------
 
 /**
- * game-rules/head-to-head-precedence#level-then-length-then-mutual-destruction:
+ * game-engine/head-to-head-precedence#level-then-length-then-mutual-destruction:
  * occupants below max level die; among the rest, below max length die; two
  * or more finalists all die. Returns the indices of survivors (0 or 1 of
  * them).
@@ -113,7 +113,7 @@ export function headToHeadSurvivors(
 }
 
 /**
- * game-rules/health-and-starvation: a heal claim resolves to maxHealth;
+ * game-engine/health-and-starvation: a heal claim resolves to maxHealth;
  * otherwise snapshot health minus tick and any hazard damage, dead at <= 0.
  */
 export function predictedHealth(input: {
@@ -128,7 +128,7 @@ export function predictedHealth(input: {
   return { health: resolved, alive: resolved > 0 };
 }
 
-/** Effect expiry turn for a rebuild at turn T (game-rules/team-potion-effects). */
+/** Effect expiry turn for a rebuild at turn T (game-engine/team-potion-effects). */
 export function expiryFor(collectionTurn: TurnNumber): TurnNumber {
   return (collectionTurn + 3) as TurnNumber;
 }

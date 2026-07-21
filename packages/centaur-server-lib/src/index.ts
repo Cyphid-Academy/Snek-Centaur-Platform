@@ -1,4 +1,4 @@
-// spec: 07-REQ-001, 02-REQ-030
+// spec: 07-REQ-001
 // Centaur Server Library — bot framework + invitation handler + healthcheck.
 // Teams use this library to build their Centaur Server implementation.
 // This is a typed skeleton — implementation deferred.

@@ -1,5 +1,7 @@
-// Move pre-validation helper for UI and bot consumers (02-REQ-037 —
-// pre-validation on web clients). Not part of module 01's minimal contract.
+// Move pre-validation helper for UI and bot consumers (web clients
+// pre-validate against the shared build per
+// global-invariants/one-shared-engine). Not part of the engine's minimal
+// contract.
 //
 // Semantics: `isValidMove` returns false only for moves whose fatality is
 // certain from this snake's OWN deterministic future — entering a wall cell,
@@ -21,8 +23,8 @@ export function isValidMove(state: GameState, snakeId: SnakeId, direction: Direc
   const targetType = cellAt(state.board, target);
   if (targetType === undefined || targetType === CellType.Wall) return false;
   // Own segments still occupied after the unconditional advance-and-drop-tail
-  // move (game-rules/movement): body[1 .. len-2]. A duplicated tail segment from
-  // growth (game-rules/food-and-growth) keeps its cell occupied via the second-to-last entry.
+  // move (game-engine/movement): body[1 .. len-2]. A duplicated tail segment from
+  // growth (game-engine/food-and-growth) keeps its cell occupied via the second-to-last entry.
   const occupiedAfter = snake.body.slice(1, -1);
   return !occupiedAfter.some((c) => sameCell(c, target));
 }

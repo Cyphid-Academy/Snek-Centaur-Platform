@@ -1,4 +1,4 @@
-// Present-items helpers. spec: game-rules/item-identity, 01 §3.2.
+// Present-items helpers. spec: game-engine/item-identity, 01 §3.2.
 //
 // GameState.items is the cell-keyed present-items projection of module 04's
 // item_lifetimes record: consumed items are simply absent. Flat Item
@@ -18,7 +18,7 @@ import type {
 
 type IdentityPair = Pick<ItemBase, "spawnTurn" | "spawnIndex">;
 
-// spec: game-rules/item-identity — an item's identity is the pair
+// spec: game-engine/item-identity — an item's identity is the pair
 // (spawnTurn, spawnIndex), carried as fields on the item itself. Game setup
 // spawns at boundary SETUP_SPAWN_TURN; turn T's resolution spawns at
 // spawnTurnAfter(T), the boundary at which those items first exist.
@@ -34,7 +34,7 @@ export function spawnTurnAfter(turnNumber: TurnNumber): TurnNumber {
 /**
  * Derived scalar rendering of the identity pair, for display and keying.
  * Never stored — downstream layers use the pair fields directly
- * (game-rules/item-identity).
+ * (game-engine/item-identity).
  */
 export function itemIdOf(identity: IdentityPair): ItemId {
   return `${identity.spawnTurn}:${identity.spawnIndex}` as ItemId;
@@ -48,7 +48,7 @@ export function compareIdentity(a: IdentityPair, b: IdentityPair): number {
 /**
  * Build the logical cell-keyed map from a flat list of present items.
  * Throws if two items share a cell — the single-occupancy invariant of
- * game-rules/item-identity must already hold in any valid wire-form list.
+ * game-engine/item-identity must already hold in any valid wire-form list.
  */
 export function itemsByCell(board: Board, items: Iterable<Item>): ItemsByCell {
   const map = new Map<CellIndex, Item>();

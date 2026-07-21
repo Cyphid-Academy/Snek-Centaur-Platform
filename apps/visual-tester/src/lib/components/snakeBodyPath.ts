@@ -32,7 +32,7 @@ export interface Discontinuity {
 // spec: visual-tester/invalid-state-surfacing — the first consecutive
 // segment pair separated by more than one cell, or null when the body is
 // contiguous. Stacked (equal) neighbours are contiguous — growth duplicates
-// a tail (game-rules/food-and-growth). Operates on the raw body so callers
+// a tail (game-engine/food-and-growth). Operates on the raw body so callers
 // can point at the exact offending index; `createSnakeBodyPath` relies on
 // there being none (it throws otherwise).
 export function firstDiscontinuity(segments: readonly SnakeSegment[]): Discontinuity | null {

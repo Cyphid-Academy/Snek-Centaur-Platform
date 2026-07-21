@@ -1,6 +1,6 @@
 // TurnContext: the read-only reference state every interaction rule consumes.
-// Built in two spec stages: move projection (game-rules/movement/043) and head-to-head
-// precedence (game-rules/head-to-head-precedence), which withdraws losing heads and yields the
+// Built in two spec stages: move projection (game-engine/movement/043) and head-to-head
+// precedence (game-engine/head-to-head-precedence), which withdraws losing heads and yields the
 // surviving moved-head set H*. Everything downstream reads only this context
 // plus the claim set.
 import { advance, cellIndex, cellKey } from "../board.js";
@@ -67,13 +67,13 @@ export interface TurnContext {
   /** Snakes alive in the snapshot, ascending snakeId. */
   readonly aliveInS: ReadonlyArray<WorkSnake>;
   readonly moved: ReadonlyMap<SnakeId, MoveProjection>;
-  /** H* (game-rules/head-to-head-precedence): alive movers whose head survived head-to-head. */
+  /** H* (game-engine/head-to-head-precedence): alive movers whose head survived head-to-head. */
   readonly survivingHeads: ReadonlyArray<SurvivingHead>;
-  /** The nullable single item occupant of a cell (game-rules/item-identity). */
+  /** The nullable single item occupant of a cell (game-engine/item-identity). */
   readonly itemAt: (cell: Cell) => Item | null;
   /**
    * Non-head segments of moved bodies at a cell — the body-collision targets
-   * of game-rules/collisions-and-severing, including head-to-head losers' bodies. Entries are
+   * of game-engine/collisions-and-severing, including head-to-head losers' bodies. Entries are
    * ordered by (snakeId, segment index) ascending; `index` is the segment's
    * position in the owner's moved body (≥ 1). The contract is fixed by the
    * spec; the backing structure behind this function is deliberately simple
@@ -113,7 +113,7 @@ export function buildTurnContext(
   const aliveInS = snakes.filter((s) => s.alive);
 
   // Roster and start-of-turn aliveness for the win check. Forfeit exclusion
-  // (game-rules/scoring) happens upstream.
+  // (game-engine/scoring) happens upstream.
   const roster: CentaurTeamId[] = [];
   for (const s of snakes) {
     if (!roster.includes(s.centaurTeamId)) roster.push(s.centaurTeamId);
@@ -121,7 +121,7 @@ export function buildTurnContext(
   const aliveTeamsAtStart = new Set(aliveInS.map((s) => s.centaurTeamId));
   const snapshotHealth = new Map<SnakeId, number>(snakes.map((s) => [s.snakeId, s.health]));
 
-  // ---- Stage 1: Move Projection. spec: game-rules/movement ----
+  // ---- Stage 1: Move Projection. spec: game-engine/movement ----
   // RNG draws happen in ascending-snakeId order, only for fallback snakes.
   const rngMove = rngFromSeed(subSeed(turnSeed, "phase-1-random"));
   const moved = new Map<SnakeId, MoveProjection>();
@@ -143,7 +143,7 @@ export function buildTurnContext(
     const from = snake.body[0] as Cell;
     const head = advance(from, direction);
     // Unconditional advance-and-drop-tail; growth is a duplicated tail
-    // segment applied at commit (game-rules/food-and-growth), never a movement branch.
+    // segment applied at commit (game-engine/food-and-growth), never a movement branch.
     moved.set(snake.snakeId, {
       direction,
       stagedBy,
@@ -153,7 +153,7 @@ export function buildTurnContext(
     });
   }
 
-  // ---- Stage 2: Head-to-Head Precedence. spec: game-rules/head-to-head-precedence ----
+  // ---- Stage 2: Head-to-Head Precedence. spec: game-engine/head-to-head-precedence ----
   // Levels and lengths are snapshot reads; losers' heads are withdrawn from
   // the surviving moved-head set consumed by every other rule. Their body
   // segments remain on the logical board.
@@ -169,7 +169,7 @@ export function buildTurnContext(
     const maxLvl = Math.max(...group.map((s) => invulnerabilityLevel(s)));
     const topTier = group.filter((s) => invulnerabilityLevel(s) === maxLvl);
     // Snapshot body length — growth from earlier food is already a
-    // duplicated tail segment in the snapshot (game-rules/food-and-growth).
+    // duplicated tail segment in the snapshot (game-engine/food-and-growth).
     const maxLen = Math.max(...topTier.map((s) => s.body.length));
     const atMax = topTier.filter((s) => s.body.length === maxLen);
     const survivor = atMax.length === 1 ? (atMax[0] as WorkSnake) : null;

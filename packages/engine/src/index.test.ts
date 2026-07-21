@@ -24,7 +24,7 @@ describe("@cyphid/snek-engine public API", () => {
   it("plays a full seeded game end to end deterministically", () => {
     // Integration: generate a board, then resolve turns with bot-less
     // fallback moves until the game ends or 60 turns pass. Twice, same seed —
-    // identical event streams (replay reproducibility, game-rules/determinism/060).
+    // identical event streams (replay reproducibility, game-engine/determinism/060).
     const run = () => {
       const gameSeed = new Uint8Array(32).fill(21);
       const config: engine.GameConfig = {

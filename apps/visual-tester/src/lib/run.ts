@@ -105,7 +105,7 @@ export function implicatedCellIndices(
   for (const d of differences) {
     const segments = parsePath(d.path);
 
-    // Item-map keys are canonical cell indices (game-rules/item-identity).
+    // Item-map keys are canonical cell indices (game-engine/item-identity).
     const itemsAt = segments.indexOf("items");
     if (segments[0] === "nextState" && itemsAt === 1 && typeof segments[2] === "string") {
       const idx = Number(segments[2]);

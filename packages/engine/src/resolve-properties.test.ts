@@ -1,16 +1,16 @@
 // Property tests for the staged turn-resolution model, driven by fast-check
 // over configurations drawn from the FULL documented parameter ranges, 2-6
 // teams, and arbitrary seeds (see arbitraries.ts):
-// 1. Rule-order independence (game-rules/turn-resolution-model#order-independence): any
+// 1. Rule-order independence (game-engine/turn-resolution-model#order-independence): any
 //    permutation of the interaction rules yields an identical TurnResolution
 //    across whole fuzzed games.
 // 2. Multi-turn structural invariants: every reachable state honours the
 //    per-family effect bound, the effect expiry window, health bounds, and
 //    head uniqueness; events arrive in canonical class order.
-// 3. Item identity (game-rules/item-identity#ids-never-collide): the (spawnTurn, spawnIndex)
+// 3. Item identity (game-engine/item-identity#ids-never-collide): the (spawnTurn, spawnIndex)
 //    pair is never re-issued, never moves, and keys its own cell; and
 //    re-resolving a turn emits an identical event sequence
-//    (game-rules/turn-events#deterministic-order).
+//    (game-engine/turn-events#deterministic-order).
 // Directed coverage of the interesting paths (potions guaranteed to be
 // collected, exact health/head-to-head outcomes) lives in
 // resolve-rules-properties.test.ts via constructive generators.
@@ -112,7 +112,7 @@ function playFuzzGame(
   return { turns: budget, events };
 }
 
-describe("rule-order independence (game-rules/turn-resolution-model#order-independence)", () => {
+describe("rule-order independence (game-engine/turn-resolution-model#order-independence)", () => {
   it("yields identical whole-game results under shuffled interaction-rule orders", () => {
     fc.assert(
       fc.property(fuzzArb, fc.integer({ min: 1, max: 1000 }), (draw, shuffleSeedN) => {
@@ -133,10 +133,10 @@ describe("multi-turn structural invariants", () => {
         const played = playFuzzGame(draw, null, (state, events, t) => {
           const headCells = new Set<string>();
           for (const snake of state.snakes) {
-            // ≤1 active effect per family (game-rules/team-potion-effects)
+            // ≤1 active effect per family (game-engine/team-potion-effects)
             const families = snake.activeEffects.map((e) => e.family);
             expect(new Set(families).size).toBe(families.length);
-            // No effect may outlive its window (game-rules/team-potion-effects#three-turn-expiry)
+            // No effect may outlive its window (game-engine/team-potion-effects#three-turn-expiry)
             for (const e of snake.activeEffects) {
               expect(e.expiryTurn).toBeGreaterThan(t);
               expect(e.expiryTurn).toBeLessThanOrEqual(t + EFFECT_DURATION_TURNS);
@@ -146,13 +146,13 @@ describe("multi-turn structural invariants", () => {
             expect(snake.body.length).toBeGreaterThanOrEqual(1);
             expect(snake.health).toBeGreaterThan(0);
             expect(snake.health).toBeLessThanOrEqual(draw.config.runtime.maxHealth);
-            // Alive heads pairwise distinct (game-rules/head-to-head-precedence#unique-entrancy)
+            // Alive heads pairwise distinct (game-engine/head-to-head-precedence#unique-entrancy)
             const head = snake.body[0];
             const key = `${head?.x},${head?.y}`;
             expect(headCells.has(key)).toBe(false);
             headCells.add(key);
           }
-          // Events arrive in canonical class order (game-rules/turn-events)
+          // Events arrive in canonical class order (game-engine/turn-events)
           const ranks = events.map((e) => EVENT_CLASS_ORDER.indexOf(e.kind));
           expect([...ranks].sort((a, b) => a - b)).toEqual(ranks);
           // At most one death event per snake
@@ -171,8 +171,8 @@ describe("multi-turn structural invariants", () => {
     fc.assert(
       fc.property(fuzzArb, (draw) => {
         // Once an identity leaves the board (consumed) it must never
-        // reappear (game-rules/item-identity#ids-never-collide), and every map entry must
-        // sit under its own cell's index (game-rules/item-identity#one-item-per-cell).
+        // reappear (game-engine/item-identity#ids-never-collide), and every map entry must
+        // sit under its own cell's index (game-engine/item-identity#one-item-per-cell).
         const everSeen = new Map<string, string>(); // identity -> home cell
         const departed = new Set<string>();
         const played = playFuzzGame(draw, null, (state) => {
@@ -198,7 +198,7 @@ describe("multi-turn structural invariants", () => {
     );
   });
 
-  it("re-resolving any turn emits an identical event sequence (game-rules/turn-events#deterministic-order)", () => {
+  it("re-resolving any turn emits an identical event sequence (game-engine/turn-events#deterministic-order)", () => {
     fc.assert(
       fc.property(fuzzArb, (draw) => {
         let state = initialState(draw);

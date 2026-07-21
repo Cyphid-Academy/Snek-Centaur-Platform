@@ -9,7 +9,7 @@ that compares recorded expectations against freshly computed resolver
 output. This capability defines the data contract with no reference to any
 UI, so it can be consumed headlessly.
 
-Depends on: game-rules. Consumed by: visual-tester (and any future
+Depends on: game-engine. Consumed by: visual-tester (and any future
 headless sequence runner, e.g. CI regression replay).
 
 ## Requirements
@@ -23,7 +23,7 @@ A Test Sequence SHALL be a self-contained JSON document recording one determinis
 
 #### Scenario: #optional-moves
 - **WHEN** a turn's staged moves omit a snake
-- **THEN** the omission is preserved as an absent entry (never an explicit null or default direction), matching the resolver's treatment of unstaged snakes per game-rules/turn-resolution-model
+- **THEN** the omission is preserved as an absent entry (never an explicit null or default direction), matching the resolver's treatment of unstaged snakes per game-engine/turn-resolution-model
 
 ### Requirement: test-sequences/canonical-encoding
 The Test Sequence format SHALL define exactly one JSON encoding for every recorded engine value — including byte-array seeds, map-valued fields, and per-team score maps — such that two equal engine values always serialize to structurally identical JSON. Equality and difference reporting over recorded values are defined over this canonical encoding.
@@ -44,7 +44,7 @@ Every Test Sequence document SHALL carry an integer schema version identifying t
 - **THEN** the document is rejected with an error naming the document's version and the supported version(s); it is never partially interpreted
 
 ### Requirement: test-sequences/determinism
-Replaying a Test Sequence SHALL derive each turn's seed from the document's game seed and that turn's number using the platform's seed-derivation convention (`subSeed(gameSeed, "turn-" + turnNumber)` per game-rules/determinism), so that replaying the same document against the same engine build always produces identical resolver outputs.
+Replaying a Test Sequence SHALL derive each turn's seed from the document's game seed and that turn's number using the platform's seed-derivation convention (`subSeed(gameSeed, "turn-" + turnNumber)` per game-engine/determinism), so that replaying the same document against the same engine build always produces identical resolver outputs.
 
 #### Scenario: #production-seed-derivation
 - **WHEN** turn T of a sequence is resolved during replay
@@ -55,7 +55,7 @@ Replaying a Test Sequence SHALL derive each turn's seed from the document's game
 - **THEN** every computed next state, event list, and outcome is identical between the two replays
 
 ### Requirement: test-sequences/validation
-A JSON document SHALL be accepted as a Test Sequence only if it passes schema validation: structural conformance to the format, closed-vocabulary conformance for every domain value per game-rules/domain-vocabulary, and referential integrity (every snake referenced by a staged move exists in the state that turn resolves from). Structural conformance includes snake-body contiguity: each consecutive pair of body segments is orthogonally adjacent or shares a cell, the only shapes producible under game-rules/movement. Rejection SHALL identify each failing document path with a human-readable reason.
+A JSON document SHALL be accepted as a Test Sequence only if it passes schema validation: structural conformance to the format, closed-vocabulary conformance for every domain value per game-engine/domain-vocabulary, and referential integrity (every snake referenced by a staged move exists in the state that turn resolves from). Structural conformance includes snake-body contiguity: each consecutive pair of body segments is orthogonally adjacent or shares a cell, the only shapes producible under game-engine/movement. Rejection SHALL identify each failing document path with a human-readable reason.
 
 #### Scenario: #invalid-document-creates-nothing
 - **WHEN** a document fails validation on import

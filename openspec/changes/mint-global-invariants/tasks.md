@@ -16,9 +16,9 @@
 
 ## 2. Implement (code and reference sweep)
 - [x] 2.1 Sweep `game-rules/ → game-engine/` references: code citations (`packages/engine`, `apps/visual-tester`), the other capabilities' specs (`test-sequences`, `visual-tester`), docs (README, `openspec/README.md`, `config.yaml`, AGENTS files), and the legacy identifier map's targets/anchors. `specs/game-rules/` itself is NOT swept — the fold renames that folder at archive. Archived change folders and the legacy corpus stay frozen.
-- [ ] 2.2 Populate `legacy-spec-archive/maps/identifier-map.json` for module 02: `target` + scenario anchors for owned ids; note-only tombstones with `pendingRehome` for omitted/design ids; NO entries for parked ids (that is what keeps them binding)  *(held for author review of the spec)*
-- [ ] 2.3 Convert module-02 code citations for owned ids: `02-REQ-002 → global-invariants/single-convex-deployment` (convex-host ×3); `02-REQ-034/037 → game-engine`/`global-invariants/one-shared-engine` (engine ×4); drop the `02-REQ-030` half of the centaur-server-lib citation, leaving `07-REQ-001`  *(held)*
-- [ ] 2.4 Change `packages/convex-snek-platform` `GameStatus` terminal literal `ended → finished` (type-literal only; no persisted data yet)  *(held)*
+- [x] 2.2 Populate `legacy-spec-archive/maps/identifier-map.json` for module 02: `target` + scenario anchors for owned ids; note-only tombstones with `pendingRehome` for omitted/design ids; NO entries for parked ids (that is what keeps them binding) 
+- [x] 2.3 Convert module-02 code citations for owned ids: `02-REQ-002 → global-invariants/single-convex-deployment` (convex-host ×3); `02-REQ-034/037 → game-engine`/`global-invariants/one-shared-engine` (engine ×4); drop the `02-REQ-030` half of the centaur-server-lib citation, leaving `07-REQ-001` 
+- [x] 2.4 Change `packages/convex-snek-platform` `GameStatus` terminal literal `ended → finished` (type-literal only; no persisted data yet) 
 
 ## 3. Archive (terminal fold — on explicit human instruction)
 - [ ] 3.1 `pnpm spec:fold mint-global-invariants` — folds `global-invariants` (mint) and `game-engine` (rename: folder move + re-prefix + `runtime-portability`); then `openspec archive --skip-specs -y`

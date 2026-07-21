@@ -1,4 +1,4 @@
-// spec: 02-REQ-002
+// spec: global-invariants/single-convex-deployment
 // Convex Host: mounts both Convex Components.
 //
 // TODO: Replace this stub with real Convex Component mounting once the

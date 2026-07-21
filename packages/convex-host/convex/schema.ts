@@ -1,4 +1,4 @@
-// spec: 02-REQ-002
+// spec: global-invariants/single-convex-deployment
 // Convex Host schema — top-level deployment.
 // All tables live in the mounted components (convex-snek-platform,
 // convex-centaur-state). This file is intentionally empty until the

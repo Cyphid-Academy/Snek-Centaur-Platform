@@ -1,10 +1,10 @@
 // @cyphid/snek-engine — the shared game engine.
-// spec: 02-REQ-034 — single shared codebase exporting module 01's domain
-// type vocabulary and the staged turn resolver, consumed by the
-// SpacetimeDB module (authoritative), the Centaur Server library
-// (simulation), and web clients (pre-validation/rendering).
+// spec: global-invariants/one-shared-engine — single shared codebase
+// exporting the game-engine type vocabulary and the staged turn resolver,
+// consumed by the SpacetimeDB module (authoritative), the Centaur Server
+// library (simulation), and web clients (pre-validation/rendering).
 //
-// The export list mirrors 02 §2.17 / 01 §3 (Exported Interfaces). Everything
+// The export list mirrors the engine's exported-interface surface. Everything
 // else in this package is module-internal detail.
 
 // 01 §3.1 — enums, branded ids, Agent, derived effect values
@@ -65,5 +65,6 @@ export { advance, cellAt, cellIndex, fertileGroundEnabled, isInner, parityOf } f
 // the exact formulas.
 export { applyTurnStart, declareTurnOver, initialClock } from "./clock.js";
 
-// Move pre-validation (02-REQ-037 consumers; see validate.ts for semantics).
+// Move pre-validation (web-client consumers of the shared build per
+// global-invariants/one-shared-engine; see validate.ts for semantics).
 export { isValidMove } from "./validate.js";

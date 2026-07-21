@@ -35,7 +35,7 @@ function formatPath(path: ReadonlyArray<PropertyKey>): string {
 }
 
 // ---------------------------------------------------------------------------
-// Closed vocabularies (game-rules/domain-vocabulary)
+// Closed vocabularies (game-engine/domain-vocabulary)
 // ---------------------------------------------------------------------------
 
 const directionSchema = z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3)], {
@@ -93,7 +93,7 @@ const snakeSchema = z.strictObject({
   centaurTeamId: z.string().min(1),
   // spec: test-sequences/validation — structural conformance includes body
   // contiguity: each consecutive segment pair is orthogonally adjacent or
-  // shares a cell (stacked), the only shapes game-rules/movement produces.
+  // shares a cell (stacked), the only shapes game-engine/movement produces.
   body: z
     .array(cellSchema)
     .min(1, "snake body must have at least one segment")
@@ -153,7 +153,7 @@ const gameStateSchema = z
       });
     }
     // Referential integrity of the item map: key is the canonical cell index
-    // `y * boardSize + x` of the item's own cell (game-rules/item-identity).
+    // `y * boardSize + x` of the item's own cell (game-engine/item-identity).
     for (const [key, item] of Object.entries(state.items)) {
       const expected = item.cell.y * size + item.cell.x;
       if (Number(key) !== expected) {

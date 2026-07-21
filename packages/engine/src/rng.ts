@@ -1,5 +1,5 @@
-// Randomness primitives. spec: 01 Section 2.3 (game-rules/determinism,
-// game-rules/board-generation-retry).
+// Randomness primitives. spec: 01 Section 2.3 (game-engine/determinism,
+// game-engine/board-generation-retry).
 //
 // PRNG: Xoshiro256++ — 256-bit state mapping naturally to a 32-byte seed.
 // Sub-seed derivation: BLAKE3 keyed hash (module 01 DOWNSTREAM IMPACT note 4:

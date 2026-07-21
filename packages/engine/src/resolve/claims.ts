@@ -50,7 +50,7 @@ export interface RebuildClaim {
 
 export interface PotionCollection {
   readonly snakeId: SnakeId;
-  // Reference by derived id (game-rules/item-identity) — the commit resolves
+  // Reference by derived id (game-engine/item-identity) — the commit resolves
   // it against the snapshot's itemById index.
   readonly itemId: ItemId;
   readonly potionType: PotionType;
@@ -79,9 +79,9 @@ export class ClaimSet {
   private readonly rebuildMap = new Map<string, RebuildClaim>();
   readonly potionCollections: PotionCollection[] = [];
   readonly foodEaten = new Map<SnakeId, ItemId>();
-  // spec: game-rules/food-and-growth, game-rules/team-potion-effects — the
+  // spec: game-engine/food-and-growth, game-engine/team-potion-effects — the
   // commit resolves these references and removes the entries from the
-  // present-items map (game-rules/item-identity); rules never write it.
+  // present-items map (game-engine/item-identity); rules never write it.
   private readonly consumptionList: ItemId[] = [];
   // Derived-stage outputs (01 §2.8 stage 4) — still claims, written before
   // the commit runs.
@@ -119,7 +119,7 @@ export class ClaimSet {
 
   // Multiple attackers severing one victim collapse to the head-closest
   // (minimum) contact index; every pair still gets its own record/event.
-  // spec: game-rules/collisions-and-severing
+  // spec: game-engine/collisions-and-severing
   sever(record: SeverRecord, contactIndex: number): void {
     const prev = this.severMinIndex.get(record.victimSnakeId);
     this.severMinIndex.set(
@@ -203,7 +203,7 @@ export class ClaimSet {
   }
 
   // Canonical source order: claims form a set, so reported source lists must
-  // not depend on rule evaluation order (game-rules/turn-resolution-model order independence).
+  // not depend on rule evaluation order (game-engine/turn-resolution-model order independence).
   damageSources(id: SnakeId): DamageSource[] {
     const present = new Set((this.damageMap.get(id) ?? []).map((d) => d.source));
     return DAMAGE_SOURCE_ORDER.filter((src) => present.has(src));
