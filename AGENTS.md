@@ -12,6 +12,16 @@ This is the top-level agent context for **implementation work** in the Snek Cent
 - For **package-scoped implementation**: read the `AGENTS.md` in the relevant `packages/*/` or `apps/*/` directory.
 - This file covers repo-wide implementation conventions that apply everywhere.
 
+> **Durability principle.** Conversation context is not durable. Whenever you
+> propose a design, write a change (proposal/design/spec/tasks), a commit
+> message, or a code comment, the artifact must stand on its own for a future
+> observer who has no access to the present session — no "as we discussed," no
+> reliance on a decision that lives only in chat. A decision's rationale belongs
+> in a durable home (a change's `design.md`, an archived change folder, a
+> `// design:` reference), not in the transcript. This is the same instinct as
+> the spec's no-journey-narration rule, generalised to every artifact you write
+> into the repo: write for the reader who arrives after the conversation is gone.
+
 ## Project Overview
 
 The **Team Snek Centaur Platform** is a team-based multiplayer snake game for Cyphid Academy's Battle Bunker educational program. Players collaborate with an AI "Centaur Server" that controls their team's snakes by default; human operators selectively override individual snakes.
