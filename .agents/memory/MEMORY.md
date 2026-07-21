@@ -2,3 +2,4 @@
 - [jsonb canonical fidelity](jsonb-canonical-fidelity.md) — jsonb reorders keys; canonical codecs must rebuild every nested object with fixed key order, no pass-throughs.
 - [Uncommitted-file loss recovery](uncommitted-file-recovery.md) — platform rollback can wipe uncommitted files mid-session; recover contents from the session transcript JSONL (write calls + cat outputs).
 - [Visual tester e2e on Replit](visual-tester-e2e.md) — port 5001 isn't proxy-routable; for UI tests spin up a temp workflow on 5173, run, then remove it.
+- [Verify PR state before acting](verify-pr-state.md) — re-check a PR's live open/merged state before pushing to its branch, archiving, rebasing, or merging; a merged branch must not be reused (fresh branch off base instead).
