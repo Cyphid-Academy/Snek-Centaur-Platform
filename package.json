@@ -6,6 +6,9 @@
   "engines": {
     "node": ">=20"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": ["@biomejs/biome", "@fission-ai/openspec", "esbuild"]
+  },
   "scripts": {
     "typecheck": "tsc -b && pnpm --filter @cyphid/centaur-server-reference typecheck && pnpm --filter @cyphid/visual-tester typecheck",
     "lint": "biome check .",
