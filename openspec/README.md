@@ -38,8 +38,14 @@ game-engine/team-potion-effects#sacrificial-collection   # one of its scenarios
 
 The pre-OpenSpec corpus is quarantined in
 [`legacy-spec-archive/`](../legacy-spec-archive/README.md). **Bindingness is
-per-module**: until a module's row says Migrated, its archived file is the
-binding spec (and its numeric `MM-REQ-NNN` identifiers remain citable).
+per identifier**: a numeric `MM-REQ-NNN` id is retired the moment it gains
+an entry in `legacy-spec-archive/maps/identifier-map.json`; until then it
+stays binding and citable in its archived module file. A module's row
+reads **Migrated** when every one of its ids is mapped, **Partial** when
+some ids are mapped while the rest are *parked* — recorded, with their
+prospective capability, in that module's parked ledger under
+[`docs/spec-migration/`](../docs/spec-migration/README.md) — and
+**Pending** when none are.
 
 | Module | Capability carving | Status | Binding source |
 |--------|--------------------|--------|----------------|
@@ -55,18 +61,22 @@ binding spec (and its numeric `MM-REQ-NNN` identifiers remain citable).
 (Module 09 was absorbed into module 08 pre-migration; its archived file is a
 redirect stub.)
 
-Modules do **not** map 1:1 to capabilities: module boundaries were chosen
-to sequence authoring and implementation work, while capabilities are
-semantic feature delineations. Each migration therefore *begins* with a
-**carving decision made with the human author** — the module may become one
-capability, several, and/or contribute deltas to capabilities that already
-exist — recorded in the migration change's proposal and filled into the
-carving column above. Migrating a module = deciding its carving, then
-re-authoring its substance at intent grain under named identifiers,
-recorded as a change folder that archives when the migration PR completes;
-`node scripts/spec-migration/audit-module.mjs <NN>` audits a migrated
-module's disposition (every archived identifier mapped, every anchor
-resolving, no stale code references).
+Migration proceeds **capability-at-a-time, carved by user-story locality**:
+each capability owns a workflow a user experiences as one thing, so most
+capabilities draw requirements from *several* legacy modules (module
+boundaries sequenced implementation work; they are not semantic
+delineations). The prospective capability set is maintained in
+[`docs/spec-migration/capability-map.md`](../docs/spec-migration/capability-map.md)
+(draft until minted); cross-cutting rules no user story owns live in the
+`global-invariants` capability, gated by the admission test in its
+Purpose. Each capability migration *begins* with a **carving decision made
+with the human author**, recorded in the migration change's proposal. A
+migration change re-authors its capability's substance at intent grain
+under named identifiers, retires the legacy ids it absorbs (map entries),
+and parks or leaves untouched the rest; `node
+scripts/spec-migration/audit-module.mjs <NN>` audits a module's
+disposition (every id mapped or parked, every anchor resolving, no stale
+code references to retired ids).
 
 ## Workflow
 
