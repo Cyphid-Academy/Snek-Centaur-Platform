@@ -1,0 +1,20 @@
+{
+  "$schema": "Named-identifier lineage map for the openspec/specs corpus. Records STRUCTURAL REFACTORS of named identifiers — capability and requirement renames, merges, and splits — so that an identifier appearing in an archived change folder (which is frozen and never rewritten) can be computationally traced to its present semantic target. This is DISTINCT from legacy-spec-archive/maps/identifier-map.json, which bridges the numeric MM-REQ-NNN era to named identifiers. Here both sides are named identifiers. A tracer resolves an archived identifier by applying, in commit order, every refactor whose 'from' matches. Renames are 1:1; splits map one 'from' to several 'to' (with a note disambiguating which target carries which behaviour); merges map several 'from' to one 'to'.",
+  "capabilities": {
+    "renames": [
+      {
+        "from": "game-rules",
+        "to": "game-engine",
+        "change": "mint-global-invariants",
+        "note": "The rules of the game and the single shared executable engine that defines them are one semantic unit. Renamed so engine INTERFACE contracts live in this root capability while engine ECOSYSTEM/topology rules (single build, no reimplementation, pluggability) live in global-invariants. Every game-rules/<slug> identifier maps to game-engine/<slug> with the slug unchanged; archived changes and legacy-spec-archive predating this rename still cite game-rules/*."
+      }
+    ],
+    "merges": [],
+    "splits": []
+  },
+  "requirements": {
+    "renames": [],
+    "merges": [],
+    "splits": []
+  }
+}
