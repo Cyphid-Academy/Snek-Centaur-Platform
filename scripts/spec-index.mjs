@@ -196,6 +196,50 @@ export function parseDeltaOps(content) {
 }
 
 /**
+ * Parse a Purpose's "Depends on:" declaration out of spec (or mint-preamble)
+ * text: the sentence starting at the first "Depends on:" (anywhere in a
+ * line — Purpose prose wraps freely) up to its first period, joining
+ * wrapped lines. Returns { found, deps, problem } —
+ * `deps` the declared capability names (a "(none …)" declaration yields
+ * []), `problem` a human-readable fault when the sentence is malformed.
+ * The capability dependency rule (a spec may reference only its declared
+ * dependencies, acyclically) is enforced on this declaration by
+ * scripts/check-spec-citations.mjs.
+ */
+export function parseDependsOn(text) {
+  const lines = text.replace(/\r\n?/g, "\n").split("\n");
+  const start = lines.findIndex((l) => l.includes("Depends on:"));
+  if (start === -1) return { found: false, deps: [] };
+  let sentence = "";
+  for (let i = start; i < lines.length; i++) {
+    sentence += i === start ? lines[i].slice(lines[i].indexOf("Depends on:")) : ` ${lines[i]}`;
+    const dot = sentence.indexOf(".");
+    if (dot !== -1) {
+      sentence = sentence.slice(0, dot);
+      break;
+    }
+  }
+  const body = sentence.slice("Depends on:".length).trim();
+  if (body.startsWith("(none")) return { found: true, deps: [] };
+  const deps = [];
+  for (const part of body
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)) {
+    if (!/^[a-z0-9-]+$/.test(part))
+      return { found: true, deps, problem: `unparseable "Depends on:" entry "${part}"` };
+    deps.push(part);
+  }
+  if (deps.length === 0)
+    return {
+      found: true,
+      deps,
+      problem: `"Depends on:" names no capability — declare "(none …)" explicitly`,
+    };
+  return { found: true, deps };
+}
+
+/**
  * Extract one requirement's raw block (header line through the line before
  * the next requirement/section header) from a spec file's content. Returns
  * null when the header is absent.

@@ -18,10 +18,11 @@
     "dev:tester": "pnpm --filter @cyphid/visual-tester dev",
     "build": "pnpm -r build",
     "spec:validate": "openspec validate --specs --strict",
+    "spec:validate:changes": "node scripts/validate-open-changes.mjs",
     "spec:citations": "node scripts/check-spec-citations.mjs",
     "spec:freshness": "node scripts/check-change-freshness.mjs",
     "spec:fold": "node scripts/fold-change.mjs",
-    "spec:check": "pnpm spec:validate && pnpm spec:citations && pnpm spec:freshness"
+    "spec:check": "pnpm spec:validate && pnpm spec:validate:changes && pnpm spec:citations && pnpm spec:freshness"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
