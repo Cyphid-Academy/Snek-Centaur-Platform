@@ -21,10 +21,10 @@
 - [x] 2.4 Change `packages/convex-snek-platform` `GameStatus` terminal literal `ended → finished` (type-literal only; no persisted data yet) 
 
 ## 3. Archive (terminal fold — on explicit human instruction)
-- [ ] 3.1 `pnpm spec:fold mint-global-invariants` — folds `global-invariants` (mint) and `game-engine` (rename: folder move + re-prefix + `runtime-portability`); then `openspec archive --skip-specs -y`
-- [ ] 3.2 Flip the module-02 cutover row to **Partial** (NOT Migrated, and module 02 is NOT added to `MIGRATED_MODULES` — parked ids stay binding and citable); add `global-invariants` to the config context capability list and to the capability map's minted table
+- [x] 3.1 `pnpm spec:fold mint-global-invariants` — folds `global-invariants` (mint) and `game-engine` (rename: folder move + re-prefix + `runtime-portability`); then `openspec archive --skip-specs -y`
+- [x] 3.2 Flip the module-02 cutover row to **Partial** (NOT Migrated, and module 02 is NOT added to `MIGRATED_MODULES` — parked ids stay binding and citable); add `global-invariants` to the config context capability list and to the capability map's minted table
 
 ## 4. Verification (before archive)
-- [ ] 4.1 `pnpm spec:check` (strict validation + reference lint + freshness) green
-- [ ] 4.2 `node scripts/spec-migration/audit-module.mjs 02` green (every module-02 id mapped or parked; targets/anchors resolving; no pending re-homes onto 02; no stale code references to retired ids)
-- [ ] 4.3 Full test battery, typecheck, biome green
+- [x] 4.1 `pnpm spec:check` (strict validation + reference lint + freshness) green
+- [x] 4.2 `node scripts/spec-migration/audit-module.mjs 02` green (every module-02 id mapped or parked; targets/anchors resolving; no pending re-homes onto 02; no stale code references to retired ids)
+- [x] 4.3 Full test battery, typecheck, biome green

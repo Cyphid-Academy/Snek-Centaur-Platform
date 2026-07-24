@@ -50,7 +50,7 @@ prospective capability, in that module's parked ledger under
 | Module | Capability carving | Status | Binding source |
 |--------|--------------------|--------|----------------|
 | 01-game-rules | `specs/game-engine/` (single capability, author decision) | **Migrated** | `openspec/specs/game-engine/spec.md` |
-| 02-platform-architecture | *decided at migration* | Pending | `legacy-spec-archive/spec/02-platform-architecture.md` |
+| 02-platform-architecture | `specs/global-invariants/` (cross-cutting; user-story remainder parked) | **Partial** | mapped ids: `openspec/specs/global-invariants/spec.md`; parked ids: `legacy-spec-archive/spec/02-platform-architecture.md` (ledger: `docs/spec-migration/module-02-parked.md`) |
 | 03-auth-and-identity | *decided at migration* | Pending | `legacy-spec-archive/spec/03-auth-and-identity.md` |
 | 04-stdb-engine | *decided at migration* | Pending | `legacy-spec-archive/spec/04-stdb-engine.md` |
 | 05-convex-platform | *decided at migration* | Pending | `legacy-spec-archive/spec/05-convex-platform.md` |

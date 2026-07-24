@@ -1,8 +1,8 @@
 {
   "$schema": "Legacy identifier map. Grows only as modules migrate; the sole mutable file in legacy-spec-archive/. requirements: legacy numeric id -> {target: current requirement, scenarios: anchors pinning its specific edge cases, note}. reviews: legacy review item -> {scenarios: anchors encoding its edge case(s), resolvedBy, note}; full item bodies remain in ../review/. This file is also the tombstone registry: every key under requirements is a retired identifier. All targets and anchors are validated by scripts/check-spec-citations.mjs.",
   "provenance": {
-    "change": "2026-07-18-migrate-module-01-game-rules",
-    "note": "module 01 was re-authored at intent grain with named identifiers; rationale and migration recipe in the archived change folder"
+    "change": "2026-07-24-mint-global-invariants",
+    "note": "module 01 re-authored at intent grain with named identifiers (2026-07-18-migrate-module-01-game-rules; its game-rules/* targets were re-prefixed to game-engine/* by the capability rename). Module 02 partially disposed by 2026-07-24-mint-global-invariants: owned ids target global-invariants, omitted/design ids are note-only tombstones, and parked ids deliberately have no entries (docs/spec-migration/module-02-parked.md)."
   },
   "requirements": {
     "01-REQ-001": {
@@ -560,37 +560,37 @@
     },
     "02-REQ-024": {
       "target": null,
-      "note": "bot-parameter write authority — substance owned by module 06's data-layer rules (06-REQ-008/010/012)",
+      "note": "bot-parameter write authority \u2014 substance owned by module 06's data-layer rules (06-REQ-008/010/012)",
       "scenarios": [],
       "pendingRehome": "06"
     },
     "02-REQ-025": {
       "target": null,
-      "note": "bot extension surface — substance owned by module 07",
+      "note": "bot extension surface \u2014 substance owned by module 07",
       "scenarios": [],
       "pendingRehome": "07"
     },
     "02-REQ-026": {
       "target": null,
-      "note": "bot compute placement — substance owned by module 07",
+      "note": "bot compute placement \u2014 substance owned by module 07",
       "scenarios": [],
       "pendingRehome": "07"
     },
     "02-REQ-027": {
       "target": null,
-      "note": "Centaur-subsystem state writes — substance owned by module 06",
+      "note": "Centaur-subsystem state writes \u2014 substance owned by module 06",
       "scenarios": [],
       "pendingRehome": "06"
     },
     "02-REQ-028": {
       "target": null,
-      "note": "operator interface surface — substance owned by module 08",
+      "note": "operator interface surface \u2014 substance owned by module 08",
       "scenarios": [],
       "pendingRehome": "08"
     },
     "02-REQ-030": {
       "target": null,
-      "note": "server library scope — substance split across module 08 (library), 07 (bot framework), and 03 (invitation credentials)",
+      "note": "server library scope \u2014 substance split across module 08 (library), 07 (bot framework), and 03 (invitation credentials)",
       "scenarios": [],
       "pendingRehome": "08"
     },
@@ -601,13 +601,13 @@
     },
     "02-REQ-032": {
       "target": null,
-      "note": "bot execution model — substance owned by module 07",
+      "note": "bot execution model \u2014 substance owned by module 07",
       "scenarios": [],
       "pendingRehome": "07"
     },
     "02-REQ-032a": {
       "target": null,
-      "note": "invitation acceptance flow — substance owned by module 08",
+      "note": "invitation acceptance flow \u2014 substance owned by module 08",
       "scenarios": [],
       "pendingRehome": "08"
     },
@@ -683,7 +683,7 @@
     },
     "02-REQ-063": {
       "target": null,
-      "note": "malicious-server trust trade-off — accepted-risk rationale recorded in the archived mint-global-invariants change's design.md; the mechanism it concerns is global-invariants/access-follows-identity",
+      "note": "malicious-server trust trade-off \u2014 accepted-risk rationale recorded in the archived mint-global-invariants change's design.md; the mechanism it concerns is global-invariants/access-follows-identity",
       "scenarios": []
     }
   },

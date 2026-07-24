@@ -5,7 +5,7 @@
       {
         "from": "game-rules",
         "to": "game-engine",
-        "change": "mint-global-invariants",
+        "change": "2026-07-24-mint-global-invariants",
         "note": "The rules of the game and the single shared executable engine that defines them are one semantic unit. Renamed so engine INTERFACE contracts live in this root capability while engine ECOSYSTEM/topology rules (single build, no reimplementation, pluggability) live in global-invariants. Every game-rules/<slug> identifier maps to game-engine/<slug> with the slug unchanged; archived changes and legacy-spec-archive predating this rename still cite game-rules/*."
       }
     ],

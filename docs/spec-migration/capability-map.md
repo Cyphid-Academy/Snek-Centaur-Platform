@@ -18,7 +18,7 @@ the legacy modules expected to feed each capability.
 | `game-engine` | The complete rules of the game and the shared executable engine defining them — independent of storage, networking, and UI | Renamed from `game-rules` by the `mint-global-invariants` change |
 | `test-sequences` | UI-free data contract for recorded resolver runs | |
 | `visual-tester` | The dev app for board authoring, simulation, and test-sequence runs | |
-| `global-invariants` | Cross-cutting rules no single user-story capability owns (admission test in its Purpose) | Minted by the open `mint-global-invariants` change |
+| `global-invariants` | Cross-cutting rules no single user-story capability owns (admission test in its Purpose) | Minted by the `mint-global-invariants` change (archived 2026-07-24) |
 
 ## Prospective (user-story capabilities)
 

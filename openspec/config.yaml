@@ -45,7 +45,11 @@ context: |
   Capabilities so far: game-engine — root of the dependency structure, no
   dependencies (module 01, carved as a single capability by author
   decision: it is already a coherent semantic unit — the complete rules of
-  the game, independent of storage, networking, and UI). test-sequences —
+  the game, independent of storage, networking, and UI; renamed from
+  game-rules). global-invariants — the cross-cutting rules no user-story
+  capability owns (runtime ownership, authority placement, security/trust
+  boundaries, credential scoping; admission test in its Purpose); depends
+  on game-engine. test-sequences —
   the UI-free data contract for recorded resolver runs (canonical encoding,
   validation, production seed derivation, halt-at-first-divergence
   replay-check); depends on game-engine. visual-tester — the dedicated dev
