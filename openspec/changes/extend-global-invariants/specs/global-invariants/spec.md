@@ -114,7 +114,7 @@ A client SHALL present only what the owning runtimes assert. Rejections by a ser
 ## MODIFIED Requirements
 
 ### Requirement: global-invariants/team-granularity-authorization
-SpacetimeDB SHALL authorise every game action at Centaur-Team granularity and no finer — a connection may act for a snake only if it is authorised for that snake's team, and SpacetimeDB holds no notion of individual operators — while Convex SHALL be the sole authority for all within-team coordination: which member may act, in what role, on which snake.
+SpacetimeDB SHALL authorise every game action at Centaur-Team granularity and no finer — a connection may act for a snake only if it is authorised for that snake's team, and SpacetimeDB holds no notion of individual operators — while Convex SHALL be the sole authority for all within-team coordination: which member may act, in what role, on which snake. The same team granularity SHALL bound observation: a connection observes other teams' state only through the instance's filtered views, and a spectator connection is authorised to observe no team's private state and to stage nothing.
 
 #### Scenario: #staging-is-team-checked
 - **WHEN** the SpacetimeDB instance accepts a staged move
@@ -124,9 +124,17 @@ SpacetimeDB SHALL authorise every game action at Centaur-Team granularity and no
 - **WHEN** a team constrains which of its members may drive a snake
 - **THEN** that rule is defined and enforced in Convex; SpacetimeDB neither knows nor checks it
 
+#### Scenario: #spectators-hold-no-private-state
+- **WHEN** a spectator connection reads or subscribes
+- **THEN** it receives only the filtered public view — no team's private state reaches it, and it can stage or alter nothing
+
 ### Requirement: global-invariants/security-enforced-outside-the-library
-Every invariant that bounds what a Snek Centaur Server may do SHALL be enforced by SpacetimeDB (row-level security, reducer-level team checks, and OIDC validation of the access token) and by Convex function contracts — never by the Server library — and SHALL hold against a Server that speaks the raw SpacetimeDB and Convex protocols directly.
+Every invariant that bounds what a Snek Centaur Server — or any client of the platform — may do SHALL be enforced by SpacetimeDB (row-level security, reducer-level team checks, and OIDC validation of the access token) and by Convex function contracts — never by the Server library, and never by what any application chooses to present or hide — and SHALL hold against a Server that speaks the raw SpacetimeDB and Convex protocols directly.
 
 #### Scenario: #library-bypass-is-still-bound
 - **WHEN** a team builds a Server from scratch, bypassing the provided library, and speaks the raw protocols
 - **THEN** it is bound by exactly the same invariants, because enforcement lives in SpacetimeDB and Convex, not the library
+
+#### Scenario: #customised-app-changes-no-invariant
+- **WHEN** a team customises its forked application — hiding affordances, adding new ones, or altering what the interface appears to permit
+- **THEN** every security and correctness invariant holds unchanged, because none is enforced by any application's presentation layer
