@@ -1,4 +1,4 @@
-// spec: 03-REQ-001, 05-REQ-001
+// spec: identity-and-authorization/identity-kinds, global-invariants/state-confined-to-owning-runtime
 // Convex Component declaration for snek-platform.
 // Owns platform-wide tables: users, centaur_teams, rooms, games, replays,
 // api_keys, webhooks.

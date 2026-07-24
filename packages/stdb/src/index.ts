@@ -1,4 +1,4 @@
-// spec: 04-REQ-001
+// spec: game-lifecycle/instance-initialization, turn-pacing/in-game-clock, live-game-observation/invisibility-filtering
 // SpacetimeDB TypeScript module skeleton.
 // Implements authoritative turn resolution, RLS, and chess timer.
 // All source files are typed stubs — implementation deferred.
@@ -14,13 +14,15 @@ export type {
   Item,
   ItemsByCell,
 } from "@cyphid/snek-engine";
-// GameState.items assembly from active item_lifetimes rows (04 §2.6).
+// GameState.items assembly from active item_lifetimes rows.
 export { itemsByCell } from "@cyphid/snek-engine";
 
 // ---------------------------------------------------------------------------
 // SpacetimeDB reducer stubs
-// spec: 04-REQ-010 (initialize_game), 04-REQ-020 (stage_move),
-//       04-REQ-030 (declare_turn_over), 04-REQ-040 (resolve_turn)
+// spec: game-lifecycle/instance-initialization (initialize_game),
+//       operator-control/staged-move-log (stage_move),
+//       turn-pacing/turn-declaration (declare_turn_over),
+//       turn-pacing/exactly-once-resolution (resolve_turn)
 // ---------------------------------------------------------------------------
 
 export interface InitializeGameParams {
