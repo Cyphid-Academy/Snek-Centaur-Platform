@@ -59,7 +59,12 @@ jobs:
     name: spec-check
     runs-on: ubuntu-latest
     steps:
+      # Full history: the seed-freshness check locates each open change's
+      # seed commit via git log; a shallow clone makes the edited delta
+      # masquerade as its own seed and fail freshness spuriously.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: pnpm/action-setup@v4
         with:
           version: 10.26.1
@@ -70,15 +75,19 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm spec:check
 
-  # Merge-readiness gate for the "no open changes on main" invariant. This job
-  # always succeeds; the gate is the SEPARATE `no-open-changes` commit status
-  # it posts — `pending` (yellow, blocks merge but is NOT a failure: the archive
-  # step is just not done yet) while any OpenSpec change is unarchived, and
-  # `success` once main is clean. Require the `no-open-changes` status in the
-  # branch ruleset (not this job). Same idea as GitHub's built-in
-  # "branch must be up to date" gate: a merge-readiness condition, not a verdict.
-  open-changes-gate:
-    name: open-changes-gate
+  # Merge-readiness gate for the archive-due invariant: open changes are a
+  # first-class state (approved spec work awaiting implementation), but a
+  # COMPLETED-but-unarchived change — all implementation tasks checked,
+  # change not archived — must be archived by the PR that completed it.
+  # This job always succeeds; the gate is the SEPARATE
+  # `no-archive-due-changes` commit status it posts — `pending` (yellow,
+  # blocks merge but is NOT a failure: the archive step is just not done
+  # yet) while any open change is archive-due, `success` otherwise.
+  # Require the `no-archive-due-changes` status in the branch ruleset (not
+  # this job). Same idea as GitHub's built-in "branch must be up to date"
+  # gate: a merge-readiness condition, not a verdict.
+  archive-due-gate:
+    name: archive-due-gate
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -88,19 +97,20 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - name: Post no-open-changes merge-readiness status
+      - name: Post no-archive-due-changes merge-readiness status
         env:
           GH_TOKEN: ${{ github.token }}
           SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
-          OPEN=$(node scripts/check-open-changes.mjs --names | tr '\n' ' ' | sed 's/ *$//')
-          if [ -z "$OPEN" ]; then
+          DUE=$(node scripts/check-open-changes.mjs --names | tr '\n' ' ' | sed 's/ *$//')
+          OPEN=$(node scripts/check-open-changes.mjs --json | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>console.log(JSON.parse(d).openChanges.length))')
+          if [ -z "$DUE" ]; then
             gh api "repos/${{ github.repository }}/statuses/$SHA" \
-              -f state=success -f context=no-open-changes \
-              -f description="No open OpenSpec changes"
+              -f state=success -f context=no-archive-due-changes \
+              -f description="No archive-due changes ($OPEN open)"
           else
-            DESC="Open change(s): $OPEN - archive before merge"
+            DESC="Archive-due (implementation complete): $DUE - archive in this PR"
             gh api "repos/${{ github.repository }}/statuses/$SHA" \
-              -f state=pending -f context=no-open-changes \
+              -f state=pending -f context=no-archive-due-changes \
               -f description="${DESC:0:140}"
           fi
