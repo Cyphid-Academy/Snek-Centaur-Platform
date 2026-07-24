@@ -7,6 +7,16 @@ same philosophy as OpenSpec's archived change folders. Come here for
 decision that produced it) and as **source material** when migrating a
 module into `openspec/specs/`.
 
+## spec-migration/ — the migration's planning corpus (archived 2026-07-24)
+
+The capability map, whole-corpus assignment matrix, module-02 parked
+ledger, and per-change staged retirements that steered the migration are
+preserved under [`spec-migration/`](spec-migration/). They are historical
+records: the operative outcome lives entirely in
+[`maps/identifier-map.json`](maps/identifier-map.json) and the capability
+specs/changes under `openspec/`. As of the corpus retirement every
+numeric identifier is tombstoned in the map.
+
 ## Bindingness
 
 Migration to OpenSpec proceeds one module at a time (see the cutover table
