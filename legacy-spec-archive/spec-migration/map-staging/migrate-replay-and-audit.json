@@ -1,0 +1,472 @@
+{
+  "requirements": {
+    "02-REQ-013": {
+      "target": "replay-and-audit/turn-keyed-game-record",
+      "scenarios": ["replay-and-audit/replay-sufficiency#nothing-else-consulted"],
+      "note": "Complete per-turn record retained in-instance for the game's lifetime, self-sufficient for reconstructing any prior turn without consulting any external system; authored with 04-REQ-004's contents enumeration (dedupe cluster with 04-REQ-004..012)."
+    },
+    "02-REQ-014": {
+      "target": "replay-and-audit/once-at-end-export",
+      "scenarios": ["replay-and-audit/once-at-end-export#nothing-leaves-per-turn"],
+      "note": "No per-turn posting of game state to any external system; the record leaves once, at game end, bundled into the terminal notification (dedupe with 04-REQ-061/065's export half; the parked ledger's review-driven edit \u2014 positive once-at-end statement carries the rule \u2014 honoured)."
+    },
+    "02-REQ-064": {
+      "target": "replay-and-audit/unified-replay-viewer",
+      "scenarios": ["replay-and-audit/unified-replay-viewer#one-viewer-not-two"],
+      "note": "One unified replay viewer, never separate platform and team viewers. Routed to replay-and-audit per the capability map, overriding the parked ledger's team-server-management heading (assignment-matrix resolved contradiction #5)."
+    },
+    "02-REQ-065": {
+      "target": "replay-and-audit/finished-games-public",
+      "scenarios": [
+        "replay-and-audit/finished-games-public#finished-means-open",
+        "replay-and-audit/finished-games-public#live-games-not-on-the-replay-surface"
+      ],
+      "note": "Every finished game's full within-turn record (all teams' action-log entries, display-state snapshots) readable by every authenticated user; live games excluded from the replay surface."
+    },
+    "03-REQ-032": {
+      "target": "replay-and-audit/connect-time-attribution",
+      "scenarios": ["replay-and-audit/connect-time-attribution#resolved-at-connect-never-later"],
+      "note": "stagedBy holds an Agent value resolved from the connection's credential at connect time; the game runtime never interprets or branches on it (dedupe with 04-REQ-020/039; connect-time model per superseding 04-REVIEW-011)."
+    },
+    "03-REQ-044": {
+      "target": "replay-and-audit/connect-time-attribution",
+      "scenarios": ["replay-and-audit/connect-time-attribution#reconnect-appends-fresh"],
+      "note": "Agent resolved at each client_connected; attribution record retained for the full game including closed/replaced connections so historical stagedBy values stay consistent (dedupe with 04-REQ-020/021)."
+    },
+    "03-REQ-045": {
+      "target": "replay-and-audit/agent-form-persistence",
+      "scenarios": ["replay-and-audit/agent-form-persistence#defensive-check-at-persistence"],
+      "note": "Persisted game record carries Agent values only, never raw connection Identities; no resolution pass at serialization (dedupe with 05-REQ-042)."
+    },
+    "03-REQ-047": {
+      "target": "replay-and-audit/agent-form-persistence",
+      "scenarios": ["replay-and-audit/agent-form-persistence#removed-member-still-attributed"],
+      "note": "Per-game authorization snapshot is append-only historical fact: post-game roster edits never erase attribution; persisted attribution binds to the snapshot (identity-and-authorization/roster-snapshot-binding), never to current membership."
+    },
+    "04-REQ-004": {
+      "target": "replay-and-audit/turn-keyed-game-record",
+      "scenarios": [],
+      "note": "Historical record with every completed turn's full observable state directly queryable, no re-execution, no other runtime (satisfied 02-REQ-013)."
+    },
+    "04-REQ-005": {
+      "target": "replay-and-audit/append-only-history",
+      "scenarios": ["replay-and-audit/append-only-history#the-single-stamp"],
+      "note": "Historical record append-only once committed; sole exception the one-time destroyedTurn stamp (dedupe cluster with 04-REQ-059/066 and 06-REQ-039)."
+    },
+    "04-REQ-006": {
+      "target": "replay-and-audit/turn-keyed-game-record",
+      "scenarios": [],
+      "note": "Per-turn snapshot of each snake's full state at each turn boundary \u2014 part of the record-contents enumeration."
+    },
+    "04-REQ-007": {
+      "target": "replay-and-audit/turn-keyed-game-record",
+      "scenarios": ["replay-and-audit/turn-keyed-game-record#items-derivable-at-any-turn"],
+      "note": "Item lifetimes tracked by spawn/destroyed turn; any turn's item set directly derivable; game-start items spawn turn 0."
+    },
+    "04-REQ-008": {
+      "target": "replay-and-audit/turn-keyed-game-record",
+      "scenarios": [],
+      "note": "Board layout written once at initialization, never modified after \u2014 part of the record-contents enumeration."
+    },
+    "04-REQ-009": {
+      "target": "replay-and-audit/turn-keyed-game-record",
+      "scenarios": [],
+      "note": "Per-turn record of each team's post-turn budget and declaration kind (explicit with timestamp vs clock expiry; turn-pacing/turn-declaration owns the declaration semantics)."
+    },
+    "04-REQ-010": {
+      "target": "replay-and-audit/turn-keyed-game-record",
+      "scenarios": ["replay-and-audit/turn-keyed-game-record#resolution-takes-time"],
+      "note": "Per-turn wall-clock start and resolution-start moments recorded; resolution never assumed instantaneous."
+    },
+    "04-REQ-011": {
+      "target": "replay-and-audit/turn-keyed-game-record",
+      "scenarios": [],
+      "note": "All turn events retained, attributed to their producing turn; within-turn ordering carried by the canonical representation order (replay-and-audit/canonical-event-order)."
+    },
+    "04-REQ-012": {
+      "target": "replay-and-audit/replay-sufficiency",
+      "scenarios": ["replay-and-audit/replay-sufficiency#nothing-else-consulted"],
+      "note": "Record sufficient for a complete replay \u2014 every board state, item lifetime, turn event, stagedBy attribution \u2014 without any other runtime (dedupe with 02-REQ-013/014)."
+    },
+    "04-REQ-020": {
+      "target": "replay-and-audit/connect-time-attribution",
+      "scenarios": [],
+      "note": "Participant attribution record: one Agent-mapped entry per admitted connection, retained for the instance's whole life (dedupe with 03-REQ-044; connect-time model per 04-REVIEW-011)."
+    },
+    "04-REQ-021": {
+      "target": "replay-and-audit/connect-time-attribution",
+      "scenarios": [
+        "replay-and-audit/connect-time-attribution#disconnect-erases-nothing",
+        "replay-and-audit/connect-time-attribution#reconnect-appends-fresh"
+      ],
+      "note": "Attribution entries never mutated/deleted on connection close; reconnect yields a fresh entry; historical references remain resolvable without the original connection."
+    },
+    "04-REQ-026": {
+      "target": "replay-and-audit/staged-move-attribution",
+      "scenarios": [],
+      "note": "Each accepted staged move permanently records writer Agent, wall-clock acceptance time, and staging turn."
+    },
+    "04-REQ-027": {
+      "target": "replay-and-audit/staged-move-attribution",
+      "scenarios": ["replay-and-audit/staged-move-attribution#sub-turn-staging-history"],
+      "note": "Staged-move storage is append-only, historical, part of the permanent record; enables sub-turn reconstruction of who staged what (log structure itself owned by operator-control/staged-move-log)."
+    },
+    "04-REQ-039": {
+      "target": "replay-and-audit/connect-time-attribution",
+      "scenarios": ["replay-and-audit/connect-time-attribution#resolved-at-connect-never-later"],
+      "note": "stagedBy in movement events is the connect-time Agent carried untouched \u2014 no interpretation, mapping, or substitution during resolution or export (satisfied 03-REQ-032; resolves 04-REVIEW-011)."
+    },
+    "04-REQ-040": {
+      "target": "replay-and-audit/staged-move-attribution",
+      "scenarios": ["replay-and-audit/staged-move-attribution#fallback-moves-attributed-to-no-one"],
+      "note": "Movement-event attribution nullable; null exactly means fallback-determined move (both fallback branches), per resolved 04-REVIEW-002."
+    },
+    "04-REQ-043": {
+      "target": "replay-and-audit/turn-event-record",
+      "scenarios": ["replay-and-audit/turn-event-record#no-new-kinds-by-extension"],
+      "note": "Closed turn-event enumeration \u2014 the engine's vocabulary (game-engine/turn-events) plus hazard damage for survivors \u2014 no extensibility mechanism. Per-kind payload detail is carried by the engine's event vocabulary plus code-level types."
+    },
+    "04-REQ-044": {
+      "target": "replay-and-audit/turn-event-record",
+      "scenarios": ["replay-and-audit/turn-event-record#death-carries-its-cause"],
+      "note": "Events self-sufficient for visualisation: no re-execution, no snapshot diffing to recover what an event describes."
+    },
+    "04-REQ-045": {
+      "target": "replay-and-audit/canonical-event-order",
+      "scenarios": [
+        "replay-and-audit/canonical-event-order#derived-not-stored",
+        "replay-and-audit/canonical-event-order#stable-across-replays",
+        "replay-and-audit/canonical-event-order#order-implies-no-causality"
+      ],
+      "note": "A turn's events are a set with a canonical representation order (type class, then subject id) derived from event data, stable across replays, asserting no causality and no delivery-order obligation (resolves 04-REVIEW-004; live delivery posture in live-game-observation/observation-use-cases)."
+    },
+    "04-REQ-059": {
+      "target": "replay-and-audit/append-only-history",
+      "scenarios": ["replay-and-audit/append-only-history#past-reads-stable"],
+      "note": "Past queries stable as turns progress; no append-only record retroactively altered (dedupe with 04-REQ-005)."
+    },
+    "04-REQ-061": {
+      "target": "replay-and-audit/once-at-end-export",
+      "scenarios": [],
+      "note": "Complete record \u2014 board, parameters, seed, snapshots, item lifetimes, budgets, timing, events, attribution \u2014 bundled to the platform at game end via the terminal notification (mechanics owned by game-lifecycle/finish-notification)."
+    },
+    "04-REQ-062": {
+      "target": "replay-and-audit/once-at-end-export",
+      "scenarios": ["replay-and-audit/once-at-end-export#platform-only-retrieval"],
+      "note": "Replay export retrievable only under the platform's authority, a privilege distinct from every gameplay admission; credential mechanics owned by identity-and-authorization."
+    },
+    "04-REQ-064": {
+      "target": "replay-and-audit/once-at-end-export",
+      "scenarios": ["replay-and-audit/once-at-end-export#filter-bypassed-for-export"],
+      "note": "Visibility filtering bypassed for the export: invisible snakes' states, staged moves, and attribution records included \u2014 the export is the complete record regardless of perspective."
+    },
+    "04-REQ-066": {
+      "target": "replay-and-audit/append-only-history",
+      "scenarios": ["replay-and-audit/append-only-history#no-retroactive-correction"],
+      "note": "No committed historical record ever modified; correctness is the resolving transaction's responsibility at commit (dedupe with 04-REQ-005)."
+    },
+    "04-REQ-069": {
+      "target": "replay-and-audit/replay-sufficiency",
+      "scenarios": ["replay-and-audit/replay-sufficiency#bit-identical-reproduction"],
+      "note": "Identical seeds/config/staged sequence yield an identical record. Engine-level reproducibility is game-engine/determinism; what is minted here is the record-level identity that makes it externally verifiable."
+    },
+    "05-REQ-040": {
+      "target": "replay-and-audit/replay-persistence",
+      "scenarios": [],
+      "note": "Platform obtains the complete append-only record (from the terminal notification payload) and persists it as the game's replay before teardown (bracket owned by game-lifecycle/teardown-after-persistence)."
+    },
+    "05-REQ-041": {
+      "target": "replay-and-audit/experience-reconstruction",
+      "scenarios": ["replay-and-audit/experience-reconstruction#any-moment-not-just-boundaries"],
+      "note": "Persisted replay plus the team action log reconstruct the complete history for the unified viewer \u2014 the two-log reconstruction guarantee."
+    },
+    "05-REQ-042": {
+      "target": "replay-and-audit/agent-form-persistence",
+      "scenarios": ["replay-and-audit/agent-form-persistence#defensive-check-at-persistence"],
+      "note": "Defensive persistence-time check: every attribution in Agent form, no raw connection Identity persisted (dedupe with 03-REQ-045)."
+    },
+    "05-REQ-043": {
+      "target": "replay-and-audit/replay-persistence",
+      "scenarios": ["replay-and-audit/replay-persistence#not-before-terminal-signal"],
+      "note": "No replay persistence before the instance's terminal state is signalled \u2014 nothing non-final is ever persisted as a replay."
+    },
+    "05-REQ-044": {
+      "target": "replay-and-audit/replay-persistence",
+      "scenarios": ["replay-and-audit/replay-persistence#viewing-never-consults-an-instance"],
+      "note": "Persisted replay survives instance teardown; replay viewing never consults a game instance."
+    },
+    "06-REQ-033": {
+      "target": "replay-and-audit/team-action-log",
+      "scenarios": ["replay-and-audit/team-action-log#sub-turn-resolution"],
+      "note": "Team action log records state-changing team-experience events at wall-clock resolution finer than turn granularity."
+    },
+    "06-REQ-034": {
+      "target": "replay-and-audit/team-action-log",
+      "scenarios": [],
+      "note": "Entry fields: game, turn, acting identity and its kind (operator vs team's server), wall-clock timestamp."
+    },
+    "06-REQ-035": {
+      "target": "replay-and-audit/experience-reconstruction",
+      "scenarios": [
+        "replay-and-audit/experience-reconstruction#selection-history-from-the-log-alone"
+      ],
+      "note": "Log + game record (+ staged-move log) reconstruct the team's experience at any timestamp: selections, manual flags, Drives, activations/overrides, display state as last written, staged moves and stagers, temperature, active-operator set and tempo. The stale 'operator mode (Centaur or Automatic)' bullet is DEAD \u2014 superseded by per-operator tempo (turn-pacing) \u2014 and deliberately not carried (assignment-matrix resolved contradiction #4)."
+    },
+    "06-REQ-036": {
+      "target": "replay-and-audit/team-action-log",
+      "scenarios": [
+        "replay-and-audit/team-action-log#tempo-and-boot-are-clock-anchored",
+        "replay-and-audit/team-action-log#weight-change-carries-before-and-after",
+        "replay-and-audit/team-action-log#move-staging-excluded"
+      ],
+      "note": "Recorded categories: selection/deselection, manual-mode toggles, Drive add/remove, weight/activation changes (old and new values), tempo changes and Captain boots (time-based), team-side submissions, display-state snapshots, temperature overrides; move staging excluded (STDB log only, per 06-REVIEW-004)."
+    },
+    "06-REQ-037": {
+      "target": "replay-and-audit/actors-write-own-entries",
+      "scenarios": [
+        "replay-and-audit/actors-write-own-entries#dropped-entry-means-no-mutation",
+        "replay-and-audit/actors-write-own-entries#server-never-ghost-writes"
+      ],
+      "note": "Display-state snapshots written exclusively by the hosting server (decision-transparency/hosting-server-sole-writer); other categories by whichever actor originated the action; every mutation logs transactionally so a dropped entry implies no mutation (resolved 06-REVIEW-003/004)."
+    },
+    "06-REQ-038": {
+      "target": "replay-and-audit/experience-reconstruction",
+      "scenarios": [
+        "replay-and-audit/experience-reconstruction#board-truth-from-the-game-record-only"
+      ],
+      "note": "Action log never reconstructs authoritative game state; board truth reads from the game record alone. Kept local to the capability (gi authority-placement noted by the matrix, but the audit-trail half is this story's)."
+    },
+    "06-REQ-039": {
+      "target": "replay-and-audit/append-only-history",
+      "scenarios": ["replay-and-audit/append-only-history#action-log-entries-never-corrected"],
+      "note": "Action-log entries immutable once written; corrections unsupported; readers treat the log as append-only (folded into the append-only-history cluster with 04-REQ-005/059/066)."
+    },
+    "06-REQ-040": {
+      "target": "replay-and-audit/replay-persistence",
+      "scenarios": ["replay-and-audit/replay-persistence#team-experience-outlives-teardown"],
+      "note": "Game-scoped Centaur state \u2014 portfolios, display state, action log \u2014 retained past instance teardown for the game record's lifetime."
+    },
+    "07-REQ-047": {
+      "target": "replay-and-audit/staged-move-attribution",
+      "scenarios": ["replay-and-audit/staged-move-attribution#bot-and-operator-distinguishable"],
+      "note": "Framework-staged moves attributed to the team's bot identity, never an individual human, so bot- and operator-originated moves are distinguishable in the record."
+    },
+    "07-REQ-062": {
+      "target": "replay-and-audit/team-action-log",
+      "scenarios": ["replay-and-audit/team-action-log#move-staging-excluded"],
+      "note": "Framework move-staging recorded only in the game instance's staged-move log (inherently attributed as bot-originated); never written to the action log (dedupe with 06-REVIEW-004)."
+    },
+    "07-REQ-063": {
+      "target": "replay-and-audit/actors-write-own-entries",
+      "scenarios": ["replay-and-audit/actors-write-own-entries#every-snapshot-logged"],
+      "note": "Every published computed-display-state snapshot corresponds to a snapshot-category action-log entry."
+    },
+    "07-REQ-064": {
+      "target": "replay-and-audit/actors-write-own-entries",
+      "scenarios": ["replay-and-audit/actors-write-own-entries#server-never-ghost-writes"],
+      "note": "Framework never writes action-log entries for operator-originated events; the originating operator writes their own (resolved 06-REVIEW-003)."
+    },
+    "08-REQ-024": {
+      "target": "replay-and-audit/team-game-history",
+      "scenarios": ["replay-and-audit/team-game-history#historical-or-current-membership"],
+      "note": "Per-hosted-team history listing of completed games, reverse chronological; eligibility = member-at-the-time (roster snapshot) or current member (amended per 08-REVIEW-003)."
+    },
+    "08-REQ-025": {
+      "target": "replay-and-audit/team-game-history",
+      "scenarios": ["replay-and-audit/team-game-history#normalised-score-headline"],
+      "note": "Listing shows room, date, opponents, result, final scores \u2014 normalised score headline at par 1.0 (real-valued, game-engine/scoring), aggregate length secondary."
+    },
+    "08-REQ-026": {
+      "target": "replay-and-audit/team-game-history",
+      "scenarios": [],
+      "note": "Selecting a listing opens the unified replay viewer defaulting to the team-perspective mode."
+    },
+    "08-REQ-027": {
+      "target": "replay-and-audit/team-game-history",
+      "scenarios": ["replay-and-audit/team-game-history#listing-is-discovery-not-access"],
+      "note": "No listings for unrelated teams' games \u2014 a discovery-scoping rule only, since finished games remain reachable by direct link (per amended 08-REVIEW-003)."
+    },
+    "08-REQ-068": {
+      "target": "replay-and-audit/team-action-log",
+      "scenarios": ["replay-and-audit/team-action-log#tempo-and-boot-are-clock-anchored"],
+      "note": "Tempo toggles, Captain boots, and Captain submissions emit their action-log events; tempo/boot are time-based (wall-clock anchored, not turn-keyed) so replay reconstructs the active-operator set and per-operator tempo at any scrubbed moment. The control affordances themselves are turn-pacing's and operator-control's."
+    },
+    "08-REQ-069": {
+      "target": "replay-and-audit/unified-replay-viewer",
+      "scenarios": [],
+      "note": "Unified viewer for finished games with a persisted replay: board-level mode (turn granularity, all authenticated users) + team-perspective mode (sub-turn, participants only)."
+    },
+    "08-REQ-070": {
+      "target": "replay-and-audit/board-level-replay",
+      "scenarios": ["replay-and-audit/board-level-replay#functional-after-teardown"],
+      "note": "Board-level mode sources everything from the persisted replay, never a game instance; functional after teardown."
+    },
+    "08-REQ-070a": {
+      "target": "replay-and-audit/board-level-replay",
+      "scenarios": [],
+      "note": "Turn-granularity rendering: terrain, snakes, items, hazards, fertile tiles, per-team scoreboard (normalised score headline par 1.0, aggregate length secondary; recorded rows of live-game-observation/scoreboard-sole-aggregate-authority), visually consistent with live spectating."
+    },
+    "08-REQ-070b": {
+      "target": "replay-and-audit/board-level-replay",
+      "scenarios": ["replay-and-audit/board-level-replay#per-turn-event-log"],
+      "note": "Per-turn event log listing the selected turn's events, matching the closed enumeration (replay-and-audit/turn-event-record)."
+    },
+    "08-REQ-071": {
+      "target": "replay-and-audit/team-perspective-replay",
+      "scenarios": ["replay-and-audit/team-perspective-replay#live-ui-read-only"],
+      "note": "Team-perspective mode presents the live operator interface read-only: mutating affordances disabled/absent, inspection affordances (direction preview, worst-case preview, decision breakdown) fully functional."
+    },
+    "08-REQ-071a": {
+      "target": "replay-and-audit/unified-replay-viewer",
+      "scenarios": ["replay-and-audit/unified-replay-viewer#team-perspective-participants-only"],
+      "note": "Team-perspective mode offered exclusively for games the viewing human participated in as a team member \u2014 interface scoping, not data-readability narrowing."
+    },
+    "08-REQ-072": {
+      "target": "replay-and-audit/unified-timeline",
+      "scenarios": [],
+      "note": "Single unified timeline control governs both modes (play/pause/scrub/speed/mode toggle); at any position the viewer displays the reconstructed state there \u2014 the reconstruction union itself is replay-and-audit/experience-reconstruction."
+    },
+    "08-REQ-072a": {
+      "target": "replay-and-audit/unified-timeline",
+      "scenarios": ["replay-and-audit/unified-timeline#mode-and-speed-are-local"],
+      "note": "Per-Turn/Timeline mode toggle; mode and speed client-local, restored within the session, never persisted to the platform; default Per-Turn."
+    },
+    "08-REQ-072b": {
+      "target": "replay-and-audit/unified-timeline",
+      "scenarios": ["replay-and-audit/unified-timeline#snap-to-what-the-team-saw"],
+      "note": "Per-Turn mode: equidistant turn ticks, snapping to end-of-turn states, playback in turns/second. The literal speed set is mechanism, demoted to code (design.md, timeline-literals section)."
+    },
+    "08-REQ-072c": {
+      "target": "replay-and-audit/unified-timeline",
+      "scenarios": ["replay-and-audit/unified-timeline#unequal-turns-render-unequal"],
+      "note": "Timeline mode: real wall-clock axis, turn markers at actual declaration times with proportional spacing, continuous scrub, playback at multiples of real time, mode-unit speed labels. Literal speed set demoted to code (design.md)."
+    },
+    "08-REQ-072d": {
+      "target": "replay-and-audit/unified-timeline",
+      "scenarios": [],
+      "note": "Keyboard scrubbing matches the active mode's granularity (whole turns; fine time steps and turn-marker jumps). Exact key/modifier bindings are mechanism, demoted to code (design.md)."
+    },
+    "08-REQ-073": {
+      "target": "replay-and-audit/team-perspective-replay",
+      "scenarios": ["replay-and-audit/team-perspective-replay#shadows-in-original-colours"],
+      "note": "Historical selections render as coloured shadows in the original per-operator live-play colours; unconnected-at-that-moment operators produce no shadow."
+    },
+    "08-REQ-074": {
+      "target": "replay-and-audit/replay-inspection",
+      "scenarios": [
+        "replay-and-audit/replay-inspection#concurrent-inspectors-never-conflict",
+        "replay-and-audit/replay-inspection#shadows-unaffected"
+      ],
+      "note": "Inspection is purely client-local: at most one inspected snake per client, no writes anywhere, no shadow, never displaces reconstructed selections (resolved 08-REVIEW-008)."
+    },
+    "08-REQ-075": {
+      "target": "replay-and-audit/replay-inspection",
+      "scenarios": ["replay-and-audit/replay-inspection#inspect-regardless-of-history"],
+      "note": "Any snake on the viewed team inspectable at any scrubbed moment regardless of who historically held it."
+    },
+    "08-REQ-075a": {
+      "target": "replay-and-audit/replay-visibility-bound",
+      "scenarios": ["replay-and-audit/replay-visibility-bound#invisible-then-invisible-now"],
+      "note": "Team-perspective replay reveals nothing about opponents beyond the team's filtered view at the original time (live-game-observation/invisibility-filtering); invisible-then stays invisible-now in that mode."
+    },
+    "08-REQ-075b": {
+      "target": "replay-and-audit/board-level-replay",
+      "scenarios": ["replay-and-audit/board-level-replay#no-team-data-in-board-mode"],
+      "note": "Board-level mode displays nothing derived from the action log: no selections, shadows, stateMap/worst-case/heuristic data."
+    },
+    "08-REQ-075c": {
+      "target": "replay-and-audit/finished-games-public",
+      "scenarios": [
+        "replay-and-audit/finished-games-public#direct-link-grants-any-finished-replay"
+      ],
+      "note": "Direct-link affordance: a URL identifying the game takes any authenticated user straight to its replay viewer."
+    },
+    "08-REQ-078": {
+      "target": "replay-and-audit/replay-binding-mutation-free",
+      "scenarios": ["replay-and-audit/replay-binding-mutation-free#absence-not-guard"],
+      "note": "The replay binding exposes no mutation surface at all \u2014 structural absence, not runtime refusal; authored behaviourally per the author-resolved boundary (the abstraction itself is 08-REQ-076's note-only mechanism)."
+    },
+    "08-REQ-013": {
+      "target": null,
+      "scenarios": [],
+      "note": "Code mechanism (author-resolved demotion): replay-viewer navigation topology \u2014 reached from the history page or a direct link, not a top-level nav target. Behavioural residue authored as replay-and-audit/team-game-history (listings open the viewer) and replay-and-audit/finished-games-public#direct-link-grants-any-finished-replay. Rationale in this change's design.md (mechanism-demotions section)."
+    },
+    "08-REQ-076": {
+      "target": null,
+      "scenarios": [],
+      "note": "Code mechanism (author-resolved demotion): the data-source abstraction binding UI reads to live subscriptions vs persisted replay + action log. The fork-stability contract of the exported surface was authored by team-server-management (forkable-reference-app); the behavioural property of the replay binding is minted as replay-and-audit/replay-binding-mutation-free. Rationale in this change's design.md."
+    },
+    "08-REQ-077": {
+      "target": null,
+      "scenarios": [],
+      "note": "Code mechanism (author-resolved demotion): components not distinguishing live from replayed state is client architecture. Its observable core \u2014 read-only-ness comes from the binding offering no writes, never per-component branches \u2014 is replay-and-audit/replay-binding-mutation-free#read-only-is-not-per-component. Rationale in this change's design.md."
+    }
+  },
+  "reviews": {
+    "03-REVIEW-005": {
+      "scenarios": [
+        "replay-and-audit/connect-time-attribution#resolved-at-connect-never-later",
+        "replay-and-audit/agent-form-persistence#defensive-check-at-persistence"
+      ],
+      "note": "stagedBy attribution granularity: originally resolved as opaque in-instance Identity with export-time resolution; superseded (with 04-REVIEW-011) by connect-time Agent resolution \u2014 stagedBy carries Agent | null from the start, the runtime never interprets it, and persisted records contain no raw Identities."
+    },
+    "04-REVIEW-002": {
+      "scenarios": ["replay-and-audit/staged-move-attribution#fallback-moves-attributed-to-no-one"],
+      "note": "Fallback representation: stagedBy is nullable and null denotes exactly a fallback-determined move \u2014 no sentinel value, no split event kinds."
+    },
+    "04-REVIEW-003": {
+      "scenarios": ["replay-and-audit/turn-event-record#hazard-damage-never-double-counted"],
+      "note": "Hazard-damage event dedup: survivors emit hazard-damage events; snakes that die with hazard contributing emit only the death event with hazard among its sources \u2014 no double counting."
+    },
+    "04-REVIEW-004": {
+      "scenarios": [
+        "replay-and-audit/canonical-event-order#order-implies-no-causality",
+        "replay-and-audit/canonical-event-order#derived-not-stored"
+      ],
+      "note": "Intra-turn ordering: events are a set; the canonical representation order (type class, then subject id) is deterministic, derived from event data, and expresses no causal/temporal relation."
+    },
+    "04-REVIEW-007": {
+      "scenarios": ["replay-and-audit/turn-keyed-game-record#unbounded-retention"],
+      "note": "Unbounded in-instance retention for the instance's life (Option A): the one-pass end-of-game persistence contract forbids any runtime-side retention cap; post-teardown retention is the platform's concern."
+    },
+    "04-REVIEW-011": {
+      "scenarios": [
+        "replay-and-audit/connect-time-attribution#resolved-at-connect-never-later",
+        "replay-and-audit/connect-time-attribution#reconnect-appends-fresh"
+      ],
+      "note": "Connect-time Agent resolution: connection identity resolved to an Agent at admission (not at export); attribution entries append-only across reconnections so historical stagedBy references resolve without the original connection."
+    },
+    "04-REVIEW-013": {
+      "scenarios": ["replay-and-audit/once-at-end-export#seed-secret-live-exported-post"],
+      "note": "Seed accessibility (Option B): the per-game seed is hidden from every game client during play but included in the replay export, making deterministic reproducibility externally verifiable."
+    },
+    "06-REVIEW-003": {
+      "scenarios": ["replay-and-audit/actors-write-own-entries#server-never-ghost-writes"],
+      "note": "Each actor writes its own action-log entries under its own credential (Option A): operators directly, the server via its game credential; no brokering of operator mutations through the server; state change and entry share one transaction."
+    },
+    "06-REVIEW-004": {
+      "scenarios": [
+        "replay-and-audit/actors-write-own-entries#dropped-entry-means-no-mutation",
+        "replay-and-audit/team-action-log#move-staging-excluded"
+      ],
+      "note": "Delivery guarantees (Option C): transactional pairing \u2014 a dropped entry implies the mutation did not happen; move_staged removed from the action log entirely, recorded only in the game instance's staged-move log where act and record inherently coincide."
+    },
+    "06-REVIEW-006": {
+      "scenarios": [
+        "replay-and-audit/experience-reconstruction#selection-history-from-the-log-alone"
+      ],
+      "note": "Selection-state lifetime (Option B): live selection records cleared at game end (operator-control/exclusive-selection#cleared-at-finish); replay reconstructs selection history exclusively from the action log."
+    },
+    "08-REVIEW-003": {
+      "scenarios": [
+        "replay-and-audit/finished-games-public#direct-link-grants-any-finished-replay",
+        "replay-and-audit/team-game-history#historical-or-current-membership"
+      ],
+      "note": "Game-history visibility: listing eligibility is historical-or-current membership; replay access is fully public for finished games \u2014 all teams' within-turn data readable by any authenticated user, listing scope governing discovery only; private games eliminated."
+    },
+    "08-REVIEW-008": {
+      "scenarios": ["replay-and-audit/replay-inspection#concurrent-inspectors-never-conflict"],
+      "note": "Replay inspection is purely client-local (Option A) \u2014 no shared state, so concurrent inspectors never conflict; the exclusive-lock selection mechanic is deliberately not reused for replay viewing."
+    }
+  }
+}

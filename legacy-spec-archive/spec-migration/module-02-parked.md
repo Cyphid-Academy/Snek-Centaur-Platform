@@ -1,3 +1,5 @@
+> **ARCHIVED (2026-07-24)** — every entry below graduated; the identifier map is the record.
+
 # Module 02 — Parked Requirements
 
 Module 02 migrated **partially**: its cross-cutting invariants became the

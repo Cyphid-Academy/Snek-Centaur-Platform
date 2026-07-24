@@ -13,9 +13,9 @@
 //      seed/edit pair are flagged.
 //   2. FRESHNESS — every seeded MODIFIED block still matches the current
 //      specs/ block verbatim, and REMOVED / RENAMED-from headers still
-//      exist in specs/. specs/ advancing under an open change — the main
-//      case being a PR rebased onto an advanced main, since archiving is
-//      standardised as a PR's final commit — makes the change stale:
+//      exist in specs/. specs/ advancing under an open change — another
+//      change archiving while this one stays open, or a PR rebasing onto
+//      an advanced main — makes the change stale:
 //      re-seed (rewrite the seed/edit pair against the new base) and
 //      re-review the word-diff.
 //   3. NEW-CAPABILITY SHAPE — a delta whose capability has no
@@ -36,7 +36,7 @@
 // base still matches specs/.
 import { execSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { isAbsolute, join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
 import { extractRequirementBlock, openChangeDeltaFiles, parseDeltaOps } from "./spec-index.mjs";
 
@@ -66,6 +66,31 @@ export function freshnessProblemsFor(root, changeName) {
   const notes = [];
   let checkedBlocks = 0;
   let skipped = 0;
+  // Seed detection needs the seed commit to be visible. In a shallow clone
+  // whose boundary swallows the seed (e.g. CI fetch-depth 1), the delta
+  // file's earliest VISIBLE commit is the boundary commit, so the edited
+  // delta masquerades as its own seed and fails freshness with a
+  // misleading "specs/ has advanced". Only that boundary case is
+  // unreliable — a shallow clone whose visible history still reaches the
+  // true seed checks fine.
+  let shallowBoundary = null;
+  const boundarySet = () => {
+    if (shallowBoundary === null) {
+      try {
+        const common = execSync("git rev-parse --git-common-dir", {
+          cwd: root,
+          encoding: "utf8",
+        }).trim();
+        const p = join(isAbsolute(common) ? common : join(root, common), "shallow");
+        shallowBoundary = new Set(
+          existsSync(p) ? readFileSync(p, "utf8").split("\n").filter(Boolean) : [],
+        );
+      } catch {
+        shallowBoundary = new Set();
+      }
+    }
+    return shallowBoundary;
+  };
   const deltas = openChangeDeltaFiles(root).filter(
     ({ file }) => !changeName || file.includes(`/changes/${changeName}/`),
   );
@@ -123,6 +148,12 @@ export function freshnessProblemsFor(root, changeName) {
       if (commits.length === 0) {
         notes.push(`${rel} not committed yet — no seed to check`);
         skipped++;
+        continue;
+      }
+      if (current.modified.size > 0 && boundarySet().has(commits[0])) {
+        problems.push(
+          `${change}: the seed commit is hidden behind a shallow-clone boundary — its MODIFIED deltas cannot be freshness-checked; fetch full history (CI: actions/checkout with fetch-depth: 0)`,
+        );
         continue;
       }
       seedContent = execSync(`git show ${commits[0]}:"${rel}"`, { cwd: root, encoding: "utf8" });

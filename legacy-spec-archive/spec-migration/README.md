@@ -1,3 +1,10 @@
+> **ARCHIVED (2026-07-24).** The migration completed: every legacy
+> identifier is tombstoned in `../maps/identifier-map.json`, and the
+> sixteen carved capabilities live as open changes under
+> `openspec/changes/` until implemented and archived. Everything below is
+> preserved as the migration's planning record and is no longer
+> operative.
+
 # Spec Migration Staging
 
 Planning artifacts for the OpenSpec migration under **capability-at-a-time
@@ -22,6 +29,16 @@ Nothing in this folder is binding. Binding sources are exactly:
 - [`capability-map.md`](capability-map.md) — the prospective user-story
   capability set. Draft until a capability's migration change mints it;
   each mint is still a carving decision made with the author.
+- [`assignment-matrix.md`](assignment-matrix.md) — the Phase B draft
+  partition for the final migration train: a per-id assignment of every
+  undisposed legacy id to its prospective capability (or
+  global-invariants / code-mechanism / drop), with dedupe clusters,
+  resolved contradictions, and the open carving questions.
+- `map-staging/` — per-change staged identifier-map retirements for the
+  final migration train (one JSON per change plus the closing-sweep
+  tombstones). Non-binding until each change archives, when its entries
+  merge into `legacy-spec-archive/maps/identifier-map.json` with dated
+  `change` attribution; the folder is deleted when the train completes.
 - `module-<NN>-parked.md` — per-module **parked ledgers**. A parked
   requirement stays binding in its legacy module file while it waits for
   its prospective capability; the ledger records the wait and preserves any

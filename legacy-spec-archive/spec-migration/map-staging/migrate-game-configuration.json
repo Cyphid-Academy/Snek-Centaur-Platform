@@ -1,0 +1,127 @@
+{
+  "requirements": {
+    "02-REQ-050": {
+      "target": "game-configuration/launch-freeze",
+      "scenarios": [
+        "game-configuration/launch-freeze#post-launch-writes-rejected",
+        "game-configuration/generation-parameter-boundary#only-the-gameplay-subtree-crosses"
+      ],
+      "note": "freeze half -> launch-freeze; parameter-split half -> generation-parameter-boundary; graduates from the module-02 parked ledger"
+    },
+    "05-REQ-022": {
+      "target": "game-configuration/config-lives-on-the-game",
+      "scenarios": [
+        "game-configuration/generation-parameter-boundary#only-the-gameplay-subtree-crosses"
+      ],
+      "note": "sole-source-of-truth/config-on-game half -> config-lives-on-the-game; runtime-handoff half -> generation-parameter-boundary"
+    },
+    "05-REQ-023": {
+      "target": "game-configuration/closed-parameter-vocabulary",
+      "scenarios": [
+        "game-configuration/closed-parameter-vocabulary#out-of-range-rejected-regardless-of-client",
+        "game-configuration/engine-schema-fidelity#drift-fails-the-build"
+      ],
+      "note": "parameter table itself lives in game-engine/configuration-parameters; this capability owns the surface's closed vocabulary and authoritative rejection"
+    },
+    "05-REQ-024": {
+      "target": "game-configuration/launch-freeze",
+      "scenarios": [
+        "game-configuration/launch-freeze#post-launch-writes-rejected",
+        "game-configuration/launch-freeze#editable-until-launch"
+      ]
+    },
+    "05-REQ-025": {
+      "target": "game-configuration/conditional-parameter-semantics",
+      "scenarios": [
+        "game-configuration/conditional-parameter-semantics#gated-value-persists-and-is-ignored"
+      ],
+      "note": "tournament-meta-field gating (tournamentMode) is outside the game-rules parameter set; its lifecycle-field residue lands with the tournaments/game-lifecycle stories"
+    },
+    "05-REQ-026": {
+      "target": "game-configuration/closed-parameter-vocabulary",
+      "scenarios": ["game-configuration/closed-parameter-vocabulary#no-bot-parameters"]
+    },
+    "05-REQ-032b": {
+      "target": "game-configuration/board-preview",
+      "scenarios": [
+        "game-configuration/board-preview#one-slot-no-archive",
+        "game-configuration/board-preview-lock-in#locked-board-launches-exactly",
+        "game-configuration/board-preview-lock-in#unlocked-regeneration-stays-hidden",
+        "game-configuration/closed-parameter-vocabulary#out-of-range-rejected-regardless-of-client"
+      ],
+      "note": "requirement text (persist on every regeneration; boardPreviewLocked boolean) wins over module 05's stale Design section 2.4, per the author-resolved contradiction"
+    },
+    "05-REQ-032c": {
+      "target": "game-configuration/infeasibility-surfaced",
+      "scenarios": [
+        "game-configuration/infeasibility-surfaced#failure-names-the-constraint",
+        "game-configuration/infeasibility-surfaced#failed-launch-halts"
+      ]
+    },
+    "05-REQ-032d": {
+      "target": "game-configuration/generation-parameter-boundary",
+      "scenarios": [
+        "game-configuration/generation-parameter-boundary#only-the-gameplay-subtree-crosses",
+        "game-configuration/engine-schema-fidelity#no-translation-at-handoff"
+      ]
+    },
+    "08-REQ-027d": {
+      "target": "game-configuration/closed-parameter-vocabulary",
+      "scenarios": [
+        "game-configuration/closed-parameter-vocabulary#out-of-range-rejected-regardless-of-client"
+      ],
+      "note": "UI-mirror folded: client enforcement is UX-only, authored once in the owning requirement"
+    },
+    "08-REQ-027d1": {
+      "target": "game-configuration/closed-parameter-vocabulary",
+      "scenarios": ["game-configuration/closed-parameter-vocabulary#board-size-round-trip"],
+      "note": "intent grain keeps the raw-integer round-trip discipline; the preset option list is code mechanism (see the change's design.md)"
+    },
+    "08-REQ-027e": {
+      "target": "game-configuration/conditional-parameter-semantics",
+      "scenarios": [
+        "game-configuration/conditional-parameter-semantics#ui-communicates-without-blocking"
+      ]
+    },
+    "08-REQ-027i": {
+      "target": "game-configuration/board-preview",
+      "scenarios": ["game-configuration/board-preview#clients-render-never-generate"]
+    },
+    "08-REQ-027j": {
+      "target": "game-configuration/board-preview-lock-in",
+      "scenarios": [
+        "game-configuration/board-preview-lock-in#lock-toggles-freely-before-launch",
+        "game-configuration/board-preview-lock-in#unlocked-regeneration-stays-hidden"
+      ]
+    },
+    "08-REQ-027k": {
+      "target": "game-configuration/board-preview",
+      "scenarios": ["game-configuration/board-preview#a-playing-game-is-never-touched"]
+    },
+    "08-REQ-102": {
+      "target": "game-configuration/config-lives-on-the-game",
+      "scenarios": ["game-configuration/config-lives-on-the-game#views-read-the-games-own-record"],
+      "note": "under config-on-the-game there are no room defaults; the rule survives as views-read-the-games-own-record plus the launch freeze"
+    }
+  },
+  "reviews": {
+    "05-REVIEW-008": {
+      "scenarios": ["game-configuration/config-lives-on-the-game#one-game-configured-at-a-time"],
+      "note": "config-on-game architecture; the auto-create/room-edit race is eliminated structurally (no room-level config); successor-creation mechanics belong to the game-lifecycle story"
+    },
+    "08-REVIEW-014": {
+      "scenarios": [
+        "game-configuration/board-preview#clients-render-never-generate",
+        "game-configuration/generation-parameter-boundary#the-runtime-never-generates"
+      ],
+      "note": "single generation authority: platform-side shared engine only — no client-side and no runtime-side board generation"
+    },
+    "08-REVIEW-015": {
+      "scenarios": [
+        "game-configuration/board-preview#one-slot-no-archive",
+        "game-configuration/board-preview-lock-in#unlocked-regeneration-stays-hidden"
+      ],
+      "note": "persistence on every regeneration onto the game record; boardPreviewLocked governs launch reuse; unlocked regeneration hidden from configuration-mode views"
+    }
+  }
+}

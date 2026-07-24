@@ -1,0 +1,125 @@
+{
+  "requirements": {
+    "05-REQ-016": {
+      "target": "rooms-and-matchmaking/room-record",
+      "scenarios": ["rooms-and-matchmaking/room-record#no-parameter-state-on-the-room"],
+      "note": "Persistent room record: name, optional owner, current-game reference, enrolled team set, archived flag; no game-configuration state on the room (config-on-game model, 05-REVIEW-008)."
+    },
+    "05-REQ-017": {
+      "target": "rooms-and-matchmaking/room-administration",
+      "scenarios": ["rooms-and-matchmaking/room-administration#ownerless-means-open-control"],
+      "note": "Owner holds administrative control (enrolment, current-game configuration, start); ownerless room grants equivalent open control to any authenticated user with access. This 'administrative actor' is the room-level role, distinct from the platform admin role."
+    },
+    "05-REQ-018": {
+      "target": "rooms-and-matchmaking/room-administration",
+      "scenarios": ["rooms-and-matchmaking/room-administration#abdication-is-forever"],
+      "note": "Owner may abdicate; abdication is irreversible and ownership of a room is never reassigned to any user."
+    },
+    "05-REQ-019": {
+      "target": "rooms-and-matchmaking/room-creation",
+      "scenarios": [
+        "rooms-and-matchmaking/room-creation#born-with-a-game",
+        "rooms-and-matchmaking/room-creation#creator-owns-from-the-first-instant"
+      ],
+      "note": "Any authenticated user creates a room; creator becomes owner; creation eagerly creates the initial not-started game with default configuration. Sibling of the game-lifecycle successor story: eager initial game here, auto-created successor there (game-lifecycle/successor-auto-creation), together keeping a room never without a current game."
+    },
+    "05-REQ-020": {
+      "target": "rooms-and-matchmaking/game-start-gate",
+      "scenarios": ["rooms-and-matchmaking/game-start-gate#unanimity-over-the-whole-enrolled-set"],
+      "note": "At least two enrolled Centaur Teams before the current game may start; the room-side gate — launch-side gates (health, invitations, walkover) are game-lifecycle/launch-gates."
+    },
+    "05-REQ-021": {
+      "target": "rooms-and-matchmaking/room-archival",
+      "scenarios": ["rooms-and-matchmaking/room-archival#archive-preserves-everything"],
+      "note": "Rooms persist indefinitely, no deletion path; archive-only, excluded from default listings, all historical games/replays/action logs preserved (05-REVIEW-002)."
+    },
+    "05-REQ-021a": {
+      "target": "rooms-and-matchmaking/room-archival",
+      "scenarios": [
+        "rooms-and-matchmaking/room-archival#no-start-in-an-archived-room",
+        "rooms-and-matchmaking/room-archival#unarchive-resumes-intact"
+      ],
+      "note": "Archived room: no game created or started; unarchive resumes activity. The legacy '(or an admin)' authorized-actor parenthetical is dropped per this change's Open Question 2 option A (read-only admin role) — revisit if option B is chosen; mid-play archival rejected per Open Question 1 option A."
+    },
+    "05-REQ-031": {
+      "target": "rooms-and-matchmaking/game-start-gate",
+      "scenarios": [
+        "rooms-and-matchmaking/game-start-gate#gate-checked-at-initiation-not-in-the-surface",
+        "rooms-and-matchmaking/team-readiness#captain-only-even-for-insiders",
+        "rooms-and-matchmaking/team-readiness#stale-readiness-never-survives"
+      ],
+      "note": "Administrative actor initiates start when >=2 enrolled and all enrolled teams ready; readiness is per-game state on the eagerly created game record, captain-only, and never carries into a fresh game (05-REVIEW-007). Successful initiation hands off to game-lifecycle/launch-orchestration."
+    },
+    "08-REQ-024a": {
+      "target": "rooms-and-matchmaking/room-discovery",
+      "scenarios": ["rooms-and-matchmaking/room-discovery#hidden-is-not-gone"],
+      "note": "Room Browser lists rooms with name, owner/ownerless state, enrolled-team count, and playing indicator; archived rooms excluded from the default listing."
+    },
+    "08-REQ-024b": {
+      "target": "rooms-and-matchmaking/room-discovery",
+      "scenarios": [],
+      "note": "Name-based filtering/search of the browser listing; further filter criteria remain design-level."
+    },
+    "08-REQ-024c": {
+      "target": "rooms-and-matchmaking/room-creation",
+      "scenarios": ["rooms-and-matchmaking/room-creation#creator-owns-from-the-first-instant"],
+      "note": "UI fold: the browser's room-creation affordance (name required, creator becomes owner) is the surface of room-creation; carried by room-discovery's body sentence offering the affordance."
+    },
+    "08-REQ-024d": {
+      "target": "rooms-and-matchmaking/room-discovery",
+      "scenarios": [],
+      "note": "Every listed room links directly to its lobby; carried in room-discovery's body."
+    },
+    "08-REQ-027a": {
+      "target": "rooms-and-matchmaking/room-lobby",
+      "scenarios": ["rooms-and-matchmaking/room-lobby#lobby-shows-the-current-games-own-values"],
+      "note": "Lobby displays owner/ownerless state, the current game's own configured parameter values, enrolled teams, and per-team readiness."
+    },
+    "08-REQ-027b": {
+      "target": "rooms-and-matchmaking/room-lobby",
+      "scenarios": [
+        "rooms-and-matchmaking/room-lobby#unaffiliated-viewers-see-everything-touch-nothing"
+      ],
+      "note": "Lobby accessible to every authenticated user; non-participants (neither administrative actor nor enrolled-team member) see it read-only with no mutating affordance."
+    },
+    "08-REQ-027c": {
+      "target": "rooms-and-matchmaking/room-administration",
+      "scenarios": ["rooms-and-matchmaking/room-administration#non-actor-rejected-at-the-function"],
+      "note": "UI mirror folded: administrative affordances (configure, enrol/remove, abdicate, start) exposed exclusively to the administrative actor — enforcement authored once, server-side. The parameter-editing affordance's substance is game-configuration's (05-REQ-023/024 cluster); 'invite' is authored as unilateral enrolment, consent living in readiness (see design.md)."
+    },
+    "08-REQ-027f": {
+      "target": "rooms-and-matchmaking/team-readiness",
+      "scenarios": ["rooms-and-matchmaking/team-readiness#captain-only-even-for-insiders"],
+      "note": "UI mirror folded: ready/unready affordance exclusively for the enrolled team's Captain; read-only indicator for everyone else (08-REVIEW-013)."
+    },
+    "08-REQ-027h": {
+      "target": "rooms-and-matchmaking/game-start-gate",
+      "scenarios": ["rooms-and-matchmaking/game-start-gate#disabled-start-explains-itself"],
+      "note": "UI mirror folded: start affordance enabled only when >=2 enrolled and all enrolled ready; disabled state names the unmet precondition to the administrative actor."
+    }
+  },
+  "reviews": {
+    "05-REVIEW-002": {
+      "scenarios": [
+        "rooms-and-matchmaking/room-archival#archive-preserves-everything",
+        "rooms-and-matchmaking/room-archival#unarchive-resumes-intact"
+      ],
+      "note": "Rooms cannot be deleted — archive-only, hidden from listings while preserving all historical games, replays, and action logs; unarchivable."
+    },
+    "05-REVIEW-007": {
+      "scenarios": [
+        "rooms-and-matchmaking/team-readiness#captain-only-even-for-insiders",
+        "rooms-and-matchmaking/team-readiness#stale-readiness-never-survives"
+      ],
+      "note": "Readiness lives on the game record from eager creation onward; Captain-only declaration; cleared whenever a new game is auto-created — re-authored as every fresh game beginning with no team ready."
+    },
+    "08-REVIEW-013": {
+      "scenarios": ["rooms-and-matchmaking/team-readiness#captain-only-even-for-insiders"],
+      "note": "Ready/unready is Captain-only (option A), matching the upstream captain-only authorization of 05-REVIEW-007; readiness read-only for non-Captains."
+    },
+    "08-REVIEW-020": {
+      "scenarios": ["rooms-and-matchmaking/room-discovery#live-games-found-through-the-browser"],
+      "note": "No platform-wide live-games listing (option A): the Room Browser's playing indicator is the general discovery path; user-scoped surfaces list only games involving the user's own teams (the home view's narrow scope itself is owned by the accounts-and-profiles story)."
+    }
+  }
+}

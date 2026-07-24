@@ -39,7 +39,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { freshnessProblemsFor } from "./check-change-freshness.mjs";
-import { openChangeDeltaFiles, parseDeltaOps } from "./spec-index.mjs";
+import { buildSpecIndex, openChangeDeltaFiles, parseDeltaOps } from "./spec-index.mjs";
 
 const fail = (msg) => {
   console.error(`spec:fold FAILED: ${msg}`);
@@ -137,6 +137,28 @@ export function foldChange(root, changeName) {
     for (const p of fresh.problems) console.error(`  ${p}`);
     for (const n of fresh.notes) console.error(`  ${n} — commit the seed/edit pair first`);
     process.exit(1);
+  }
+
+  // DAG-order precondition: once folded, specs/ must never cite a
+  // capability that exists only in another OPEN change's deltas. The
+  // reference lint's overlay legitimately resolves such citations while
+  // both changes are open; fold is the moment they become binding, so the
+  // cited capability's minting change must archive first.
+  {
+    const bindingIdx = buildSpecIndex(root);
+    const overlayIdx = buildSpecIndex(root, { overlayOpenChanges: true });
+    const ownCaps = new Set(deltas.map((d) => d.cap));
+    const phantomCaps = [...overlayIdx.keys()].filter((c) => !bindingIdx.has(c) && !ownCaps.has(c));
+    if (phantomCaps.length > 0) {
+      const re = new RegExp(`(?<![\\w/-])(${phantomCaps.join("|")})/[a-z0-9-]+`, "g");
+      for (const { file } of deltas) {
+        const hits = [...new Set([...readFileSync(file, "utf8").matchAll(re)].map((m) => m[1]))];
+        if (hits.length > 0)
+          fail(
+            `${changeName}: delta cites capabilities not yet in specs/ (${hits.join(", ")}) — archive the changes minting them first (capability-dependency order)`,
+          );
+      }
+    }
   }
 
   for (const { file, cap } of deltas) {

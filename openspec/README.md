@@ -30,61 +30,60 @@ game-engine/team-potion-effects#sacrificial-collection   # one of its scenarios
   changes that cite the old name stay traceable.
 - Code cites `// spec: <capability>/<slug>[#<scenario>]`; archived decision
   rationale is cited `// design: <archived-change-folder>`.
-- `pnpm spec:check` validates structure (strict OpenSpec validation),
-  every reference (`scripts/check-spec-citations.mjs`), and open changes'
+- The capability dependency rule is lint-enforced: every Purpose (a
+  capability's `spec.md`, or a mint delta's preamble) declares its
+  dependencies in a `Depends on:` sentence; a capability's spec may
+  reference only itself and those declared dependencies, and the declared
+  graph must stay acyclic.
+- `pnpm spec:check` validates structure (strict OpenSpec validation of
+  `specs/` and of every open change), every reference and the capability
+  dependency graph (`scripts/check-spec-citations.mjs`), and open changes'
   seed freshness (`scripts/check-change-freshness.mjs`).
 
-## Migration cutover table
+## The legacy corpus and the identifier map
 
 The pre-OpenSpec corpus is quarantined in
-[`legacy-spec-archive/`](../legacy-spec-archive/README.md). **Bindingness is
-per identifier**: a numeric `MM-REQ-NNN` id is retired the moment it gains
-an entry in `legacy-spec-archive/maps/identifier-map.json`; until then it
-stays binding and citable in its archived module file. A module's row
-reads **Migrated** when every one of its ids is mapped, **Partial** when
-some ids are mapped while the rest are *parked* — recorded, with their
-prospective capability, in that module's parked ledger under
-[`docs/spec-migration/`](../docs/spec-migration/README.md) — and
-**Pending** when none are.
+[`legacy-spec-archive/`](../legacy-spec-archive/README.md) and is **fully
+historical** (corpus retired 2026-07-24): every numeric `MM-REQ-NNN`
+requirement and `MM-REVIEW-NNN` review item is tombstoned in
+[`legacy-spec-archive/maps/identifier-map.json`](../legacy-spec-archive/maps/identifier-map.json)
+— the sole bridge between the eras. Each entry names its new home (a
+target resolving in `openspec/specs/` or, until archived, in the named
+open change's deltas), the scenarios pinning its edge cases, and the
+retiring change by its stable, dateless name. Citing a numeric identifier
+anywhere in code or specs is a lint error.
 
-| Module | Capability carving | Status | Binding source |
-|--------|--------------------|--------|----------------|
-| 01-game-rules | `specs/game-engine/` (single capability, author decision) | **Migrated** | `openspec/specs/game-engine/spec.md` |
-| 02-platform-architecture | `specs/global-invariants/` (cross-cutting; user-story remainder parked) | **Partial** | mapped ids: `openspec/specs/global-invariants/spec.md`; parked ids: `legacy-spec-archive/spec/02-platform-architecture.md` (ledger: `docs/spec-migration/module-02-parked.md`) |
-| 03-auth-and-identity | *decided at migration* | Pending | `legacy-spec-archive/spec/03-auth-and-identity.md` |
-| 04-stdb-engine | *decided at migration* | Pending | `legacy-spec-archive/spec/04-stdb-engine.md` |
-| 05-convex-platform | *decided at migration* | Pending | `legacy-spec-archive/spec/05-convex-platform.md` |
-| 06-centaur-state | *decided at migration* | Pending | `legacy-spec-archive/spec/06-centaur-state.md` |
-| 07-bot-framework | *decided at migration* | Pending | `legacy-spec-archive/spec/07-bot-framework.md` |
-| 08-centaur-server-app | *decided at migration* | Pending | `legacy-spec-archive/spec/08-centaur-server-app.md` |
+| Module | Capability homes | Status |
+|--------|------------------|--------|
+| 01-game-rules | `game-engine` | **Migrated** |
+| 02-platform-architecture | `global-invariants` + user-story capabilities | **Migrated** |
+| 03-auth-and-identity | `identity-and-authorization`, `team-server-management`, … | **Migrated** |
+| 04-stdb-engine | `turn-pacing`, `live-game-observation`, `replay-and-audit`, … | **Migrated** |
+| 05-convex-platform | `game-lifecycle`, `rooms-and-matchmaking`, `tournaments`, … | **Migrated** |
+| 06-centaur-state | `bot-configuration`, `operator-control`, `replay-and-audit`, … | **Migrated** |
+| 07-bot-framework | `bot-framework`, `turn-pacing`, `decision-transparency`, … | **Migrated** |
+| 08-centaur-server-app | `accounts-and-profiles`, `operator-control`, `replay-and-audit`, … | **Migrated** |
 
-(Module 09 was absorbed into module 08 pre-migration; its archived file is a
-redirect stub.)
-
-Migration proceeds **capability-at-a-time, carved by user-story locality**:
-each capability owns a workflow a user experiences as one thing, so most
-capabilities draw requirements from *several* legacy modules (module
-boundaries sequenced implementation work; they are not semantic
-delineations). The prospective capability set is maintained in
-[`docs/spec-migration/capability-map.md`](../docs/spec-migration/capability-map.md)
-(draft until minted); cross-cutting rules no user story owns live in the
-`global-invariants` capability, gated by the admission test in its
-Purpose. Each capability migration *begins* with a **carving decision made
-with the human author**, recorded in the migration change's proposal. A
-migration change re-authors its capability's substance at intent grain
-under named identifiers, retires the legacy ids it absorbs (map entries),
-and parks or leaves untouched the rest; `node
-scripts/spec-migration/audit-module.mjs <NN>` audits a module's
-disposition (every id mapped or parked, every anchor resolving, no stale
-code references to retired ids).
+(The map is authoritative per identifier; the table is orientation only.
+Module 09 was absorbed into module 08 pre-migration.) `node
+scripts/spec-migration/audit-module.mjs <NN>` remains as a regression
+check that every module's disposition stays complete and resolving. The
+migration's planning artifacts — capability map, assignment matrix,
+parked ledger, staged retirements — are archived permanently under
+[`legacy-spec-archive/spec-migration/`](../legacy-spec-archive/spec-migration/).
+The capability dependency graph's live home is the `Depends on:`
+declaration in each capability's Purpose (lint-derived and acyclic;
+`spec:fold` enforces dependency-ordered archiving).
 
 ## Workflow
 
 Spec-affecting work flows through OpenSpec changes: `/opsx:explore` →
 `/opsx:propose` → **author review of the change artifacts** (Open Questions
-resolved, deltas approved) → `/opsx:apply` — implementation lands in the
-same PR as the still-open change folder → `openspec archive` as the PR's
-final commit → merge. Four conventions bind agents:
+resolved, deltas approved) → `/opsx:apply` — implementation lands alongside
+the still-open change folder (in the authoring PR when spec and code ship
+together, otherwise in a later PR) → `openspec archive` at the tail of the
+PR that completes the implementation (the archive-due gate enforces this)
+→ merge. Five conventions bind agents:
 
 - **Two-commit delta authoring.** A delta that modifies existing
   requirements is introduced across exactly two commits: the first seeds
@@ -112,10 +111,27 @@ final commit → merge. Four conventions bind agents:
   across a rebase) and the Purpose was never reconciled. Minting a
   capability also means adding it to the capability list in
   `config.yaml`'s context block at archive time.
-- **Archiving is the PR's final commit, on a human decision.** Archiving
-  folds the deltas into `specs/` (the only way `specs/` ever advances) and
-  is the terminal act of a change — standardised as the **last commit of
-  the PR**, once review is resolved. An AI agent should say when everything
+- **Archiving means implemented — the archive-due gate.** `specs/` is the
+  record of how the system behaves, so a change archives in the PR that
+  **completes its implementation**, never merely when its deltas are
+  drafted. Open changes are a first-class state (approved spec work whose
+  implementation hasn't landed) and any number may live on main. The
+  enforced invariant is the dual: a change whose `tasks.md` has zero
+  unchecked tasks outside its final `## Archive` section is
+  **archive-due**, and the PR that reaches that state must archive it at
+  its tail (`scripts/check-open-changes.mjs`; CI posts the
+  `no-archive-due-changes` merge-readiness status — pending, not failed,
+  while any change is due). Every `tasks.md` therefore keeps its
+  archive-time bookkeeping (fold+archive, the config.yaml capability
+  list) under a final `## Archive` heading, exempt from the completeness
+  count. Folding
+  additionally enforces **capability-dependency order**: a delta citing a
+  capability that exists only as another open change refuses to fold —
+  archive the minting change first.
+- **Archiving is a human decision.** Archiving folds the
+  deltas into `specs/` (the only way `specs/` ever advances) and is the
+  terminal act of a change — executed once review is resolved, at the
+  tail of the completing PR (one archive commit per change). An AI agent should say when everything
   in the PR looks resolved and ready to archive, but never archives without
   explicit instruction. Until then `specs/` states pre-change truth; the
   reference lint resolves citations against `specs/` overlaid with open
@@ -131,16 +147,33 @@ final commit → merge. Four conventions bind agents:
   patch and a missing scenario name is ambiguous — but this repo's
   full-block authoring makes scenario removals and renames explicit in the
   reviewed word-diff, which that guard would reject.
+- **Change trains: one PR may carry several open changes.** Each change
+  keeps its own folder — proposal, `design.md`, deltas, tasks — authored in
+  its own commit(s), so each capability's decision rationale stays a
+  dedicated, citable context in the archive. (A mint change is ADDED-only
+  and needs no seed/edit pair, so it is normally a single commit.) The
+  train's preconditions are the existing guards: the changes' requirement
+  sets must be disjoint (the overlap tripwire), each capability is minted
+  by exactly one change, and cross-change references are legal because the
+  reference lint overlays **every** open change's deltas. Each change of a
+  train archives whenever its implementation completes — in the authoring
+  PR if implementation ships there, otherwise in the later PR that
+  finishes it (the archive-due gate decides) — always in
+  capability-dependency order, each archive its own commit: `pnpm
+  spec:fold <change>`, the tasks under its `## Archive` section, then
+  `openspec archive --skip-specs -y <change>`.
 - **Concurrency is guarded, not assumed away.** The archive machinery
   replaces MODIFIED blocks by header match with no three-way merge, so a
   delta authored against a stale base can silently clobber an interleaved
   edit. The reference lint fails when two open changes touch the same
   requirement, and `pnpm spec:freshness` verifies each open change's
-  seeded blocks still match `specs/`. With archiving standardised as the
-  PR's final commit, the main staleness event is **rebasing the PR onto an
-  advanced main** — run `pnpm spec:freshness` after every rebase; if it
-  reports staleness, re-seed (rewrite the seed/edit pair against the new
-  base) and have the word-diff re-reviewed. (Replit environment: the
+  seeded blocks still match `specs/`. Because open changes may outlive
+  their authoring PR, `specs/` can advance under any of them whenever
+  another change archives — and rebasing a PR onto an advanced main is the
+  same event. The freshness check runs continuously in CI and as
+  `spec:fold`'s hard precondition; on staleness, re-seed (rewrite the
+  seed/edit pair against the new base) and have the word-diff
+  re-reviewed. (Replit environment: the
   scripted-rebase tooling in `replit.md` → "Scripted history rewriting"
   performs these rewrites non-interactively.)
 

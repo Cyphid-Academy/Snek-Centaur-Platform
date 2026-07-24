@@ -46,11 +46,12 @@ const map = JSON.parse(
 
 const resolves = makeResolver(buildSpecIndex(root, { overlayOpenChanges: true }));
 
-// Parked ledger: under capability-at-a-time carving a module may migrate
-// PARTIALLY. A backticked module-NN id in docs/spec-migration/
-// module-NN-parked.md marks the id parked — still binding in the legacy
-// file, no map entry (an entry is what retires an id), disposition
-// satisfied by the ledger instead.
+// Parked ledger (historical): during the migration a module could migrate
+// PARTIALLY, with unretired ids parked in docs/spec-migration/
+// module-NN-parked.md. The corpus retired in full on 2026-07-24 and the
+// ledgers are archived under legacy-spec-archive/spec-migration/, so no
+// ledger exists at the read path — the parked set is empty and every id
+// must be mapped.
 const parkedPath = join(root, "docs", "spec-migration", `module-${mod}-parked.md`);
 const parked = new Set();
 if (existsSync(parkedPath))

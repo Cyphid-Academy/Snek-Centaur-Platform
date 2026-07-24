@@ -119,8 +119,9 @@ jobs:
 2. Pattern: `main`.
 3. Enable:
    - **Require a pull request before merging** (no direct push except from CI).
-   - **Require status checks to pass** — add `typecheck`, `lint`, `test`, `codegen-drift`.
-   - **Require linear history** (squash or rebase merge only; this is important for subtree split).
+   - **Require status checks to pass** — add `lint`, `typecheck`, `test`, `spec-check`, the `no-archive-due-changes` merge-readiness status (posted by the `archive-due-gate` job; pending while an open change is archive-due), and `codegen-drift` once that workflow lands.
+   - **Require branches to be up to date before merging.**
+   - Leave **Require linear history** OFF — multi-commit change PRs land as merge commits carrying their phase structure (see root `AGENTS.md` → merge policy).
 4. Save the rule.
 
 ### Create the mirror repository

@@ -1,0 +1,157 @@
+{
+  "requirements": {
+    "02-REQ-005": {
+      "target": "team-server-management/server-nomination",
+      "scenarios": ["team-server-management/server-nomination#unilateral-and-secretless"],
+      "note": "Captain unilaterally nominates the server domain on the team record; no server acceptance. The mid-game freeze half is carried by team-management/roster-freeze (which enumerates nomination changes) and the captain gate by team-management/captain-authority — cited, not re-owned."
+    },
+    "02-REQ-006": {
+      "target": "team-server-management/nomination-required-to-play",
+      "scenarios": [
+        "team-server-management/nomination-required-to-play#empty-nomination-bars-entry",
+        "team-server-management/nomination-required-to-play#no-pure-human-path"
+      ],
+      "note": "A team joins games only with a nominated server; no pure-human teams — the gate is structural."
+    },
+    "02-REQ-029": {
+      "target": "team-server-management/server-healthcheck",
+      "scenarios": ["team-server-management/server-healthcheck#member-triggered-check"],
+      "note": "Every server exposes a healthcheck endpoint the platform calls for availability display and pre-game readiness. Unauthenticated/minimal per 03-REVIEW-008; start-time branching on health (05-REQ-036) is the game-lifecycle story's."
+    },
+    "02-REQ-052": {
+      "target": "team-server-management/shared-hosting",
+      "scenarios": [
+        "team-server-management/shared-hosting#one-server-per-team-per-game",
+        "team-server-management/shared-hosting#switching-between-games"
+      ],
+      "note": "Team↔server relationship many-to-many over time; exactly one server per team per game. The operator-trust half of shared hosting is global-invariants/server-trust-boundary (already minted), not re-authored here."
+    },
+    "02-REQ-059": {
+      "target": "team-server-management/unified-web-application",
+      "scenarios": ["team-server-management/unified-web-application#no-second-application"],
+      "note": "App scope spans platform-level and team-internal concerns in the one unified application (dedupe with 08-REQ-001). The static-host residue noted on the parked ledger is carried by global-invariants/ephemeral-game-credentials, not by this id's binding text — see the change's design.md."
+    },
+    "03-REQ-012": {
+      "target": "team-server-management/invitation-credential-carriage",
+      "scenarios": [
+        "team-server-management/invitation-credential-carriage#sole-secret-channel",
+        "team-server-management/server-nomination#unilateral-and-secretless"
+      ],
+      "note": "No shared secret stored, exchanged, or transmitted with a server at nomination or any other time; game invitations are the sole secret channel."
+    },
+    "03-REQ-049": {
+      "target": "team-server-management/no-server-identity",
+      "scenarios": [
+        "team-server-management/no-server-identity#nothing-to-register",
+        "team-server-management/no-server-identity#credentials-name-teams-never-servers"
+      ],
+      "note": "Servers have no persistent platform identity; the domain is team configuration. The credential-scoping half (team+game scope, none at rest, expiry) is carried by identity-and-authorization/game-credential-scope and global-invariants/ephemeral-game-credentials (gi-dedupe checked — no re-authoring)."
+    },
+    "03-REQ-050": {
+      "target": "team-server-management/game-invitations",
+      "scenarios": ["team-server-management/game-invitations#bounded-concurrent-delivery"],
+      "note": "At game start the platform sends a game invitation to each participating team's nominated server. Where the send sits inside start orchestration (after config freeze and instance provisioning) is the game-lifecycle story's."
+    },
+    "03-REQ-051": {
+      "target": "team-server-management/game-invitations",
+      "scenarios": [
+        "team-server-management/game-invitations#one-invitation-per-team",
+        "team-server-management/game-invitations#https-only"
+      ],
+      "note": "Delivery via HTTPS POST to a single well-known invitation endpoint path fixed platform-wide; the literal path is code-level, its stability spec'd via forkable-reference-app's enumerated surface."
+    },
+    "03-REQ-052": {
+      "target": "team-server-management/game-invitations",
+      "scenarios": ["team-server-management/game-invitations#dns-is-the-proof"],
+      "note": "DNS resolution of the nominated domain is the sufficient ownership proof; the platform sends to the domain and receives no credentials from it, so no challenge is performed."
+    },
+    "03-REQ-053": {
+      "target": "team-server-management/invitation-credential-carriage",
+      "scenarios": [
+        "team-server-management/invitation-credential-carriage#self-sufficient-provisioning"
+      ],
+      "note": "The invitation carries the per-team game credential plus the game context needed to act on it; what the credential grants is identity-and-authorization/game-credential-scope."
+    },
+    "03-REQ-054": {
+      "target": "team-server-management/invitation-acceptance",
+      "scenarios": [
+        "team-server-management/invitation-acceptance#acceptance-gates-the-team",
+        "team-server-management/invitation-acceptance#default-open"
+      ],
+      "note": "The server must accept for its team to proceed; the reference implementation auto-accepts by default. Refusal consequences for the game (03-REQ-056) are the game-lifecycle story's."
+    },
+    "03-REQ-055": {
+      "target": "team-server-management/invitation-acceptance",
+      "scenarios": [
+        "team-server-management/invitation-acceptance#whitelist-refusal",
+        "team-server-management/invitation-acceptance#default-open"
+      ],
+      "note": "Custom servers may reject; reference implementation offers a server-side whitelist, default unrestricted. The legacy 'by player email or Centaur Team ID' key enumeration is authored abstractly pending this change's Open Question (email keys collide with the email-free invitation payload)."
+    },
+    "03-REQ-066": {
+      "target": "team-server-management/unified-web-application",
+      "scenarios": ["team-server-management/unified-web-application#same-data-any-server"],
+      "note": "Every server serves the same UI and the user sees the same data regardless of server visited; the server is an open-source client. The identity-not-server read-access principle itself (03-REQ-065) is global-invariants'."
+    },
+    "05-REQ-009": {
+      "target": "team-server-management/server-healthcheck",
+      "scenarios": [
+        "team-server-management/server-healthcheck#on-demand-not-polled",
+        "team-server-management/server-healthcheck#member-triggered-check"
+      ],
+      "note": "Latest healthcheck status + timestamp recorded per nominated domain, on demand (member- or surface-triggered); no automatic polling obligation. Display on the management surface is cited via team-management/team-management-view."
+    },
+    "05-REQ-014": {
+      "target": "team-server-management/server-nomination",
+      "scenarios": ["team-server-management/server-nomination#validity-not-checked-at-nomination"],
+      "note": "Captain sets/updates the nominated domain as a plain field update; validity verified implicitly at invitation delivery. The playing-freeze half is team-management/roster-freeze; the captain gate is team-management/captain-authority."
+    },
+    "05-REQ-015": {
+      "target": "team-server-management/server-nomination",
+      "scenarios": ["team-server-management/server-nomination#clearing-is-allowed"],
+      "note": "Captain may clear the nomination; the resulting participation bar is team-server-management/nomination-required-to-play#empty-nomination-bars-entry."
+    },
+    "08-REQ-001": {
+      "target": "team-server-management/unified-web-application",
+      "scenarios": ["team-server-management/unified-web-application#no-second-application"],
+      "note": "Single human-facing web application spanning team-internal and platform-wide concerns; no separate platform app (dedupe:02-REQ-059). The module-scope framing ('this module shall define...') is carving-obsolete meta; the substance retires here."
+    },
+    "08-REQ-004": {
+      "target": "team-server-management/shared-hosting",
+      "scenarios": ["team-server-management/shared-hosting#unhosted-team-surface-refused"],
+      "note": "One server hosts multiple teams; team-scoped surfaces render in the context of one specific hosted team, platform-wide surfaces team-independently. The hosted-only route family and cross-server deep links are the constraint-mined scenarios of the same requirement."
+    },
+    "08-REQ-005": {
+      "target": "team-server-management/invitation-endpoint-discipline",
+      "scenarios": [
+        "team-server-management/invitation-endpoint-discipline#duplicate-delivery-idempotent",
+        "team-server-management/invitation-endpoint-discipline#credential-stays-in-process"
+      ],
+      "note": "The app exposes the well-known invitation endpoint, accepts on behalf of the invited team, and uses the delivered credential for all subsequent hosting interactions; signature/hosted-team/idempotency checks constraint-mined from the legacy Design into the same requirement."
+    },
+    "08-REQ-023f": {
+      "target": "team-management/team-management-view",
+      "scenarios": ["team-management/team-management-view#management-is-not-play-configuration"],
+      "note": "Dedupe: the Team Management view's exclusion of bot/heuristic/operator configuration is fully authored by the team-management mint's view requirement, which team-server-management cites as a dependency; no parallel scope requirement is authored (see migrate-team-server-management design.md)."
+    },
+    "08-REQ-027g": {
+      "target": "team-server-management/server-healthcheck",
+      "scenarios": ["team-server-management/server-healthcheck#member-triggered-check"],
+      "note": "UI mirror folded: the lobby's member-only healthcheck-ping affordance becomes the surface-generic member-triggered-check scenario ('pre-game readiness surfaces among them') so this capability names no downstream room vocabulary."
+    },
+    "08-REQ-079": {
+      "target": "team-server-management/forkable-reference-app",
+      "scenarios": [
+        "team-server-management/forkable-reference-app#full-source-ownership",
+        "team-server-management/forkable-reference-app#enumerated-surface-is-the-contract"
+      ],
+      "note": "Forkable reference repository, full source ownership; the 'no customisation relaxes invariants / enforcement is external' half is carried by global-invariants (08-REQ-080a's requirement), and the fork-stable compatibility surface is constraint-mined into the same requirement."
+    }
+  },
+  "reviews": {
+    "03-REVIEW-008": {
+      "scenarios": ["team-server-management/server-healthcheck#unauthenticated-and-minimal"],
+      "note": "Option A: healthchecks are unauthenticated, verifying reachability only — keeping the sole-issuer and no-secret-at-nomination rules exception-free. The minimal-payload guidance is elevated to the scenario's violation clause: adding team-scoped state to the response changes the threat model and requires revisiting the decision."
+    }
+  }
+}

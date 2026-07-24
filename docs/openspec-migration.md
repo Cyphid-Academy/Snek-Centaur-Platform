@@ -8,7 +8,15 @@ OpenSpec change folder, archived when it ships.
 **Date**: 2026-07-11 (revised 2026-07-18; migration plan revised
 2026-07-23 — §4.5/§6: capability-at-a-time carving by user-story locality,
 per-identifier bindingness, adopted during the module-02 migration and
-recorded in the `mint-global-invariants` change)
+recorded in the `mint-global-invariants` change; revised 2026-07-24 —
+§5.1/§6: change trains — the remaining migration lands as one final PR
+carrying one change folder per capability; further revised 2026-07-24
+after checking stock OpenSpec semantics — archiving means IMPLEMENTED
+(`specs/` records current behaviour), so the train merges with its
+changes open and each archives in the PR completing its implementation,
+enforced by the archive-due gate: a change with zero unchecked tasks
+outside its final `## Archive` section must be archived by the PR that
+reached that state)
 **Scope**: Evaluates OpenSpec (`@fission-ai/openspec` v1.6.0) as the home of
 the `spec/` corpus and the change-management workflow for it, and records
 the adopted migration design.
@@ -310,12 +318,12 @@ falsifiable).
 Each capability's migration still *begins* with a human+AI carving
 decision, recorded in that migration's change proposal; the prospective
 capability set is maintained as a draft in
-`docs/spec-migration/capability-map.md`. Since user-story capabilities
+`legacy-spec-archive/spec-migration/capability-map.md`. Since user-story capabilities
 draw from several modules, bindingness is tracked per *identifier* (a
 legacy id retires when it gains an identifier-map entry), letting modules
 migrate partially: unretired ids either wait untouched or are *parked* —
 recorded with a prospective capability in
-`docs/spec-migration/module-NN-parked.md`, machine-checked by the
+`legacy-spec-archive/spec-migration/module-NN-parked.md`, machine-checked by the
 migration audit so nothing is silently dropped.
 
 ---
@@ -326,12 +334,30 @@ migration audit so nothing is silently dropped.
 
 `/opsx:explore` → `/opsx:propose` → **author review of the change
 artifacts** (Open Questions resolved, deltas approved) → `/opsx:apply` —
-implementation lands in the same PR as the open change folder → **archive
-as the PR's final commit**, executed only on the author's explicit
+implementation lands alongside the still-open change folder → **archive
+at the tail of the PR that completes the implementation** (see the
+archive-due gate below), executed only on the author's explicit
 instruction → merge. Archiving folds the deltas into `specs/` and is the
 only way `specs/` ever advances; an AI agent should say when everything in
 the PR looks resolved and ready to archive, but never runs
 `openspec archive` unprompted.
+
+*(Revised 2026-07-24.)* One PR may carry a **change train**: several open
+changes, each in its own folder — dedicated proposal, `design.md`, deltas,
+and tasks, authored in its own commit(s) — so each capability's rationale
+is archived as a dedicated, citable context. Preconditions are the
+existing mechanical guards: disjoint requirement sets across the train
+(the overlap lint), one mint per capability, cross-change references
+resolved by the open-change overlay, and every open change validated
+continuously (`pnpm spec:check`). *(Further revised 2026-07-24, after
+checking stock OpenSpec semantics: `specs/` records implemented
+behaviour, so a train MERGES WITH ITS CHANGES OPEN and each change
+archives — one fold+archive commit — in the PR that completes its
+implementation, always in capability-dependency order. The archive-due
+gate enforces this: a change whose tasks.md has zero unchecked tasks
+outside its final `## Archive` section must be archived by the PR that
+reached that state; `spec:fold` refuses a delta citing a capability that
+exists only as another open change.)*
 
 ### 5.2 Two-commit delta authoring (AI responsibility)
 
@@ -361,11 +387,12 @@ for the same requirement** (conflict-in-flight). And a **seed-freshness
 check** exploits the two-commit policy: the seed commit is a durable record
 of the base a change was authored against, so the check compares each open
 change's seeded requirement blocks with the current `specs/` state and
-fails if they diverge. With archive standardised as the PR's final commit,
-the main event that can invalidate a seed is **rebasing the PR onto an
-advanced main** — run the freshness check after every rebase; if it fails,
-re-seed (rewrite the seed/edit pair against the new base) and re-review the
-word-diff.
+fails if they diverge. Because open changes may outlive their authoring
+PR, a seed can go stale whenever `specs/` advances — another change
+archiving, or a PR rebasing onto an advanced main. The freshness check
+runs continuously in CI and as fold's hard precondition; if it fails,
+re-seed (rewrite the seed/edit pair against the new base) and re-review
+the word-diff.
 
 ---
 
@@ -392,14 +419,20 @@ identifier until each id's cutover, no long split-brain.
    user-story homes; per-identifier bindingness and the parked-ledger
    audit land with it.
 4. **Remaining migration proceeds capability-at-a-time** from the
-   prospective map (`docs/spec-migration/capability-map.md`), one
-   capability per PR, ordered by the capability dependency graph and
-   implementation need rather than by module number. Each PR: carving
-   decision with the author → re-author at intent grain (parked drafts as
-   source material, legacy text binding) → constraint-mine → retire the
-   absorbed ids in the identifier map, convert code citations, clear
-   ledger entries → update cutover rows (a module flips to Migrated when
-   its last id is disposed) → audit + full battery.
+   prospective map (`legacy-spec-archive/spec-migration/capability-map.md`), one
+   capability per **change folder**, ordered by the capability dependency
+   graph and implementation need rather than by module number. *(Revised
+   2026-07-24: the remaining capabilities land together as one final PR
+   carrying a change train — the batch carving decision is made with the
+   author across the whole remaining corpus, then each capability gets its
+   own change folder, authored in its own commit; the train merges with
+   its changes open, each archiving in the PR that completes its
+   capability's implementation, in dependency order — see §5.1.)* Each change:
+   carving decision with the author → re-author at intent grain (parked
+   drafts as source material, legacy text binding) → constraint-mine →
+   retire the absorbed ids in the identifier map, convert code citations,
+   clear ledger entries → update cutover rows (a module flips to Migrated
+   when its last id is disposed) → audit + full battery.
 5. **Retro as the shape settles**; adjust the recipe in each subsequent
    migration change as needed.
 
@@ -413,7 +446,7 @@ identifier until each id's cutover, no long split-brain.
 | Split-brain during migration | High if prolonged | Per-module bindingness cutover table; short campaign, module per PR |
 | OpenSpec project churn / single maintainer | Medium | Everything is markdown in our repo — worst case keep the format, drop the CLI; pin the CLI version; avoid experimental subsystems |
 | Delta header mismatch strands/duplicates requirements | Medium | Frozen named headers; RENAMED-only renames with same-commit sweep; lint fails dangling references |
-| Stale delta clobbers an interleaved edit at archive | Medium | Archive as the PR's final commit; overlap lint; seed-freshness check after rebases (§5.4) |
+| Stale delta clobbers an interleaved edit at archive | Medium | Archive-due gate ties archiving to the completing PR; overlap lint; continuous seed-freshness in CI and as fold's precondition (§5.4) |
 | Spec drift once gates are soft | Medium | Reference lint in CI; change-folder discipline; the existing binding-spec culture |
 | Carving decisions fragment or duplicate capabilities | Medium | Carving is an explicit human+AI decision per module, recorded in the migration change's proposal |
 | Losing decision provenance | Low | Review logs frozen in the archive; review items mapped to encoding scenarios; future rationale in archived change folders |

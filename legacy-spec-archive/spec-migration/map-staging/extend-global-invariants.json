@@ -1,0 +1,170 @@
+{
+  "requirements": {
+    "03-REQ-005": {
+      "target": "global-invariants/authenticated-unambiguous-identity",
+      "scenarios": [
+        "global-invariants/authenticated-unambiguous-identity#identity-kind-is-decidable"
+      ],
+      "note": "Identity kinds distinguishable wherever platform code observes them; no code path handles an ambiguous-kind identity."
+    },
+    "03-REQ-006": {
+      "target": "global-invariants/authenticated-unambiguous-identity",
+      "scenarios": [
+        "global-invariants/authenticated-unambiguous-identity#no-anonymous-mutation-path"
+      ],
+      "note": "No anonymous/unauthenticated participants in any state-mutating role, on any runtime."
+    },
+    "03-REQ-029": {
+      "target": "global-invariants/team-granularity-authorization",
+      "scenarios": [
+        "global-invariants/team-granularity-authorization#spectators-hold-no-private-state"
+      ],
+      "note": "Action half (no staging/altering for another team) was already carried by the requirement body and #staging-is-team-checked; this change adds the observation half (filtered-view-only cross-team reads; spectators see no private state, stage nothing). Invisibility-filter mechanics stay with live-game-observation."
+    },
+    "03-REQ-030": {
+      "target": "global-invariants/team-granularity-authorization",
+      "scenarios": [
+        "global-invariants/team-granularity-authorization#within-team-discipline-lives-in-convex"
+      ],
+      "note": "Map-entry-only: existing text already states SpacetimeDB holds no notion of individual operators and Convex is sole authority for the operator-to-snake mapping. Staging attribution records (Agent values SpacetimeDB never interprets) are replay-and-audit's story, not an authority record."
+    },
+    "03-REQ-038": {
+      "target": "global-invariants/authenticated-unambiguous-identity",
+      "scenarios": [
+        "global-invariants/authenticated-unambiguous-identity#instance-team-ids-resolve-uniquely"
+      ],
+      "note": "Team identifiers seeded into a game instance denote exactly one persistent Convex team record for the game's lifetime; cross-game collision immunity follows from global-invariants/spacetimedb-instance-isolation. Matrix alt (code-mechanism) declined: falsifiable cross-runtime behaviour, kept as spec."
+    },
+    "03-REQ-043": {
+      "target": "global-invariants/credential-confinement",
+      "scenarios": [
+        "global-invariants/credential-confinement#signing-keys-never-leave-convex",
+        "global-invariants/credential-confinement#game-credential-has-one-delivery-path"
+      ],
+      "note": "Credential/key material only to intended holders over authenticated channels; token-signing private keys never leave Convex (public verification keys only); per-team game credentials travel only via the game invitation to the nominated Server."
+    },
+    "03-REQ-065": {
+      "target": "global-invariants/access-follows-identity",
+      "scenarios": ["global-invariants/access-follows-identity#same-data-regardless-of-server"],
+      "note": "Map-entry-only: the existing requirement already states read access follows Google identity and never the Server visited."
+    },
+    "03-REQ-067": {
+      "target": "global-invariants/security-enforced-outside-the-library",
+      "scenarios": [],
+      "note": "Accepted-exfiltration residue: a malicious Snek Centaur Server can inject client-side code exfiltrating data its visitors can read — an accepted trust trade-off (visit only Servers you trust), not a falsifiable behaviour. Retired here as the enforcement-model requirement it qualifies; the user-facing trust prose lands in team-server-management's Purpose (authored by that change)."
+    },
+    "04-REQ-002": {
+      "target": "global-invariants/state-confined-to-owning-runtime",
+      "scenarios": [
+        "global-invariants/state-confined-to-owning-runtime#game-instance-holds-only-its-games-state"
+      ],
+      "note": "Game runtime holds/derives/exposes no platform-wide persistent state; instance state is single-game-scoped and dies with the instance (teardown-after-export bracket owned by game-lifecycle)."
+    },
+    "04-REQ-036": {
+      "target": "global-invariants/one-shared-engine",
+      "scenarios": ["global-invariants/one-shared-engine#no-parallel-implementation"],
+      "note": "Map-entry-only: resolution via the one shared engine build, no parallel/specialised variant, is the existing requirement; the sole-authoritative-executor half is global-invariants/authoritative-turn-resolution."
+    },
+    "04-REQ-065": {
+      "target": "global-invariants/game-instance-hermeticity",
+      "scenarios": ["global-invariants/game-instance-hermeticity#no-egress-before-game-end"],
+      "note": "No spontaneous outbound transmission during gameplay; game-end notification and finished-record delivery are the sanctioned egress; serving authorized subscribers is contract, not egress."
+    },
+    "04-REQ-068": {
+      "target": "global-invariants/game-instance-hermeticity",
+      "scenarios": ["global-invariants/game-instance-hermeticity#seeded-once-never-refreshed"],
+      "note": "No external system consulted during gameplay; all gameplay inputs seeded at initialisation, never refreshed; token validation uses verification keys obtained at startup, not per-connection external calls."
+    },
+    "05-REQ-002": {
+      "target": "global-invariants/state-confined-to-owning-runtime",
+      "scenarios": [
+        "global-invariants/state-confined-to-owning-runtime#convex-never-mirrors-a-live-game"
+      ],
+      "note": "Convex stores no state whose authoritative home is the game runtime; one-time post-game import of the finished record is the sole exception."
+    },
+    "06-REQ-001": {
+      "target": "global-invariants/centaur-state-boundary",
+      "scenarios": [],
+      "note": "Centaur subsystem in Convex is the sole persistent home of bot-side per-team and per-game state, excepting game-authoritative state (game instance) and platform-wide records; carried by the requirement body."
+    },
+    "06-REQ-002": {
+      "target": "global-invariants/centaur-state-boundary",
+      "scenarios": [],
+      "note": "All Centaur state resides in the single Convex deployment, never in any SpacetimeDB instance; the outliving-a-game half is also listed in global-invariants/single-convex-deployment."
+    },
+    "06-REQ-003": {
+      "target": "global-invariants/centaur-state-boundary",
+      "scenarios": ["global-invariants/centaur-state-boundary#centaur-state-cannot-decide-a-game"],
+      "note": "Centaur subsystem holds nothing authoritative for game outcome; game-authoritative state lives solely in the game's instance."
+    },
+    "06-REQ-044": {
+      "target": "global-invariants/one-contract-many-surfaces",
+      "scenarios": [
+        "global-invariants/one-contract-many-surfaces#operators-never-proxy-through-the-server"
+      ],
+      "note": "Operators read/mutate Centaur state directly through the function contract under their own identity, never routed through their team's Server; per-mutation authorization enforcement is identity-and-authorization's story."
+    },
+    "06-REQ-045": {
+      "target": "global-invariants/centaur-state-boundary",
+      "scenarios": [
+        "global-invariants/centaur-state-boundary#bot-to-game-flow-never-routes-through-convex"
+      ],
+      "note": "Game instance never reads/writes Centaur state; bot-to-game communication flows only through staged moves and the instance's subscriptions, never through Convex."
+    },
+    "06-REQ-046": {
+      "target": "global-invariants/centaur-state-boundary",
+      "scenarios": [
+        "global-invariants/centaur-state-boundary#bot-to-game-flow-never-routes-through-convex"
+      ],
+      "note": "Write direction of the same boundary: no Centaur-subsystem mutation writes game-instance-owned state (dedupe with 06-REQ-045; one boundary, both directions in the requirement body)."
+    },
+    "07-REQ-061": {
+      "target": "global-invariants/bot-compute-view-confinement",
+      "scenarios": [
+        "global-invariants/bot-compute-view-confinement#co-hosted-teams-compute-apart",
+        "global-invariants/bot-compute-view-confinement#masked-state-stays-masked"
+      ],
+      "note": "Bot compute for a team consumes only that team's authorized filtered view — never other teams' game state (including views a co-hosting Server legitimately holds) nor the masked portion of its own view. Bounded by global-invariants/server-trust-boundary: binds platform compute implementations, not the operator."
+    },
+    "08-REQ-080a": {
+      "target": "global-invariants/security-enforced-outside-the-library",
+      "scenarios": [
+        "global-invariants/security-enforced-outside-the-library#customised-app-changes-no-invariant"
+      ],
+      "note": "No application customisation relied on for any security or correctness invariant; this change broadens the requirement from 'never the Server library' to 'never any client's presentation'."
+    },
+    "08-REQ-083a": {
+      "target": "global-invariants/client-truthfulness",
+      "scenarios": ["global-invariants/client-truthfulness#subscription-loss-is-visible"],
+      "note": "Subscription loss surfaced, never papered over with fabricated/stale state; resubscribe and render fresh on recovery."
+    },
+    "08-REQ-084a": {
+      "target": "global-invariants/state-confined-to-owning-runtime",
+      "scenarios": ["global-invariants/state-confined-to-owning-runtime#clients-restart-clean"],
+      "note": "The application persists no authoritative state of its own across sessions; all operator-visible state re-derived from the owning runtimes each session."
+    },
+    "08-REQ-100": {
+      "target": "global-invariants/client-truthfulness",
+      "scenarios": ["global-invariants/client-truthfulness#rejections-reach-the-user"],
+      "note": "Server-side invariant rejections surfaced as explicit, user-legible feedback at the point of action; never silently swallowed."
+    },
+    "08-REQ-101": {
+      "target": "global-invariants/client-truthfulness",
+      "scenarios": ["global-invariants/client-truthfulness#enablement-derives-from-server-state"],
+      "note": "Invariant-gated affordance enablement derives from server-held state, not client optimism; where not yet derivable, dispatch anyway and surface the authoritative result."
+    },
+    "08-REQ-103": {
+      "target": "global-invariants/client-truthfulness",
+      "scenarios": ["global-invariants/client-truthfulness#archived-teams-still-render"],
+      "note": "Views referencing archived teams render from the persisted participating-team snapshot and present archived status explicitly; never broken references. Matrix alt (accounts-and-profiles) declined: binds every historical view across capabilities."
+    },
+    "08-REQ-104": {
+      "target": "global-invariants/one-contract-many-surfaces",
+      "scenarios": [
+        "global-invariants/one-contract-many-surfaces#every-surface-hits-the-same-invariants"
+      ],
+      "note": "Every mutating action from any surface dispatched against the owning runtime's server-side contract under identical invariants; no UI bypass; rejection surfacing pinned by global-invariants/client-truthfulness#rejections-reach-the-user. Integrator-facing parity half (05-REQ-050) is platform-integrations' story."
+    }
+  },
+  "reviews": {}
+}

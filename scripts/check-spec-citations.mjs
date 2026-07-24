@@ -22,15 +22,32 @@
 //     legacy-spec-archive/maps/), allowed for unmigrated modules.
 //   - No requirement may be touched by more than one OPEN change — archive
 //     replaces blocks by header match with no three-way merge, so
-//     overlapping open changes would clobber each other.
+//     overlapping open changes would clobber each other. (Several open
+//     changes MAY share one PR — a change train — precisely because this
+//     guard forces their requirement sets to be disjoint.)
+//   - Capability dependency rule: every Purpose (specs/ or a mint delta's
+//     preamble) declares its dependencies in a "Depends on:" sentence; a
+//     capability's spec may reference only itself and its declared
+//     dependencies, and the declared graph must be acyclic.
+//   - Identifier-map entries may carry a `change` field — the archived
+//     change folder that retired the id, added at that change's archive
+//     commit — which must resolve under openspec/changes/archive/.
 // Seed freshness (stale deltas vs an advanced specs/) is the companion
 // check scripts/check-change-freshness.mjs (pnpm spec:freshness).
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { buildSpecIndex, makeResolver, openChangeDeltaFiles } from "./spec-index.mjs";
+import {
+  buildSpecIndex,
+  makeResolver,
+  openChangeDeltaFiles,
+  parseDeltaOps,
+  parseDependsOn,
+} from "./spec-index.mjs";
 
 const root = new URL("..", import.meta.url).pathname;
-const MIGRATED_MODULES = new Set(["01"]); // numeric prefixes now tombstoned
+// Every module is migrated (corpus retired in full 2026-07-24): all numeric
+// prefixes are tombstoned and review-item citations are errors everywhere.
+const MIGRATED_MODULES = new Set(["01", "02", "03", "04", "05", "06", "07", "08"]);
 
 const walk = (dir, out = []) => {
   if (!existsSync(dir)) return out;
@@ -70,6 +87,51 @@ for (const [req, changes] of touchedBy) {
     errors.push(
       `requirement ${req} is touched by multiple open changes (${[...changes].join(", ")}) — sequence or merge them before either archives`,
     );
+}
+
+// --- Capability dependency graph (Purpose "Depends on:" declarations) ------
+// The capability dependency rule (config.yaml context) is enforced
+// mechanically: a capability's spec — and any open delta folding into it —
+// may reference only the capability itself and its declared dependencies,
+// and the declared graph must be acyclic. An existing capability declares in
+// its specs/ Purpose; a delta that mints (or renames into) a capability
+// declares in its Purpose preamble.
+const declaredDeps = new Map(); // cap -> Set<dep>
+const declareDepsFrom = (cap, text, where) => {
+  const { found, deps, problem } = parseDependsOn(text);
+  if (!found) errors.push(`${where}: Purpose has no "Depends on:" declaration`);
+  else if (problem) errors.push(`${where}: ${problem}`);
+  declaredDeps.set(cap, new Set(deps));
+};
+if (existsSync(specsDir))
+  for (const cap of readdirSync(specsDir)) {
+    const f = join(specsDir, cap, "spec.md");
+    if (existsSync(f))
+      declareDepsFrom(cap, readFileSync(f, "utf8"), `openspec/specs/${cap}/spec.md`);
+  }
+for (const { file, cap } of openDeltas) {
+  const { preamble } = parseDeltaOps(readFileSync(file, "utf8"));
+  if (preamble) declareDepsFrom(cap, preamble, file.replace(root, ""));
+}
+for (const [cap, deps] of declaredDeps)
+  for (const d of deps) {
+    if (d === cap) errors.push(`${cap}: declares a dependency on itself`);
+    else if (!resolved.has(d))
+      errors.push(`${cap}: declared dependency "${d}" is not a known capability`);
+  }
+{
+  const state = new Map(); // undefined = unvisited, 0 = visiting, 1 = done
+  const visit = (cap, path) => {
+    if (state.get(cap) === 1) return;
+    if (state.get(cap) === 0) {
+      errors.push(`capability dependency cycle: ${[...path, cap].join(" -> ")}`);
+      return;
+    }
+    state.set(cap, 0);
+    for (const d of declaredDeps.get(cap) ?? []) visit(d, [...path, cap]);
+    state.set(cap, 1);
+  };
+  for (const cap of declaredDeps.keys()) visit(cap, []);
 }
 
 // --- Tombstoned numeric identifiers (sourced from the identifier map) ------
@@ -118,15 +180,40 @@ if (existsSync(mapPath)) {
     errors.push(
       `identifier-map.json: provenance change "${map.provenance.change}" has no archive folder`,
     );
+  // Per-entry provenance: `change` names the retiring change by its
+  // STABLE, DATELESS name — valid while the change is open, and still
+  // valid after archiving (the archived folder carries a date prefix over
+  // the same name, matched by suffix). Exact archived-folder names are
+  // also accepted.
+  const openChangeNames = new Set(
+    existsSync(join(root, "openspec", "changes"))
+      ? readdirSync(join(root, "openspec", "changes")).filter(
+          (n) => n !== "archive" && !n.startsWith("."),
+        )
+      : [],
+  );
+  const changeResolves = (name) =>
+    archivedChanges.has(name) ||
+    openChangeNames.has(name) ||
+    [...archivedChanges].some((a) => a.endsWith(`-${name}`));
+  const changeOk = (e, where) => {
+    if (e.change && !changeResolves(e.change))
+      errors.push(
+        `identifier-map.json: ${where} change "${e.change}" matches no open change or archive folder`,
+      );
+  };
   for (const [lid, e] of Object.entries(map.requirements ?? {})) {
     if (e.target) {
       anchorOk(e.target, lid);
       retiredTarget.set(lid, e.target);
     }
     for (const sc of e.scenarios ?? []) anchorOk(sc, lid);
+    changeOk(e, lid);
   }
-  for (const [rid, e] of Object.entries(map.reviews ?? {}))
+  for (const [rid, e] of Object.entries(map.reviews ?? {})) {
     for (const sc of e.scenarios ?? []) anchorOk(sc, rid);
+    changeOk(e, rid);
+  }
   for (const lid of Object.keys(map.requirements ?? {})) tombstones.add(lid);
 }
 
@@ -143,11 +230,13 @@ const codeFiles = [];
 for (const base of ["packages", "apps"])
   codeFiles.push(...walk(join(root, base)).filter((p) => /\.(ts|tsx|svelte|rs)$/.test(p)));
 const specFiles = [
-  ...walk(specsDir).filter((p) => p.endsWith("spec.md")),
-  ...openDeltas.map((d) => d.file),
+  ...walk(specsDir)
+    .filter((p) => p.endsWith("spec.md"))
+    .map((p) => ({ file: p, cap: p.match(/\/specs\/([^/]+)\/spec\.md$/)?.[1] ?? null })),
+  ...openDeltas,
 ];
 
-const checkLine = (file, i, line, isCode) => {
+const checkLine = (file, i, line, isCode, ownCap = null) => {
   if (!isCode) {
     // Spec purity: capability specs never reference the legacy archive or
     // implementation locations — the identifier map is the sole bridge to
@@ -170,6 +259,10 @@ const checkLine = (file, i, line, isCode) => {
       if (!reqs.has(req)) errors.push(`${file}:${i + 1} unknown requirement "${cap}/${req}"`);
       else if (scen && !reqs.get(req).has(scen))
         errors.push(`${file}:${i + 1} unknown scenario "${cap}/${req}#${scen}"`);
+      if (!isCode && ownCap && cap !== ownCap && !declaredDeps.get(ownCap)?.has(cap))
+        errors.push(
+          `${file}:${i + 1} references "${cap}/${req}" but "${ownCap}" does not declare a dependency on "${cap}"`,
+        );
     }
   for (const m of line.matchAll(numericRe)) {
     if (tombstones.has(m[0]))
@@ -195,10 +288,10 @@ for (const f of codeFiles)
   readFileSync(f, "utf8")
     .split("\n")
     .forEach((line, i) => checkLine(f, i, line, true));
-for (const f of specFiles)
-  readFileSync(f, "utf8")
+for (const { file, cap } of specFiles)
+  readFileSync(file, "utf8")
     .split("\n")
-    .forEach((line, i) => checkLine(f, i, line, false));
+    .forEach((line, i) => checkLine(file, i, line, false, cap));
 
 if (errors.length) {
   console.error(`Spec-reference lint FAILED (${errors.length}):`);
