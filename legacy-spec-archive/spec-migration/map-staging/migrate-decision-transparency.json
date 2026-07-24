@@ -1,0 +1,103 @@
+{
+  "requirements": {
+    "06-REQ-026": {
+      "target": "decision-transparency/computed-display-state",
+      "scenarios": [
+        "decision-transparency/computed-display-state#per-direction-coherence",
+        "decision-transparency/computed-display-state#timestamps-travel-with-the-world"
+      ],
+      "note": "The persistent per-snake computed display state and its minimum per-direction contents: stateMap score, worst-case simulated world (sufficient for the preview), and per-heuristic normalised outputs (sufficient for the breakdown). Re-authored with the per-snake turn timestamps travelling inside the record and undefined directions absent, never zero-filled. The heuristicViolations column the resolved annotations review briefly added was already excised legacy-side (violations are server-log-only); nothing of it carries."
+    },
+    "06-REQ-027": {
+      "target": "decision-transparency/hosting-server-sole-writer",
+      "scenarios": [
+        "decision-transparency/hosting-server-sole-writer#only-the-hosting-server-writes"
+      ],
+      "note": "RE-AUTHORED per the split note binding this change: the team's hosting server (the process the team's automated player runs in, via bot-framework/embedded-team-player) is the sole writer — the legacy identification of the writer by its per-team game credential is credential/game-lifecycle vocabulary outside this capability's dependency ceiling and stays with the identity story. Dedupe: 07-REQ-004 (the framework-side statement of the same sole-writership). The paired action-log writer rules remain with their own id."
+    },
+    "06-REQ-028": {
+      "target": "decision-transparency/snapshot-full-replacement",
+      "scenarios": ["decision-transparency/snapshot-full-replacement#any-snapshot-stands-alone"],
+      "note": "Updates are full snapshots, never deltas — every recorded snapshot independently interpretable without reference to prior snapshots. Extended at authoring with the consumer-side dual (never diff-merge, never back-fill absent entries) from the legacy downstream-impact note — the routed constraint-mining lead."
+    },
+    "06-REQ-029": {
+      "target": "decision-transparency/hosting-server-sole-writer",
+      "scenarios": [
+        "decision-transparency/hosting-server-sole-writer#cadence-is-the-writers-choice"
+      ],
+      "note": "No per-turn or per-second rate limit on computed-display-state writes; the writing bot framework alone owns update cadence (author-resolved: carried at full strength, no cadence requirement authored anywhere in the capability). The legacy 'beyond Convex operational constraints' carve-out is operational reality, not spec."
+    },
+    "07-REQ-004": {
+      "target": "decision-transparency/hosting-server-sole-writer",
+      "scenarios": [
+        "decision-transparency/hosting-server-sole-writer#only-the-hosting-server-writes"
+      ],
+      "note": "Dedupe: 06-REQ-027 — the framework-side statement of the same sole-writership (the framework, embedded in the hosting server per bot-framework/embedded-team-player, is the process that writes). One requirement, authored once."
+    },
+    "07-REQ-039": {
+      "target": "decision-transparency/snapshot-full-replacement",
+      "scenarios": [
+        "decision-transparency/snapshot-full-replacement#dirty-flag-drives-publication",
+        "decision-transparency/snapshot-full-replacement#selection-converges-the-display"
+      ],
+      "note": "A full snapshot is written whenever the snake's dirty flag (bot-framework/score-composition) is set; the snapshot's contents half (stateMap, worst-case worlds with per-snake turn timestamps, per-heuristic outputs from the worst-case worlds) is authored in decision-transparency/computed-display-state. The function-contract-surface write path is mechanism. The paired action-log-entry-per-snapshot obligation stays with its own id (replay story)."
+    },
+    "08-REQ-040": {
+      "target": "decision-transparency/scored-direction-display",
+      "scenarios": [
+        "decision-transparency/scored-direction-display#one-ramp-two-surfaces",
+        "decision-transparency/scored-direction-display#neutral-is-not-worst"
+      ],
+      "note": "Candidate cells adjacent to the held snake's head coloured by stateMap score on a monotone ramp; undefined entries render a distinct neutral state distinguishable from every score value (UI-mirror clause folded as scenario, per the author decision). Held-snake gating of candidates is operator-control's."
+    },
+    "08-REQ-048": {
+      "target": "decision-transparency/worst-case-preview",
+      "scenarios": ["decision-transparency/worst-case-preview#pick-triggers-preview"],
+      "note": "With a held snake and a picked direction, the board additionally renders that (snake, direction)'s recorded worst-case world: current positions solid, worst-case simulated positions as translucent overlays. Read from the computed display state only. The exact visual treatment of frozen snakes is a design decision; the timestamps that enable it are guaranteed in computed-display-state#timestamps-travel-with-the-world."
+    },
+    "08-REQ-050": {
+      "target": "decision-transparency/worst-case-preview",
+      "scenarios": ["decision-transparency/worst-case-preview#preview-evolves-in-place"],
+      "note": "UI-mirror folded as scenario (author decision): the preview updates reactively as new snapshots publish, so a direction left picked shows the worst-case world evolving in place."
+    },
+    "08-REQ-051": {
+      "target": "decision-transparency/worst-case-preview",
+      "scenarios": ["decision-transparency/worst-case-preview#no-record-no-preview"],
+      "note": "No preview without both a picked direction and existing computed display state — the board then shows only the current state; the interface never previews a world it has no record of."
+    },
+    "08-REQ-059": {
+      "target": "decision-transparency/decision-breakdown",
+      "scenarios": ["decision-transparency/decision-breakdown#rows-explain-the-recorded-world"],
+      "note": "Per-direction decision breakdown for the held snake: one row per active heuristic with name, raw normalised output in the recorded worst-case world, portfolio weight, weighted contribution, and relative impact. Rendered purely from published outputs per decision-transparency/published-slots-only (the legacy no-recompute downstream note, minted as a requirement — the routed constraint-mining lead)."
+    },
+    "08-REQ-060": {
+      "target": "decision-transparency/decision-breakdown",
+      "scenarios": [
+        "decision-transparency/decision-breakdown#snapshot-updates-the-open-table",
+        "decision-transparency/decision-breakdown#direction-switch-is-a-re-read"
+      ],
+      "note": "UI-mirror folded as scenarios (author decision): the breakdown updates reactively on new snapshots and on the operator switching the examined direction — the latter a pure re-read of the already-published record."
+    }
+  },
+  "reviews": {
+    "07-REVIEW-013": {
+      "scenarios": [
+        "decision-transparency/computed-display-state#worst-case-world-is-deterministic"
+      ],
+      "note": "Worst-case-world tie-breaking resolved as deterministic (Option A, lexicographic foreign-tuple order). Authored at intent grain: the requirement pins that recorded worst-case selection is deterministic — identical evaluation state always records the identical world, keeping the preview reproducible from the snapshot alone (the routed constraint-mining lead); the specific lexicographic rule is mechanism, cited from code with a // design: reference to this change."
+    },
+    "07-REVIEW-014": {
+      "scenarios": [
+        "decision-transparency/published-slots-only#violations-stay-in-the-server-log",
+        "decision-transparency/published-slots-only#missing-cell-renders-absent"
+      ],
+      "note": "The annotations subsystem is excised (with 08-REQ-049's MVP deferral dropped by the sibling that owns it); the surviving posture is authored here: the published slots are the complete operator-visible decision surface, heuristic contract violations are diagnosed in the hosting server's process log only with no operator-UI surface (aligning with bot-framework/author-fault-containment), and the review's restored per-snake turn timestamps travel inside the record (computed-display-state#timestamps-travel-with-the-world). A replacement annotations design remains future work extending this capability."
+    }
+  },
+  "ledger": {
+    "extensible-centaur-state-slots": {
+      "target": "decision-transparency/extensible-state-slots",
+      "note": "The module-02 parked ledger's id-less constraint-mined entry (final section of docs/spec-migration/module-02-parked.md) graduates: standardized bounded recorded-output slots — the per-snake computed display state record and the append-only action log — so novel bot logic produces recorded, replayable data without any per-team schema change. No numeric id exists, so no identifier-map requirement entry; clearing the ledger section at integration is the retirement act (tasks.md 2.2)."
+    }
+  }
+}

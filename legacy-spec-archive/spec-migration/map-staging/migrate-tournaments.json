@@ -1,0 +1,80 @@
+{
+  "requirements": {
+    "05-REQ-027a": {
+      "target": "tournaments/forfeit-scoring",
+      "scenarios": [
+        "tournaments/forfeit-scoring#zero-scored-and-marked",
+        "tournaments/forfeit-scoring#marking-not-value-distinguishes",
+        "tournaments/forfeit-scoring#forfeit-visible-downstream"
+      ],
+      "note": "forfeitedTeamIds re-authored as the game record's unseated-teams marking (game-lifecycle/game-record stores it; this capability owns its scoring meaning). Forfeit = loss with score 0, distinguishable from a played loss by the marking, not the value; reflected in scoring, ranking/leaderboard, and replay surfaces. Also covers the forfeit-scoring aspect of 03-REQ-056 (that id mapped by migrate-game-lifecycle, which owns the refusal transitions)."
+    },
+    "05-REQ-059": {
+      "target": "tournaments/round-structure",
+      "scenarios": ["tournaments/round-structure#every-round-a-real-game"],
+      "note": "Tournament = configured number of rounds, each a distinct game with its own record (game-lifecycle/game-record) and its own freshly provisioned instance (game-lifecycle/instance-per-game). Participant set fixed at tournament start (rooms-and-matchmaking/team-enrolment); a forfeit never unseats a team for later rounds (#forfeit-does-not-unseat)."
+    },
+    "05-REQ-060": {
+      "target": "tournaments/round-scheduling",
+      "scenarios": ["tournaments/round-scheduling#interlude-then-the-platform-acts"],
+      "note": "Round N+1 begins after round N finishes plus the configured interlude; Convex is the sole authority for scheduling and initiating every round — no human initiates a scheduled round. Scheduled rounds consult no readiness gate (#no-ready-check-between-rounds, the constraint-mined lead)."
+    },
+    "05-REQ-061": {
+      "target": "tournaments/round-scheduling",
+      "scenarios": ["tournaments/round-scheduling#never-before-the-scheduled-moment"],
+      "note": "First round begins no earlier than the tournament's scheduled start time, regardless of team readiness. The tournament is initiated through the ordinary room gate (rooms-and-matchmaking/game-start-gate); the scheduled start defers the launch, never the other way around."
+    },
+    "05-REQ-062": {
+      "target": "tournaments/round-config-inheritance",
+      "scenarios": [
+        "tournaments/round-config-inheritance#identical-play-round-to-round",
+        "tournaments/round-config-inheritance#no-nested-tournament"
+      ],
+      "note": "Rounds inherit the gameplay configuration captured from the tournament's opening game at tournament creation; the inherited set excludes the tournament meta-parameters (round count, interlude, scheduled start time), which are properties of the tournament as a whole."
+    },
+    "05-REQ-063": {
+      "target": "tournaments/round-scheduling",
+      "scenarios": ["tournaments/round-scheduling#nothing-after-the-final-round"],
+      "note": "No auto-created game after the final round — the concrete 'a format may govern that none follows' arm of game-lifecycle/successor-auto-creation (dedupe seam with 05-REQ-039, mapped by migrate-game-lifecycle)."
+    },
+    "05-REQ-064": {
+      "target": "tournaments/tournament-roster-freeze",
+      "scenarios": [
+        "tournaments/tournament-roster-freeze#frozen-through-the-interlude",
+        "tournaments/tournament-roster-freeze#anchored-to-the-tournament-not-to-a-round",
+        "tournaments/tournament-roster-freeze#lifts-when-the-final-round-finishes"
+      ],
+      "note": "Whole-event roster freeze: first round entering play until final round finished, interludes included; phrased as this capability's own enclosing-competitive-engagement extension composing with team-management/roster-freeze's 'holdable longer' clause without a cross-DAG citation (dedupe: the 05-REQ-013 tournament sentence). Anchored to the tournament's in-progress state, never derived from a round's playing status. Subject to this change's Open Question 1 (authored per 05-REVIEW-003 option B; confirm vs the 03-REVIEW-006 unresolved sub-question)."
+    }
+  },
+  "reviews": {
+    "03-REVIEW-012": {
+      "scenarios": [
+        "tournaments/scheduled-start-override#refusal-costs-the-seat-not-the-round",
+        "tournaments/forfeit-scoring#zero-scored-and-marked",
+        "tournaments/walkover-and-no-contest#walkover-scores-par",
+        "tournaments/walkover-and-no-contest#no-contest-no-winner"
+      ],
+      "note": "Forfeit-on-invitation-refusal branches for tournament rounds: two-plus acceptances play (forfeiters marked, score 0), exactly one is a walkover (sole acceptor 1.0), zero is a no-contest (no winner) — forfeits distinguishable from played losses by the unseated-teams marking. The non-tournament abort arm and the abstract format-override hook are game-lifecycle/launch-gates (03-REQ-056, mapped by migrate-game-lifecycle); this capability is the concrete format."
+    },
+    "05-REVIEW-003": {
+      "scenarios": [
+        "tournaments/tournament-roster-freeze#frozen-through-the-interlude",
+        "tournaments/tournament-roster-freeze#lifts-when-the-final-round-finishes"
+      ],
+      "note": "Option B — tournament-wide freeze from first-round start to final-round end; inter-round interludes remain frozen. The later decided source for the whole-event question the 03-REVIEW-006 sub-question left open; carried into the delta per this change's Open Question 1 pending author confirmation."
+    },
+    "05-REVIEW-016": {
+      "scenarios": [
+        "tournaments/walkover-and-no-contest#walkover-scores-par",
+        "tournaments/walkover-and-no-contest#no-contest-no-winner",
+        "tournaments/walkover-and-no-contest#chaining-indifferent-to-branch"
+      ],
+      "note": "Orchestration reordering for forfeit semantics: the initialization-deferred-until-invitations-resolve ordering is owned by game-lifecycle/launch-orchestration#invitations-resolve-before-init and the walkover status transition by game-lifecycle/status-authority#walkover-straight-to-finished (both mapped by migrate-game-lifecycle); this capability owns the tournament-side resolution ladder and that round chaining proceeds from any branch."
+    },
+    "05-REVIEW-018": {
+      "scenarios": ["tournaments/walkover-and-no-contest#walkover-scores-par"],
+      "note": "Walkover score value: sole acceptor records 1.0 — par, the normalised-scoring value for a field of one — forfeiters 0; the 'winner-by-default' sentinel removed everywhere. Phrased abstractly in the delta because game-engine is outside the tournaments dependency ceiling; the formula stays single-sourced in the engine's scoring requirements."
+    }
+  }
+}

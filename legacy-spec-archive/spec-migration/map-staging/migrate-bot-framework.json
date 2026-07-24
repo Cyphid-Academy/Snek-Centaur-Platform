@@ -1,0 +1,290 @@
+{
+  "requirements": {
+    "07-REQ-001": {
+      "target": "bot-framework/embedded-team-player",
+      "scenarios": [],
+      "note": "Library consumed by the Snek Centaur Server runtime — one player per hosted team per live game, sharing the process's access to the team's Centaur state and its game's SpacetimeDB instance. Coordinator/worker-pool topology is mechanism (design.md)."
+    },
+    "07-REQ-002": {
+      "target": "bot-framework/worst-case-statemap",
+      "scenarios": ["bot-framework/worst-case-statemap#one-turn-horizon"],
+      "note": "Depth-1 (single-ply) lookahead is binding MVP scope: each scored world is exactly the next turn's resolution; no multi-ply tree."
+    },
+    "07-REQ-003": {
+      "target": "bot-framework/worst-case-statemap",
+      "scenarios": ["bot-framework/worst-case-statemap#worst-case-tracks-activation"],
+      "note": "Per-owned-snake stateMap (direction -> worst-case weighted score) continuously updated during the turn in response to the reactive inputs."
+    },
+    "07-REQ-005": {
+      "target": "bot-framework/observe-and-stage-only",
+      "scenarios": ["bot-framework/observe-and-stage-only#staging-is-the-only-game-write"],
+      "note": "Never writes authoritative game state; staged moves for automatic-mode snakes are the sole SpacetimeDB write channel. The authority-placement principle behind it is global-invariants' (gi flag from the matrix checked — no re-authoring); what retires here is the framework-side write-channel behaviour."
+    },
+    "07-REQ-006": {
+      "target": "bot-framework/heuristic-vocabulary",
+      "scenarios": ["bot-framework/heuristic-vocabulary#two-target-types-only"],
+      "note": "The two author abstractions: Drive (snake- or cell-targeted directed motivation) and Preference (targetless scalar function)."
+    },
+    "07-REQ-007": {
+      "target": "bot-framework/heuristic-vocabulary",
+      "scenarios": [],
+      "note": "The enumerated Drive operations (reward, distance, motivation combiner, satisfaction predicate, target-eligibility predicate, self-direction nomination, foreign-move nomination) authored at intent grain in the requirement body. Purity categories and invocation sites are mechanism (design.md)."
+    },
+    "07-REQ-008": {
+      "target": "bot-framework/heuristic-vocabulary",
+      "scenarios": ["bot-framework/heuristic-vocabulary#preferences-have-no-target"],
+      "note": "Preference = targetless, time-invariant [-1,1] function of self snake and board; no distance or satisfaction concept."
+    },
+    "07-REQ-009": {
+      "target": "bot-framework/scalar-discipline",
+      "scenarios": ["bot-framework/scalar-discipline#importance-lives-in-weights"],
+      "note": "All heuristic scalars in [-1,1] (distance non-negative and finite); relative importance exclusively via portfolio weights."
+    },
+    "07-REQ-009a": {
+      "target": "bot-framework/author-fault-containment",
+      "scenarios": [
+        "bot-framework/author-fault-containment#nan-never-propagates",
+        "bot-framework/author-fault-containment#thrown-exception-is-contained"
+      ],
+      "note": "Strict boundary enforcement of the range invariants: validate every author output, clamp out-of-range, substitute safe defaults for non-finite/wrong-typed values; nothing invalid ever propagates downstream. The contained-author-exception behaviour (Design-mined lead) is authored alongside."
+    },
+    "07-REQ-009b": {
+      "target": "bot-framework/author-fault-containment",
+      "scenarios": ["bot-framework/author-fault-containment#log-noise-is-bounded"],
+      "note": "Structured violation reporting to the hosting server's process log, deduplicated per turn per (snake, heuristic, violation kind), dedup resetting on turn change; not persisted and not surfaced in the operator UI (resolved 07-REVIEW-014 posture carried at intent grain — the exact log-field list is mechanism)."
+    },
+    "07-REQ-010": {
+      "target": "bot-framework/drive-satisfaction",
+      "scenarios": ["bot-framework/drive-satisfaction#terminal-reward-bypasses-motivation"],
+      "note": "Terminal reward on satisfaction bypasses distance/motivation; a Drive satisfied on the turn's observed authoritative board is retired at turn close (retirement anchor per 07-REVIEW-007)."
+    },
+    "07-REQ-011": {
+      "target": "bot-framework/heuristic-vocabulary",
+      "scenarios": ["bot-framework/heuristic-vocabulary#goal-and-fear-share-one-runtime"],
+      "note": "Goal/Fear distinction is author-level semantics only; runtime treats them identically."
+    },
+    "07-REQ-012": {
+      "target": "bot-framework/scalar-discipline",
+      "scenarios": ["bot-framework/scalar-discipline#no-shape-assumptions"],
+      "note": "No algebraic assumptions about author operations beyond the range constraints."
+    },
+    "07-REQ-013": {
+      "target": "bot-framework/per-snake-portfolio",
+      "scenarios": [
+        "bot-framework/per-snake-portfolio#portfolio-is-total",
+        "bot-framework/per-snake-portfolio#temperature-is-opaque"
+      ],
+      "note": "Portfolio definition: active Preferences with weights, active Drives with concrete targets and weights, one effective softmax temperature. Per the author-resolved cycle-break, temperature is authored as an opaque already-derived scalar; its derivation (07-REQ-056 cluster) is bot-configuration's."
+    },
+    "07-REQ-019": {
+      "target": "bot-framework/candidate-directions",
+      "scenarios": [
+        "bot-framework/candidate-directions#all-lethal-still-decides",
+        "bot-framework/candidate-directions#contingent-death-is-not-filtered"
+      ],
+      "note": "Candidate self-direction enumeration; immediately lethal directions deprioritised but retained as last resort, so an alive snake always has at least one candidate."
+    },
+    "07-REQ-020": {
+      "target": "bot-framework/reactive-inputs",
+      "scenarios": ["bot-framework/reactive-inputs#nothing-else-is-reactive"],
+      "note": "Exactly three reactive inputs: interest map (union of active Drives' foreign-move nominations), per-foreign-snake commitment, portfolio weights."
+    },
+    "07-REQ-021": {
+      "target": "bot-framework/reactive-inputs",
+      "scenarios": ["bot-framework/reactive-inputs#dormant-worlds-reactivate"],
+      "note": "SPLIT per the author decision: the activation predicate (a world is active iff each assumed foreign move is in the interest map and consistent with commitment) is authored; the no-re-simulation half (toggling never re-simulates) is mechanism — code, rationale in this change's design.md (mechanism-boundary section)."
+    },
+    "07-REQ-023": {
+      "target": "bot-framework/turn-scoped-evaluation",
+      "scenarios": [
+        "bot-framework/turn-scoped-evaluation#reconnect-same-turn-keeps-work",
+        "bot-framework/turn-scoped-evaluation#turn-change-is-the-only-reset"
+      ],
+      "note": "Cache cleared only when the observed turn number changes; same-turn reconnection never clears (07-REVIEW-008); within a turn evaluation work only grows. The append-only cache data structure itself is mechanism."
+    },
+    "07-REQ-032": {
+      "target": "bot-framework/foreign-snake-treatment",
+      "scenarios": ["bot-framework/frozen-snake-timestamps#staleness-is-readable"],
+      "note": "SPLIT: the frozen-in-place semantics for out-of-interest foreign snakes retire onto foreign-snake-treatment; the timestamp carriage onto frozen-snake-timestamps. The wrapper-composition realisation (engine untouched) is mechanism — design.md; the one-shared-engine invariant it protects is global-invariants/one-shared-engine."
+    },
+    "07-REQ-033": {
+      "target": "bot-framework/foreign-snake-treatment",
+      "scenarios": ["bot-framework/foreign-snake-treatment#teammate-is-not-self"],
+      "note": "Foreign snake means any snake other than the one being evaluated — alive teammates included."
+    },
+    "07-REQ-034": {
+      "target": "bot-framework/foreign-snake-treatment",
+      "scenarios": [
+        "bot-framework/foreign-snake-treatment#automatic-teammate-stays-uncommitted",
+        "bot-framework/foreign-snake-treatment#uninteresting-staged-move-freezes"
+      ],
+      "note": "Commitment semantics per category: manual teammate's effective staged move commits only when it intersects the evaluator's interest map (07-REVIEW-002); automatic teammates and opponents always uncommitted — a framework-staged move never commits its own teammate."
+    },
+    "07-REQ-035": {
+      "target": "bot-framework/worst-case-statemap",
+      "scenarios": ["bot-framework/worst-case-statemap#undefined-is-not-zero"],
+      "note": "stateMap entry = worst-case weighted score over currently active worlds; undefined until at least one active world is evaluated for the direction."
+    },
+    "07-REQ-036": {
+      "target": "bot-framework/score-composition",
+      "scenarios": [
+        "bot-framework/score-composition#zero-weight-silences",
+        "bot-framework/score-composition#unchanged-scores-set-no-flag"
+      ],
+      "note": "Weighted score = sum of weight x (motivation, or terminal reward where satisfied, or Preference value); min aggregation lives in worst-case-statemap; dirty flag set on any actual stateMap entry change."
+    },
+    "07-REQ-038": {
+      "target": "bot-framework/worst-case-statemap",
+      "scenarios": [],
+      "note": "SPLIT across two requirements of the same capability: higher-entries-are-better polarity in worst-case-statemap; softmax-favours-higher in softmax-decision. Conservative-minimax naming is design vocabulary, not spec."
+    },
+    "07-REQ-040": {
+      "target": "bot-framework/attention-tiers",
+      "scenarios": ["bot-framework/attention-tiers#manual-snakes-still-served"],
+      "note": "Three attention tiers (automatic; selected manual; unselected manual) authored at intent grain with the no-starvation guarantee; within-tier round-robin detail is mechanism with 07-REQ-041. Included per the assignment matrix's bot-framework row (seam: operator selection drives tier 2)."
+    },
+    "07-REQ-048": {
+      "target": "bot-framework/softmax-decision",
+      "scenarios": [],
+      "note": "Softmax sampling proportional to exp(entry / effective temperature) for automatic-mode snakes; temperature consumed as the portfolio's opaque scalar; the randomness source is deliberately unconstrained (mechanism)."
+    },
+    "07-REQ-049": {
+      "target": "bot-framework/softmax-decision",
+      "scenarios": [
+        "bot-framework/softmax-decision#partial-statemap-is-decidable",
+        "bot-framework/softmax-decision#zero-knowledge-fallback"
+      ],
+      "note": "Undefined entries excluded from the distribution; fallback to lastDirection, or stage nothing on the first turn so the engine's random fallback resolves the move (game-engine/movement)."
+    },
+    "07-REQ-051": {
+      "target": "bot-framework/attention-tiers",
+      "scenarios": ["bot-framework/attention-tiers#selection-shifts-attention-immediately"],
+      "note": "Selection of a manual-mode snake promotes it to the selected tier effective immediately; deselection demotes — driven by operator-control/exclusive-selection state."
+    },
+    "07-REQ-052": {
+      "target": "bot-framework/selection-promotion",
+      "scenarios": ["bot-framework/selection-promotion#drift-reconciled-on-promotion"],
+      "note": "Promotion re-evaluates active/dormant status against current reactive inputs and rescores the stateMap; the resulting snapshot write is the decision-transparency story's (triggered by the dirty flag authored here)."
+    },
+    "07-REQ-053": {
+      "target": "bot-framework/selection-promotion",
+      "scenarios": ["bot-framework/selection-promotion#promotion-never-stages"],
+      "note": "Selection promotion never stages a move — display and attention only, consistent with operator-control/selection-is-view-only."
+    },
+    "07-REQ-054": {
+      "target": "bot-framework/selection-promotion",
+      "scenarios": ["bot-framework/selection-promotion#staged-move-survives-promotion"],
+      "note": "An operator-staged move present at promotion survives untouched."
+    },
+    "07-REQ-057": {
+      "target": "bot-framework/embedded-team-player",
+      "scenarios": [
+        "bot-framework/embedded-team-player#restart-rebuilds-from-subscriptions",
+        "bot-framework/embedded-team-player#scratch-dies-with-the-game"
+      ],
+      "note": "All persistent state in the Centaur state subsystem; game tree caches, stateMaps, and dirty flags are in-memory per-game scratch. The matrix's gi flag checked — the runtime-ownership principle is already global-invariants'; what retires here is the framework's own statefulness boundary."
+    },
+    "07-REQ-058": {
+      "target": "bot-framework/observe-and-stage-only",
+      "scenarios": ["bot-framework/observe-and-stage-only#operator-edits-arrive-by-subscription"],
+      "note": "Subscribes to the team's game-scoped Centaur state for real-time reactivity — operator edits propagate without polling."
+    },
+    "07-REQ-059": {
+      "target": "bot-framework/observe-and-stage-only",
+      "scenarios": ["bot-framework/observe-and-stage-only#operator-edits-arrive-by-subscription"],
+      "note": "Never calls Centaur state mutations on operators' behalf; operator mutations flow client-to-Convex directly and the framework observes their effects."
+    },
+    "07-REQ-060": {
+      "target": "bot-framework/observe-and-stage-only",
+      "scenarios": ["bot-framework/observe-and-stage-only#no-shadow-board"],
+      "note": "Board, staged moves, turn number, and chess clock read from the SpacetimeDB subscription; game-instance state never cached in Convex."
+    },
+    "07-REQ-065": {
+      "target": "bot-framework/frozen-snake-timestamps",
+      "scenarios": ["bot-framework/frozen-snake-timestamps#staleness-is-readable"],
+      "note": "Every simulated board carries per-snake turn timestamps: advanced snakes at the simulated turn, frozen snakes at the prior turn. The concrete field shape is mechanism; the readable-staleness behaviour is the spec."
+    },
+    "07-REQ-066": {
+      "target": "bot-framework/frozen-snake-timestamps",
+      "scenarios": ["bot-framework/frozen-snake-timestamps#head-start-compensation"],
+      "note": "Board-analysis consumers (framework or heuristic authors) compensate for the frozen-in-place fiction via a temporal head start proportional to staleness (07-REVIEW-003); the multi-source-BFS seeding pattern is illustrative, not mandated."
+    },
+    "07-REQ-024": {
+      "target": null,
+      "scenarios": [],
+      "note": "Mechanism (author-resolved boundary): the append-only simulated-world cache via the shared engine. Stays in code; rationale in this change's design.md (mechanism-boundary section). Observable residue authored as bot-framework/turn-scoped-evaluation and worst-case-statemap#one-turn-horizon."
+    },
+    "07-REQ-025": {
+      "target": null,
+      "scenarios": [],
+      "note": "Mechanism: cached worlds store weight-independent normalised heuristic outputs. Stays in code; rationale in this change's design.md. Observable residue: score-composition#zero-weight-silences."
+    },
+    "07-REQ-026": {
+      "target": null,
+      "scenarios": [],
+      "note": "Mechanism: portfolio weights applied at scoring time, never folded into the cache. Stays in code; rationale in this change's design.md. The live-editability guarantee it serves is the bot-configuration story's."
+    },
+    "07-REQ-027": {
+      "target": null,
+      "scenarios": [],
+      "note": "Mechanism: the lattice structure of foreign-move combinations. Stays in code; rationale in this change's design.md."
+    },
+    "07-REQ-028": {
+      "target": null,
+      "scenarios": [],
+      "note": "Mechanism: per-(foreign snake, direction) priority weights with rank decay. Stays in code; rationale in this change's design.md (plastic performance choice — doc-comment with a design reference)."
+    },
+    "07-REQ-029": {
+      "target": null,
+      "scenarios": [],
+      "note": "Mechanism: anytime traversal of uncomputed active lattice points by descending combined priority. Stays in code; rationale in this change's design.md. Observable residue: softmax-decision#partial-statemap-is-decidable."
+    },
+    "07-REQ-030": {
+      "target": null,
+      "scenarios": [],
+      "note": "Mechanism: Dijkstra-like axis-neighbour traversal without revisits. Stays in code; rationale in this change's design.md."
+    },
+    "07-REQ-031": {
+      "target": null,
+      "scenarios": [],
+      "note": "Mechanism: priority changes reorder only still-uncomputed points; computed worlds never re-simulated. Stays in code; rationale in this change's design.md."
+    },
+    "07-REQ-041": {
+      "target": null,
+      "scenarios": [],
+      "note": "Mechanism: within-snake round-robin across candidate directions (breadth-first on rank 0). Stays in code; rationale in this change's design.md. The tier-level ordering it schedules under is authored as bot-framework/attention-tiers."
+    },
+    "07-REQ-042": {
+      "target": null,
+      "scenarios": [],
+      "note": "Mechanism: reactive rescoring from the existing cache without new simulation. Stays in code; rationale in this change's design.md. Observable residue: score-composition dirty-flag-on-change and reactive-inputs#dormant-worlds-reactivate."
+    },
+    "07-REQ-043": {
+      "target": null,
+      "scenarios": [],
+      "note": "Mechanism: newly active uncomputed points enqueued in the snake's tier; reverted commitments reactivate without enqueueing. Stays in code; rationale in this change's design.md."
+    }
+  },
+  "reviews": {
+    "07-REVIEW-002": {
+      "scenarios": ["bot-framework/foreign-snake-treatment#uninteresting-staged-move-freezes"],
+      "note": "A manual teammate's staged move outside the evaluator's interest map adds no explored alternative — the teammate is frozen in place, consistent with the standard lattice-membership rules."
+    },
+    "07-REVIEW-003": {
+      "scenarios": ["bot-framework/frozen-snake-timestamps#head-start-compensation"],
+      "note": "Temporal head-start compensation: consumers of simulated boards seed frozen snakes ahead proportional to their staleness, compensating for the frozen-in-place fiction."
+    },
+    "07-REVIEW-006": {
+      "scenarios": ["bot-framework/softmax-decision#partial-statemap-is-decidable"],
+      "note": "Sampling over a partial stateMap is legitimate anytime behaviour: undefined entries are excluded, and a decision from the evaluated subset beats no decision."
+    },
+    "07-REVIEW-007": {
+      "scenarios": ["bot-framework/drive-satisfaction#simulated-satisfaction-does-not-retire"],
+      "note": "Drive retirement is anchored to the turn's observed authoritative board only — satisfaction in simulated worlds contributes terminal reward but never retires."
+    },
+    "07-REVIEW-008": {
+      "scenarios": ["bot-framework/turn-scoped-evaluation#reconnect-same-turn-keeps-work"],
+      "note": "A SpacetimeDB reconnection that resurfaces the current turn number keeps the evaluation cache; only an observed turn-number change clears it."
+    }
+  }
+}

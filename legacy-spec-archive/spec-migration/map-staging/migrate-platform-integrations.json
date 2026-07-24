@@ -1,0 +1,137 @@
+{
+  "requirements": {
+    "03-REQ-033": {
+      "target": "platform-integrations/admin-api-keys",
+      "scenarios": ["platform-integrations/admin-api-keys#creator-no-longer-admin"],
+      "note": "HTTP API authorized by bearer API keys; admin-only creation (per resolved 05-REVIEW-004), revocable. The revocation means retires with 05-REQ-052 onto key-management."
+    },
+    "03-REQ-034": {
+      "target": "platform-integrations/key-custody",
+      "scenarios": [
+        "platform-integrations/key-custody#plaintext-shown-exactly-once",
+        "platform-integrations/key-custody#metadata-only-ever-after"
+      ],
+      "note": "Unrecoverable (one-way digest) storage; plaintext disclosed exactly once at creation. Dedupe cluster with 05-REQ-046 and 08-REQ-095b/095c; hash algorithm and key format are mechanism."
+    },
+    "03-REQ-035": {
+      "target": "platform-integrations/admin-api-keys",
+      "scenarios": ["platform-integrations/admin-api-keys#key-follows-its-creator-only"],
+      "note": "Key bound permanently to the creating admin; global scope. Dedupe with 05-REQ-047; the scope's consistency with the strictly observational admin role is carried by key-capability-bounds (see design.md)."
+    },
+    "03-REQ-036": {
+      "target": "platform-integrations/key-capability-bounds",
+      "scenarios": ["platform-integrations/key-capability-bounds#no-identity-creation"],
+      "note": "Keys never authorize identity creation or actions requiring interactive OAuth. Dedupe with 05-REQ-048."
+    },
+    "05-REQ-045": {
+      "target": "platform-integrations/admin-api-keys",
+      "scenarios": ["platform-integrations/admin-api-keys#creator-no-longer-admin"],
+      "note": "Bearer-key authorization of every HTTP API request; reject missing/invalid/revoked/creator-not-admin (per resolved 05-REVIEW-004). The 'expose an HTTP API' half retires with 05-REQ-049 onto http-api-surface."
+    },
+    "05-REQ-046": {
+      "target": "platform-integrations/key-custody",
+      "scenarios": ["platform-integrations/key-custody#metadata-only-ever-after"],
+      "note": "Persistent per-key record: one-way digest, label, creating admin's user record, creation timestamp, null-until-revoked revocation timestamp; plaintext never stored or exposed after the single disclosure."
+    },
+    "05-REQ-047": {
+      "target": "platform-integrations/admin-api-keys",
+      "scenarios": [],
+      "note": "Global, never scoped-down key scope. 'Equivalent to the admin role' deliberately not restated verbatim: the mutating reach is bounded to the API surface by key-capability-bounds to stay consistent with identity-and-authorization/platform-admin-role's read-only extension (design.md)."
+    },
+    "05-REQ-048": {
+      "target": "platform-integrations/key-capability-bounds",
+      "scenarios": [
+        "platform-integrations/key-capability-bounds#never-a-gameplay-actor",
+        "platform-integrations/key-capability-bounds#no-identity-creation"
+      ],
+      "note": "No endpoints for identity creation, OAuth interactions, direct game-access-token issuance, or Centaur-subsystem state."
+    },
+    "05-REQ-049": {
+      "target": "platform-integrations/http-api-surface",
+      "scenarios": [
+        "platform-integrations/http-api-surface#the-families-are-a-floor",
+        "platform-integrations/http-api-surface#api-start-is-a-real-launch"
+      ],
+      "note": "Endpoint families as behavioural scope statements (teams, rooms, game read/start, webhooks, keys); URL shapes and payload schemas are mechanism per the author decision."
+    },
+    "05-REQ-050": {
+      "target": "platform-integrations/first-party-parity",
+      "scenarios": [
+        "platform-integrations/first-party-parity#no-privileged-bypass",
+        "platform-integrations/first-party-parity#two-doors-one-rulebook"
+      ],
+      "note": "Authored generically per the matrix note: API mutations obey the same invariants as the first-party surface; the legacy roster-freeze example is not cited (that rule lives with its owning capability and binds through parity)."
+    },
+    "05-REQ-051": {
+      "target": "platform-integrations/key-management",
+      "scenarios": [],
+      "note": "Creation means through the first-party application and the API itself, admin-only; the exactly-once plaintext disclosure half retires with 03-REQ-034 onto key-custody."
+    },
+    "05-REQ-052": {
+      "target": "platform-integrations/key-management",
+      "scenarios": ["platform-integrations/key-management#revocation-immediate"],
+      "note": "Revocation means; all subsequent requests with the revoked key rejected, immediately (constraint-mined: no grace or cache window; revoked records retained per #revoked-records-retained)."
+    },
+    "05-REQ-053": {
+      "target": "platform-integrations/webhook-subscriptions",
+      "scenarios": ["platform-integrations/webhook-subscriptions#room-scope-follows-the-room"],
+      "note": "Subscription registration by API-key-authenticated callers; captures URL, event types from the closed {game_start, game_end} set, game-or-room scope, owning key, creation timestamp."
+    },
+    "05-REQ-054": {
+      "target": "platform-integrations/lifecycle-event-notifications",
+      "scenarios": [
+        "platform-integrations/lifecycle-event-notifications#start-payload-is-the-played-config"
+      ],
+      "note": "game_start on the playing transition (game-lifecycle/status-authority) to matching subscriptions; payload includes game id, room id, configuration (launch-frozen)."
+    },
+    "05-REQ-055": {
+      "target": "platform-integrations/lifecycle-event-notifications",
+      "scenarios": [],
+      "note": "game_end on the finished transition to matching subscriptions; payload includes game id, room id, final scores. Covers walkovers via status-authority's not-started -> finished transition (design.md)."
+    },
+    "05-REQ-056": {
+      "target": "platform-integrations/at-least-once-delivery",
+      "scenarios": [
+        "platform-integrations/at-least-once-delivery#same-id-on-every-redelivery",
+        "platform-integrations/at-least-once-delivery#retries-back-off-and-stop"
+      ],
+      "note": "At-least-once with exponential backoff and a bounded retry budget; stable dedup identifier in every notification (constraint-mined stability: determined solely by game/event-type/subscription; the {gameId}:{eventType}:{webhookId} format is mechanism)."
+    },
+    "05-REQ-057": {
+      "target": "platform-integrations/non-blocking-delivery",
+      "scenarios": ["platform-integrations/non-blocking-delivery#unresponsive-subscriber-harmless"],
+      "note": "Delivery never blocks lifecycle transitions, replay persistence, or teardown (game-lifecycle/teardown-after-persistence cited). Kept local per the matrix note rather than promoted to global-invariants."
+    },
+    "05-REQ-058": {
+      "target": "platform-integrations/webhook-subscriptions",
+      "scenarios": ["platform-integrations/webhook-subscriptions#revoked-with-owning-key"],
+      "note": "Subscriptions auto-revoked with their owning key; no deliveries for events occurring after revocation."
+    },
+    "08-REQ-095a": {
+      "target": "platform-integrations/key-management",
+      "scenarios": ["platform-integrations/key-management#revoked-records-retained"],
+      "note": "The management surface listing active and revoked keys with label and timestamps. 'Every authenticated user' superseded by the admin-only resolution of 05-REVIEW-004 — re-authored as an admin affordance (design.md)."
+    },
+    "08-REQ-095b": {
+      "target": "platform-integrations/key-custody",
+      "scenarios": ["platform-integrations/key-custody#plaintext-shown-exactly-once"],
+      "note": "Single creation-time plaintext display with an explicit copy affordance before dismissal."
+    },
+    "08-REQ-095c": {
+      "target": "platform-integrations/key-custody",
+      "scenarios": ["platform-integrations/key-custody#metadata-only-ever-after"],
+      "note": "Never display/store/transmit plaintext after the single disclosure — deduped with the identity capability's custody hygiene by citing identity-and-authorization/client-credential-custody (whose one-time-disclosure exception this is) rather than restating it."
+    },
+    "08-REQ-095d": {
+      "target": "platform-integrations/key-management",
+      "scenarios": [],
+      "note": "Scope communication at the management surface, specialized to the admin-only model: a key carries its creator's global admin authority and stops working if the creator loses the role (per-request re-check in admin-api-keys#creator-no-longer-admin)."
+    }
+  },
+  "reviews": {
+    "05-REVIEW-005": {
+      "scenarios": ["platform-integrations/lifecycle-event-notifications#no-creation-event"],
+      "note": "Option A: only game_start, firing at the not-started -> playing transition. No game_created or game_will_start event — subscribers first hear of a game at launch, when its configuration is frozen and actionable (#start-payload-is-the-played-config carries the rationale behaviourally)."
+    }
+  }
+}

@@ -1,0 +1,368 @@
+{
+  "requirements": {
+    "02-REQ-016": {
+      "target": "identity-and-authorization/sole-credential-issuer",
+      "scenarios": [],
+      "note": "Convex hosts all identity and credential infrastructure — folded into the sole-issuer requirement."
+    },
+    "03-REQ-001": {
+      "target": "identity-and-authorization/identity-kinds",
+      "scenarios": [],
+      "note": "Two persistent kinds plus derived game-participant identities; kind-distinguishability and no-anonymous-mutators halves are global-invariants (extend-global-invariants change)."
+    },
+    "03-REQ-002": {
+      "target": "identity-and-authorization/email-as-canonical-identity",
+      "scenarios": ["identity-and-authorization/google-sign-in#google-account-specifically"],
+      "note": "Human = natural person with a Google account, identified by email (03-REVIEW-002/003 upheld)."
+    },
+    "03-REQ-003": {
+      "target": "identity-and-authorization/identity-kinds",
+      "scenarios": ["identity-and-authorization/identity-kinds#server-domain-is-not-identity"],
+      "note": "Team as persistent competitive unit; nominated server domain is configuration, not identity."
+    },
+    "03-REQ-004": {
+      "target": "identity-and-authorization/identity-kinds",
+      "scenarios": ["identity-and-authorization/identity-kinds#participants-are-derived"],
+      "note": "Game-participant identities as per-game derived connections; role set widened to include coach per the later legacy amendments."
+    },
+    "03-REQ-007": {
+      "target": "identity-and-authorization/google-sign-in",
+      "scenarios": ["identity-and-authorization/google-sign-in#session-survives-reload"],
+      "note": "Google OAuth via Convex; persistent session."
+    },
+    "03-REQ-008": {
+      "target": "identity-and-authorization/email-as-canonical-identity",
+      "scenarios": [
+        "identity-and-authorization/email-as-canonical-identity#same-email-merges",
+        "identity-and-authorization/email-as-canonical-identity#email-fork-keeps-history"
+      ],
+      "note": "Email canonical; same email merges; provider email change forks a new identity, history stays on the old (03-REVIEW-003)."
+    },
+    "03-REQ-009": {
+      "target": "identity-and-authorization/email-as-canonical-identity",
+      "scenarios": [
+        "identity-and-authorization/email-as-canonical-identity#no-human-shared-secrets"
+      ],
+      "note": "No passwords or shared secrets stored for humans."
+    },
+    "03-REQ-010": {
+      "target": "identity-and-authorization/authentication-required",
+      "scenarios": ["identity-and-authorization/authentication-required#unauthenticated-refused"],
+      "note": "Dedupe with 08-REQ-002 — one authentication-prerequisite rule."
+    },
+    "03-REQ-016": {
+      "target": "identity-and-authorization/game-credential-scope",
+      "scenarios": ["identity-and-authorization/game-credential-scope#not-valid-for-another-team"],
+      "note": "Non-transferability folded into the single credential-scoping requirement (dedupe with 03-REQ-057)."
+    },
+    "03-REQ-017": {
+      "target": "identity-and-authorization/game-credential-scope",
+      "scenarios": [],
+      "note": "Resolution of a credential to its issuing team is the observable precondition of scope enforcement and retires onto the scoping requirement; the identity-kind-exposure helper shape (resolveIdentity) is code mechanism — rationale in this change's design.md."
+    },
+    "03-REQ-019": {
+      "target": "identity-and-authorization/sole-credential-issuer",
+      "scenarios": ["identity-and-authorization/sole-credential-issuer#no-alternative-admission"],
+      "note": "Instances admit only Convex-issued signed tokens; the RS256/OIDC naming is mechanism (crypto-neutrality, 03-REVIEW-001). Dedupe with 03-REQ-037, 05-REQ-035, 04-REQ-023."
+    },
+    "03-REQ-020": {
+      "target": "identity-and-authorization/game-token-contents",
+      "scenarios": ["identity-and-authorization/game-token-contents#token-names-its-game"],
+      "note": "Game binding, role/identity subject, expiry — re-authored crypto-neutrally (claim names are mechanism per 03-REVIEW-001)."
+    },
+    "03-REQ-021": {
+      "target": "identity-and-authorization/connect-time-validation",
+      "scenarios": ["identity-and-authorization/connect-time-validation#expiry-never-disconnects"],
+      "note": "Validation at connect only; expiry never disconnects an established connection (03-REVIEW-004)."
+    },
+    "03-REQ-022": {
+      "target": "identity-and-authorization/verification-without-shared-secrets",
+      "scenarios": [
+        "identity-and-authorization/verification-without-shared-secrets#instance-validates-alone"
+      ],
+      "note": "Dedupe with 05-REQ-034a — one cross-runtime discovery contract; OIDC/JWKS endpoint shapes are mechanism."
+    },
+    "03-REQ-023": {
+      "target": "identity-and-authorization/admission-validation",
+      "scenarios": ["identity-and-authorization/admission-validation#unregistered-team-refused"],
+      "note": "Rejection criteria (signature, game binding, expiry, unregistered team). Dedupe with 04-REQ-018/022."
+    },
+    "03-REQ-024": {
+      "target": "identity-and-authorization/participant-token-eligibility",
+      "scenarios": [
+        "identity-and-authorization/participant-token-eligibility#operator-outside-roster-refused"
+      ],
+      "note": "Operator tokens require membership per the game's roster snapshot (see roster-snapshot-binding)."
+    },
+    "03-REQ-025": {
+      "target": "identity-and-authorization/participant-token-eligibility",
+      "scenarios": [
+        "identity-and-authorization/participant-token-eligibility#bot-token-requires-team-credential"
+      ],
+      "note": "Bot tokens require a valid game credential for a registered team."
+    },
+    "03-REQ-026": {
+      "target": "identity-and-authorization/spectator-tokens",
+      "scenarios": [
+        "identity-and-authorization/spectator-tokens#any-authenticated-human-may-request",
+        "identity-and-authorization/spectator-tokens#no-team-binding"
+      ],
+      "note": "Issuance floor owned here; spectator eligibility policy beyond authentication and consumption semantics live with the live-game-observation story (03-REVIEW-009 routed there)."
+    },
+    "03-REQ-026a": {
+      "target": "identity-and-authorization/coach-tokens",
+      "scenarios": [
+        "identity-and-authorization/coach-tokens#coach-reads-as-bound-team",
+        "identity-and-authorization/coach-tokens#coach-of-nonparticipating-team-refused"
+      ],
+      "note": "Coach-token issuance owned here, mirroring spectator tokens; seam — consumption semantics (the filtered read-only live view) live with the live-game-observation story, and coach designation with team-management."
+    },
+    "03-REQ-027": {
+      "target": "identity-and-authorization/token-lifetime-and-refresh",
+      "scenarios": [
+        "identity-and-authorization/token-lifetime-and-refresh#refresh-without-reauth",
+        "identity-and-authorization/token-lifetime-and-refresh#teardown-not-expiry-ends-access",
+        "identity-and-authorization/connect-time-validation#expiry-never-disconnects"
+      ],
+      "note": "Two-hour lifetime, refresh without re-auth, teardown as the real boundary (03-REVIEW-004)."
+    },
+    "03-REQ-037": {
+      "target": "identity-and-authorization/sole-credential-issuer",
+      "scenarios": ["identity-and-authorization/sole-credential-issuer#app-never-self-issues"],
+      "note": "Convex sole issuer of all cross-runtime credentials (dedupe with 03-REQ-019, 05-REQ-035)."
+    },
+    "03-REQ-039": {
+      "target": "identity-and-authorization/roster-snapshot-binding",
+      "scenarios": [
+        "identity-and-authorization/roster-snapshot-binding#running-game-reads-only-the-snapshot"
+      ],
+      "note": "Snapshot binds in-game authorization for the whole game; seam — snapshot storage/orchestration (05-REQ-029) is game-lifecycle's, the roster mutation-freeze (03-REQ-046) is team-management's."
+    },
+    "03-REQ-041": {
+      "target": "identity-and-authorization/signing-independence",
+      "scenarios": ["identity-and-authorization/signing-independence#compromise-contained"],
+      "note": "Deliberate architectural invariant (03-REVIEW-007) re-authored crypto-neutrally — scheme names (Ed25519/RS256) are mechanism."
+    },
+    "03-REQ-057": {
+      "target": "identity-and-authorization/game-credential-scope",
+      "scenarios": ["identity-and-authorization/game-credential-scope#not-valid-for-another-game"],
+      "note": "One team, one game (dedupe with 03-REQ-016)."
+    },
+    "03-REQ-058": {
+      "target": "identity-and-authorization/game-credential-scope",
+      "scenarios": ["identity-and-authorization/live-game-issuance#credential-dead-at-finish"],
+      "note": "Credential lifetime bounded to the game; enforced per request by live-game-issuance (05-REVIEW-012)."
+    },
+    "03-REQ-059": {
+      "target": "identity-and-authorization/game-credential-scope",
+      "scenarios": [
+        "identity-and-authorization/game-credential-scope#grants-nothing-beyond-the-two"
+      ],
+      "note": "Exactly two grants: team-scoped Centaur-subsystem writes and bot-token requests."
+    },
+    "03-REQ-060": {
+      "target": "identity-and-authorization/platform-admin-role",
+      "scenarios": [],
+      "note": "Admin as platform-level role (dedupe with 05-REQ-065)."
+    },
+    "03-REQ-061": {
+      "target": "identity-and-authorization/platform-admin-role",
+      "scenarios": ["identity-and-authorization/platform-admin-role#admin-reads-across-all-teams"],
+      "note": "Browse all teams (dedupe with 05-REQ-066)."
+    },
+    "03-REQ-062": {
+      "target": "identity-and-authorization/platform-admin-role",
+      "scenarios": ["identity-and-authorization/platform-admin-role#admin-reads-across-all-teams"],
+      "note": "See all games across teams (dedupe with 05-REQ-066)."
+    },
+    "03-REQ-063": {
+      "target": "identity-and-authorization/platform-admin-role",
+      "scenarios": ["identity-and-authorization/platform-admin-role#implicit-coach-everywhere"],
+      "note": "Watch any replay; implicit coach of every team (dedupe with 05-REQ-066)."
+    },
+    "03-REQ-040": {
+      "scenarios": [],
+      "note": "Code mechanism: maintaining game-credential signing material inside Convex without external key infrastructure. Behavioural residue is covered by identity-and-authorization/sole-credential-issuer, signing-independence, and verification-without-shared-secrets; key custody/format rationale in the minting change's design.md."
+    },
+    "03-REQ-064": {
+      "scenarios": [],
+      "note": "Code mechanism (dedupe with 05-REQ-068): how admin accounts are designated is deliberately unspecified; the observable contract (platform-level designation on the user record, effective without reload) is identity-and-authorization/platform-admin-role."
+    },
+    "04-REQ-003": {
+      "target": "identity-and-authorization/admission-validation",
+      "scenarios": [
+        "identity-and-authorization/admission-validation#unadmitted-mutations-rejected"
+      ],
+      "note": "No gameplay mutation from unadmitted connections."
+    },
+    "04-REQ-018": {
+      "target": "identity-and-authorization/admission-validation",
+      "scenarios": [],
+      "note": "Connect-time application-level validation of the token's claims; callback naming (client_connected) is mechanism. Dedupe with 03-REQ-023."
+    },
+    "04-REQ-019": {
+      "target": "identity-and-authorization/admission-validation",
+      "scenarios": [
+        "identity-and-authorization/coach-tokens#coach-reads-as-bound-team",
+        "identity-and-authorization/role-bound-privileges#spectator-and-coach-never-mutate"
+      ],
+      "note": "Game-binding/subject/roster validation and role derivation at admission; the coach-view filtering it grants is stated on coach-tokens; parse-helper detail is mechanism."
+    },
+    "04-REQ-022": {
+      "target": "identity-and-authorization/admission-validation",
+      "scenarios": ["identity-and-authorization/admission-validation#reject-before-touching-state"],
+      "note": "Disconnect on failed validation with no admission or attribution record written (constraint-mined as reject-before-touching-state)."
+    },
+    "04-REQ-023": {
+      "target": "identity-and-authorization/sole-credential-issuer",
+      "scenarios": ["identity-and-authorization/sole-credential-issuer#no-alternative-admission"],
+      "note": "Convex-issued validated tokens are the only admission mechanism (dedupe with 03-REQ-019)."
+    },
+    "04-REQ-070": {
+      "target": "identity-and-authorization/role-bound-privileges",
+      "scenarios": [
+        "identity-and-authorization/role-bound-privileges#captaincy-invisible-in-game",
+        "identity-and-authorization/role-bound-privileges#spectator-and-coach-never-mutate"
+      ],
+      "note": "Privileges derive solely from the token's role and team binding; Convex-side role distinctions invisible to the runtime."
+    },
+    "05-REQ-006": {
+      "target": "identity-and-authorization/authentication-required",
+      "scenarios": [
+        "identity-and-authorization/authentication-required#user-record-anchors-authorization"
+      ],
+      "note": "User record as the anchor for authorization, membership, key ownership, admin role, and attribution."
+    },
+    "05-REQ-030": {
+      "target": "identity-and-authorization/roster-snapshot-binding",
+      "scenarios": [
+        "identity-and-authorization/participant-token-eligibility#operator-outside-roster-refused"
+      ],
+      "note": "The participating-teams snapshot gates operator token issuance."
+    },
+    "05-REQ-034": {
+      "target": "identity-and-authorization/verification-without-shared-secrets",
+      "scenarios": [
+        "identity-and-authorization/verification-without-shared-secrets#same-material-platform-wide"
+      ],
+      "note": "Platform-wide signing material with no per-instance secret; the key algorithm, env-var custody, and key-pair detail are mechanism (crypto-neutrality)."
+    },
+    "05-REQ-034a": {
+      "target": "identity-and-authorization/verification-without-shared-secrets",
+      "scenarios": [
+        "identity-and-authorization/verification-without-shared-secrets#instance-validates-alone"
+      ],
+      "note": "Discovery of verification material at stable well-known addresses (dedupe with 03-REQ-022); endpoint shapes are mechanism."
+    },
+    "05-REQ-035": {
+      "target": "identity-and-authorization/sole-credential-issuer",
+      "scenarios": ["identity-and-authorization/live-game-issuance#no-tokens-for-finished-games"],
+      "note": "Sole issuer of game access tokens (dedupe with 03-REQ-019/037); the refuse-finished half lands on live-game-issuance."
+    },
+    "05-REQ-065": {
+      "target": "identity-and-authorization/platform-admin-role",
+      "scenarios": [],
+      "note": "Admin as platform-wide designation on the user record (dedupe with 03-REQ-060)."
+    },
+    "05-REQ-066": {
+      "target": "identity-and-authorization/platform-admin-role",
+      "scenarios": [
+        "identity-and-authorization/platform-admin-role#admin-reads-across-all-teams",
+        "identity-and-authorization/platform-admin-role#implicit-coach-everywhere"
+      ],
+      "note": "Read-all breadth plus implicit coach permission (dedupe with 03-REQ-061..063)."
+    },
+    "05-REQ-068": {
+      "scenarios": [],
+      "note": "Code mechanism (dedupe with 03-REQ-064): admin designation mechanism deliberately unspecified; observable contract carried by identity-and-authorization/platform-admin-role."
+    },
+    "06-REQ-031": {
+      "target": "identity-and-authorization/mutation-authorization",
+      "scenarios": [
+        "identity-and-authorization/mutation-authorization#ui-gating-is-not-enforcement"
+      ],
+      "note": "Every state-mutating function authenticates and authorizes server-side; the specific per-rule authorities it cited (captain-only writes, selection invariants) are owned by their story capabilities."
+    },
+    "08-REQ-002": {
+      "target": "identity-and-authorization/authentication-required",
+      "scenarios": ["identity-and-authorization/authentication-required#unauthenticated-refused"],
+      "note": "Authentication before any functionality beyond sign-in and public, non-user-specific views (dedupe with 03-REQ-010)."
+    },
+    "08-REQ-006": {
+      "target": "identity-and-authorization/google-sign-in",
+      "scenarios": ["identity-and-authorization/google-sign-in#google-account-specifically"],
+      "note": "Google OAuth only; no independent credential store (dedupe with 03-REQ-007/009)."
+    },
+    "08-REQ-007": {
+      "target": "identity-and-authorization/authentication-required",
+      "scenarios": [
+        "identity-and-authorization/authentication-required#user-record-anchors-authorization"
+      ],
+      "note": "Authenticated identity resolves to the user record; session actions attributed to it."
+    },
+    "08-REQ-009": {
+      "target": "identity-and-authorization/sole-credential-issuer",
+      "scenarios": ["identity-and-authorization/sole-credential-issuer#app-never-self-issues"],
+      "note": "The application never self-issues game access tokens."
+    },
+    "08-REQ-009a": {
+      "target": "identity-and-authorization/client-credential-custody",
+      "scenarios": ["identity-and-authorization/client-credential-custody#single-disclosure-only"],
+      "note": "Never store/display/transmit credential plaintext; the one-time creation-time disclosure exception is stated generically here — the API-key surface that exercises it belongs to platform-integrations."
+    },
+    "08-REQ-009b": {
+      "target": "identity-and-authorization/google-sign-in",
+      "scenarios": ["identity-and-authorization/google-sign-in#sign-out-clears-client-state"],
+      "note": "Sign-out terminates the session and revokes client-held tokens."
+    },
+    "08-REQ-009c": {
+      "target": "identity-and-authorization/platform-admin-role",
+      "scenarios": ["identity-and-authorization/platform-admin-role#role-effective-without-reload"],
+      "note": "Admin affordances follow the user record without page reload (UI mirror of the role contract)."
+    },
+    "08-REQ-096a": {
+      "target": "identity-and-authorization/platform-admin-role",
+      "scenarios": [
+        "identity-and-authorization/platform-admin-role#admin-reads-across-all-teams",
+        "identity-and-authorization/platform-admin-role#implicit-coach-everywhere"
+      ],
+      "note": "Admin experience enumeration (team/game/replay visibility, live coach entry) — UI mirror of the role's read breadth."
+    },
+    "08-REQ-096b": {
+      "target": "identity-and-authorization/platform-admin-role",
+      "scenarios": ["identity-and-authorization/platform-admin-role#no-write-path-into-live-games"],
+      "note": "Admin strictly read-only over game and Centaur-subsystem state (constraint-mined as admin-extends-read-only)."
+    }
+  },
+  "reviews": {
+    "03-REVIEW-001": {
+      "scenarios": [],
+      "note": "Crypto-neutrality upheld in the re-authoring: the minted requirements name no cryptographic primitives (JWT/HMAC/JWKS/RSA); primitives are mechanism, with the policy recorded in the minting change's design.md."
+    },
+    "03-REVIEW-002": {
+      "scenarios": ["identity-and-authorization/google-sign-in#google-account-specifically"],
+      "note": "Google specifically is binding, not an implementation choice — supporting another provider requires deliberate spec revision."
+    },
+    "03-REVIEW-003": {
+      "scenarios": [
+        "identity-and-authorization/email-as-canonical-identity#email-fork-keeps-history"
+      ],
+      "note": "Email canonical; provider email change forks a new identity and the prior identity keeps its history unmigrated."
+    },
+    "03-REVIEW-004": {
+      "scenarios": [
+        "identity-and-authorization/connect-time-validation#expiry-never-disconnects",
+        "identity-and-authorization/token-lifetime-and-refresh#teardown-not-expiry-ends-access"
+      ],
+      "note": "Two-hour token lifetime with connect-time-only validation; instance teardown, not expiry, is the primary post-game boundary."
+    },
+    "03-REVIEW-007": {
+      "scenarios": ["identity-and-authorization/signing-independence#compromise-contained"],
+      "note": "Independence-of-compromise between credential-type signing materials kept as a requirement, stated crypto-neutrally."
+    },
+    "05-REVIEW-012": {
+      "scenarios": ["identity-and-authorization/live-game-issuance#credential-dead-at-finish"],
+      "note": "Game credential effectively dies at game finish via per-request status re-check; the two-hour expiry is a leak backstop, not the access boundary."
+    }
+  }
+}

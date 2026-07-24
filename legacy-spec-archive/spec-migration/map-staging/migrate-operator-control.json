@@ -1,0 +1,251 @@
+{
+  "requirements": {
+    "02-REQ-011": {
+      "target": "operator-control/staged-move-log",
+      "scenarios": ["operator-control/staged-move-log#supersession-is-not-deletion"],
+      "note": "Last-write-wins per snake within a turn — re-authored as effective-move semantics over the append-only log (latest current-turn entry wins), never destructive overwrite, per the author-resolved staged-moves model (assignment-matrix Q4). Graduated from the module-02 parked ledger; its reconciliation flag is discharged."
+    },
+    "02-REQ-012": {
+      "target": "operator-control/staged-move-log",
+      "scenarios": ["operator-control/staged-move-log#revocation-is-supersession"],
+      "note": "SUPERSEDED: the legacy 'consume and clear staged moves in the resolving transaction' wording was overridden by the later append-only model (retained for the game's lifetime, nothing cleared at resolution, no cancel operation) — author-resolved contradiction, assignment-matrix Q4. The id retires onto the append-only requirement that replaced it; the consumed-at-resolution residue survives only as 'resolution consumes what the log holds at declaration' (#accepted-until-declaration). Graduated from the module-02 parked ledger."
+    },
+    "02-REQ-018": {
+      "target": "operator-control/exclusive-selection",
+      "scenarios": ["operator-control/exclusive-selection#server-side-enforcement"],
+      "note": "At most one operator per snake and one snake per operator — dedupe with the two subsystem-level exclusivity ids into one requirement (selection-exclusivity cluster). The Convex-owns-selection authority split had already graduated to global-invariants/team-granularity-authorization. Graduated from the module-02 parked ledger."
+    },
+    "02-REQ-038": {
+      "target": "operator-control/operator-dual-connection",
+      "scenarios": ["operator-control/operator-dual-connection#direct-not-proxied"],
+      "note": "Operators connect directly to the game's SpacetimeDB instance to observe (filtered) and stage. Transport binding (WebSocket) is mechanism per 02-REVIEW-005 — the authored behaviour is the direct-connection topology. Graduated from the parked ledger's client-connection-topology entry."
+    },
+    "02-REQ-039": {
+      "target": "operator-control/operator-dual-connection",
+      "scenarios": ["operator-control/operator-dual-connection#independent-connections"],
+      "note": "Operators separately connect to Convex for coordination state (selection, manual mode). Drive-assignment reads/writes ride the same connection but their semantics belong to the bot-configuration story; the action log to replay-and-audit. Graduated from the parked ledger's client-connection-topology entry."
+    },
+    "02-REQ-040": {
+      "target": "operator-control/operator-dual-connection",
+      "scenarios": ["operator-control/operator-dual-connection#served-by-the-nominated-host"],
+      "note": "Operator interface served by the team's nominated server — authored as the behavioural topology (served by the team's host, gameplay traffic still direct); hosting mechanics are team-server-management's story. Graduated from the parked ledger's client-connection-topology entry."
+    },
+    "03-REQ-028": {
+      "target": "operator-control/team-scoped-staging",
+      "scenarios": ["operator-control/team-scoped-staging#any-team-snake-regardless-of-selection"],
+      "note": "A team's admitted human or bot connection may stage for any team snake; the 'staging discipline is last-write-wins within the instance' clause re-authors as effective-move semantics over the append-only log (operator-control/staged-move-log)."
+    },
+    "04-REQ-024": {
+      "target": "operator-control/team-scoped-staging",
+      "scenarios": ["operator-control/team-scoped-staging#any-team-snake-regardless-of-selection"],
+      "note": "The move-staging operation accepts (snake, direction) only from operator/bot connections of the owning team; all other callers rejected. Dedupe with 03-REQ-028 into one team-scoped-staging requirement; role-level refusal of spectators/coaches is identity-and-authorization/role-bound-privileges."
+    },
+    "04-REQ-025": {
+      "target": "operator-control/staged-move-log",
+      "scenarios": [
+        "operator-control/staged-move-log#supersession-is-not-deletion",
+        "operator-control/staged-move-log#revocation-is-supersession",
+        "operator-control/staged-move-log#nothing-carries-over"
+      ],
+      "note": "The append-only staged-move log: new entries never overwrite, effective move = latest entry, no cancel operation, retained for the game's lifetime, not cleared at resolution. The authoritative model that supersedes 02-REQ-011/012's wording (assignment-matrix Q4). Current-turn scoping of the effective move constraint-mined from the legacy Design's resolution read. Per-entry attribution/timestamps (04-REQ-026/027) are replay-and-audit's story."
+    },
+    "04-REQ-028": {
+      "target": "operator-control/staging-is-unvalidated",
+      "scenarios": ["operator-control/staging-is-unvalidated#lethal-direction-accepted"],
+      "note": "No legality validation at staging; consequences only at resolution via the collision rules. Preserves the explore-a-direction affordance (see operator-control/board-and-move-interface#exploration-is-staging)."
+    },
+    "04-REQ-029": {
+      "target": "operator-control/team-scoped-staging",
+      "scenarios": ["operator-control/team-scoped-staging#spoofed-parameters-rejected"],
+      "note": "No cross-team staging even with spoofed parameters; team membership is the connection-level association from admission and cannot be asserted per call. The general team-granularity principle stays with global-invariants; this entry pins the staging-specific behaviour."
+    },
+    "06-REQ-018": {
+      "target": "operator-control/exclusive-selection",
+      "scenarios": [],
+      "note": "Per-snake selection record: current holder (or none) plus the manual-mode flag, held in Convex for each snake of an active game."
+    },
+    "06-REQ-019": {
+      "target": "operator-control/exclusive-selection",
+      "scenarios": ["operator-control/exclusive-selection#server-side-enforcement"],
+      "note": "At most one operator per snake — dedupe with 02-REQ-018 and 06-REQ-020 into the single exclusivity requirement."
+    },
+    "06-REQ-020": {
+      "target": "operator-control/exclusive-selection",
+      "scenarios": ["operator-control/exclusive-selection#unheld-rows-are-nobodys"],
+      "note": "At most one snake per operator per game — dedupe into the single exclusivity requirement; the null-holder exemption (unselected rows never count against any operator) is constraint-mined from the legacy Design's guard."
+    },
+    "06-REQ-021": {
+      "target": "operator-control/exclusive-selection",
+      "scenarios": ["operator-control/exclusive-selection#server-side-enforcement"],
+      "note": "Invariant-violating selection mutations rejected server-side at the function contract; downstream runtimes never pre-check."
+    },
+    "06-REQ-022": {
+      "target": "operator-control/selection-transfer",
+      "scenarios": ["operator-control/selection-transfer#confirmation-gates-displacement"],
+      "note": "Taking a held snake requires the mutation to explicitly request displacement; absent that, rejection."
+    },
+    "06-REQ-023": {
+      "target": "operator-control/selection-transfer",
+      "scenarios": [
+        "operator-control/selection-transfer#atomic-handover",
+        "operator-control/selection-transfer#previous-selection-auto-released"
+      ],
+      "note": "Displacement atomic across all affected records; no reader observes an intermediate violation. The auto-release of the caller's previous snake, observable as a deselection, is constraint-mined from the legacy Design's selectSnake."
+    },
+    "06-REQ-024": {
+      "target": "operator-control/exclusive-selection",
+      "scenarios": ["operator-control/exclusive-selection#non-member-never-holds"],
+      "note": "Selection mutations restricted to members of the owning team; no non-member ever appears as a holder."
+    },
+    "06-REQ-025": {
+      "target": "operator-control/manual-mode",
+      "scenarios": [
+        "operator-control/manual-mode#staging-enters-manual-without-a-gap",
+        "operator-control/manual-mode#explicit-entry-locks-the-current-move"
+      ],
+      "note": "Manual toggling holder-only; auto-set true as a side effect of the holder staging a direction. The cross-runtime ordering race the legacy Design documented (bot overwriting an operator-staged move while the flag write is in flight) is closed by the minted never-supersede-the-operator invariant."
+    },
+    "06-REQ-025a": {
+      "target": "operator-control/exclusive-selection",
+      "scenarios": ["operator-control/exclusive-selection#cleared-at-finish"],
+      "note": "All selection records cleared at game end; replay reconstructs selection history exclusively from recorded activity (the replay-and-audit story owns that reconstruction)."
+    },
+    "07-REQ-046": {
+      "target": "operator-control/manual-mode",
+      "scenarios": [
+        "operator-control/manual-mode#manual-survives-losing-the-holder",
+        "operator-control/manual-mode#exit-resumes-automation"
+      ],
+      "note": "Manual-mode snakes — selected or not — never staged by the automated submission passes; their moves originate exclusively from operator action. Authored from the operator-control side as 'the automated player never stages for a manual snake'; the bot capability binds to it from below."
+    },
+    "08-REQ-011": {
+      "target": "operator-control/live-interface-availability",
+      "scenarios": [
+        "operator-control/live-interface-availability#arriving-operator-lands-in-the-game"
+      ],
+      "note": "Active game prominent in navigation for member operators — no searching required."
+    },
+    "08-REQ-012": {
+      "target": "operator-control/live-interface-availability",
+      "scenarios": ["operator-control/live-interface-availability#no-game-no-live-page"],
+      "note": "No live page without a playing game; navigation refused with an explanatory empty state."
+    },
+    "08-REQ-028": {
+      "target": "operator-control/manual-mode",
+      "scenarios": ["operator-control/manual-mode#fresh-game-all-automatic"],
+      "note": "Live interface scoped to a team with a playing game; every owned snake starts in automatic mode with the automated player staging for it. The interface-scoping half rides operator-control/live-interface-availability."
+    },
+    "08-REQ-029": {
+      "target": "operator-control/selection-is-view-only",
+      "scenarios": ["operator-control/selection-is-view-only#selection-never-flips-manual"],
+      "note": "Selection is view-only — never enters manual mode by itself, never removes the snake from automatic staging. The legacy Design's deliberately-separate selectSnake/setManualMode mutations are the mechanism; the behaviour is the requirement."
+    },
+    "08-REQ-030": {
+      "target": "operator-control/manual-mode",
+      "scenarios": [
+        "operator-control/manual-mode#staging-enters-manual-without-a-gap",
+        "operator-control/manual-mode#exit-resumes-automation"
+      ],
+      "note": "Manual entered exclusively by the holder's explicit toggle or by staging a direction (auto-set); exited exclusively by the holder's return to automatic, upon which automated staging resumes."
+    },
+    "08-REQ-031": {
+      "target": "operator-control/manual-mode",
+      "scenarios": ["operator-control/manual-mode#interface-adds-no-automation"],
+      "note": "The UI adds no scheduling logic of its own — authored abstractly (automated staging originates solely in the team's automated player). The compute-follows-attention scheduling it mirrored is the bot story's behaviour."
+    },
+    "08-REQ-035": {
+      "target": "operator-control/operator-presence-and-identity",
+      "scenarios": ["operator-control/operator-presence-and-identity#same-colour-on-every-client"],
+      "note": "Presence display with per-operator colours stable for the game and shared with the on-board selection indication. Colour determinism in (game, operator) constraint-mined from the legacy Design's assignOperatorColour; the palette/hash and the presence library are mechanism."
+    },
+    "08-REQ-036": {
+      "target": "operator-control/operator-presence-and-identity",
+      "scenarios": ["operator-control/operator-presence-and-identity#latency-is-client-measured"],
+      "note": "Client-measured round-trip latency indicator; no server-held field backs it. Measurement methodology stays mechanism."
+    },
+    "08-REQ-037": {
+      "target": "operator-control/board-and-move-interface",
+      "scenarios": [],
+      "note": "Board rendering of grid, terrain, items, and observable snakes — authored as rendering the connection's filtered observation surface; renderer detail (letters, length labels, layering) is mechanism shared with the observation/replay views."
+    },
+    "08-REQ-039": {
+      "target": "operator-control/operator-presence-and-identity",
+      "scenarios": ["operator-control/operator-presence-and-identity#same-colour-on-every-client"],
+      "note": "Per-snake selection indication in the holding operator's colour, concurrent selections each in their holder's colour — folded into the deterministic operator-identity requirement."
+    },
+    "08-REQ-041": {
+      "target": "operator-control/board-and-move-interface",
+      "scenarios": ["operator-control/board-and-move-interface#marker-follows-any-origin"],
+      "note": "Staged-move marker updates live without reload, whatever the staging origin (automated player, this operator, a teammate on another client)."
+    },
+    "08-REQ-042": {
+      "target": "operator-control/selection-transfer",
+      "scenarios": ["operator-control/selection-transfer#confirmation-gates-displacement"],
+      "note": "Click-to-select of eligible owned snakes, Escape/select-another to release, and the displacement confirmation before issuing the displacing mutation. Gesture bindings are mechanism; the confirmation-gates-displacement behaviour is the requirement."
+    },
+    "08-REQ-043": {
+      "target": "operator-control/selection-is-view-only",
+      "scenarios": ["operator-control/selection-is-view-only#no-affordances-without-holding"],
+      "note": "No direction-candidate display or interaction for snakes the operator does not hold; all staging and per-snake affordances gated on being the current holder."
+    },
+    "08-REQ-044": {
+      "target": "operator-control/board-and-move-interface",
+      "scenarios": ["operator-control/board-and-move-interface#lethal-discouraged-not-blocked"],
+      "note": "SPLIT: the four-direction affordance reflecting the staged direction with lethal directions visibly discouraged but selectable is authored here; the stateMap score labels and score-consistent colouring are the decision-transparency story's substance (its decision-display requirements decorate this affordance)."
+    },
+    "08-REQ-045": {
+      "target": "operator-control/manual-mode",
+      "scenarios": [
+        "operator-control/manual-mode#staging-enters-manual-without-a-gap",
+        "operator-control/board-and-move-interface#exploration-is-staging"
+      ],
+      "note": "SPLIT: direction pick immediately stages as an operator-originated move and auto-sets manual (authored here, with the ordering-race invariant); the triggered worst-case preview is the decision-transparency story's substance."
+    },
+    "08-REQ-046": {
+      "target": "operator-control/board-and-move-interface",
+      "scenarios": ["operator-control/board-and-move-interface#exploration-is-staging"],
+      "note": "Staged moves freely changeable until the team's turn is over; no separate commit affordance; the interface makes exploring-equals-staging legible."
+    },
+    "08-REQ-047": {
+      "target": "operator-control/manual-mode",
+      "scenarios": ["operator-control/manual-mode#explicit-entry-locks-the-current-move"],
+      "note": "Manual checkbox reflects the flag, editable by the current holder only; checking locks the currently staged move (no new staging), unchecking returns the snake to automated staging. Checkbox presentation is mechanism; the lock/resume behaviour is the requirement."
+    },
+    "08-REQ-068a": {
+      "target": "operator-control/captain-boot",
+      "scenarios": [
+        "operator-control/captain-boot#no-sticky-lockout",
+        "operator-control/captain-boot#boot-clears-nothing",
+        "operator-control/captain-boot#captain-only"
+      ],
+      "note": "SPLIT: the boot itself — forced disconnect identical to network loss, no persistent operator state, no lockout, reconnect rejoins, Captain-only server-side — is authored here (boot-writes-no-persistent-state constraint-mined from the legacy Design). The active-set/quorum consequences of leaving and rejoining (and the tempo-flow reconnect write) are the turn-pacing story's substance."
+    },
+    "08-REQ-081a": {
+      "target": "operator-control/live-interface-availability",
+      "scenarios": ["operator-control/live-interface-availability#no-game-no-live-page"],
+      "note": "Live interface available from the playing transition until the finished transition — the availability bracket."
+    },
+    "08-REQ-082a": {
+      "target": "operator-control/live-interface-availability",
+      "scenarios": ["operator-control/live-interface-availability#finish-is-terminal"],
+      "note": "On finish, connected operators get the terminal view — final scores and a replay link, zero mutating affordances — replacing the live interface."
+    }
+  },
+  "reviews": {
+    "02-REVIEW-005": {
+      "scenarios": ["operator-control/operator-dual-connection#direct-not-proxied"],
+      "note": "WebSocket named-transport question resolved as: transport is mechanism and stays out of requirements; the behavioural residue — the direct, independently authenticated dual-connection topology — is authored in operator-control/operator-dual-connection."
+    },
+    "04-REVIEW-014": {
+      "scenarios": ["operator-control/staged-move-log#accepted-until-declaration"],
+      "note": "No final-submission barrier: a pre-declaration burst of staged moves is ordinary appends, and resolution consumes exactly what the log holds at the instant of declaration; submission-pass coordination is entirely a team-side concern."
+    },
+    "07-REVIEW-009": {
+      "scenarios": [
+        "operator-control/staged-move-log#single-home",
+        "operator-control/operator-dual-connection#direct-not-proxied"
+      ],
+      "note": "Staged moves are mediated exclusively by the game's SpacetimeDB instance — operators stage directly under their own tokens, and every consumer (including the team's automated player) observes staged moves from that single log; no secondary staging store or brokered path exists."
+    }
+  }
+}

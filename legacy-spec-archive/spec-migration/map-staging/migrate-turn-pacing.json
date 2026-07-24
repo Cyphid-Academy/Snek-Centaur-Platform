@@ -1,0 +1,188 @@
+{
+  "requirements": {
+    "04-REQ-030": {
+      "target": "turn-pacing/in-game-clock",
+      "scenarios": [
+        "turn-pacing/in-game-clock#no-external-timekeeper",
+        "turn-pacing/in-game-clock#invariant-at-every-instant"
+      ],
+      "note": "The chess-timer semantics implemented within the game instance's own state, no external runtime mediating clock timing. The arithmetic RULES it bound to stay in game-engine/chess-timer (cited, not restated); the carve-out-deduction correction (04-REVIEW-023 cascade) survives as the every-instant budget+clock invariant. Turn-0 clock start at playability constraint-mined from the legacy Design's init sequence."
+    },
+    "04-REQ-031": {
+      "target": "turn-pacing/turn-declaration",
+      "scenarios": [
+        "turn-pacing/turn-declaration#second-declaration-is-a-no-op",
+        "turn-pacing/turn-declaration#only-the-team-declares"
+      ],
+      "note": "The declare-turn-over operation: team-only, stops the clock and banks the remainder (game-engine/chess-timer#declaration-banks-the-remainder), idempotent within the turn, spectators rejected. The declaration-timestamp persistence clause rides the per-turn record, which is replay-and-audit's story (04-REQ-009); the kind-distinction behaviour is authored here."
+    },
+    "04-REQ-032": {
+      "target": "turn-pacing/turn-declaration",
+      "scenarios": ["turn-pacing/turn-declaration#expiry-detected-autonomously"],
+      "note": "Autonomous clock-expiry detection treated as implicit declaration, marked distinctly from explicit declaration. The record that persists the distinction is replay-and-audit's (04-REQ-009); the distinguishable-kinds behaviour is authored here."
+    },
+    "04-REQ-033": {
+      "target": "turn-pacing/exactly-once-resolution",
+      "scenarios": [
+        "turn-pacing/exactly-once-resolution#any-mix-one-trigger",
+        "turn-pacing/exactly-once-resolution#nothing-else-resolves"
+      ],
+      "note": "Resolution triggered exactly once per turn at the moment all participating teams have declared (any mix of kinds), and by no other condition — not wall-clock time, administrative action, or connection changes."
+    },
+    "04-REQ-034": {
+      "target": "turn-pacing/turn-declaration",
+      "scenarios": ["turn-pacing/turn-declaration#snakeless-team-never-blocks"],
+      "note": "Teams with no alive snakes treated as declared at the start of every subsequent turn — resolution never waits out an eliminated team's clock. Folded into the declaration requirement as the third declaration kind (snakeless)."
+    },
+    "04-REQ-035": {
+      "target": "turn-pacing/in-game-clock",
+      "scenarios": ["turn-pacing/in-game-clock#invariant-at-every-instant"],
+      "note": "Budget bookkeeping conforming to the engine's initial-budget/increment/carve-out rules — authored as the realization citing game-engine/chess-timer, with the deduction (04-REVIEW-023) carried by the every-instant invariant. The post-turn-budget recording clause rides the per-turn record, replay-and-audit's story (04-REQ-009)."
+    },
+    "04-REQ-041": {
+      "target": "turn-pacing/next-turn-bracket",
+      "scenarios": ["turn-pacing/next-turn-bracket#no-silent-reordering"],
+      "note": "No staged move or declaration accepted for a committed turn; late operations land in the new turn or are rejected, never silently reordered into committed state."
+    },
+    "04-REQ-042": {
+      "target": "turn-pacing/next-turn-bracket",
+      "scenarios": ["turn-pacing/next-turn-bracket#next-turn-opens-with-the-commit"],
+      "note": "After a resolution commit the next turn begins: budget increment, fresh clock carve-out (game-engine/chess-timer), staging and declarations accepted — no dead interval between turns."
+    },
+    "06-REQ-040a": {
+      "target": "turn-pacing/live-pacing-parameters",
+      "scenarios": [
+        "turn-pacing/live-pacing-parameters#live-record-not-derivation",
+        "turn-pacing/live-pacing-parameters#mid-game-retuning-is-live"
+      ],
+      "note": "SPLIT: the game-scoped live per-team parameter record is authored here for the SUBMISSION-TIMING fields (automatic submission time allocation, scheduled-submission interval, imminent-deadline threshold) — initialised from captured team defaults at game start (bot-configuration/game-start-snapshot), independently mutable during play, read directly as the live source of truth (06-REVIEW-008's live-record-over-log-derivation decision). The globalTemperature field's capture and derivation were retired via bot-configuration (game-start-snapshot, effective-temperature). This change also owns the timing fields' consumption semantics that bot-configuration/team-bot-parameters deliberately stored as opaque scalars."
+    },
+    "06-REQ-040b": {
+      "target": "turn-pacing/operator-tempo",
+      "scenarios": [
+        "turn-pacing/operator-tempo#durable-across-turns",
+        "turn-pacing/operator-tempo#flow-on-every-rejoin",
+        "turn-pacing/operator-tempo#restating-tempo-is-still-an-act"
+      ],
+      "note": "SPLIT: the per-operator durable tempo record (thinking/flow, written only by its operator, durable across turns, flow written on every (re)connect as the ONLY automatic write, coaches/admins recordless) is authored here, with the restated-write-accepted behaviour constraint-mined from the legacy Design's idempotent mutation (its transactional action-log entry is replay-and-audit's story). The Captain-boot half (forced disconnect, no persistent state, reconnect allowed) was retired via operator-control/captain-boot; boot's active-set/quorum consequence is authored here (turn-pacing/flow-quorum#boot-leaves-rejoin-restores). Table/key/mutation shapes are mechanism."
+    },
+    "07-REQ-044": {
+      "target": "turn-pacing/scheduled-submission",
+      "scenarios": [
+        "turn-pacing/scheduled-submission#no-news-no-reroll",
+        "turn-pacing/scheduled-submission#ack-gates-the-clear"
+      ],
+      "note": "The scheduled submission pass on the team's scheduled-submission interval: for each automatic-mode snake with a set dirty flag, sample (bot-framework/softmax-decision), stage (operator-control/staged-move-log), clear the flag — with clearing gated on the staging acknowledgement, constraint-mined from the legacy Design (the snapshot write never clears the flag). The interval's team-tunability is bot-configuration/team-bot-parameters; its live game-scoped value is turn-pacing/live-pacing-parameters."
+    },
+    "07-REQ-045": {
+      "target": "turn-pacing/final-flush",
+      "scenarios": [
+        "turn-pacing/final-flush#deadline-tracks-the-clock",
+        "turn-pacing/final-flush#expiry-never-wastes-decisions"
+      ],
+      "note": "The final submission pass at the dynamically computed deadline — min(automatic submission time allocation, observed remaining time) less the imminent-deadline threshold, all live values — flushing every dirty automatic-mode snake, with the scheduled cadence continuing until the turn is declared over. The re-arm-on-shrinking-budget behaviour is constraint-mined from the legacy Design's subscription re-arm. Per 07-REVIEW-005/08-REVIEW-011; the turn-0 allocation carve-out was already removed in legacy review (remaining time naturally bounds turn 0)."
+    },
+    "07-REQ-045a": {
+      "target": "turn-pacing/captain-submit",
+      "scenarios": [
+        "turn-pacing/captain-submit#no-flush-after-the-human-decision",
+        "turn-pacing/captain-submit#declaration-observed-never-signalled"
+      ],
+      "note": "Captain manual submit suppresses the final flush — no fresh softmax rolls after the human decision that the staged set stands; only automatic deadline expiry flushes. The observation-only coordination (the automated player learns of declaration solely from the game instance's declared state, no out-of-band channel) is constraint-mined from the legacy Design's declaredTurnOver subscription. The quorum's passivity clause is authored in turn-pacing/flow-quorum."
+    },
+    "08-REQ-032": {
+      "target": "turn-pacing/pacing-header",
+      "scenarios": ["turn-pacing/pacing-header#tempo-from-the-record"],
+      "note": "SPLIT: the header's pacing content — turn number, clock countdown, remaining budget, active operators' tempo on the presence display, conditional Captain controls (turn-pacing/captain-submit) — is authored here; the presence display's identity/colour and the latency indicator were retired via operator-control/operator-presence-and-identity (cited). Presence-proves-connectedness-only (tempo read from the durable record, never duplicated into presence) constraint-mined from the legacy Design."
+    },
+    "08-REQ-033": {
+      "target": "turn-pacing/pacing-header",
+      "scenarios": [
+        "turn-pacing/pacing-header#sub-second-countdown-with-warning",
+        "turn-pacing/pacing-header#submitted-indicator-holds"
+      ],
+      "note": "Clock countdown at sub-second precision with a warning state near expiry; once the team has declared, a stable turn-submitted indicator that never flickers back to a countdown while other teams finish. The seconds-to-one-decimal presentation is the minimum-resolution proposal and stays mechanism; the legibility and stability behaviours are the requirement."
+    },
+    "08-REQ-034": {
+      "note": "DROPPED (number reserved): removed during the legacy 08-REVIEW-011 resolution that superseded the team-level operator-mode model; the reserved text's residual intent (coordination state rendered as per-operator tempo in the presence display) is covered by turn-pacing/pacing-header#tempo-from-the-record. No requirement authored; the numeric id is tombstoned and never re-minted."
+    },
+    "08-REQ-061": {
+      "target": "turn-pacing/operator-tempo",
+      "scenarios": ["turn-pacing/operator-tempo#durable-across-turns"],
+      "note": "UI-mirror: the per-operator tempo toggle — owned exclusively by the operator it describes, reactive across all connected team members — folds into the tempo requirement (written only by that operator, toggleable at any moment). The thinking/flow vocabulary and stance semantics are carried in the requirement text."
+    },
+    "08-REQ-062": {
+      "target": "turn-pacing/flow-quorum",
+      "scenarios": [
+        "turn-pacing/flow-quorum#passive-never-a-trigger",
+        "turn-pacing/flow-quorum#zero-operators-defers",
+        "turn-pacing/flow-quorum#boot-leaves-rejoin-restores"
+      ],
+      "note": "The active-operator set (currently connected member operators; boot leaves it exactly as a disconnect, per operator-control/captain-boot) and the unanimous-flow PASSIVE necessary precondition on the automated player's declaration — becoming true triggers nothing; zero active operators defers automated declaration (08-REVIEW-011); Captain submit and clock expiry bypass entirely. The when-to-declare rules within the permitted window live in turn-pacing/final-flush."
+    },
+    "08-REQ-063": {
+      "target": "turn-pacing/operator-tempo",
+      "scenarios": ["turn-pacing/operator-tempo#thinking-stops-only-the-automated-declaration"],
+      "note": "Tempo toggleable in either direction at any time, immediately affecting the unanimity; every operator interaction remains available regardless of tempo; the team's clock runs and expires regardless of any operator's tempo (expiry declares via the engine rule, game-engine/chess-timer)."
+    },
+    "08-REQ-064": {
+      "target": "turn-pacing/operator-tempo",
+      "scenarios": ["turn-pacing/operator-tempo#flow-on-every-rejoin"],
+      "note": "Every path into the active set — first join, reconnect after a drop, rejoin after a boot — sets the operator's tempo to flow as part of (re)connecting, and this is the only automatic tempo write; no per-turn reset exists. The client-issues-the-call shape is mechanism; the uniform flow-on-(re)connect behaviour is the requirement."
+    },
+    "08-REQ-064a": {
+      "target": "turn-pacing/flow-quorum",
+      "scenarios": ["turn-pacing/flow-quorum#observers-never-count"],
+      "note": "Coaches and admins acting as implicit coaches have no tempo, are never active operators, and never count for or against the unanimity; the presence display distinguishes observers from member operators (the visual-distinction half rides the pacing-header's tempo-from-the-record presentation and operator-control's presence identity)."
+    },
+    "08-REQ-065": {
+      "target": "turn-pacing/captain-submit",
+      "scenarios": ["turn-pacing/captain-submit#immediate-and-tempo-blind"],
+      "note": "SPLIT: the Captain's turn-submit — immediate declaration with exactly the currently staged moves, regardless of any operator's tempo — is authored here, alongside the Captain-only exposure of both Captain controls; the boot affordance's own semantics were retired via operator-control/captain-boot (cited), and its quorum consequence via turn-pacing/flow-quorum."
+    },
+    "08-REQ-066": {
+      "target": "turn-pacing/captain-submit",
+      "scenarios": ["turn-pacing/captain-submit#keyboard-under-pressure"],
+      "note": "The turn-submit affordance keyboard-bindable so the Captain can operate it without pointer input; the specific binding stays mechanism."
+    },
+    "08-REQ-067": {
+      "target": "turn-pacing/captain-submit",
+      "scenarios": ["turn-pacing/captain-submit#non-captain-rejected-server-side"],
+      "note": "UI-mirror plus enforcement: non-Captains see neither Captain control, and any invocation — keyboard included — is rejected server-side at the function contract; the tempo toggle is expressly not Captain-gated (every member operator owns their own)."
+    }
+  },
+  "reviews": {
+    "04-REVIEW-023": {
+      "scenarios": ["turn-pacing/in-game-clock#invariant-at-every-instant"],
+      "note": "The budget carve-out correction cascade: the per-turn clock is deducted from the budget the moment it is carved out, so budget + clock = total remaining time at every instant and depletion is reachable. Promoted from boundary arithmetic to the every-instant invariant in the realization requirement; the arithmetic rule itself lives in game-engine/chess-timer#carve-out-arithmetic."
+    },
+    "06-REVIEW-008": {
+      "scenarios": ["turn-pacing/live-pacing-parameters#live-record-not-derivation"],
+      "note": "Live game-scoped record over action-log derivation for current pacing values — readers consult the record directly, never scan the log. The 'operator mode' the original decision stored was later superseded twice (ready-state, then per-operator tempo, per the module-08 review chain); the surviving substance is the live-record principle, authored for the timing fields here (the tempo record has its own requirement, turn-pacing/operator-tempo)."
+    },
+    "07-REVIEW-005": {
+      "scenarios": [
+        "turn-pacing/final-flush#deadline-tracks-the-clock",
+        "turn-pacing/final-flush#expiry-never-wastes-decisions",
+        "turn-pacing/captain-submit#no-flush-after-the-human-decision"
+      ],
+      "note": "The deadline is computed dynamically from live values (allocation vs observed remaining time, less the threshold), not from any fixed wall-clock signal; manual Captain submission suppresses the final flush (human discretion stands, no post-decision rolls) while the automatic deadline path always flushes; the scheduled cadence runs until the turn is declared over. The turn-0 allocation carve-out was removed within the legacy review chain itself."
+    },
+    "08-REVIEW-011": {
+      "scenarios": [
+        "turn-pacing/flow-quorum#zero-operators-defers",
+        "turn-pacing/flow-quorum#passive-never-a-trigger",
+        "turn-pacing/captain-submit#immediate-and-tempo-blind"
+      ],
+      "note": "The resolution that dissolved the team-level Automatic/Centaur operator-mode model into per-operator coordination: the precondition is passive, zero active operators defers automated declaration (the clock running on, expiry as backstop), and the Captain's submit and clock expiry bypass the precondition entirely. Its interim ready-state model was itself superseded by the durable tempo model (08-REVIEW-024); this change authors only the surviving tempo-model behaviours. 08-REQ-034's removal (number reserved) originates here."
+    },
+    "08-REVIEW-024": {
+      "scenarios": [
+        "turn-pacing/operator-tempo#durable-across-turns",
+        "turn-pacing/operator-tempo#flow-on-every-rejoin",
+        "turn-pacing/flow-quorum#boot-leaves-rejoin-restores"
+      ],
+      "note": "The durable per-operator tempo correction over the per-turn ready-state model: tempo persists across turns (routine turns cost zero operator actions), flow is written on every (re)connect as the only automatic write, and the Captain's boot is a stateless forced disconnect whose subject leaves the active set like any disconnect and rejoins in flow. The boot act itself was retired via operator-control/captain-boot; the quorum/rejoin consequences are authored here."
+    }
+  }
+}

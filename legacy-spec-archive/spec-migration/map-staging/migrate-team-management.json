@@ -1,0 +1,106 @@
+{
+  "requirements": {
+    "02-REQ-043": {
+      "target": "team-management/team-management-view",
+      "scenarios": ["team-management/team-management-view#management-is-not-play-configuration"],
+      "note": "Management page limited to identity/nomination/membership (incl. captain transfer and coach designation), never competitive configuration; seam — nomination and healthcheck semantics belong to the team-server-management story."
+    },
+    "03-REQ-046": {
+      "target": "team-management/roster-freeze",
+      "scenarios": [
+        "team-management/roster-freeze#hard-rejection-never-deferral",
+        "team-management/roster-freeze#identity-edits-stay-open"
+      ],
+      "note": "Roster mutations (member add/remove, captaincy, server-nomination changes) rejected while a team's game is playing (dedupe with 05-REQ-013; 03-REVIEW-006 hard-rejection semantics)."
+    },
+    "05-REQ-008": {
+      "target": "team-management/team-record",
+      "scenarios": ["team-management/team-record#exactly-one-captain"],
+      "note": "Persistent team record: name, display colour, structural captain; the nullable nominated-server-domain field is anchored on this record — nomination semantics seam to team-server-management."
+    },
+    "05-REQ-011": {
+      "target": "team-management/roster-of-operators",
+      "scenarios": ["team-management/roster-of-operators#members-are-peers"],
+      "note": "Membership records; every member is an Operator; captaincy structural on the team record, not a per-member role (05-REVIEW-014)."
+    },
+    "05-REQ-012": {
+      "target": "team-management/captain-authority",
+      "scenarios": [
+        "team-management/captain-authority#transfer-only-to-a-member",
+        "team-management/captain-authority#transfer-is-immediate-and-complete"
+      ],
+      "note": "Captain adds/removes members and transfers captaincy, freeze-gated; seam — the in-game operator-boot affordance half is an in-game control owned by the operator-control/turn-pacing stories, and per-operator tempo was already not a captain authority."
+    },
+    "05-REQ-013": {
+      "target": "team-management/roster-freeze",
+      "scenarios": ["team-management/roster-freeze#check-and-write-atomic"],
+      "note": "Reject membership/captaincy mutation while playing (dedupe with 03-REQ-046); the tournament-wide extension (05-REQ-064) is authored by the tournaments change, citing the extensible freeze interval."
+    },
+    "05-REQ-015a": {
+      "target": "team-management/archive-not-delete",
+      "scenarios": [
+        "team-management/archive-not-delete#history-resolves-after-archive",
+        "team-management/archive-not-delete#archive-blocked-while-frozen",
+        "team-management/archive-not-delete#unarchive-resumes-intact"
+      ],
+      "note": "Archive-only, never delete (05-REVIEW-011); the 'no playing game / no active tournament' gate is expressed via the (extensible) roster freeze. The legacy '(or an admin)' unarchive parenthetical is dropped per this change's Open Question option A — revisit if option B is chosen."
+    },
+    "05-REQ-068a": {
+      "target": "team-management/coaches",
+      "scenarios": [
+        "team-management/coaches#coach-gains-no-roster-standing",
+        "team-management/coaches#coaches-visible-to-members"
+      ],
+      "note": "Coach designations on the team record, distinct from the roster, observable to members; captain-only designation carried by team-management/captain-authority (the 05-REQ-067 designation half); coach live-read semantics stay with the live-game-observation story."
+    },
+    "08-REQ-023b": {
+      "target": "team-management/team-management-view",
+      "scenarios": ["team-management/team-management-view#every-member-sees-the-whole-picture"],
+      "note": "Team Management view for every member: identity, captain, roster, coaches, nomination + health status. The stale 'members with their roles' phrase is not carried (roles eliminated by 05-REVIEW-014); healthcheck semantics seam to team-server-management."
+    },
+    "08-REQ-023c": {
+      "target": "team-management/team-creation",
+      "scenarios": [
+        "team-management/team-creation#creator-captains-from-the-first-instant",
+        "team-management/team-creation#no-special-standing-required"
+      ],
+      "note": "Any authenticated user creates a team; creator becomes captain (and first member)."
+    },
+    "08-REQ-023d": {
+      "target": "team-management/captain-authority",
+      "scenarios": [
+        "team-management/captain-authority#captain-only-affordances",
+        "team-management/captain-authority#non-captain-rejected-at-the-function"
+      ],
+      "note": "UI mirror folded: captain-exclusive mutating affordances are scenarios of the owning authority requirement — enforcement authored once, server-side."
+    },
+    "08-REQ-023e": {
+      "target": "team-management/roster-freeze",
+      "scenarios": ["team-management/roster-freeze#frozen-affordances-visibly-disabled"],
+      "note": "UI mirror folded: frozen affordances visibly disabled with an explanation, never a bypass."
+    }
+  },
+  "reviews": {
+    "03-REVIEW-006": {
+      "scenarios": [
+        "team-management/roster-freeze#hard-rejection-never-deferral",
+        "team-management/roster-freeze#check-and-write-atomic"
+      ],
+      "note": "Mid-game roster edits hard-rejected (option A strengthened) — the freeze keeps the live record coherent with the binding snapshot; the snapshot-binding half lives in identity-and-authorization/roster-snapshot-binding and the append-only-attribution half with the replay-and-audit story."
+    },
+    "05-REVIEW-011": {
+      "scenarios": [
+        "team-management/archive-not-delete#archive-is-the-only-retirement",
+        "team-management/archive-not-delete#history-resolves-after-archive"
+      ],
+      "note": "Team deletion disallowed; archive flag hides from listings and new enrolments while preserving all live and historical state."
+    },
+    "05-REVIEW-014": {
+      "scenarios": [
+        "team-management/team-record#captaincy-not-a-member-role",
+        "team-management/roster-of-operators#members-are-peers"
+      ],
+      "note": "Timekeeper role eliminated; captaincy enforced structurally via the team record's single captain reference; membership carries no role information — every member is an Operator."
+    }
+  }
+}

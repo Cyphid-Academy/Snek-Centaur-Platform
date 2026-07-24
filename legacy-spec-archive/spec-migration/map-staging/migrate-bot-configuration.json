@@ -1,0 +1,287 @@
+{
+  "requirements": {
+    "06-REQ-005": {
+      "target": "bot-configuration/team-heuristic-defaults",
+      "scenarios": [
+        "bot-configuration/team-heuristic-defaults#server-replacement-inherits-defaults"
+      ],
+      "note": "Per-team heuristic default configuration covering the server-registered Drives and Preferences; per-team storage is authoritative, so a server replacement inherits it (06-REVIEW-001). The registered-by-string-id availability half is authored in bot-configuration/registry-defines-availability."
+    },
+    "06-REQ-006": {
+      "target": "bot-configuration/team-heuristic-defaults",
+      "scenarios": [],
+      "note": "Per-Preference default fields: active-by-default flag and default portfolio weight."
+    },
+    "06-REQ-007": {
+      "target": "bot-configuration/team-heuristic-defaults",
+      "scenarios": ["bot-configuration/drive-management-interface#pinned-first-ordering"],
+      "note": "Per-Drive default fields (default weight, nickname) authored in team-heuristic-defaults; the pinned-then-lexicographic-by-nickname dropdown ordering is authored in drive-management-interface; the pinnedHeuristics list's storage home is team-bot-parameters."
+    },
+    "06-REQ-008": {
+      "target": "bot-configuration/captain-only-team-configuration",
+      "scenarios": [
+        "bot-configuration/captain-only-team-configuration#non-captain-write-rejected-at-the-function"
+      ],
+      "note": "Captain-only CRUD on the heuristic default configuration (Captain-only per resolved 08-REVIEW-001)."
+    },
+    "06-REQ-009": {
+      "target": "bot-configuration/game-start-snapshot",
+      "scenarios": ["bot-configuration/game-start-snapshot#in-progress-game-unaffected"],
+      "note": "Default edits never retroactively affect a game in progress; portfolios are independent of team defaults once the game has begun (launch capture)."
+    },
+    "06-REQ-010": {
+      "target": "bot-configuration/captain-only-team-configuration",
+      "scenarios": [
+        "bot-configuration/captain-only-team-configuration#non-captain-write-rejected-at-the-function"
+      ],
+      "note": "Negative half of the defaults gate: no runtime other than the Captain writes heuristic defaults, enforced server-side at the function contract (data layer)."
+    },
+    "06-REQ-011": {
+      "target": "bot-configuration/team-bot-parameters",
+      "scenarios": [
+        "bot-configuration/team-bot-parameters#timing-parameters-are-tunable-not-constants",
+        "bot-configuration/team-bot-parameters#pinning-is-team-configuration"
+      ],
+      "note": "SPLIT: the bot parameter record is authored here — softmax temperature default, pinnedHeuristics list, and the three submission-timing fields (automatic submission time allocation, scheduled-submission interval, imminent-deadline threshold) as OPAQUE team-tunable scalars stored/edited/snapshotted by bot-configuration. The timing fields' consumption semantics (submission cadence and deadline arming) are turn-pacing's story and are deliberately NOT authored by this change; the copied-into-game-scoped-state sentence lands in bot-configuration/game-start-snapshot. Seed default values (100 ms / 50 ms) are code with design rationale in this change's design.md."
+    },
+    "06-REQ-012": {
+      "target": "bot-configuration/captain-only-team-configuration",
+      "scenarios": [
+        "bot-configuration/captain-only-team-configuration#non-captain-write-rejected-at-the-function"
+      ],
+      "note": "Negative half of the bot-parameter gate: Captain-only writes, enforced at the function contract."
+    },
+    "06-REQ-013": {
+      "target": "bot-configuration/per-snake-portfolio-record",
+      "scenarios": [],
+      "note": "Per-snake portfolio record contents: active Drives with concrete target/type/weight; weight overrides; Preference activation overrides; nullable temperature override."
+    },
+    "06-REQ-014": {
+      "target": "bot-configuration/game-start-snapshot",
+      "scenarios": ["bot-configuration/game-start-snapshot#initial-portfolio-is-defaults-only"],
+      "note": "Game-start initialisation from the captured defaults: active-by-default Preferences at default weight, no Drives, no overrides. dedupe:07-REQ-014."
+    },
+    "06-REQ-015": {
+      "target": "bot-configuration/any-member-live-editing",
+      "scenarios": [],
+      "note": "The portfolio mutation set: Drive add/remove (retarget), Drive/Preference weight change, Preference activation toggle, temperature override set/clear."
+    },
+    "06-REQ-016": {
+      "target": "bot-configuration/per-snake-portfolio-record",
+      "scenarios": [
+        "bot-configuration/per-snake-portfolio-record#temperature-override-survives-deselection"
+      ],
+      "note": "Portfolio state persists across turns; deselection resets nothing — temperature override included, symmetric with Drives and weight overrides (06-REVIEW-005). dedupe:08-REQ-057."
+    },
+    "06-REQ-017": {
+      "target": "bot-configuration/effective-configuration",
+      "scenarios": ["bot-configuration/effective-configuration#derivable-by-any-reader"],
+      "note": "Effective configuration = captured defaults overlaid by portfolio record, computable from persisted data without negotiation. dedupe:07-REQ-016."
+    },
+    "06-REQ-041": {
+      "target": "bot-configuration/team-heuristic-defaults",
+      "scenarios": ["bot-configuration/team-heuristic-defaults#archiving-preserves-configuration"],
+      "note": "Team-scoped bot configuration persists for the team's lifetime; archive-only team semantics (team-management/archive-not-delete) mean no cascade mechanics and no reset on archive/unarchive."
+    },
+    "07-REQ-014": {
+      "target": "bot-configuration/game-start-snapshot",
+      "scenarios": ["bot-configuration/game-start-snapshot#initial-portfolio-is-defaults-only"],
+      "note": "Framework-side statement of game-start portfolio initialisation from the captured defaults. dedupe:06-REQ-014."
+    },
+    "07-REQ-015": {
+      "target": "bot-configuration/any-member-live-editing",
+      "scenarios": ["bot-configuration/any-member-live-editing#weight-edit-keeps-evaluated-work"],
+      "note": "Operator portfolio mutations take effect on the running player reactively, recomputing without restarting or clearing accumulated evaluation."
+    },
+    "07-REQ-016": {
+      "target": "bot-configuration/effective-configuration",
+      "scenarios": ["bot-configuration/effective-configuration#derivable-by-any-reader"],
+      "note": "Framework reads the effective configuration (default overlaid by portfolio) from persisted state without further negotiation. dedupe:06-REQ-017."
+    },
+    "07-REQ-017": {
+      "target": "bot-configuration/per-snake-portfolio-record",
+      "scenarios": [
+        "bot-configuration/per-snake-portfolio-record#no-drive-without-a-target",
+        "bot-configuration/per-snake-portfolio-record#dead-target-omits-never-deletes"
+      ],
+      "note": "Targets always concrete (specific snake or cell); unresolved-target Drives are never maintained in play — omitted while unresolvable, never deleted by the platform, auto re-entering when resolvable (legacy 07 Design §2.4 lead)."
+    },
+    "07-REQ-018": {
+      "target": "bot-configuration/registry-sync-insert-only",
+      "scenarios": [
+        "bot-configuration/registry-sync-insert-only#framework-never-writes-configuration"
+      ],
+      "note": "The framework never modifies team-scoped configuration on its own initiative; all team-config writes are captain/member-initiated workflows."
+    },
+    "07-REQ-022": {
+      "target": "bot-configuration/any-member-live-editing",
+      "scenarios": ["bot-configuration/any-member-live-editing#weight-edit-keeps-evaluated-work"],
+      "note": "Weight changes affect scoring only — no invalidation, no new simulation; the cache-toggle machinery half stays mechanism (bot-framework's demoted internals)."
+    },
+    "07-REQ-037": {
+      "target": "bot-configuration/any-member-live-editing",
+      "scenarios": ["bot-configuration/any-member-live-editing#weight-edit-keeps-evaluated-work"],
+      "note": "The cheap-rescan property as the live-edit guarantee: a weight edit is pure rescoring of already-evaluated worlds. The read-cache-multiply-sum-min mechanism stays code (bot-framework design)."
+    },
+    "07-REQ-050": {
+      "target": "bot-configuration/effective-temperature",
+      "scenarios": ["bot-configuration/effective-temperature#lower-is-more-deterministic"],
+      "note": "The calibration contract: lower temperature biases toward the highest-scoring direction, higher toward uniform sampling — the sign of the effect operators tune against."
+    },
+    "07-REQ-055": {
+      "target": "bot-configuration/effective-temperature",
+      "scenarios": ["bot-configuration/effective-temperature#override-else-team-value"],
+      "note": "The two temperature sources: team-wide value and per-snake override. Post-snapshot the team-side source is the game-scoped temperature value (forked from the team default at launch per game-start-snapshot)."
+    },
+    "07-REQ-056": {
+      "target": "bot-configuration/effective-temperature",
+      "scenarios": ["bot-configuration/effective-temperature#change-applies-at-next-decision"],
+      "note": "Effective temperature = override else team value, derived reactively: source changes take effect at the next softmax decision with no cache invalidation and no restart."
+    },
+    "08-REQ-008": {
+      "target": "bot-configuration/captain-only-team-configuration",
+      "scenarios": [
+        "bot-configuration/captain-only-team-configuration#captaincy-change-applies-without-reload"
+      ],
+      "note": "UI-mirror: captain-gated affordances track current captain status reactively, effective without page reload. Authored generically (any captain-gated affordance follows a captaincy transfer), so surfaces owned by sibling capabilities inherit the pattern."
+    },
+    "08-REQ-014": {
+      "target": "bot-configuration/team-configuration-surfaces",
+      "scenarios": [],
+      "note": "The team-scoped heuristic configuration page listing the team's configured heuristics; its registry-intersection classification (active/stale/registry-only) is authored in registry-defines-availability."
+    },
+    "08-REQ-015": {
+      "target": "bot-configuration/team-configuration-surfaces",
+      "scenarios": [],
+      "note": "Per-Preference editing on the page: active-by-default flag and default weight."
+    },
+    "08-REQ-016": {
+      "target": "bot-configuration/team-configuration-surfaces",
+      "scenarios": [],
+      "note": "Per-Drive editing on the page: default weight, nickname, pinned status and order."
+    },
+    "08-REQ-017": {
+      "target": "bot-configuration/captain-only-team-configuration",
+      "scenarios": ["bot-configuration/team-configuration-surfaces#read-only-below-captain"],
+      "note": "UI-mirror of the defaults gate: mutations routed through the function contract, rejected for non-Captains, rejections surfaced; non-Captain members get the read-only view."
+    },
+    "08-REQ-018": {
+      "target": "bot-configuration/game-start-snapshot",
+      "scenarios": ["bot-configuration/game-start-snapshot#surfaces-say-future-games-only"],
+      "note": "The page communicates that default edits affect future games only. Concrete affordance (banner/tooltip) stays design-level."
+    },
+    "08-REQ-019": {
+      "target": "bot-configuration/team-configuration-surfaces",
+      "scenarios": ["bot-configuration/team-configuration-surfaces#pages-cannot-touch-games"],
+      "note": "Negative: the heuristic configuration page mutates team-scoped defaults only — no per-snake or per-game state."
+    },
+    "08-REQ-020": {
+      "target": "bot-configuration/team-configuration-surfaces",
+      "scenarios": [],
+      "note": "The bot parameters page: displays and edits the bot parameter record (temperature default and the submission-timing parameters)."
+    },
+    "08-REQ-021": {
+      "target": "bot-configuration/captain-only-team-configuration",
+      "scenarios": ["bot-configuration/team-configuration-surfaces#read-only-below-captain"],
+      "note": "UI-mirror of the bot-parameter gate: Captain-only via the function contract, read-only view for other members."
+    },
+    "08-REQ-022": {
+      "target": "bot-configuration/game-start-snapshot",
+      "scenarios": [
+        "bot-configuration/game-start-snapshot#game-scoped-values-fork-from-defaults",
+        "bot-configuration/game-start-snapshot#surfaces-say-future-games-only"
+      ],
+      "note": "Parameters take effect on the next game; at game start they are copied into game-scoped values thereafter independent of the team defaults (08-REVIEW-002 launch-snapshot semantics)."
+    },
+    "08-REQ-023": {
+      "target": "bot-configuration/team-configuration-surfaces",
+      "scenarios": ["bot-configuration/team-configuration-surfaces#no-game-rules-here"],
+      "note": "Negative: no game-rules configuration parameter appears on the bot parameters page."
+    },
+    "08-REQ-052": {
+      "target": "bot-configuration/drive-management-interface",
+      "scenarios": ["bot-configuration/drive-management-interface#pinned-first-ordering"],
+      "note": "The Drive-type chooser with pinned-first-then-lexicographic-by-nickname ordering; its option set is the config∩registry intersection per registry-defines-availability."
+    },
+    "08-REQ-053": {
+      "target": "bot-configuration/drive-management-interface",
+      "scenarios": [
+        "bot-configuration/drive-management-interface#only-eligible-targets-confirmable"
+      ],
+      "note": "Targeting mode per target type: eligibility-predicate-accepted targets highlighted and confirmable, the rest dimmed and inert."
+    },
+    "08-REQ-054": {
+      "target": "bot-configuration/drive-management-interface",
+      "scenarios": [
+        "bot-configuration/drive-management-interface#deterministic-cycling",
+        "bot-configuration/drive-management-interface#cancel-leaves-no-trace"
+      ],
+      "note": "Deterministic nearest-first keyboard cycling through eligible targets; Escape cancels without side effects. The exact three-key sort (A*-distance, clockwise angle, identity tiebreak) is demoted to code with rationale in this change's design.md — the binding residue is determinism and nearest-first."
+    },
+    "08-REQ-055": {
+      "target": "bot-configuration/drive-management-interface",
+      "scenarios": ["bot-configuration/drive-management-interface#single-click-commits"],
+      "note": "Target confirmation adds the Drive at its default weight with no additional confirmation step."
+    },
+    "08-REQ-056": {
+      "target": "bot-configuration/drive-management-interface",
+      "scenarios": [],
+      "note": "Active Drives listed with target and weight, weight-editable and removable, edits effective immediately via the live-editing contract."
+    },
+    "08-REQ-057": {
+      "target": "bot-configuration/per-snake-portfolio-record",
+      "scenarios": [
+        "bot-configuration/per-snake-portfolio-record#temperature-override-survives-deselection"
+      ],
+      "note": "UI-mirror of portfolio persistence: the interface never resets Drives, overrides, or the temperature override on selection changes or turn transitions. dedupe:06-REQ-016."
+    },
+    "08-REQ-058": {
+      "target": "bot-configuration/registry-defines-availability",
+      "scenarios": [
+        "bot-configuration/registry-defines-availability#no-unregistered-drive-affordance"
+      ],
+      "note": "Negative: no affordance to add a Drive outside the configured-and-registered set; registration is a code-level concern, not a runtime UI affordance."
+    }
+  },
+  "reviews": {
+    "06-REVIEW-001": {
+      "scenarios": [
+        "bot-configuration/team-heuristic-defaults#server-replacement-inherits-defaults"
+      ],
+      "note": "Per-team is authoritative (Option A): heuristic defaults are per-CentaurTeam; a replacement server inherits them; the server's build-time registry determines availability only."
+    },
+    "06-REVIEW-005": {
+      "scenarios": [
+        "bot-configuration/per-snake-portfolio-record#temperature-override-survives-deselection"
+      ],
+      "note": "Temperature override persists across turns and deselection, symmetric with Drive and weight overrides (Option A)."
+    },
+    "07-REVIEW-012": {
+      "scenarios": [
+        "bot-configuration/team-bot-parameters#timing-parameters-are-tunable-not-constants"
+      ],
+      "note": "Submission interval and imminent threshold are team-tunable bot parameters (the promotion the legacy 06-REQ-011 text adopted), not framework constants; their consumption semantics stay with the pacing story."
+    },
+    "08-REVIEW-001": {
+      "scenarios": [
+        "bot-configuration/captain-only-team-configuration#non-captain-write-rejected-at-the-function",
+        "bot-configuration/any-member-live-editing#any-member-not-only-captain"
+      ],
+      "note": "The load-bearing authorization split: team-scoped defaults (heuristic defaults, bot parameters) are Captain-only; game-scoped per-snake overrides (Drives, weights, activation, temperature) are editable by any current member. No timekeeper role."
+    },
+    "08-REVIEW-002": {
+      "scenarios": [
+        "bot-configuration/game-start-snapshot#in-progress-game-unaffected",
+        "bot-configuration/game-start-snapshot#game-scoped-values-fork-from-defaults"
+      ],
+      "note": "Launch snapshot: all team-scoped defaults take effect only when game-scoped state is created at game start; running games are unaffected by default edits."
+    },
+    "08-REVIEW-021": {
+      "scenarios": [
+        "bot-configuration/registry-defines-availability#stale-rows-retained-not-deleted",
+        "bot-configuration/registry-sync-insert-only#sync-never-overwrites"
+      ],
+      "note": "Registry drift handling: operable set = config ∩ build-time registry; stale config rows retained, greyed, captain-deletable, never in the in-game dropdown; new registry entries adopted via the insert-only lazy sync on a Captain visit, never overwriting Captain-edited values; the framework never writes heuristic config."
+    }
+  }
+}

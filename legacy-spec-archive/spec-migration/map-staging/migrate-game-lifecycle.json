@@ -1,0 +1,241 @@
+{
+  "requirements": {
+    "02-REQ-003": {
+      "target": "game-lifecycle/instance-per-game",
+      "scenarios": ["game-lifecycle/instance-per-game#no-instance-before-launch"],
+      "note": "Exactly one transient SpacetimeDB instance per started game; unstarted games have none. Dedupe cluster with 02-REQ-019/020/021."
+    },
+    "02-REQ-019": {
+      "target": "game-lifecycle/instance-per-game",
+      "scenarios": ["game-lifecycle/instance-per-game#no-instance-before-launch"],
+      "note": "Convex orchestrates provisioning at the moment of launch and teardown after end (the launch-orchestration and teardown-after-persistence requirements carry the two ends of the bracket)."
+    },
+    "02-REQ-020": {
+      "target": "game-lifecycle/instance-per-game",
+      "scenarios": ["game-lifecycle/instance-per-game#fresh-on-every-path"],
+      "note": "No instance reuse across games; fresh instance on every creation path (first game, successor, competition round) with no special cases."
+    },
+    "02-REQ-021": {
+      "target": "game-lifecycle/instance-per-game",
+      "scenarios": [
+        "game-lifecycle/teardown-after-persistence#no-teardown-before-persistence",
+        "game-lifecycle/teardown-after-persistence#prompt-after-confirmation"
+      ],
+      "note": "Instance lifetime bounded to its game; torn down after the game ends and the record's persistence is confirmed. The parked ledger's walkover/forward-status draft half is carried by status-authority (#walkover-straight-to-finished); the terminal-state term is settled as finished per that draft's note."
+    },
+    "02-REQ-022": {
+      "target": "game-lifecycle/teardown-after-persistence",
+      "scenarios": ["game-lifecycle/teardown-after-persistence#no-teardown-before-persistence"],
+      "note": "Convex obtains and persists the complete game record before teardown; the retrieval pattern was deliberately left open (02-REVIEW-006) and later resolved as bundling into the finish notification (finish-notification). What the record must contain for replay sufficiency is replay-and-audit's."
+    },
+    "02-REQ-022a": {
+      "target": "game-lifecycle/finish-notification",
+      "scenarios": ["game-lifecycle/finish-notification#pushed-never-polled-live"],
+      "note": "Terminal state learned only via a runtime-pushed notification; Convex holds no live gameplay subscription to any instance. Dedupe with 04-REQ-061a and 05-REQ-038."
+    },
+    "02-REQ-051": {
+      "target": "game-lifecycle/successor-auto-creation",
+      "scenarios": [
+        "game-lifecycle/successor-auto-creation#mutable-again",
+        "game-lifecycle/instance-per-game#no-instance-before-launch"
+      ],
+      "note": "Successor auto-created as a new not-started, mutable record inheriting configuration, with no instance provisioned until its own launch; record semantics uniform across competition and non-competition paths. Dedupe with 05-REQ-039."
+    },
+    "03-REQ-048": {
+      "target": "game-lifecycle/launch-orchestration",
+      "scenarios": ["game-lifecycle/launch-orchestration#privileged-operations-are-platform-only"],
+      "note": "Convex authenticates itself for provisioning, initialization, finish-notification registration, retrieval, and teardown; no other party can invoke the privileged instance operations. The concrete self-issued-JWT/management-API mechanism stays in code."
+    },
+    "03-REQ-056": {
+      "target": "game-lifecycle/launch-gates",
+      "scenarios": [
+        "game-lifecycle/launch-gates#refusal-aborts-cleanly",
+        "game-lifecycle/launch-gates#override-seats-the-willing",
+        "game-lifecycle/status-authority#walkover-straight-to-finished"
+      ],
+      "note": "Invitation-refusal branching: non-tournament refusal/timeout aborts (game stays not-started, error names the servers); the tournament arm is authored as an abstract competition-format override with forfeited seats and the walkover below the two-team minimum. Forfeit/walkover SCORING (the 1.0/0/no-contest ladder) is the tournaments story's, per the author routing with 05-REQ-027a."
+    },
+    "04-REQ-013": {
+      "target": "game-lifecycle/instance-initialization",
+      "scenarios": ["game-lifecycle/instance-initialization#initialization-is-once-only"],
+      "note": "Privileged once-only initialization by the authenticated platform orchestration, delivering precomputed starting state, dynamic gameplay parameters, roster snapshot, game identifier, and the always-forwarded root seed. Payload field shapes stay in code."
+    },
+    "04-REQ-014": {
+      "target": "game-lifecycle/instance-initialization",
+      "scenarios": [],
+      "note": "Successful initialization leaves turn 0 fully written (board, snake snapshots, initial items, budgets, identifier, roster available to admission)."
+    },
+    "04-REQ-015": {
+      "target": "game-lifecycle/instance-initialization",
+      "scenarios": ["game-lifecycle/instance-initialization#nothing-before-init"],
+      "note": "Post-initialization the instance is ready for connections, staging, and declarations — the ready-after half of the once-only contract."
+    },
+    "04-REQ-016": {
+      "target": "game-lifecycle/instance-initialization",
+      "scenarios": [
+        "game-lifecycle/instance-initialization#initialization-is-once-only",
+        "game-lifecycle/instance-initialization#nothing-before-init"
+      ],
+      "note": "Re-initialization rejected; pre-init gameplay operations rejected; pre-init clients disconnected; no clock runs before initialization completes."
+    },
+    "04-REQ-017": {
+      "target": "game-lifecycle/instance-initialization",
+      "scenarios": ["game-lifecycle/instance-initialization#malformed-payload-rejected"],
+      "note": "The runtime never generates a board (that half is carried by game-configuration/generation-parameter-boundary); it validates the delivered payload's structural integrity and rejects malformed payloads synchronously. Infeasibility surfacing to the configuring user is game-configuration/infeasibility-surfaced."
+    },
+    "04-REQ-060": {
+      "target": "game-lifecycle/game-end-boundary",
+      "scenarios": [
+        "game-lifecycle/game-end-boundary#zero-grace-window",
+        "game-lifecycle/game-end-boundary#no-turns-after-end"
+      ],
+      "note": "Game ends at the commit of the end-detecting turn; all later gameplay operations rejected as game-over with zero grace window (commit-boundary language from 04-REVIEW-006)."
+    },
+    "04-REQ-061a": {
+      "target": "game-lifecycle/finish-notification",
+      "scenarios": ["game-lifecycle/finish-notification#pushed-never-polled-live"],
+      "note": "Runtime notifies Convex via the callback registered at initialization, presenting the pre-signed callback credential and carrying the outcome with the bundled complete record. Dedupe with 02-REQ-022a and 05-REQ-038; the bundled replay data's shape (incl. null on error outcomes) is replay-and-audit's."
+    },
+    "04-REQ-063": {
+      "target": "game-lifecycle/teardown-after-persistence",
+      "scenarios": [
+        "game-lifecycle/teardown-after-persistence#no-teardown-before-persistence",
+        "game-lifecycle/teardown-after-persistence#no-self-teardown"
+      ],
+      "note": "The instance stays available and discards nothing unread until persistence is confirmed; teardown is exclusively Convex's act — the instance has no self-teardown capability."
+    },
+    "04-REQ-072": {
+      "target": "game-lifecycle/host-warm-up",
+      "scenarios": ["game-lifecycle/host-warm-up#warm-signal-is-idempotent"],
+      "note": "The SpacetimeDB host's warm-up signal: suspended-to-ready within ten seconds, provisions nothing, mutates nothing, light auth permitted, success no-op when already warm. Distinct from any Snek Centaur Server warm-up. Hosting target and scale-to-zero mechanics stay in code."
+    },
+    "05-REQ-027": {
+      "target": "game-lifecycle/game-record",
+      "scenarios": ["game-lifecycle/game-record#record-outlives-the-instance"],
+      "note": "Persistent record per game: configuration, status, instance reference, playing/finished timestamps, outcome at finish, and unseated-teams history. The room reference is the downstream matchmaking story's vocabulary; the tournament forfeit set's scoring semantics are tournaments' (05-REQ-027a)."
+    },
+    "05-REQ-028": {
+      "target": "game-lifecycle/status-authority",
+      "scenarios": [
+        "game-lifecycle/status-authority#no-backward-motion",
+        "game-lifecycle/status-authority#walkover-straight-to-finished",
+        "game-lifecycle/status-authority#aborted-launch-was-never-playing"
+      ],
+      "note": "Convex sole status authority; closed set not-started/playing/finished; exactly three forward transitions incl. the walkover. The legacy healthcheck-rollback exception is re-expressed without backward motion: an aborted launch never committed playing (see the change's design.md)."
+    },
+    "05-REQ-029": {
+      "target": "game-lifecycle/roster-snapshot",
+      "scenarios": ["game-lifecycle/roster-snapshot#snapshot-survives-later-edits"],
+      "note": "Per-game append-only participating-teams/member snapshot, seeding instance admission through the initialization payload. Captured at initialization (legacy creation-time wording reconciled — see design.md); the authorization-binding half is identity-and-authorization/roster-snapshot-binding (03-REQ-039)."
+    },
+    "05-REQ-032": {
+      "target": "game-lifecycle/launch-orchestration",
+      "scenarios": [
+        "game-lifecycle/launch-orchestration#invitations-resolve-before-init",
+        "game-lifecycle/launch-orchestration#generation-failure-provisions-nothing"
+      ],
+      "note": "Seven-step start orchestration re-authored as ordering constraints (freeze, starting state per the preview lock, provision, invitations resolve, restricted init, playing). Step mechanics, endpoints, and payload shapes stay in code; the walkover branch is status-authority/launch-gates; the invitation window's value lives on team-server-management/game-invitations."
+    },
+    "05-REQ-032a": {
+      "target": "game-lifecycle/finish-notification",
+      "scenarios": ["game-lifecycle/finish-notification#forged-callback-refused"],
+      "note": "Orchestration authenticated (with 03-REQ-048); callback registration is the address plus the platform-pre-signed credential delivered at initialization, validated statelessly on receipt and never persisted by Convex."
+    },
+    "05-REQ-033": {
+      "target": "game-lifecycle/no-orphans",
+      "scenarios": [
+        "game-lifecycle/no-orphans#record-always-first",
+        "game-lifecycle/no-orphans#post-provisioning-failure-cleans-up"
+      ],
+      "note": "The orphan invariant of the provision bracket: no instance before its record, no record without an intended instance, and post-provisioning launch failure tears the instance down."
+    },
+    "05-REQ-036": {
+      "target": "game-lifecycle/launch-gates",
+      "scenarios": [
+        "game-lifecycle/launch-gates#unhealthy-server-blocks-manual-start",
+        "game-lifecycle/launch-gates#override-seats-the-willing"
+      ],
+      "note": "Start-time healthcheck branching: manual starts blocked while any participating server is unhealthy (failing teams identified); schedule-bound competition starts ignore health — the team plays if its server accepts in time. The healthcheck endpoint/recording contract is team-server-management/server-healthcheck."
+    },
+    "05-REQ-037": {
+      "target": "game-lifecycle/teardown-after-persistence",
+      "scenarios": ["game-lifecycle/teardown-after-persistence#prompt-after-confirmation"],
+      "note": "Teardown immediately after confirmed persistence, within the same terminal handling, under the platform's authority."
+    },
+    "05-REQ-038": {
+      "target": "game-lifecycle/finish-notification",
+      "scenarios": [
+        "game-lifecycle/finish-notification#forged-callback-refused",
+        "game-lifecycle/finish-notification#error-outcome-still-finishes"
+      ],
+      "note": "On receipt of the validated notification: record outcome, persist the record, transition to finished, tear down — with error outcomes still finishing and tearing down, without scores. Dedupe with 02-REQ-022a and 04-REQ-061a; replay-content semantics are replay-and-audit's."
+    },
+    "05-REQ-039": {
+      "target": "game-lifecycle/successor-auto-creation",
+      "scenarios": [
+        "game-lifecycle/successor-auto-creation#atomic-with-currency",
+        "game-lifecycle/successor-auto-creation#no-preview-carried"
+      ],
+      "note": "Non-tournament finish auto-creates the successor: not-started, configuration copied, no preview carried (lock clear), atomic with its installation as the current game. Dedupe with 02-REQ-051. The cleared ready flags are the downstream matchmaking story's (05-REVIEW-007)."
+    },
+    "05-REQ-074": {
+      "target": "game-lifecycle/host-warm-up",
+      "scenarios": [
+        "game-lifecycle/host-warm-up#warm-up-never-blocks-creation",
+        "game-lifecycle/host-warm-up#cold-start-fallback"
+      ],
+      "note": "Best-effort warm-up dispatch on every game-record-creation path, decoupled from the creation transaction: never blocks or rolls back, at most one retry, not surfaced; launch bears the cold start when no warm-up succeeded."
+    },
+    "06-REQ-042": {
+      "target": "game-lifecycle/fresh-game-state",
+      "scenarios": ["game-lifecycle/fresh-game-state#successor-inherits-config-not-state"],
+      "note": "Re-authored generically per the author decision: a fresh game begins with no pre-existing per-game platform state of any kind (the legacy text's enumeration of Centaur-state concepts is downstream vocabulary and deliberately not carried)."
+    }
+  },
+  "reviews": {
+    "02-REVIEW-003": {
+      "scenarios": [
+        "game-lifecycle/instance-per-game#no-instance-before-launch",
+        "game-lifecycle/instance-per-game#fresh-on-every-path"
+      ],
+      "note": "Provisioning is tied to game start, not record creation: auto-created successors are unstarted, instance-less, and get a fresh instance only at their own launch — uniform across every creation path."
+    },
+    "02-REVIEW-006": {
+      "scenarios": ["game-lifecycle/teardown-after-persistence#no-teardown-before-persistence"],
+      "note": "The retrieval pattern was deliberately left open at the architectural level; the invariant kept is persistence-before-teardown. Later resolved concretely as bundling into the finish notification (05-REVIEW-015), reflected in finish-notification."
+    },
+    "02-REVIEW-008": {
+      "scenarios": ["game-lifecycle/status-authority#walkover-straight-to-finished"],
+      "note": "The lifecycle has a second path out of not-started: an override-governed launch seating fewer than the minimum walks straight to finished without entering playing, with any provisioned instance torn down and the initialization roster restricted to accepting teams on the proceeding path."
+    },
+    "04-REVIEW-006": {
+      "scenarios": ["game-lifecycle/game-end-boundary#zero-grace-window"],
+      "note": "Option A: game-end rejection begins at the commit of the end-detecting turn; in-flight operations arriving after the commit are rejected as game-over — no grace window between commit and enforcement."
+    },
+    "05-REVIEW-009": {
+      "scenarios": [
+        "game-lifecycle/launch-gates#unhealthy-server-blocks-manual-start",
+        "game-lifecycle/launch-gates#override-seats-the-willing"
+      ],
+      "note": "Differentiated healthcheck behaviour at start: manual games blocked (with the failing teams identified) until all servers pass; schedule-bound competition starts ignore health, and a team whose server is not running in time is simply absent."
+    },
+    "05-REVIEW-013": {
+      "scenarios": ["team-server-management/game-invitations#bounded-concurrent-delivery"],
+      "note": "The invitation response window lives on the invitation contract (team-server-management), which this capability cites without restating a number. NOTE: this review decided ten seconds while the sibling change authored thirty (from the module-03 Design) — flagged as this change's Open Question 1; finalize this note with the human resolution."
+    },
+    "05-REVIEW-015": {
+      "scenarios": [
+        "game-lifecycle/finish-notification#forged-callback-refused",
+        "game-lifecycle/teardown-after-persistence#prompt-after-confirmation"
+      ],
+      "note": "Callback credential validated statelessly (self-contained proof, never persisted, no stored-copy comparison) and the complete record bundled into the finish notification, enabling immediate teardown within the same terminal handling."
+    },
+    "05-REVIEW-019": {
+      "scenarios": [
+        "game-lifecycle/host-warm-up#warm-up-never-blocks-creation",
+        "game-lifecycle/host-warm-up#cold-start-fallback"
+      ],
+      "note": "Scale-to-zero host with warm-up dispatched on game-configuration creation to amortise the cold start off the launch path; best-effort, with the launch-time cold start remaining a handled fallback. Hosting target named only in legacy design text — stays out of the spec."
+    }
+  }
+}

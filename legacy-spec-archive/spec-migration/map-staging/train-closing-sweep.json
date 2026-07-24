@@ -1,0 +1,42 @@
+{
+  "_comment": "Closing-sweep tombstones: mechanism/drop ids with no capability owner. Entries land in the identifier map at the archive of the change that flips each module's cutover row; 'change' attribution finalized then.",
+  "requirements": {
+    "04-REQ-001": {
+      "note": "dropped: module-boundary meta obsoleted by capability carving"
+    },
+    "04-REQ-038": {
+      "note": "mechanism: resolution step sequence; behaviour at turn-pacing/exactly-once-resolution, steps in code (migrate-turn-pacing design.md)"
+    },
+    "04-REQ-046": {
+      "note": "dropped: subsumed by the closed event enumeration at replay-and-audit/turn-event-record"
+    },
+    "05-REQ-001": {
+      "note": "mechanism: component/schema ownership partition; cross-runtime rule at global-invariants/state-confined-to-owning-runtime"
+    },
+    "05-REQ-003": {
+      "note": "mechanism: schema co-residence without collisions; code concern"
+    },
+    "05-REQ-073": {
+      "note": "mechanism: WASM artifact storage and upload pipeline; rationale in migrate-game-lifecycle design.md"
+    },
+    "06-REQ-004": {
+      "note": "mechanism: team/game-scoped state partition; intent carried by bot-configuration persistence and replay-and-audit retention requirements"
+    },
+    "06-REQ-030": {
+      "note": "mechanism: function-contract-only mutations; invariant carried by global-invariants/transactional-invariant-enforcement and identity-and-authorization/mutation-authorization"
+    },
+    "06-REQ-043": {
+      "note": "mechanism: server subscription transport; reactive behaviour at bot-framework/reactive-inputs"
+    },
+    "08-REQ-003": {
+      "note": "mechanism: client connection wiring; topology behaviour at operator-control/operator-dual-connection"
+    },
+    "08-REQ-010": {
+      "note": "mechanism: navigation shell; destinations covered per capability"
+    },
+    "08-REQ-049": {
+      "note": "dropped: documented MVP deferral of worst-case annotations (08-REVIEW-023); substrate excised"
+    }
+  },
+  "reviews": {}
+}

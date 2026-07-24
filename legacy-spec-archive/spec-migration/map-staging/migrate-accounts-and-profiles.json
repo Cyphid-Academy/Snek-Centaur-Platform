@@ -1,0 +1,161 @@
+{
+  "requirements": {
+    "05-REQ-004": {
+      "target": "accounts-and-profiles/user-record",
+      "scenarios": ["accounts-and-profiles/user-record#created-at-first-sign-in"],
+      "note": "Persistent user record per human identity that has signed in, capturing at minimum canonical email, display name, and first-authentication timestamp. Identity semantics (email canonical) are cited from identity-and-authorization/email-as-canonical-identity, not restated."
+    },
+    "05-REQ-005": {
+      "target": "accounts-and-profiles/user-record",
+      "scenarios": [
+        "accounts-and-profiles/user-record#created-at-first-sign-in",
+        "accounts-and-profiles/user-record#record-follows-the-fork"
+      ],
+      "note": "Record created at the moment of first successful sign-in; canonical email immutable on the record; a provider-side email change is a new identity with a fresh record. Fork semantics owned by identity-and-authorization/email-as-canonical-identity#email-fork-keeps-history (dedupe cluster with retired 03-REQ-008); this capability carries only the record-side consequence."
+    },
+    "05-REQ-007": {
+      "target": "accounts-and-profiles/user-record-permanence",
+      "scenarios": [
+        "accounts-and-profiles/user-record-permanence#lost-account-deletes-nothing",
+        "accounts-and-profiles/user-record-permanence#never-merged"
+      ],
+      "note": "User records never deleted (including on loss of Google-account access) and never merged across distinct canonical emails; historical attribution stays anchored to the original record. The attribution-preservation half of retired 03-REQ-047 lives with replay-and-audit."
+    },
+    "08-REQ-010a": {
+      "target": "accounts-and-profiles/home-view",
+      "scenarios": [
+        "accounts-and-profiles/home-view#live-participation-surfaces",
+        "accounts-and-profiles/home-view#home-links-onward"
+      ],
+      "note": "Authenticated home view: current team memberships, recently visited rooms, and games currently being played involving the user's teams, each linking to its detailed view. Room and game-status semantics stay with their owning capabilities; the home view is a hub of links."
+    },
+    "08-REQ-023a": {
+      "target": "accounts-and-profiles/teams-browser",
+      "scenarios": [
+        "accounts-and-profiles/teams-browser#entry-opens-the-profile",
+        "accounts-and-profiles/teams-browser#archived-hidden-not-gone"
+      ],
+      "note": "Teams browser listing teams (name, colour, captain) with entries linking to team profiles. The legacy 'all Centaur Teams' yields to the later archive semantics: the default listing hides archived teams per team-management/archive-not-delete while their profiles stay reachable."
+    },
+    "08-REQ-090": {
+      "target": "accounts-and-profiles/player-profile",
+      "scenarios": [
+        "accounts-and-profiles/player-profile#every-user-has-one",
+        "accounts-and-profiles/no-public-surface#unauthenticated-visitors-see-nothing"
+      ],
+      "note": "Player Profile for every user record — own profile via global navigation, others linked at minimum from member listings and game histories. The authenticated-only half (08-REVIEW-016) is authored once in accounts-and-profiles/no-public-surface."
+    },
+    "08-REQ-091": {
+      "target": "accounts-and-profiles/player-profile",
+      "scenarios": [
+        "accounts-and-profiles/player-profile#history-outlives-membership",
+        "accounts-and-profiles/email-confidentiality#hidden-even-from-self-view"
+      ],
+      "note": "Profile contents: display name, current and historical memberships, chronological game history under the historical-or-current membership rule (cited from replay-and-audit/team-game-history) — and never an email, even on self-view (the email half is owned by accounts-and-profiles/email-confidentiality)."
+    },
+    "08-REQ-091a": {
+      "target": "accounts-and-profiles/email-confidentiality",
+      "scenarios": [
+        "accounts-and-profiles/email-confidentiality#hidden-even-from-self-view",
+        "accounts-and-profiles/email-confidentiality#omitted-at-the-boundary",
+        "accounts-and-profiles/email-confidentiality#participation-snapshots-are-email-free"
+      ],
+      "note": "No user-facing query, view, or exported shape exposes any user's email to anyone, the user themselves included; email stored solely for identity matching and administrative operations. The legacy downstream constraint on the platform query layer is authored as behaviour here: shapes omit email at the data-contract boundary, and participation snapshots store none (constraint-mining promotion of the legacy design's projection and email-free-rosterSnapshot notes)."
+    },
+    "08-REQ-092": {
+      "target": "accounts-and-profiles/aggregate-statistics",
+      "scenarios": ["accounts-and-profiles/aggregate-statistics#consistent-with-the-listing"],
+      "note": "Player aggregate statistics (games played, win rate, average team score at minimum) computed from exactly the data populating the game-history listing, hence consistent with it."
+    },
+    "08-REQ-093": {
+      "target": "accounts-and-profiles/snapshot-attribution",
+      "scenarios": [
+        "accounts-and-profiles/snapshot-attribution#team-of-the-day",
+        "accounts-and-profiles/snapshot-attribution#roster-changes-rewrite-nothing"
+      ],
+      "note": "Player-profile historical attribution resolves via participating-team snapshots, never current records — a historical game shows the team of the day even after team changes or archiving."
+    },
+    "08-REQ-094": {
+      "target": "accounts-and-profiles/team-profile",
+      "scenarios": [
+        "accounts-and-profiles/team-profile#archived-teams-keep-their-profile",
+        "accounts-and-profiles/no-public-surface#unauthenticated-visitors-see-nothing",
+        "accounts-and-profiles/no-public-surface#authenticated-users-face-no-further-gate"
+      ],
+      "note": "Team Profile for every Centaur Team (archived included), visible to every authenticated user; the authenticated-only half (08-REVIEW-016) is authored once in accounts-and-profiles/no-public-surface."
+    },
+    "08-REQ-094a": {
+      "target": "accounts-and-profiles/leaderboard",
+      "scenarios": ["accounts-and-profiles/leaderboard#closed-sets-only"],
+      "note": "Global leaderboard ranking teams by one of a closed criteria set: at minimum win rate (with a minimum-games qualifying threshold), total wins, and average score — authored as average normalised score, the cross-game comparable form (decision in the change's design.md)."
+    },
+    "08-REQ-094b": {
+      "target": "accounts-and-profiles/leaderboard",
+      "scenarios": ["accounts-and-profiles/leaderboard#closed-sets-only"],
+      "note": "Criterion switching plus time-window filtering from a closed set (at minimum all time, last 30 days, last 7 days)."
+    },
+    "08-REQ-094c": {
+      "target": "accounts-and-profiles/leaderboard",
+      "scenarios": ["accounts-and-profiles/leaderboard#room-scoped-ranking"],
+      "note": "Optional restriction of the ranking to games played within a single room; the ranking then considers only that subset."
+    },
+    "08-REQ-094d": {
+      "target": "accounts-and-profiles/leaderboard",
+      "scenarios": [],
+      "note": "Each ranked entry links to that team's Team Profile view; carried in the leaderboard requirement's body."
+    },
+    "08-REQ-094e": {
+      "target": "accounts-and-profiles/leaderboard",
+      "scenarios": [
+        "accounts-and-profiles/leaderboard#archived-teams-still-ranked",
+        "accounts-and-profiles/snapshot-attribution#head-to-head-archive-stable"
+      ],
+      "note": "Archived teams remain in the default leaderboard under their archived identity; rankings resolve via participating-team snapshots and archiving never rewrites competitive history (08-REVIEW-017; archive semantics cited from team-management/archive-not-delete)."
+    },
+    "08-REQ-094f": {
+      "target": "accounts-and-profiles/no-public-surface",
+      "scenarios": ["accounts-and-profiles/no-public-surface#unauthenticated-visitors-see-nothing"],
+      "note": "Leaderboard exposes nothing to unauthenticated visitors; folded into the single authenticated-only surface rule (08-REVIEW-016), citing identity-and-authorization/authentication-required."
+    },
+    "08-REQ-095": {
+      "target": "accounts-and-profiles/team-profile",
+      "scenarios": ["accounts-and-profiles/team-profile#full-history-for-any-viewer"],
+      "note": "Team Profile contents: name, colour, captain, current members, server nomination with latest health status (record substance cited from team-management/team-record), and the team's full chronological game history visible to any authenticated user (consistent with replay-and-audit/finished-games-public)."
+    },
+    "08-REQ-096": {
+      "target": "accounts-and-profiles/aggregate-statistics",
+      "scenarios": [
+        "accounts-and-profiles/aggregate-statistics#consistent-with-the-listing",
+        "accounts-and-profiles/aggregate-statistics#head-to-head-covers-every-opponent"
+      ],
+      "note": "Team aggregate statistics: games played, win rate, average score, and a head-to-head record against every team ever played, derived from the same data as the history listing."
+    },
+    "08-REQ-097": {
+      "target": "accounts-and-profiles/snapshot-attribution",
+      "scenarios": ["accounts-and-profiles/snapshot-attribution#head-to-head-archive-stable"],
+      "note": "Head-to-head opponent attribution resolves via participating-team snapshots and is stable under opponent archiving (08-REVIEW-017)."
+    },
+    "08-REQ-098": {
+      "target": "accounts-and-profiles/team-profile",
+      "scenarios": ["accounts-and-profiles/team-profile#strictly-informational"],
+      "note": "UI mirror folded as a scenario: the Team Profile exposes no mutating affordance over team state; mutation authority lives with team-management (the profile at most links onward to team-management/team-management-view)."
+    }
+  },
+  "reviews": {
+    "08-REVIEW-016": {
+      "scenarios": [
+        "accounts-and-profiles/no-public-surface#unauthenticated-visitors-see-nothing",
+        "accounts-and-profiles/email-confidentiality#hidden-even-from-self-view",
+        "accounts-and-profiles/email-confidentiality#omitted-at-the-boundary"
+      ],
+      "note": "Profiles and leaderboard are authenticated-only ('public' means any authenticated user, never the internet), and emails are never exposed by any user-facing query — not even to the user on their own profile; email stays stored solely for identity matching and administrative operations."
+    },
+    "08-REVIEW-017": {
+      "scenarios": [
+        "accounts-and-profiles/leaderboard#archived-teams-still-ranked",
+        "accounts-and-profiles/snapshot-attribution#head-to-head-archive-stable"
+      ],
+      "note": "Deletion is not a thing on this platform: archived teams persist in the default leaderboard under their archived identity, and archiving never rewrites history, statistics, or rankings (upstream resolution carried by team-management/archive-not-delete)."
+    }
+  }
+}

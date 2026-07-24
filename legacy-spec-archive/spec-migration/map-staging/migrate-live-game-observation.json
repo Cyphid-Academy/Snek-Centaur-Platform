@@ -1,0 +1,285 @@
+{
+  "requirements": {
+    "02-REQ-009": {
+      "target": "live-game-observation/real-time-committed-delivery",
+      "scenarios": ["live-game-observation/real-time-committed-delivery#no-polling"],
+      "note": "Real-time committed-state sync without per-turn polling — dedupe with 04-REQ-053 into one delivery requirement; graduated from the module-02 parked ledger."
+    },
+    "02-REQ-010": {
+      "target": "live-game-observation/invisibility-filtering",
+      "scenarios": [
+        "live-game-observation/invisibility-filtering#spectators-are-opponents-of-every-team",
+        "live-game-observation/filtered-views-are-the-only-surface#raw-protocol-client-gets-filtered-data"
+      ],
+      "note": "Invisibility filtered at the data layer, keyed on the querying connection's team; the data-layer-enforcement principle half was already covered by global-invariants/security-enforced-outside-the-library — what retires here is the invisibility feature's own visibility semantics. Graduated from the module-02 parked ledger."
+    },
+    "02-REQ-041": {
+      "target": "live-game-observation/spectator-access",
+      "scenarios": [
+        "live-game-observation/spectator-access#entry-obtains-a-token",
+        "live-game-observation/spectator-live-experience#zero-mutating-affordances"
+      ],
+      "note": "Spectators connect read-only under a spectator access token, filtered as opponents of every team (02-REVIEW-007). Transport binding (WebSocket) is mechanism — the authored behaviour is transport-neutral. Graduates out of the parked ledger's operator-control 'Client connection topology' entry; 02-REQ-038/039/040 remain parked."
+    },
+    "03-REQ-031": {
+      "target": "live-game-observation/invisibility-filtering",
+      "scenarios": [
+        "live-game-observation/invisibility-filtering#spectators-are-opponents-of-every-team"
+      ],
+      "note": "Every admitted connection subject to the invisibility filter; spectators filtered on opponent terms — dedupe with 02-REQ-010 and 04-REQ-047 into the single filtering requirement."
+    },
+    "04-REQ-037": {
+      "target": "live-game-observation/real-time-committed-delivery",
+      "scenarios": [
+        "live-game-observation/real-time-committed-delivery#no-partial-resolution-state"
+      ],
+      "note": "Turn resolution as a single atomic transaction with no observable intermediate state — dedupe with 04-REQ-056/067 into one atomic-delivery requirement."
+    },
+    "04-REQ-047": {
+      "target": "live-game-observation/invisibility-filtering",
+      "scenarios": ["live-game-observation/invisibility-filtering#board-effects-stay-observable"],
+      "note": "Data-layer filtering of invisible opponent snake state; spectators and opponents filtered equally; board effects stay observable. Dedupe with 02-REQ-010 and 03-REQ-031."
+    },
+    "04-REQ-048": {
+      "target": "live-game-observation/visibility-transitions-and-history",
+      "scenarios": [
+        "live-game-observation/visibility-transitions-and-history#history-scrub-cannot-reveal"
+      ],
+      "note": "Filtering applies to historical queries — scrubbing cannot recover an invisible-at-that-turn opponent snake."
+    },
+    "04-REQ-049": {
+      "target": "live-game-observation/invisibility-filtering",
+      "scenarios": ["live-game-observation/invisibility-filtering#board-effects-stay-observable"],
+      "note": "Only the snake's own state record is hidden; items consumed and turn events remain visible to all observers, with no tracking of whether the causer was visible."
+    },
+    "04-REQ-050": {
+      "target": "live-game-observation/invisibility-filtering",
+      "scenarios": ["live-game-observation/invisibility-filtering#ally-sees-visible-false"],
+      "note": "Allied connections observe the invisible snake normally with visibility false exposed so the client can indicate it."
+    },
+    "04-REQ-051": {
+      "target": "live-game-observation/visibility-transitions-and-history",
+      "scenarios": [
+        "live-game-observation/visibility-transitions-and-history#vanishes-and-reappears-at-boundaries"
+      ],
+      "note": "Visibility-filter transitions happen exactly at turn boundaries, in both directions."
+    },
+    "04-REQ-052": {
+      "target": "live-game-observation/filtered-views-are-the-only-surface",
+      "scenarios": [
+        "live-game-observation/filtered-views-are-the-only-surface#raw-protocol-client-gets-filtered-data"
+      ],
+      "note": "SPLIT, retired here as the matrix's owning row: the no-client-side-filtering / no-cooperating-client half is authored here; the staged-move read policy (own-team-only) is operator-control's substance; attribution-metadata blocking is identity-and-authorization/admission-records-private."
+    },
+    "04-REQ-053": {
+      "target": "live-game-observation/real-time-committed-delivery",
+      "scenarios": ["live-game-observation/real-time-committed-delivery#no-polling"],
+      "note": "Incremental subscription delivery as turns commit, no polling — dedupe with 02-REQ-009."
+    },
+    "04-REQ-054": {
+      "target": "live-game-observation/observation-use-cases",
+      "scenarios": ["live-game-observation/observation-use-cases#mid-game-join"],
+      "note": "The four supported observation patterns: live current-turn view, historical scrubbing, turn-transition animation, full-game mid-join catch-up."
+    },
+    "04-REQ-055": {
+      "target": "live-game-observation/invisibility-filtering",
+      "scenarios": [],
+      "note": "Subscription deliveries filtered on the same terms as direct queries — folded into the filtering requirement's 'deliveries and query results' wording."
+    },
+    "04-REQ-056": {
+      "target": "live-game-observation/real-time-committed-delivery",
+      "scenarios": [
+        "live-game-observation/real-time-committed-delivery#snapshot-and-events-arrive-together"
+      ],
+      "note": "A turn's commit delivered as a single logical update — dedupe with 04-REQ-037/067."
+    },
+    "04-REQ-057": {
+      "target": "live-game-observation/historical-reconstruction",
+      "scenarios": [
+        "live-game-observation/historical-reconstruction#reconstruction-respects-visibility"
+      ],
+      "note": "Any completed turn reconstructible from the query surface within authorized visibility: snakes, items, budgets, full event list."
+    },
+    "04-REQ-058": {
+      "target": "live-game-observation/historical-reconstruction",
+      "scenarios": ["live-game-observation/historical-reconstruction#no-rules-re-execution"],
+      "note": "Reconstruction requires no re-execution of game-rule logic; per-turn state directly readable as committed."
+    },
+    "04-REQ-067": {
+      "target": "live-game-observation/real-time-committed-delivery",
+      "scenarios": [
+        "live-game-observation/real-time-committed-delivery#no-partial-resolution-state"
+      ],
+      "note": "No pre-commit delivery to subscribers — dedupe with 04-REQ-037/056."
+    },
+    "04-REQ-071": {
+      "target": "live-game-observation/scoreboard-sole-aggregate-authority",
+      "scenarios": [
+        "live-game-observation/scoreboard-sole-aggregate-authority#invisible-snakes-counted-not-revealed",
+        "live-game-observation/scoreboard-sole-aggregate-authority#eliminated-teams-zero-filled",
+        "live-game-observation/scoreboard-sole-aggregate-authority#client-aggregation-is-a-defect"
+      ],
+      "note": "Per-turn scoreboard rows for every rostered team, zero-filled, computed over the true alive set including invisible snakes, identical for all connections, the sole aggregate channel. Same-transaction write constraint-mined into #never-lags-the-snapshot."
+    },
+    "05-REQ-067": {
+      "target": "live-game-observation/team-private-live-state",
+      "scenarios": ["live-game-observation/team-private-live-state#coach-parity-with-members"],
+      "note": "Retired here as the matrix's owning row, authored abstractly as 'team-private live state' (the legacy enumeration of bot-side state kinds is outside this capability's dependency ceiling). Coach designation/storage half is team-management's (05-REQ-068a); coach admission terms are identity-and-authorization/coach-tokens; read-only standing is identity-and-authorization/role-bound-privileges."
+    },
+    "05-REQ-068b": {
+      "target": "live-game-observation/team-private-live-state",
+      "scenarios": [
+        "live-game-observation/team-private-live-state#finished-games-owe-coaches-nothing"
+      ],
+      "note": "Coach access confers nothing for finished games beyond what every authenticated user has — the role is meaningful only at the live boundary."
+    },
+    "06-REQ-032": {
+      "target": "live-game-observation/team-private-live-state",
+      "scenarios": ["live-game-observation/team-private-live-state#cross-team-reads-denied"],
+      "note": "SPLIT, retired here as the matrix's owning row: the live read-scoping substance (team members, coaches, admins only; never cross-team) is authored here; the finished-game/replay read half is replay-and-audit's; the team-configuration access half is bot-configuration's. Cross-team denial per 06-REVIEW-002."
+    },
+    "08-REQ-027l": {
+      "target": "live-game-observation/spectator-access",
+      "scenarios": ["live-game-observation/spectator-access#reachable-from-the-lobby"],
+      "note": "Room lobby links to the spectating view of its playing game."
+    },
+    "08-REQ-038": {
+      "target": "live-game-observation/ui-honours-the-filter",
+      "scenarios": ["live-game-observation/ui-honours-the-filter#own-team-indication-only"],
+      "note": "Invisibility rendered own-team-only, never revealing other teams' invisibility states. The effect-outline styling (blue/red outlines, shimmer treatment) is presentation mechanism and stays in code."
+    },
+    "08-REQ-052a": {
+      "target": "live-game-observation/coach-mode-interface",
+      "scenarios": ["live-game-observation/coach-mode-interface#every-mutating-affordance-inert"],
+      "note": "Coach mode renders the full live interface read-only, reachable from where the live game is surfaced (including the spectating view)."
+    },
+    "08-REQ-052b": {
+      "target": "live-game-observation/coach-mode-interface",
+      "scenarios": ["live-game-observation/coach-mode-interface#every-mutating-affordance-inert"],
+      "note": "Coach mode exposes no affordance that writes on behalf of the coached team — controls hidden or visibly disabled."
+    },
+    "08-REQ-052c": {
+      "target": "live-game-observation/coach-mode-interface",
+      "scenarios": ["live-game-observation/coach-mode-interface#inspection-is-client-local"],
+      "note": "Coach inspection is client-local: no writes, no selection shadow, no displacement, at most one inspected snake per coach client, coexisting with operators' real selection shadows."
+    },
+    "08-REQ-052d": {
+      "target": "live-game-observation/coach-mode-interface",
+      "scenarios": [
+        "live-game-observation/coach-mode-interface#inspection-never-reads-as-selection"
+      ],
+      "note": "Coach inspection visually and gesturally distinct from operator selection."
+    },
+    "08-REQ-080": {
+      "target": "live-game-observation/spectator-access",
+      "scenarios": ["live-game-observation/spectator-access#eligibility-deliberately-open"],
+      "note": "Spectating available for any playing game to every authenticated user, without team membership."
+    },
+    "08-REQ-081": {
+      "target": "live-game-observation/spectator-access",
+      "scenarios": ["live-game-observation/spectator-access#entry-obtains-a-token"],
+      "note": "Entry obtains a spectator access token via the platform's issuance path and connects under it (identity-and-authorization/spectator-tokens owns issuance)."
+    },
+    "08-REQ-082": {
+      "target": "live-game-observation/spectator-live-experience",
+      "scenarios": [],
+      "note": "The spectating view subscribes to the live current-state pattern and renders board, items, observable snakes, and events in real time."
+    },
+    "08-REQ-083": {
+      "target": "live-game-observation/ui-honours-the-filter",
+      "scenarios": ["live-game-observation/ui-honours-the-filter#never-infers-hidden-state"],
+      "note": "The UI honours the server-side filter and never infers or reconstructs invisible-snake state from any channel."
+    },
+    "08-REQ-084": {
+      "target": "live-game-observation/scoreboard-sole-aggregate-authority",
+      "scenarios": [
+        "live-game-observation/scoreboard-sole-aggregate-authority#invisible-snakes-counted-not-revealed"
+      ],
+      "note": "Scoreboard sourced exclusively from the server aggregate channel, rendered exactly as delivered — dedupe with 08-REQ-084b and 04-REQ-071 (08-REVIEW-018 posture)."
+    },
+    "08-REQ-084b": {
+      "target": "live-game-observation/scoreboard-sole-aggregate-authority",
+      "scenarios": [
+        "live-game-observation/scoreboard-sole-aggregate-authority#client-aggregation-is-a-defect"
+      ],
+      "note": "Never compute team-level aggregates client-side from per-snake data — folded into the sole-aggregate-authority requirement."
+    },
+    "08-REQ-085": {
+      "target": "live-game-observation/spectator-live-experience",
+      "scenarios": [
+        "live-game-observation/spectator-live-experience#pacing-legible-without-private-state"
+      ],
+      "note": "Spectating displays current turn number and, per team, remaining budget and declared-turn-over status."
+    },
+    "08-REQ-086": {
+      "target": "live-game-observation/spectator-live-experience",
+      "scenarios": ["live-game-observation/spectator-live-experience#zero-mutating-affordances"],
+      "note": "Spectating exposes zero mutating affordances — structural read-only, matching the token's terms."
+    },
+    "08-REQ-087": {
+      "target": "live-game-observation/spectator-timeline",
+      "scenarios": ["live-game-observation/spectator-timeline#upfront-history-no-lazy-fetch"],
+      "note": "Timeline scrubber over all completed turns; up-front full-history subscription on entry per 08-REVIEW-019; scrubbing never interrupts the live subscription."
+    },
+    "08-REQ-088": {
+      "target": "live-game-observation/spectator-timeline",
+      "scenarios": ["live-game-observation/spectator-timeline#scrub-while-live-continues"],
+      "note": "Scrubbed view visibly not-live with a one-action return to the live head."
+    },
+    "08-REQ-089": {
+      "target": "live-game-observation/spectator-access",
+      "scenarios": ["live-game-observation/spectator-access#session-ends-cleanly"],
+      "note": "Subscription released and spectator token discarded on navigation away or game finish."
+    }
+  },
+  "reviews": {
+    "02-REVIEW-007": {
+      "scenarios": [
+        "live-game-observation/invisibility-filtering#spectators-are-opponents-of-every-team"
+      ],
+      "note": "Spectator intersection semantics: spectators see no invisible snake of any team — treated as opponents of every team."
+    },
+    "03-REVIEW-009": {
+      "scenarios": ["live-game-observation/spectator-access#eligibility-deliberately-open"],
+      "note": "Spectator eligibility policy (private games, visibility, rate limits) deliberately deferred; the scenario records that authentication + game-in-play are the only gates until the requirement is deliberately revised."
+    },
+    "04-REVIEW-009": {
+      "scenarios": [
+        "live-game-observation/observation-use-cases#canonical-order-is-read-not-delivered"
+      ],
+      "note": "No subscription delivery-order guarantee: a turn's events are a set; deterministic order is read from the stored canonical representation order."
+    },
+    "04-REVIEW-012": {
+      "scenarios": ["live-game-observation/invisibility-filtering#turn-zero-is-public"],
+      "note": "Turn-0 starting positions and initial food are fully public; the filter encodes invisibility only, never pre-game positional privacy."
+    },
+    "04-REVIEW-020": {
+      "scenarios": [
+        "live-game-observation/scoreboard-sole-aggregate-authority#invisible-snakes-counted-not-revealed",
+        "live-game-observation/scoreboard-sole-aggregate-authority#eliminated-teams-zero-filled"
+      ],
+      "note": "Scoreboard computed over the true alive set including invisible snakes; eliminated teams zero-filled, never omitted."
+    },
+    "04-REVIEW-021": {
+      "scenarios": [
+        "live-game-observation/scoreboard-sole-aggregate-authority#live-score-reads-as-if-ended"
+      ],
+      "note": "Live team score is the normalised as-if-ended score (par 1.0) per game-engine/scoring, decoupled from aggregate length."
+    },
+    "06-REVIEW-002": {
+      "scenarios": ["live-game-observation/team-private-live-state#cross-team-reads-denied"],
+      "note": "Strict team-scoping of team-private live state; cross-team reads denied; admins read as implicit coaches, designated coaches on member terms."
+    },
+    "08-REVIEW-018": {
+      "scenarios": [
+        "live-game-observation/scoreboard-sole-aggregate-authority#invisible-snakes-counted-not-revealed",
+        "live-game-observation/scoreboard-sole-aggregate-authority#client-aggregation-is-a-defect"
+      ],
+      "note": "Clients are dumb readers: server-side aggregate view is the sole scoreboard source; client-side aggregation of per-snake data is prohibited (would leak/under-count under invisibility)."
+    },
+    "08-REVIEW-019": {
+      "scenarios": ["live-game-observation/spectator-timeline#upfront-history-no-lazy-fetch"],
+      "note": "Up-front full-history subscription on spectating entry; bounded entry latency accepted; no lazy-fetch state machine."
+    }
+  }
+}
