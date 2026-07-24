@@ -108,6 +108,13 @@ rules:
     - Requirement headers and scenario slugs are frozen once merged; renames
       only via RENAMED deltas plus a same-commit sweep of every reference
       (run pnpm spec:check to find them).
+    - "CAPABILITY RENAME: rename a whole capability (folder + every
+      requirement prefix) from within a change — the new capability's delta
+      opens with a `## RENAMES CAPABILITY: <old>` directive above its
+      `## Purpose` preamble and is otherwise ADDED-only. The overlay resolves
+      both names while the change is open; spec:fold moves the folder and
+      re-prefixes at archive. Record the rename in
+      openspec/maps/identifier-lineage.json."
     - MODIFIED deltas must copy the ENTIRE requirement block — header, body,
       and all scenarios — then edit.
     - "NEW-CAPABILITY DELTAS: a delta file for a capability with no existing

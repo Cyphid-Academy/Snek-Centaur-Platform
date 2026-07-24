@@ -19,7 +19,15 @@ game-rules/team-potion-effects#sacrificial-collection   # one of its scenarios
 - Definition headers carry the full path: `### Requirement:
   game-rules/team-potion-effects`; scenarios are `#### Scenario: #<slug>`.
 - Identifiers are frozen API: renames only via RENAMED deltas with a
-  same-commit sweep of all references.
+  same-commit sweep of all references. Renaming a whole **capability**
+  (folder + every requirement's prefix) is a change-folder operation: the
+  new capability's delta opens with a `## RENAMES CAPABILITY: <old>`
+  directive above its `## Purpose` preamble and is otherwise ADDED-only.
+  While the change is open the reference lint resolves both the old and new
+  names (the overlay carries the source's requirements over); `pnpm
+  spec:fold` performs the folder move and re-prefix at archive. Record the
+  capability rename in `openspec/maps/identifier-lineage.json` so archived
+  changes that cite the old name stay traceable.
 - Code cites `// spec: <capability>/<slug>[#<scenario>]`; archived decision
   rationale is cited `// design: <archived-change-folder>`.
 - `pnpm spec:check` validates structure (strict OpenSpec validation),
