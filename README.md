@@ -98,7 +98,7 @@ Where `MM` is the module number (e.g. `01`, `07`) and `NNN` is the requirement I
 The spec is in `spec/` (nine numbered modules in roughly dependency order). Start with `spec/SPEC-INSTRUCTIONS.md` for a complete orientation, or follow this reading order:
 
 1. **`spec/02-platform-architecture.md`** — start here; establishes the three-runtime topology, shared engine contract, and Centaur Server lifecycle.
-2. **`openspec/specs/game-rules/spec.md`** — domain model, the full staged turn-resolution model, potion mechanics.
+2. **`openspec/specs/game-engine/spec.md`** — domain model, the full staged turn-resolution model, potion mechanics.
 3. **`spec/03-auth-and-identity.md`** — identity types, Google OAuth, game invitation flow.
 4. **`spec/04-stdb-engine.md`** and **`spec/05-convex-platform.md`** — the two backend runtimes (either order).
 5. **`spec/06-centaur-state.md`** — Centaur subsystem Convex schema.

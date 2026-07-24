@@ -48,7 +48,7 @@ export interface GameConfigRecord {
   readonly chessTimerMaxMs: number;
 }
 
-export type GameStatus = "not-started" | "playing" | "ended";
+export type GameStatus = "not-started" | "playing" | "finished";
 
 export interface GameRecord {
   readonly _id: string;

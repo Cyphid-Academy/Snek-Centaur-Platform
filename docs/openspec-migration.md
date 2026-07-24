@@ -5,7 +5,10 @@ and the design the adoption follows. The operative conventions live in
 `openspec/README.md` and `openspec/config.yaml` once the tooling lands;
 each module migration records its own decisions and rationale as an
 OpenSpec change folder, archived when it ships.
-**Date**: 2026-07-11 (revised 2026-07-18)
+**Date**: 2026-07-11 (revised 2026-07-18; migration plan revised
+2026-07-23 — §4.5/§6: capability-at-a-time carving by user-story locality,
+per-identifier bindingness, adopted during the module-02 migration and
+recorded in the `mint-global-invariants` change)
 **Scope**: Evaluates OpenSpec (`@fission-ai/openspec` v1.6.0) as the home of
 the `spec/` corpus and the change-management workflow for it, and records
 the adopted migration design.
@@ -289,17 +292,31 @@ reference the legacy archive, numeric identifiers, or implementation
 locations — the map is the only bridge to the past, and code cites specs,
 never the reverse. Purity is lint-enforced.
 
-### 4.5 Capability carving is a decision, not a mapping
+### 4.5 Capability carving is a decision, not a mapping — by user story
 
-Modules do **not** map 1:1 to capabilities. Module boundaries were chosen
-to sequence chunks of authoring and implementation work; capabilities are
-semantic feature delineations. Each module's migration therefore *begins*
-with a human+AI carving decision, recorded in that migration's change
-proposal: the module may become one capability, several, and/or contribute
-deltas to capabilities that already exist — modules are not guaranteed to
-be isolated with respect to a good capability grain. The cutover table
-tracks bindingness per *module*; its capability column is filled in as each
-carving is decided.
+*(Revised 2026-07-23.)* Modules do **not** map 1:1 to capabilities. Module
+boundaries were chosen to sequence chunks of authoring and implementation
+work; capabilities are semantic feature delineations. The module-02
+migration sharpened this into a grain rule: capabilities are carved by
+**user-story locality** — each owns a workflow a user experiences as one
+thing — because a corpus survey showed system-carved modules sawing single
+stories along runtime seams (game end, replay, authorization, snake
+selection each split across two or three modules) and bundling unrelated
+stories by shared substrate. Cross-cutting rules no user story owns live
+in the `global-invariants` capability, gated by the admission test in its
+Purpose (constrains ≥2 capabilities/runtimes; no user-story owner;
+falsifiable).
+
+Each capability's migration still *begins* with a human+AI carving
+decision, recorded in that migration's change proposal; the prospective
+capability set is maintained as a draft in
+`docs/spec-migration/capability-map.md`. Since user-story capabilities
+draw from several modules, bindingness is tracked per *identifier* (a
+legacy id retires when it gains an identifier-map entry), letting modules
+migrate partially: unretired ids either wait untouched or are *parked* —
+recorded with a prospective capability in
+`docs/spec-migration/module-NN-parked.md`, machine-checked by the
+migration audit so nothing is silently dropped.
 
 ---
 
@@ -354,26 +371,36 @@ word-diff.
 
 ## 6. Migration Plan
 
-Principle: short campaign, module per PR, the archived corpus stays
-binding per-module until cutover, no long split-brain.
+*(Revised 2026-07-23 — steps 3+ replanned around capability-at-a-time
+carving; steps 1–2 record what already happened.)* Principle: short
+campaign, one capability per PR, the archived corpus stays binding per
+identifier until each id's cutover, no long split-brain.
 
 1. **Land the tooling first** (no spec content moves): OpenSpec init +
    skills, `config.yaml` conventions, the quarantine move, the reference
    lint and freshness check, README cutover table with every module
-   Pending.
+   Pending. *(Done.)*
 2. **Pilot: module 01 (game-rules).** Largest requirement count, best test
    coverage to validate scenarios against, zero dependencies. Carving
    decision: module 01 becomes the single `game-rules` capability — it is
    already a coherent semantic unit (the complete rules of the game,
-   independent of storage, networking, and UI). The pilot's migration
-   change records the re-usable per-module recipe: carve (with the author)
-   → re-author at intent grain → constraint-mine the legacy Design/EI
-   sections → extend the identifier map and convert code citations → flip
-   the cutover row → audit + full battery.
-3. **Remaining modules in dependency order** (02 → 03 → 06 → 04 → 05 → 07
-   → 08), one PR each, each beginning with its carving decision. Module 08
-   in particular is expected to carve into several capabilities.
-4. **Retro after the pilot**; adjust the recipe in each subsequent
+   independent of storage, networking, and UI). *(Done; later renamed
+   `game-engine`.)*
+3. **Module 02 partial-migrates as the pivot** (`mint-global-invariants`):
+   its cross-cutting invariants become the `global-invariants` capability;
+   its application-level requirements are parked with prospective
+   user-story homes; per-identifier bindingness and the parked-ledger
+   audit land with it.
+4. **Remaining migration proceeds capability-at-a-time** from the
+   prospective map (`docs/spec-migration/capability-map.md`), one
+   capability per PR, ordered by the capability dependency graph and
+   implementation need rather than by module number. Each PR: carving
+   decision with the author → re-author at intent grain (parked drafts as
+   source material, legacy text binding) → constraint-mine → retire the
+   absorbed ids in the identifier map, convert code citations, clear
+   ledger entries → update cutover rows (a module flips to Migrated when
+   its last id is disposed) → audit + full battery.
+5. **Retro as the shape settles**; adjust the recipe in each subsequent
    migration change as needed.
 
 ---

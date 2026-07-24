@@ -341,7 +341,7 @@ function itemClass(item: Item): string {
   /* Items sit above the snake overlay (z-index 1) on a dark disc so the glyph
      reads on any terrain colour, and on a dead snake's cell in run mode (a
      dead snake is off the board but still rendered faded; the engine may
-     spawn an item there — game-rules/item-spawning). */
+     spawn an item there — game-engine/item-spawning). */
   .item {
     position: absolute;
     inset: 0;

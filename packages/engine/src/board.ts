@@ -1,7 +1,7 @@
 // Board geometry helpers. spec: 01 Section 2.2.
 import type { Board, Cell, CellIndex, CellType, Direction } from "./types.js";
 
-// spec: game-rules/board-geometry / DOWNSTREAM IMPACT note 3 — flat row-major encoding.
+// spec: game-engine/board-geometry / DOWNSTREAM IMPACT note 3 — flat row-major encoding.
 // Also the key type of the present-items map (01 §3.2).
 export function cellIndex(board: Board, cell: Cell): CellIndex {
   return (cell.y * board.boardSize + cell.x) as CellIndex;
@@ -14,17 +14,17 @@ export function cellAt(board: Board, cell: Cell): CellType | undefined {
   return board.cells[cellIndex(board, cell)];
 }
 
-// spec: game-rules/board-geometry
+// spec: game-engine/board-geometry
 export function isInner(board: Board, cell: Cell): boolean {
   return cell.x > 0 && cell.x < board.boardSize - 1 && cell.y > 0 && cell.y < board.boardSize - 1;
 }
 
-// spec: game-rules/starting-placement
+// spec: game-engine/starting-placement
 export function parityOf(cell: Cell): 0 | 1 {
   return ((cell.x + cell.y) & 1) as 0 | 1;
 }
 
-// spec: game-rules/item-spawning#eligibility — the board, not the config, is
+// spec: game-engine/item-spawning#eligibility — the board, not the config, is
 // the authoritative record of whether fertile-ground generation ran.
 export function fertileGroundEnabled(board: Board): boolean {
   return board.cells.includes(3 satisfies CellType); // CellType.Fertile
@@ -49,7 +49,7 @@ export function sameCell(a: Cell, b: Cell): boolean {
 }
 
 // Collision-free numeric key for Map/Set keying of cells. The 4096 stride
-// requires boardSize <= 4096; the user-facing bound is 32 (game-rules/configuration-parameters).
+// requires boardSize <= 4096; the user-facing bound is 32 (game-engine/configuration-parameters).
 export function cellKey(cell: Cell): number {
   return cell.y * 4096 + cell.x;
 }

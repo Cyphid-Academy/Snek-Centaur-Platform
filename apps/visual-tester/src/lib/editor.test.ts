@@ -1,6 +1,6 @@
 // Editor-boundary contiguity guard (visual-tester/board-editor
 // #structural-validity-enforced): bodies grow only onto cells adjacent to
-// or stacked on the current tail — the shapes game-rules/movement produces
+// or stacked on the current tail — the shapes game-engine/movement produces
 // and the only ones the silhouette renderer (design D10) accepts.
 import { DEFAULT_GAME_CONFIG } from "@cyphid/snek-engine";
 import type { CentaurTeamId, GameState, SnakeId } from "@cyphid/snek-engine";

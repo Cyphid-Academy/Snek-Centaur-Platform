@@ -31,7 +31,7 @@ const ok = (state: GameState): EditResult => ({ ok: true, state });
 const reject = (error: string): EditResult => ({ ok: false, error });
 
 // The three paintable terrains within the fixed Wall ring
-// (game-rules/board-geometry): the Wall ring itself is never paintable.
+// (game-engine/board-geometry): the Wall ring itself is never paintable.
 export type PaintableCellType =
   | typeof CellType.Normal
   | typeof CellType.Hazard
@@ -162,7 +162,7 @@ export function letterForIndex(i: number): string {
 
 /**
  * Re-letter every snake from its index within its team, in snake order
- * (game-rules/initial-snakes: lettered consecutively from A within the team).
+ * (game-engine/initial-snakes: lettered consecutively from A within the team).
  * Letters are derived, never hand-set, so this runs after any add/remove/team
  * change (visual-tester/board-editor#letters-auto-assigned).
  */
@@ -200,11 +200,11 @@ export function addSnake(
   }
   // spec: visual-tester/board-editor#head-parity-enforced — a new head must
   // share the parity of the existing heads this turn, the only head arrangement
-  // any reachable state has (game-rules/starting-placement#shared-parity).
+  // any reachable state has (game-engine/starting-placement#shared-parity).
   const parity = requiredHeadParity(state);
   if (parity !== null && cellParity(cell) !== parity) {
     return reject(
-      `cell (${cell.x}, ${cell.y}) is the wrong parity; a new head must share (x + y) mod 2 = ${parity} with the existing heads (game-rules/starting-placement)`,
+      `cell (${cell.x}, ${cell.y}) is the wrong parity; a new head must share (x + y) mod 2 = ${parity} with the existing heads (game-engine/starting-placement)`,
     );
   }
   const snake: SnakeState = {
@@ -250,8 +250,8 @@ function updateSnake(
 // spec: visual-tester/board-editor#structural-validity-enforced — bodies
 // stay contiguous: an appended cell is orthogonally adjacent to the current
 // tail, or stacked on it (the duplicated-tail shape growth produces,
-// game-rules/food-and-growth). Contiguity is the only body shape
-// game-rules/movement can produce, and the silhouette renderer relies on it.
+// game-engine/food-and-growth). Contiguity is the only body shape
+// game-engine/movement can produce, and the silhouette renderer relies on it.
 export function appendBodyCell(state: GameState, snakeId: SnakeId, cell: Cell): EditResult {
   if (!inBounds(state, cell)) return reject(`cell (${cell.x}, ${cell.y}) is out of bounds`);
   // spec: visual-tester/board-editor#item-not-on-body — no snake body on an item.
@@ -298,7 +298,7 @@ export function setSnakeTeam(
   return result.ok ? ok(syncClocks(relabelTeams(result.state), config)) : result;
 }
 
-// spec: game-rules/domain-vocabulary — at most one active effect per family.
+// spec: game-engine/domain-vocabulary — at most one active effect per family.
 export function setSnakeEffect(
   state: GameState,
   snakeId: SnakeId,
@@ -351,7 +351,7 @@ export function cellParity(cell: Cell): Parity {
 // spec: visual-tester/board-editor#head-parity-enforced — the parity all new
 // heads must share this turn, or null when no head yet fixes it. Every snake
 // moves one cell per turn, so `(x + y) mod 2` flips in lockstep for all heads;
-// since all starting heads share one parity (game-rules/starting-placement
+// since all starting heads share one parity (game-engine/starting-placement
 // #shared-parity), every head at every reachable turn shares it. Dead snakes
 // are off the board, so only alive heads fix the parity.
 export function requiredHeadParity(state: GameState): Parity | null {
@@ -368,7 +368,7 @@ function cellHasItem(state: GameState, cell: Cell): boolean {
 
 // spec: visual-tester/board-editor#item-not-on-body — an item may not share a
 // cell with a snake body. The engine never puts an item on an ALIVE snake body
-// (game-rules/item-spawning excludes alive snakes; a surviving head consumes
+// (game-engine/item-spawning excludes alive snakes; a surviving head consumes
 // any item it lands on), and every editor snake is alive — so placing an item
 // on a body is rejected. Placing over an existing item still REPLACES it.
 export function placeItem(state: GameState, cell: Cell, itemType: ItemType): EditResult {

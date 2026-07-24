@@ -4,7 +4,7 @@ import { SETUP_SPAWN_TURN, itemAt, itemIdOf, itemsByCell, spawnTurnAfter } from 
 import { emptyBoard, makeItem, turn } from "./testkit.js";
 import { ItemType } from "./types.js";
 
-describe("itemsByCell / itemAt (game-rules/item-identity)", () => {
+describe("itemsByCell / itemAt (game-engine/item-identity)", () => {
   const board = emptyBoard(11);
 
   it("keys each item by its canonical cell index", () => {
@@ -24,7 +24,7 @@ describe("itemsByCell / itemAt (game-rules/item-identity)", () => {
   });
 });
 
-describe("item identity (game-rules/item-identity)", () => {
+describe("item identity (game-engine/item-identity)", () => {
   it("defines the spawn boundaries: setup at 0, turn T's spawns at T + 1", () => {
     expect(SETUP_SPAWN_TURN).toBe(0);
     expect(spawnTurnAfter(turn(0))).toBe(1); // turn 0's resolution spawns
@@ -36,7 +36,7 @@ describe("item identity (game-rules/item-identity)", () => {
     expect(itemIdOf({ spawnTurn: turn(5), spawnIndex: 2 })).toBe("5:2");
   });
 
-  // spec: game-rules/item-identity#ids-never-collide
+  // spec: game-engine/item-identity#ids-never-collide
   it("never collides across spawn turns and indices", () => {
     const ids = new Set<string>();
     for (let t = 0; t < 40; t++)

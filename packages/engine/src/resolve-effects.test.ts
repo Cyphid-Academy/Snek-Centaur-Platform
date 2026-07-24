@@ -43,7 +43,7 @@ function collectorPair(family: "invulnerability" | "invisibility") {
   return { collector, mate };
 }
 
-describe("Cancellation — collector disruption cancels the family team-wide (game-rules/team-potion-effects)", () => {
+describe("Cancellation — collector disruption cancels the family team-wide (game-engine/team-potion-effects)", () => {
   it("cancels teammates' buffs when the collector dies", () => {
     const { collector, mate } = collectorPair("invulnerability");
     // Collector drives into the wall: body starts adjacent to it.
@@ -258,7 +258,7 @@ describe("Cancellation — collector disruption cancels the family team-wide (ga
     expect(snakeById(nextState, 2).activeEffects).toEqual([effect("invulnerability", "buff", 9)]);
   });
 
-  it("lets a same-turn re-collection supersede the cancellation (game-rules/team-potion-effects)", () => {
+  it("lets a same-turn re-collection supersede the cancellation (game-engine/team-potion-effects)", () => {
     // The collector dies, but a teammate collects a fresh potion of the same
     // family in the same turn: 9a strips the old buffs, 9b still applies the
     // new rebuild. Requirements override §2.8's discard-pending pseudocode.
@@ -286,7 +286,7 @@ describe("Cancellation — collector disruption cancels the family team-wide (ga
   });
 });
 
-describe("collection and death in the same turn (game-rules/team-potion-effects#sacrificial-collection)", () => {
+describe("collection and death in the same turn (game-engine/team-potion-effects#sacrificial-collection)", () => {
   it("applies the team rebuild when the collector dies by body collision (sacrificial collection)", () => {
     // The collector grabs the potion on a cell crossed by an enemy body and
     // dies there; the rebuild still applies — debuff on the corpse, buff on
@@ -426,7 +426,7 @@ describe("collection and death in the same turn (game-rules/team-potion-effects#
   });
 });
 
-describe("Expiry (game-rules/team-potion-effects#three-turn-expiry)", () => {
+describe("Expiry (game-engine/team-potion-effects#three-turn-expiry)", () => {
   it("keeps an effect active on turns T+1..T+3 and removes it at the end of T+3", () => {
     const collector = makeSnake({
       snakeId: sid(0),

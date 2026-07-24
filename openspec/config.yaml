@@ -33,28 +33,37 @@ context: |
 
   Capability dependency rule: a capability's spec may only reference its
   dependencies, never peers or downstream capabilities. The capability set
-  GROWS as modules migrate — capabilities are semantic feature
-  delineations, while legacy module boundaries were implementation
-  sequencing, so modules are NOT assumed to map 1:1 to capabilities: each
-  migration begins with a carving decision made WITH the human author (one
-  new capability, several, and/or deltas to existing capabilities),
+  GROWS capability-at-a-time, carved by USER-STORY LOCALITY: a capability
+  owns a workflow a user experiences as one thing, and typically draws its
+  requirements from several legacy modules (legacy module boundaries were
+  implementation sequencing, not semantic delineations). Cross-cutting
+  rules no user story owns belong to global-invariants, gated by the
+  admission test in its Purpose. The prospective capability set is
+  docs/spec-migration/capability-map.md (draft until minted); each mint
+  still begins with a carving decision made WITH the human author,
   recorded in that migration change's proposal and in the cutover table.
-  Capabilities so far: game-rules — root of the dependency structure, no
+  Capabilities so far: game-engine — root of the dependency structure, no
   dependencies (module 01, carved as a single capability by author
   decision: it is already a coherent semantic unit — the complete rules of
-  the game, independent of storage, networking, and UI). test-sequences —
+  the game, independent of storage, networking, and UI; renamed from
+  game-rules). global-invariants — the cross-cutting rules no user-story
+  capability owns (runtime ownership, authority placement, security/trust
+  boundaries, credential scoping; admission test in its Purpose); depends
+  on game-engine. test-sequences —
   the UI-free data contract for recorded resolver runs (canonical encoding,
   validation, production seed derivation, halt-at-first-divergence
-  replay-check); depends on game-rules. visual-tester — the dedicated dev
+  replay-check); depends on game-engine. visual-tester — the dedicated dev
   app for authoring board state, staging moves, engine-driven simulation,
   and running saved Test Sequences with discrepancy annotation; depends on
-  game-rules and test-sequences (leaf capability).
+  game-engine and test-sequences (leaf capability).
 
-  MIGRATION NOTE: modules migrate from legacy-spec-archive/spec/ one at a
-  time (cutover table: openspec/README.md). For unmigrated modules the
-  archived file is BINDING and its numeric MM-REQ-NNN identifiers remain
-  citable. Migrated modules' numeric identifiers are retired; translations
-  live in legacy-spec-archive/maps/.
+  MIGRATION NOTE: the legacy corpus (legacy-spec-archive/spec/) retires
+  PER IDENTIFIER (cutover table: openspec/README.md): a numeric MM-REQ-NNN
+  id is retired iff it has an entry in legacy-spec-archive/maps/
+  identifier-map.json; otherwise it remains BINDING and citable — so a
+  module may be Partial, with its unretired ids parked (prospective home
+  recorded in docs/spec-migration/module-NN-parked.md) or simply not yet
+  reached.
 
   Authoring grain (intent grain): one behaviour per requirement, stated in
   1-3 plain sentences an author can vet at a read; edge-case semantics are

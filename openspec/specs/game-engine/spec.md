@@ -1,22 +1,23 @@
-# game-rules Specification
+# game-engine Specification
 
 ## Purpose
 
-Domain model and game behaviour for Team Snek: the type vocabulary, board
-construction, movement, collisions and severing, health, food and growth,
-the team potion mechanic, invisibility, the staged turn-resolution model,
-item spawning and identity, the chess timer, game end and scoring, and
-determinism. This capability defines game behaviour with no reference to
-storage, networking, or UI.
+Domain model and game behaviour for Team Snek, provided as the single shared
+executable engine that is their canonical definition: the type vocabulary,
+board construction, movement, collisions and severing, health, food and
+growth, the team potion mechanic, invisibility, the staged turn-resolution
+model, item spawning and identity, the chess timer, game end and scoring,
+determinism, and runtime portability. This capability defines game behaviour
+with no reference to storage, networking, or UI.
 
 Depends on: (none — root of the capability graph). Consumed by:
-platform-architecture, stdb-engine, bot-framework (and transitively all
-other capabilities).
+global-invariants and, directly or transitively, every capability that
+touches gameplay.
 
 ## Requirements
 
-### Requirement: game-rules/domain-vocabulary
-The game SHALL use a closed domain vocabulary: four directions (`Up`/`Right`/`Down`/`Left`), four cell types (`Normal`/`Wall`/`Hazard`/`Fertile`), three item types (`Food`/`InvulnPotion`/`InvisPotion`), potion effects as `(family, state, expiryTurn)` triples over two families (`invulnerability`/`invisibility`) and two states (`buff`/`debuff`), present items as (identity, type, cell) per game-rules/item-identity, and the snake state shape: `snakeId`, `letter`, `centaurTeamId`, `body` (ordered cells, head first), `health`, `activeEffects`, `lastDirection`, `alive`.
+### Requirement: game-engine/domain-vocabulary
+The game SHALL use a closed domain vocabulary: four directions (`Up`/`Right`/`Down`/`Left`), four cell types (`Normal`/`Wall`/`Hazard`/`Fertile`), three item types (`Food`/`InvulnPotion`/`InvisPotion`), potion effects as `(family, state, expiryTurn)` triples over two families (`invulnerability`/`invisibility`) and two states (`buff`/`debuff`), present items as (identity, type, cell) per game-engine/item-identity, and the snake state shape: `snakeId`, `letter`, `centaurTeamId`, `body` (ordered cells, head first), `health`, `activeEffects`, `lastDirection`, `alive`.
 
 #### Scenario: #closed-sets
 - **WHEN** any rule, event, or state refers to a direction, cell type, item type, or potion effect
@@ -24,16 +25,16 @@ The game SHALL use a closed domain vocabulary: four directions (`Up`/`Right`/`Do
 
 #### Scenario: #derived-values-are-not-stored
 - **WHEN** a snake's invulnerability level or visibility is needed
-- **THEN** it is computed on demand from `activeEffects` (see game-rules/collisions-and-severing, game-rules/invisibility); neither is a stored field of the snake state
+- **THEN** it is computed on demand from `activeEffects` (see game-engine/collisions-and-severing, game-engine/invisibility); neither is a stored field of the snake state
 
-### Requirement: game-rules/board-geometry
+### Requirement: game-engine/board-geometry
 The board SHALL be a square grid of `boardSize × boardSize` cells whose outermost 1-cell-thick border is entirely `Wall`. The playable area is the `(boardSize − 2)²` inner cells.
 
 #### Scenario: #construction
 - **WHEN** a board is generated with edge length N
 - **THEN** it is an N×N grid with a complete Wall ring and an (N−2)² playable interior
 
-### Requirement: game-rules/hazards
+### Requirement: game-engine/hazards
 When the configured hazard percentage H is greater than 0, board generation SHALL designate `floor(inner_cell_count × H / 100)` inner cells as Hazard terrain, seeded from the game seed. Hazard cells are permanent for the whole game.
 
 #### Scenario: #connectivity-guarantee
@@ -44,7 +45,7 @@ When the configured hazard percentage H is greater than 0, board generation SHAL
 - **WHEN** the game progresses
 - **THEN** the set of Hazard cells never changes
 
-### Requirement: game-rules/fertile-ground
+### Requirement: game-engine/fertile-ground
 When fertile ground is enabled, board generation SHALL designate a fixed subset of inner non-Wall non-Hazard cells as `Fertile` at game start, forming organic clustered patches: the density parameter D sets coverage (the top D% of candidate cells ranked by seeded fractal noise) and the clustering parameter C sets patch scale.
 
 #### Scenario: #stable-designation
@@ -55,7 +56,7 @@ When fertile ground is enabled, board generation SHALL designate a fixed subset 
 - **WHEN** C is low
 - **THEN** fertile cells form small scattered patches; high C forms large contiguous blobs, with D controlling total coverage in both cases
 
-### Requirement: game-rules/starting-placement
+### Requirement: game-engine/starting-placement
 For an N-team game, board generation SHALL divide the board into N starting territories using a circular pie of N equal angular sectors centred on the board with a seeded-random angular offset. Each snake's starting head SHALL be placed on a seeded-random non-Wall, non-Hazard inner cell inside its team's territory, and all starting heads across all teams SHALL share one seeded-random parity of `(x + y) mod 2`.
 
 #### Scenario: #territory-assignment
@@ -66,7 +67,7 @@ For an N-team game, board generation SHALL divide the board into N starting terr
 - **WHEN** all starting heads are placed
 - **THEN** every head cell has the same `(x + y) mod 2` parity
 
-### Requirement: game-rules/initial-snakes
+### Requirement: game-engine/initial-snakes
 Each team SHALL field exactly `snakesPerTeam` snakes. Every snake starts with length 3 (all three segments stacked on its starting cell), `health = MaxHealth`, no active effects, no prior direction, and alive. Snakes are lettered consecutively from `A` within their team; a snake's display name is `{centaurTeamName}.{letter}`.
 
 #### Scenario: #initial-state
@@ -77,14 +78,14 @@ Each team SHALL field exactly `snakesPerTeam` snakes. Every snake starts with le
 - **WHEN** team Red fields three snakes
 - **THEN** they are `Red.A`, `Red.B`, `Red.C`
 
-### Requirement: game-rules/initial-food
+### Requirement: game-engine/initial-food
 After all starting positions are assigned, setup SHALL spawn `snakesPerTeam` food items per starting territory — one per snake of the owning team — each on a seeded-random distinct eligible cell within that territory: inner, non-Wall, non-Hazard, and not occupied by any snake body. Initial food eligibility ignores fertile designations.
 
 #### Scenario: #food-count-per-territory
 - **WHEN** a game with N teams and S snakes per team is set up
 - **THEN** exactly N × S food items are placed, S inside each starting territory, on distinct eligible cells — Fertile or not
 
-### Requirement: game-rules/board-generation-retry
+### Requirement: game-engine/board-generation-retry
 Board generation SHALL be an all-or-nothing attempt, retried on failure with deterministic sub-seeds derived from the game seed and the attempt index, up to three retries (four attempts total); if all attempts fail, generation SHALL be reported infeasible with a machine-readable error.
 
 #### Scenario: #failure-conditions
@@ -99,7 +100,7 @@ Board generation SHALL be an all-or-nothing attempt, retried on failure with det
 - **WHEN** all four attempts fail
 - **THEN** the game is left unplayable, the error identifies the constraint that failed on the last attempt, and the room owner can reconfigure and re-provision
 
-### Requirement: game-rules/determinism
+### Requirement: game-engine/determinism
 All randomness SHALL be deterministic from seeds — game setup from the per-game seed, each turn's resolution from a per-turn seed derived from it — and no seed SHALL be accessible to any game client.
 
 #### Scenario: #reproducibility
@@ -110,7 +111,7 @@ All randomness SHALL be deterministic from seeds — game setup from the per-gam
 - **WHEN** any client (operator, bot, or spectator) reads game state
 - **THEN** neither the game seed nor any turn seed is observable
 
-### Requirement: game-rules/turn-resolution-model
+### Requirement: game-engine/turn-resolution-model
 Each turn SHALL resolve in fixed stages: move projection, head-to-head precedence, interaction rules, derived rules, commit, item spawning, win-condition check, event derivation. Every rule reads only the start-of-turn snapshot (plus the surviving moved-head set from head-to-head precedence, and — for derived rules — interaction-rule claims); the commit is the sole writer of game state.
 
 #### Scenario: #snapshot-purity
@@ -121,7 +122,7 @@ Each turn SHALL resolve in fixed stages: move projection, head-to-head precedenc
 - **WHEN** the rules within the interaction stage or the derived stage are evaluated in any order or concurrently
 - **THEN** every outcome is identical
 
-### Requirement: game-rules/movement
+### Requirement: game-engine/movement
 All alive snakes SHALL move simultaneously each turn. Direction: the staged move if any; else `lastDirection` unconditionally, even into a lethal cell; else (turn 0 with nothing staged) a seeded-random direction, also unconstrained by lethality. The moved body advances the head one cell and drops the final tail segment; `lastDirection` updates to the direction moved.
 
 #### Scenario: #direction-precedence
@@ -134,9 +135,9 @@ All alive snakes SHALL move simultaneously each turn. Direction: the staged move
 
 #### Scenario: #body-advance
 - **WHEN** move projection runs
-- **THEN** each moved body is `[newHead] ⧺ body[0 .. len−2]` unconditionally — growth never skips the tail drop; it is represented by tail duplication at commit (game-rules/food-and-growth)
+- **THEN** each moved body is `[newHead] ⧺ body[0 .. len−2]` unconditionally — growth never skips the tail drop; it is represented by tail duplication at commit (game-engine/food-and-growth)
 
-### Requirement: game-rules/collisions-and-severing
+### Requirement: game-engine/collisions-and-severing
 Collision outcomes SHALL be decided from snapshot values, where a snake's invulnerability level is derived from `activeEffects`: `+1` with an invulnerability buff, `−1` with the debuff, else `0`. A surviving moved head on a Wall cell or on a non-head segment of its own moved body dies (`wall`, `self_collision`). A surviving moved head entering a non-head segment of another snake's moved body severs the victim from the contact segment through the tail if the attacker's level exceeds the victim's; otherwise the attacker dies (`body_collision`) and the victim suffers a disruption.
 
 #### Scenario: #tail-chase-is-safe-unless-the-tail-is-duplicated
@@ -155,7 +156,7 @@ Collision outcomes SHALL be decided from snapshot values, where a snake's invuln
 - **WHEN** a snake incurs certain death from any rule
 - **THEN** its body segments remain valid collision targets for every other rule for the whole turn, and severing is observable only after commit
 
-### Requirement: game-rules/head-to-head-precedence
+### Requirement: game-engine/head-to-head-precedence
 When two or more moved heads occupy the same cell, head-to-head resolution SHALL run before every other interaction rule: occupants below the maximum snapshot invulnerability level die; among those at the maximum, occupants below the maximum snapshot body length die; if two or more still remain, all die (`head_to_head`). Losers' heads are withdrawn from the turn; their bodies remain on the board.
 
 #### Scenario: #level-then-length-then-mutual-destruction
@@ -170,7 +171,7 @@ When two or more moved heads occupy the same cell, head-to-head resolution SHALL
 - **WHEN** head-to-head resolution completes
 - **THEN** at most one surviving head occupies any cell, so every item is collected by at most one snake per turn
 
-### Requirement: game-rules/health-and-starvation
+### Requirement: game-engine/health-and-starvation
 Every snake alive in the snapshot SHALL take 1 damage per turn (`tick`), and a surviving moved head on a Hazard cell SHALL additionally take the configured `hazardDamage` and suffer a disruption. At commit, a snake with any heal claim resolves to `MaxHealth`; otherwise health resolves to snapshot health minus total damage, and at ≤ 0 the snake dies (`health_depletion`, reporting contributing sources). Certain-death outcomes (wall, self, body, head-to-head) are independent of health and win the reported cause when both apply.
 
 #### Scenario: #heal-dominates-same-turn-damage
@@ -185,8 +186,8 @@ Every snake alive in the snapshot SHALL take 1 damage per turn (`tick`), and a s
 - **WHEN** a snake both incurs a certain-death claim and resolves to non-positive health
 - **THEN** it dies with the certain-death cause reported
 
-### Requirement: game-rules/food-and-growth
-A surviving moved head on a cell holding food SHALL consume it (the item leaves the board — game-rules/item-identity): the snake heals to `MaxHealth` and grows by one segment via duplication of its final tail segment at commit, applied after any severing. Growth changes cell occupancy only when the duplicated tail advances on a later turn; the grown length is present in the next turn's snapshot. Eating is never a disruption.
+### Requirement: game-engine/food-and-growth
+A surviving moved head on a cell holding food SHALL consume it (the item leaves the board — game-engine/item-identity): the snake heals to `MaxHealth` and grows by one segment via duplication of its final tail segment at commit, applied after any severing. Growth changes cell occupancy only when the duplicated tail advances on a later turn; the grown length is present in the next turn's snapshot. Eating is never a disruption.
 
 #### Scenario: #duplication-after-severing
 - **WHEN** a snake that ate this turn is also severed this turn
@@ -196,7 +197,7 @@ A surviving moved head on a cell holding food SHALL consume it (the item leaves 
 - **WHEN** a snake consumed food in turn T and turn T+1 resolves
 - **THEN** the grown length participates in head-to-head length comparisons and the duplicated tail cell is occupied (and lethal to tail-chasers)
 
-### Requirement: game-rules/item-spawning
+### Requirement: game-engine/item-spawning
 After each commit, food SHALL spawn at expected rate `foodSpawnRate` and each potion type SHALL spawn independently at its configured rate: `floor(rate)` items guaranteed plus one more with probability `rate mod 1`, a rate of 0 spawning nothing. Locations are seeded-random eligible cells of the committed state: inner, non-Wall, non-Hazard, unoccupied by alive snake, food, or potion. Food placement is additionally restricted to Fertile cells when fertile ground is enabled; potion placement never is.
 
 #### Scenario: #floor-plus-fraction-mechanic
@@ -208,7 +209,7 @@ After each commit, food SHALL spawn at expected rate `foodSpawnRate` and each po
 - **THEN** occupied, border, and hazard cells are never chosen; with fertile ground enabled, food spawns only on Fertile cells while potions spawn on any eligible cell
 - **AND** whether fertile ground is enabled is derived from the board's cells, not from configuration
 
-### Requirement: game-rules/team-potion-effects
+### Requirement: game-engine/team-potion-effects
 Potions are team plays with a painted target. When members of one team collect potions of one family in a turn, the team SHALL receive a single rebuild: every collector gets that family's `debuff` and every other member alive at commit gets its `buff`, all expiring 3 turns later (`expiryTurn = currentTurn + 3`), replacing any prior effect of that family — a snake holds at most one active effect per family. If a snake holding a family's `debuff` in the snapshot suffers any disruption — death from any cause, severing another snake, being severed, receiving a body collision, or entering a hazard; item collection is never a disruption — the team SHALL lose all its active effects of that family at commit.
 
 #### Scenario: #rebuild-shape
@@ -243,7 +244,7 @@ Potions are team plays with a painted target. When members of one team collect p
 - **WHEN** a rebuild grants effects at turn T's commit
 - **THEN** the effects influence turns T+1 through T+3 and are absent from turn T+4's snapshot
 
-### Requirement: game-rules/invisibility
+### Requirement: game-engine/invisibility
 An invisibility `buff` SHALL hide a snake from connections belonging to opponent teams only — every game mechanic (collision, severing, health, scoring) applies identically — and the invisibility `debuff` holder SHALL remain visible, so opponents can target the collector for disruption.
 
 #### Scenario: #information-asymmetry-only
@@ -254,7 +255,7 @@ An invisibility `buff` SHALL hide a snake from connections belonging to opponent
 - **WHEN** a snake holds `(invisibility, debuff)`
 - **THEN** its derived visibility is true
 
-### Requirement: game-rules/chess-timer
+### Requirement: game-engine/chess-timer
 Each team SHALL have a persistent millisecond time budget: `initialBudget` at game start, incremented by `budgetIncrement` each turn. At each turn start, `min(cap, budget)` moves from the budget onto the team's per-turn clock — the cap is `firstTurnTime` on turn 0 and `maxTurnTime` afterwards — so total remaining time is always `budget + perTurnClock`. Declaring turn over returns the unused clock to the budget; a clock reaching zero auto-declares; turn resolution commences when every team has declared.
 
 #### Scenario: #carve-out-arithmetic
@@ -269,7 +270,7 @@ Each team SHALL have a persistent millisecond time budget: `initialBudget` at ga
 - **WHEN** a team's clock reaches zero
 - **THEN** its turn is declared over without action, and resolution starts once all teams have declared
 
-### Requirement: game-rules/game-end-conditions
+### Requirement: game-engine/game-end-conditions
 The game SHALL end at the end of the turn whose commit leaves at most one competing team with a living snake — last-team-standing (one team survives) or simultaneous elimination (none does) — or at the end of the turn in which the configured `maxTurns` is reached; `maxTurns` of 0 or absent means no turn limit. Win conditions are evaluated against each turn's committed state.
 
 #### Scenario: #last-team-standing
@@ -284,7 +285,7 @@ The game SHALL end at the end of the turn whose commit leaves at most one compet
 - **WHEN** `maxTurns` is reached, or is 0/absent
 - **THEN** the game ends at the end of that turn, or continues indefinitely until an elimination ending, respectively
 
-### Requirement: game-rules/scoring
+### Requirement: game-engine/scoring
 A team's score at game end SHALL be its normalised body-share times the number of competing teams: `score(team) = (alive_segments_owned / total_alive_segments) × competing_teams`, with par exactly `1.0` for a proportional share. Forfeited teams are excluded from all terms and score `0` (if every team forfeited, all score `0`). Ending-specific scores: the last-standing survivor scores `1.0 × competing_teams` and eliminated teams `0`; at simultaneous elimination, teams alive at the final turn's start score `1.0` and earlier-eliminated teams `0`. Highest score wins; ties produce a draw.
 
 #### Scenario: #proportional-par
@@ -299,7 +300,7 @@ A team's score at game end SHALL be its normalised body-share times the number o
 - **WHEN** the game ends by survival, simultaneous elimination, or turn limit
 - **THEN** scores follow the ending's rule above, and any tie at the top is a draw
 
-### Requirement: game-rules/turn-events
+### Requirement: game-engine/turn-events
 Each turn SHALL emit a closed set of events sufficient to reconstruct and narrate the turn: movements (with who staged them), deaths (cause — including contributing damage sources for starvation — killer where applicable, and location), severs, food consumption and potion collection (each carrying the consumed item's identity; potion collection also the collector and affected teammates), spawns, effect applications, and effect cancellations.
 
 #### Scenario: #every-significant-outcome-is-an-event
@@ -310,7 +311,7 @@ Each turn SHALL emit a closed set of events sufficient to reconstruct and narrat
 - **WHEN** the same turn resolves twice from an identical snapshot, staged moves, and turn seed
 - **THEN** the emitted event sequence is identical
 
-### Requirement: game-rules/configuration-parameters
+### Requirement: game-engine/configuration-parameters
 Game configuration SHALL comprise exactly these parameters, with these ranges, defaults, and disable sentinels:
 
 | Parameter | Range | Default | Sentinel |
@@ -345,7 +346,7 @@ Numeric bounds SHALL be enforced by the user-facing configuration surfaces; the 
 - **WHEN** the configuration schema evolves
 - **THEN** every field remains expressible identically in all three runtimes' type systems: plain numbers (no bigint), no optional or null fields (zero sentinels encode disabled features), string-literal enums, milliseconds for time values
 
-### Requirement: game-rules/item-identity
+### Requirement: game-engine/item-identity
 Every item SHALL be identified by the pair (spawn turn, spawn index): the turn boundary at which the item first exists — game-setup items at boundary 0, items spawned by turn T's resolution at boundary T+1 — and the item's index within that boundary's spawn order, counting from 0. The pair is game-unique, is carried by the item itself, and is what downstream consumers use directly; any scalar item id is computed from the pair, never stored or independently assigned. Game state holds only items presently on the board — at most one item per cell, structurally — and consumption SHALL resolve as a claim at commit: the item is removed from the board and the consumption event reports its identity, from which the data layer completes the item's single spawn-to-destruction lifetime record.
 
 #### Scenario: #ids-never-collide
@@ -359,3 +360,14 @@ Every item SHALL be identified by the pair (spawn turn, spawn index): the turn b
 #### Scenario: #one-item-per-cell
 - **WHEN** the board holds items
 - **THEN** no cell holds more than one — a second occupant is structurally unrepresentable
+
+### Requirement: game-engine/runtime-portability
+The engine SHALL depend only on portable ECMAScript facilities and SHALL take all nondeterminism and external input as explicit parameters — using no ambient clock, randomness, I/O, or runtime-specific API — so that a single build runs unchanged in any conformant JavaScript runtime.
+
+#### Scenario: #no-ambient-nondeterminism
+- **WHEN** the engine needs randomness or the current time
+- **THEN** it reads them from explicit inputs (the `Rng` state, the game seed, the configuration), never from host facilities such as `Date.now` or `crypto`
+
+#### Scenario: #no-runtime-specific-api
+- **WHEN** the same engine build is loaded into a different conformant JavaScript runtime
+- **THEN** it runs unchanged, relying on no Node-, browser-, or host-specific API

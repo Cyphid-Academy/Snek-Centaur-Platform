@@ -18,7 +18,7 @@ import {
 import type { SnakeState } from "./types.js";
 import { Direction, ItemType } from "./types.js";
 
-describe("Move projection — direction (game-rules/movement)", () => {
+describe("Move projection — direction (game-engine/movement)", () => {
   it("uses the staged move and attributes it in the snake_moved event", () => {
     const s = makeSnake({
       snakeId: sid(0),
@@ -86,7 +86,7 @@ describe("Move projection — direction (game-rules/movement)", () => {
   });
 });
 
-describe("Move projection — body advance and growth (game-rules/movement, game-rules/food-and-growth)", () => {
+describe("Move projection — body advance and growth (game-engine/movement, game-engine/food-and-growth)", () => {
   it("advances the head and drops the tail, keeping length constant", () => {
     const s = makeSnake({
       snakeId: sid(0),
@@ -105,7 +105,7 @@ describe("Move projection — body advance and growth (game-rules/movement, game
     expect(snakeById(nextState, 0).lastDirection).toBe(Direction.Up);
   });
 
-  it("advances a grown snake by dropping only one tail copy (game-rules/movement)", () => {
+  it("advances a grown snake by dropping only one tail copy (game-engine/movement)", () => {
     // Doubled tail from an earlier meal: the cell stays occupied after a move.
     const s = makeSnake({
       snakeId: sid(0),
@@ -125,7 +125,7 @@ describe("Move projection — body advance and growth (game-rules/movement, game
     ]);
   });
 
-  it("grows exactly once, as a doubled tail at the eating turn's commit (game-rules/food-and-growth)", () => {
+  it("grows exactly once, as a doubled tail at the eating turn's commit (game-engine/food-and-growth)", () => {
     const s = makeSnake({
       snakeId: sid(0),
       body: [
@@ -159,7 +159,7 @@ describe("Move projection — body advance and growth (game-rules/movement, game
   });
 });
 
-describe("Collision rules (game-rules/collisions-and-severing)", () => {
+describe("Collision rules (game-engine/collisions-and-severing)", () => {
   it("kills a snake whose head enters a wall (044a)", () => {
     const s = makeSnake({
       snakeId: sid(0),
@@ -427,7 +427,7 @@ describe("Collision rules (game-rules/collisions-and-severing)", () => {
     expect(snakeById(nextState, 1).alive).toBe(true);
   });
 
-  it("keeps a wall-dying snake's body lethal in the same phase (game-rules/collisions-and-severing#dead-bodies-remain-lethal-all-turn)", () => {
+  it("keeps a wall-dying snake's body lethal in the same phase (game-engine/collisions-and-severing#dead-bodies-remain-lethal-all-turn)", () => {
     // A drives into the wall; B simultaneously enters A's body. Both die.
     const a = makeSnake({
       snakeId: sid(0),
@@ -471,7 +471,7 @@ describe("Collision rules (game-rules/collisions-and-severing)", () => {
     expect(causes).toContainEqual([sid(1), "body_collision"]);
   });
 
-  it("ignores effects gained this turn for this turn's collisions (game-rules/turn-resolution-model)", () => {
+  it("ignores effects gained this turn for this turn's collisions (game-engine/turn-resolution-model)", () => {
     // Attacker collects an invuln potion THIS turn and hits a body: still level 0 → dies.
     const attacker = makeSnake({
       snakeId: sid(0),
@@ -505,7 +505,7 @@ describe("Collision rules (game-rules/collisions-and-severing)", () => {
   });
 });
 
-describe("Health rules (game-rules/health-and-starvation)", () => {
+describe("Health rules (game-engine/health-and-starvation)", () => {
   it("subtracts 1 health per turn unconditionally (046a)", () => {
     const s = makeSnake({ snakeId: sid(0), health: 42 });
     const { nextState } = doResolve(state([s]), moves([[0, Direction.Up]]));
@@ -555,7 +555,7 @@ describe("Health rules (game-rules/health-and-starvation)", () => {
     expect(new Set(died?.sources)).toEqual(new Set(["tick", "hazard"]));
   });
 
-  it("restores health to max and grows on food (046c, game-rules/food-and-growth)", () => {
+  it("restores health to max and grows on food (046c, game-engine/food-and-growth)", () => {
     const s = makeSnake({ snakeId: sid(0), health: 30 });
     const head = s.body[0];
     if (head === undefined) throw new Error("no head");
@@ -570,7 +570,7 @@ describe("Health rules (game-rules/health-and-starvation)", () => {
     const eaten = eventsOfKind(events, "food_eaten");
     expect(eaten).toHaveLength(1);
     expect(eaten[0]?.healthRestored).toBe(100 - 29); // after the tick
-    // reference to the consumed item by derived id (game-rules/item-identity)
+    // reference to the consumed item by derived id (game-engine/item-identity)
     expect(eaten[0]?.itemId).toBe("0:0");
   });
 
@@ -720,7 +720,7 @@ describe("Health rules (game-rules/health-and-starvation)", () => {
   });
 });
 
-describe("Potion rule (game-rules/team-potion-effects/027)", () => {
+describe("Potion rule (game-engine/team-potion-effects/027)", () => {
   function teamPair() {
     const collector = makeSnake({
       snakeId: sid(0),
@@ -804,7 +804,7 @@ describe("Potion rule (game-rules/team-potion-effects/027)", () => {
     ]);
   });
 
-  it("treats the two potion families independently (game-rules/team-potion-effects)", () => {
+  it("treats the two potion families independently (game-engine/team-potion-effects)", () => {
     const [collector, mate] = teamPair();
     const potions = [
       makeItem(0, ItemType.InvulnPotion, { x: 3, y: 4 }),

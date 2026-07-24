@@ -5,7 +5,7 @@ This package is `@cyphid/snek-stdb`: the SpacetimeDB TypeScript module. It is th
 ## Spec scope
 
 - **Module 04** (`legacy-spec-archive/spec/04-stdb-engine.md`) — reducers, schema, RLS, chess timer, subscription queries.
-- **Module 01 / `game-rules` capability** (`openspec/specs/game-rules/spec.md`) — consumed via `@cyphid/snek-engine`.
+- **Module 01 / `game-engine` capability** (`openspec/specs/game-engine/spec.md`) — consumed via `@cyphid/snek-engine`.
 - **Module 02** (`legacy-spec-archive/spec/02-platform-architecture.md`) — lifecycle and identity context.
 - **Module 03** (`legacy-spec-archive/spec/03-auth-and-identity.md`) — OIDC/JWT validation, RLS identity model.
 

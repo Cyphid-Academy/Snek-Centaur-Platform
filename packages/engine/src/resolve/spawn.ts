@@ -1,5 +1,5 @@
 // Item spawning (01 §2.8 stage 6): seeded generation against the committed
-// occupancy. spec: game-rules/item-spawning, game-rules/item-identity.
+// occupancy. spec: game-engine/item-spawning, game-engine/item-identity.
 import { cellIndex, fertileGroundEnabled } from "../board.js";
 import { spawnTurnAfter } from "../items.js";
 import type { Rng } from "../rng.js";
@@ -12,7 +12,7 @@ import type { EventBuffer } from "./events.js";
 export function runSpawning(ctx: TurnContext, turnSeed: Uint8Array, events: EventBuffer): void {
   const { board, config, items } = ctx;
   // Spawned items first exist at the boundary after this turn — their
-  // spawnTurn per game-rules/item-identity.
+  // spawnTurn per game-engine/item-identity.
   const spawnTurn = spawnTurnAfter(ctx.turnNumber);
   let spawnedThisTurn = 0;
 
@@ -31,7 +31,7 @@ export function runSpawning(ctx: TurnContext, turnSeed: Uint8Array, events: Even
         const cell = { x, y };
         const key = cellIndex(board, cell);
         // The items map already reflects this turn's earlier spawns, so a
-        // later family can never stack onto a just-spawned cell (game-rules/item-identity).
+        // later family can never stack onto a just-spawned cell (game-engine/item-identity).
         if (occupied.has(key) || items.has(key)) continue;
         cells.push(cell);
       }
@@ -69,7 +69,7 @@ export function runSpawning(ctx: TurnContext, turnSeed: Uint8Array, events: Even
     rngFood,
     eligibleSpawnCells(fertileGroundEnabled(board)),
   );
-  // Potion eligibility is not fertile-restricted (game-rules/item-spawning; DECISIONS.md §2.1).
+  // Potion eligibility is not fertile-restricted (game-engine/item-spawning; DECISIONS.md §2.1).
   const rngPotion = rngFromSeed(subSeed(turnSeed, "phase-8-potions"));
   spawnItems(
     ItemType.InvulnPotion,
@@ -87,7 +87,7 @@ export function runSpawning(ctx: TurnContext, turnSeed: Uint8Array, events: Even
 
 // Birth record per item kind — an exhaustive switch over the sealed Item
 // union; the assertNever arm turns any future item kind into a compile
-// error here (game-rules/domain-vocabulary closed sets).
+// error here (game-engine/domain-vocabulary closed sets).
 function spawnEventFor(item: Item): TurnEvent {
   switch (item.itemType) {
     case ItemType.Food:

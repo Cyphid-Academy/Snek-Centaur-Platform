@@ -1,7 +1,7 @@
 // Domain type vocabulary for the Team Snek game engine.
 // This file is the canonical TypeScript rendering of spec module 01's
 // Exported Interfaces (spec/01-game-rules.md Section 3), consumed by all
-// three runtimes per 02-REQ-034.
+// three runtimes per global-invariants/one-shared-engine.
 //
 // Note on enums: the spec drafts `Direction`/`CellType`/`ItemType` as
 // `const enum`s. This workspace compiles with `isolatedModules` +
@@ -11,12 +11,12 @@
 // literal-union pattern, which preserves the spec's numeric values exactly
 // while remaining safe in every consumer runtime.
 
-// spec: game-rules/domain-vocabulary
+// spec: game-engine/domain-vocabulary
 export const Direction = { Up: 0, Right: 1, Down: 2, Left: 3 } as const;
 export type Direction = (typeof Direction)[keyof typeof Direction];
 
 // Canonical iteration order (Up, Right, Down, Left) — also the draw order of
-// the turn-0 seeded random pick (game-rules/movement), so reordering changes replays.
+// the turn-0 seeded random pick (game-engine/movement), so reordering changes replays.
 export const ALL_DIRECTIONS: ReadonlyArray<Direction> = [
   Direction.Up,
   Direction.Right,
@@ -24,17 +24,17 @@ export const ALL_DIRECTIONS: ReadonlyArray<Direction> = [
   Direction.Left,
 ];
 
-// spec: game-rules/domain-vocabulary. Fertile is an overlay on Normal — a cell is never
+// spec: game-engine/domain-vocabulary. Fertile is an overlay on Normal — a cell is never
 // simultaneously Fertile and Wall/Hazard — but is represented as a distinct
 // CellType so every inner cell sits in exactly one category.
 export const CellType = { Normal: 0, Wall: 1, Hazard: 2, Fertile: 3 } as const;
 export type CellType = (typeof CellType)[keyof typeof CellType];
 
-// spec: game-rules/domain-vocabulary
+// spec: game-engine/domain-vocabulary
 export const ItemType = { Food: 0, InvulnPotion: 1, InvisPotion: 2 } as const;
 export type ItemType = (typeof ItemType)[keyof typeof ItemType];
 
-// spec: game-rules/domain-vocabulary
+// spec: game-engine/domain-vocabulary
 export type EffectFamily = "invulnerability" | "invisibility";
 export type EffectState = "buff" | "debuff";
 
@@ -49,7 +49,7 @@ export interface Cell {
 export type SnakeId = number & { readonly __brand: "SnakeId" };
 export type CentaurTeamId = string & { readonly __brand: "CentaurTeamId" };
 // ItemId is a DERIVED scalar rendering "spawnTurn:spawnIndex" of the item
-// identity pair (game-rules/item-identity) — computed via itemIdOf for
+// identity pair (game-engine/item-identity) — computed via itemIdOf for
 // display/keying, never stored: the identity lives as the ItemIdentity
 // fields on the item itself.
 export type ItemId = string & { readonly __brand: "ItemId" };
@@ -66,20 +66,20 @@ export type Agent =
   | { readonly kind: "centaur_team"; readonly centaurTeamId: CentaurTeamId }
   | { readonly kind: "operator"; readonly operatorUserId: UserId };
 
-// spec: game-rules/domain-vocabulary. A snake holds at most one active effect per family
-// (game-rules/team-potion-effects). `expiryTurn` is the last turn on which the effect is active
-// (game-rules/team-potion-effects#three-turn-expiry).
+// spec: game-engine/domain-vocabulary. A snake holds at most one active effect per family
+// (game-engine/team-potion-effects). `expiryTurn` is the last turn on which the effect is active
+// (game-engine/team-potion-effects#three-turn-expiry).
 export interface PotionEffect {
   readonly family: EffectFamily;
   readonly state: EffectState;
   readonly expiryTurn: TurnNumber;
 }
 
-// spec: game-rules/domain-vocabulary. `invulnerabilityLevel` and `visible` are NOT stored
-// fields — they are derived from `activeEffects` per game-rules/collisions-and-severing/023 via
+// spec: game-engine/domain-vocabulary. `invulnerabilityLevel` and `visible` are NOT stored
+// fields — they are derived from `activeEffects` per game-engine/collisions-and-severing/023 via
 // `invulnerabilityLevel(snake)` and `isVisible(snake)` in effects.ts.
 // SnakeState carries no intra-turn bookkeeping: growth is a duplicated tail
-// segment in `body` (game-rules/food-and-growth) and team rebuilds are intra-turn claims.
+// segment in `body` (game-engine/food-and-growth) and team rebuilds are intra-turn claims.
 export interface SnakeState {
   readonly snakeId: SnakeId;
   readonly letter: string; // single alphabetic char, 'A' + index within team
@@ -88,12 +88,12 @@ export interface SnakeState {
   // cell (duplicated tail from growth; fully stacked game-start body).
   readonly body: ReadonlyArray<Cell>;
   readonly health: number;
-  readonly activeEffects: ReadonlyArray<PotionEffect>; // ≤1 per family (game-rules/team-potion-effects)
+  readonly activeEffects: ReadonlyArray<PotionEffect>; // ≤1 per family (game-engine/team-potion-effects)
   readonly lastDirection: Direction | null;
   readonly alive: boolean;
 }
 
-// spec: game-rules/item-identity — a present item. Consumption removes the entry from the
+// spec: game-engine/item-identity — a present item. Consumption removes the entry from the
 // items collection at commit; there is no consumed flag. The full lifetime
 // (spawn/destruction turns) is module 04's item_lifetimes record, maintained
 // from spawn/consumption events.
@@ -102,7 +102,7 @@ export type PotionType = typeof ItemType.InvulnPotion | typeof ItemType.InvisPot
 
 // Common item supertype: the identity pair plus location. Concrete item
 // kinds extend it, discriminated by itemType; `Item` below is the sealed
-// union (the closed set of game-rules/domain-vocabulary, compiler-enforced
+// union (the closed set of game-engine/domain-vocabulary, compiler-enforced
 // via never-checked switches — see assertNever).
 export interface ItemBase {
   // The turn boundary at which the item first exists: game setup spawns at
@@ -128,19 +128,19 @@ export function assertNever(x: never): never {
   throw new Error(`unreachable: ${JSON.stringify(x)}`);
 }
 
-// spec: game-rules/item-identity, 01 §3.2 — the present-items component of game state,
+// spec: game-engine/item-identity, 01 §3.2 — the present-items component of game state,
 // keyed by canonical cell index so a second occupant of a cell is
 // unrepresentable. Build from flat lists via itemsByCell (items.ts).
 export type ItemsByCell = ReadonlyMap<CellIndex, Item>;
 
-// spec: game-rules/board-geometry. Flat row-major cell array; index is
+// spec: game-engine/board-geometry. Flat row-major cell array; index is
 // `y * boardSize + x` (module 01 DOWNSTREAM IMPACT note 3).
 export interface Board {
   readonly boardSize: number; // edge length in cells
   readonly cells: ReadonlyArray<CellType>; // length = boardSize * boardSize
 }
 
-// spec: game-rules/chess-timer..037
+// spec: game-engine/chess-timer..037
 export interface CentaurTeamClockState {
   readonly centaurTeamId: CentaurTeamId;
   readonly budgetMs: number; // persistent across turns
@@ -148,30 +148,30 @@ export interface CentaurTeamClockState {
   readonly declaredTurnOver: boolean;
 }
 
-// spec: game-rules/configuration-parameters..070 (ranges enforced by user-facing surfaces, not here)
+// spec: game-engine/configuration-parameters..070 (ranges enforced by user-facing surfaces, not here)
 export interface GameOrchestrationConfig {
-  readonly boardSize: number; // positive integer, game-rules/board-geometry, game-rules/configuration-parameters
-  readonly snakesPerTeam: number; // 1-10, default 5, game-rules/initial-snakes, game-rules/configuration-parameters
-  readonly hazardPercentage: number; // 0-30, default 0, game-rules/hazards, game-rules/configuration-parameters
+  readonly boardSize: number; // positive integer, game-engine/board-geometry, game-engine/configuration-parameters
+  readonly snakesPerTeam: number; // 1-10, default 5, game-engine/initial-snakes, game-engine/configuration-parameters
+  readonly hazardPercentage: number; // 0-30, default 0, game-engine/hazards, game-engine/configuration-parameters
   readonly fertileGround: {
-    readonly density: number; // 0-90, default 30, game-rules/configuration-parameters (0 = disabled)
-    readonly clustering: number; // 1-20, default 10, game-rules/configuration-parameters
+    readonly density: number; // 0-90, default 30, game-engine/configuration-parameters (0 = disabled)
+    readonly clustering: number; // 1-20, default 10, game-engine/configuration-parameters
   };
 }
 
-// spec: game-rules/configuration-parameters..068, game-rules/configuration-parameters..077
+// spec: game-engine/configuration-parameters..068, game-engine/configuration-parameters..077
 export interface GameRuntimeConfig {
-  readonly maxHealth: number; // 1-500, default 100, game-rules/configuration-parameters
-  readonly maxTurns: number; // 0 (disabled) or 1-1000, default 100, game-rules/configuration-parameters
-  readonly hazardDamage: number; // 1-100, default 15, game-rules/configuration-parameters
-  readonly foodSpawnRate: number; // 0-5, default 0.5, game-rules/configuration-parameters
-  readonly invulnPotionSpawnRate: number; // 0-0.2, default 0.15, game-rules/configuration-parameters
-  readonly invisPotionSpawnRate: number; // 0-0.2, default 0.1, game-rules/configuration-parameters
+  readonly maxHealth: number; // 1-500, default 100, game-engine/configuration-parameters
+  readonly maxTurns: number; // 0 (disabled) or 1-1000, default 100, game-engine/configuration-parameters
+  readonly hazardDamage: number; // 1-100, default 15, game-engine/configuration-parameters
+  readonly foodSpawnRate: number; // 0-5, default 0.5, game-engine/configuration-parameters
+  readonly invulnPotionSpawnRate: number; // 0-0.2, default 0.15, game-engine/configuration-parameters
+  readonly invisPotionSpawnRate: number; // 0-0.2, default 0.1, game-engine/configuration-parameters
   readonly clock: {
-    readonly initialBudgetMs: number; // 0-600000, default 60000, game-rules/configuration-parameters
-    readonly budgetIncrementMs: number; // 100-5000, default 500, game-rules/configuration-parameters
-    readonly firstTurnTimeMs: number; // 1000-300000, default 60000, game-rules/configuration-parameters
-    readonly maxTurnTimeMs: number; // 100-300000, default 10000, game-rules/configuration-parameters
+    readonly initialBudgetMs: number; // 0-600000, default 60000, game-engine/configuration-parameters
+    readonly budgetIncrementMs: number; // 100-5000, default 500, game-engine/configuration-parameters
+    readonly firstTurnTimeMs: number; // 1000-300000, default 60000, game-engine/configuration-parameters
+    readonly maxTurnTimeMs: number; // 100-300000, default 10000, game-engine/configuration-parameters
   };
 }
 
@@ -180,7 +180,7 @@ export interface GameConfig {
   readonly runtime: GameRuntimeConfig;
 }
 
-// Canonical defaults from game-rules/configuration-parameters..077. Exported as a convenience for
+// Canonical defaults from game-engine/configuration-parameters..077. Exported as a convenience for
 // downstream configuration surfaces and tests; not part of the minimal
 // module-01 contract.
 export const DEFAULT_GAME_CONFIG: GameConfig = {
@@ -206,7 +206,7 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
   },
 };
 
-// spec: game-rules/scoring..058 (Section 3.4)
+// spec: game-engine/scoring..058 (Section 3.4)
 export type GameOutcome =
   | { readonly kind: "in_progress" }
   | {
@@ -221,7 +221,7 @@ export type GameOutcome =
     }
   | { readonly kind: "error"; readonly reason: string };
 
-// spec: game-rules/turn-events (Section 2.11) — closed discriminated union.
+// spec: game-engine/turn-events (Section 2.11) — closed discriminated union.
 export type DeathCause =
   | "wall"
   | "self_collision"
@@ -229,7 +229,7 @@ export type DeathCause =
   | "head_to_head"
   | "health_depletion";
 
-// Damage-claim sources reported on health_depletion deaths (game-rules/health-and-starvation).
+// Damage-claim sources reported on health_depletion deaths (game-engine/health-and-starvation).
 export type DamageSource = "tick" | "hazard";
 
 export type TurnEvent =
@@ -250,7 +250,7 @@ export type TurnEvent =
       readonly killerSnakeId: SnakeId | null;
       readonly location: Cell;
       // Present iff cause === 'health_depletion': every damage source that
-      // contributed to the fatal health resolution (game-rules/health-and-starvation).
+      // contributed to the fatal health resolution (game-engine/health-and-starvation).
       readonly sources?: ReadonlyArray<DamageSource>;
     }
   | {
@@ -263,7 +263,7 @@ export type TurnEvent =
   | {
       readonly kind: "food_eaten";
       readonly snakeId: SnakeId;
-      // Reference to the consumed item by derived id (game-rules/item-identity);
+      // Reference to the consumed item by derived id (game-engine/item-identity);
       // the item's full data travelled on its spawn record.
       readonly itemId: ItemId;
       readonly cell: Cell;
@@ -272,7 +272,7 @@ export type TurnEvent =
   | {
       readonly kind: "potion_collected";
       readonly snakeId: SnakeId;
-      // Reference to the consumed item by derived id (game-rules/item-identity).
+      // Reference to the consumed item by derived id (game-engine/item-identity).
       readonly itemId: ItemId;
       readonly cell: Cell;
       readonly potionType: PotionType;
@@ -305,7 +305,7 @@ export type TurnEvent =
       readonly reason: "collector_disruption" | "expiry" | "replaced";
     };
 
-// spec: game-rules/board-generation-retry (Section 3.6)
+// spec: game-engine/board-generation-retry (Section 3.6)
 export interface BoardGenerationFailure {
   readonly code: "HAZARD_CONNECTIVITY" | "TERRITORY_PARITY_SHORTAGE" | "INITIAL_FOOD_SHORTAGE";
   readonly attemptsUsed: 4;
@@ -322,7 +322,7 @@ export interface StagedMove {
   readonly stagedBy: Agent; // never null on input; absence = omit the map entry
 }
 
-// spec: game-rules/domain-vocabulary. The canonical aggregate of the
+// spec: game-engine/domain-vocabulary. The canonical aggregate of the
 // four game-state components; module 04 assembles this shape from its tables
 // (`items` via itemsByCell over the active item_lifetimes rows).
 export interface GameState {
