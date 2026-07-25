@@ -239,7 +239,7 @@ export function foldChange(root, changeName) {
     }
     if (ops.preamble)
       fail(
-        `${cap}: delta carries a new-capability "## Purpose" preamble but openspec/specs/${cap}/spec.md already exists — reconcile the Purpose by hand and re-author the delta without the preamble`,
+        `${cap}: delta carries a new-capability "## Purpose" preamble but openspec/specs/${cap}/spec.md already exists — a "## Purpose" preamble mints a capability. To amend an existing capability's Purpose (the only way its "Depends on:" declaration can change), use a "## MODIFIED Purpose" section instead`,
       );
     const spec = splitSpec(readFileSync(target, "utf8"));
     if (spec === null) fail(`${cap}: spec.md has no "## Requirements" section`);
@@ -273,9 +273,22 @@ export function foldChange(root, changeName) {
       appended.push(b);
     }
     const blocks = [...spec.blocks.filter((b) => byName.get(b.name) === b), ...appended];
-    writeFileSync(target, recompose({ ...spec, blocks }));
+    // MODIFIED Purpose replaces the `## Purpose` section inside `before` (the
+    // title line plus the Purpose). Everything above the Purpose heading is
+    // preserved, so the title survives verbatim.
+    let before = spec.before;
+    if (ops.modifiedPurpose) {
+      const idx = before.indexOf("## Purpose");
+      if (idx === -1)
+        fail(
+          `${cap}: delta carries "## MODIFIED Purpose" but openspec/specs/${cap}/spec.md has no "## Purpose" section to amend`,
+        );
+      before = `${before.slice(0, idx)}## Purpose\n\n${ops.modifiedPurpose}\n`;
+    }
+    writeFileSync(target, recompose({ ...spec, before, blocks }));
     const n = (c) => (c ? c : null);
     const counts = [
+      ops.modifiedPurpose ? "Purpose amended" : null,
       n(ops.renamed.length) && `${ops.renamed.length} renamed`,
       n(ops.removed.length) && `${ops.removed.length} removed`,
       n(ops.modified.size) && `${ops.modified.size} modified`,

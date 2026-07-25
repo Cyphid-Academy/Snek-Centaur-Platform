@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { freshnessProblemsFor } from "./check-change-freshness.mjs";
 import { taskProgress } from "./check-open-changes.mjs";
 import { foldChange } from "./fold-change.mjs";
-import { buildSpecIndex, makeResolver, parseDependsOn } from "./spec-index.mjs";
+import { buildSpecIndex, makeResolver, parseDeltaOps, parseDependsOn } from "./spec-index.mjs";
 
 const write = (root, path, content) => {
   mkdirSync(join(root, dirname(path)), { recursive: true });
@@ -267,5 +267,141 @@ describe("archive-due gate (taskProgress)", () => {
 - [ ] later work`);
     expect(p.implUnchecked).toBe(1);
     expect(p.archiveUnchecked).toBe(1);
+  });
+});
+
+// A temp repo with an EXISTING capability plus a change that amends its
+// Purpose through `## MODIFIED Purpose`. `amend` is the replacement Purpose
+// body written in the edit commit; the seed commit always carries the live
+// Purpose verbatim, so the seed/edit pair is a reviewable word-diff.
+function purposeFixture({
+  amend = null,
+  seedWithAmendment = false,
+  seedWithoutPurpose = false,
+} = {}) {
+  const root = mkdtempSync(join(tmpdir(), "purpose-"));
+  const livePurpose = "Base purpose text.\n\nDepends on: (none — root).";
+  write(
+    root,
+    "openspec/specs/cap/spec.md",
+    `# cap Specification
+
+## Purpose
+
+${livePurpose}
+
+## Requirements
+
+### Requirement: cap/alpha
+The system SHALL do alpha.
+
+#### Scenario: #a1
+- **WHEN** x
+- **THEN** y
+`,
+  );
+  const delta = (
+    purpose,
+  ) => `${purpose === null ? "" : `## MODIFIED Purpose\n\n${purpose}\n\n`}## ADDED Requirements
+
+### Requirement: cap/beta
+The system SHALL do beta.
+
+#### Scenario: #b1
+- **WHEN** p
+- **THEN** q
+`;
+  const deltaPath = "openspec/changes/amend-test/specs/cap/spec.md";
+  write(
+    root,
+    deltaPath,
+    delta(seedWithoutPurpose ? null : seedWithAmendment ? (amend ?? livePurpose) : livePurpose),
+  );
+  const git = (cmd) => execSync(cmd, { cwd: root });
+  git("git init -q && git add -A && git -c user.email=t@t -c user.name=t commit -qm seed");
+  if (amend && !seedWithAmendment) {
+    write(root, deltaPath, delta(amend));
+    git("git add -A && git -c user.email=t@t -c user.name=t commit -qm edit");
+  }
+  return { root, livePurpose, deltaPath };
+}
+
+describe("## MODIFIED Purpose (amending an existing capability's Purpose)", () => {
+  it("is parsed as its own section, separate from a minting preamble", () => {
+    const ops = parseDeltaOps(
+      "## MODIFIED Purpose\n\nNew text.\n\nDepends on: game-engine.\n\n## ADDED Requirements\n\n### Requirement: a/b\nBody.\n",
+    );
+    expect(ops.modifiedPurpose).toContain("Depends on: game-engine.");
+    expect(ops.preamble).toBe("");
+    expect([...ops.added.keys()]).toEqual(["a/b"]);
+    expect(parseDependsOn(ops.modifiedPurpose).deps).toEqual(["game-engine"]);
+  });
+
+  it("passes freshness when the seed carries the live Purpose verbatim", () => {
+    const { root } = purposeFixture({ amend: "Amended purpose.\n\nDepends on: (none — root)." });
+    expect(freshnessProblemsFor(root, "amend-test").problems).toEqual([]);
+  });
+
+  it("fails freshness when the Purpose block is not in the seed commit", () => {
+    // Seed has no Purpose block at all; the amendment is bolted on afterwards,
+    // which is exactly the "extending the delta in place" the rule forbids.
+    const { root, deltaPath } = purposeFixture({ seedWithoutPurpose: true });
+    const body = readFileSync(join(root, deltaPath), "utf8");
+    writeFileSync(join(root, deltaPath), `## MODIFIED Purpose\n\nLate.\n\n${body}`);
+    execSync("git add -A && git -c user.email=t@t -c user.name=t commit -qm late", { cwd: root });
+    const { problems } = freshnessProblemsFor(root, "amend-test");
+    expect(problems.join("\n")).toMatch(
+      /"## MODIFIED Purpose" for "cap" is not in the seed commit/,
+    );
+  });
+
+  it("fails freshness when specs/ advanced under the seeded Purpose", () => {
+    const { root } = purposeFixture({ amend: "Amended.\n\nDepends on: (none — root)." });
+    const spec = join(root, "openspec/specs/cap/spec.md");
+    writeFileSync(
+      spec,
+      readFileSync(spec, "utf8").replace("Base purpose text.", "Base purpose text, revised."),
+    );
+    const { problems } = freshnessProblemsFor(root, "amend-test");
+    expect(problems.join("\n")).toMatch(/specs\/ has advanced since "cap"'s Purpose was seeded/);
+  });
+
+  it("rejects MODIFIED Purpose on a capability that does not exist yet", () => {
+    const { root } = purposeFixture();
+    execSync(
+      "git mv openspec/specs/cap openspec/specs/other && git -c user.email=t@t -c user.name=t commit -qm mv",
+      { cwd: root },
+    );
+    const { problems } = freshnessProblemsFor(root, "amend-test");
+    expect(problems.join("\n")).toMatch(
+      /carries "## MODIFIED Purpose" but the capability does not exist/,
+    );
+  });
+
+  it("folds by replacing the Purpose while preserving the title and requirements", () => {
+    const { root } = purposeFixture({
+      amend: "Amended purpose body.\n\nDepends on: (none — root).",
+    });
+    foldChange(root, "amend-test");
+    const out = readFileSync(join(root, "openspec/specs/cap/spec.md"), "utf8");
+    expect(out).toMatch(/^# cap Specification\n/);
+    expect(out).toContain("Amended purpose body.");
+    expect(out).not.toContain("Base purpose text.");
+    expect(out).toContain("### Requirement: cap/alpha");
+    expect(out).toContain("### Requirement: cap/beta");
+    // The amendment is folded once, not left as a delta section.
+    expect(out).not.toContain("## MODIFIED Purpose");
+  });
+
+  it("refuses a minting preamble when the capability already exists, naming the remedy", () => {
+    const { root, deltaPath } = purposeFixture();
+    writeFileSync(
+      join(root, deltaPath),
+      readFileSync(join(root, deltaPath), "utf8").replace("## MODIFIED Purpose", "## Purpose"),
+    );
+    execSync("git add -A && git -c user.email=t@t -c user.name=t commit -qm p", { cwd: root });
+    const { problems } = freshnessProblemsFor(root, "amend-test");
+    expect(problems.join("\n")).toMatch(/mints a capability/);
+    expect(problems.join("\n")).toMatch(/use a "## MODIFIED Purpose" section/);
   });
 });

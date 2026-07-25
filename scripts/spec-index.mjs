@@ -125,8 +125,12 @@ export function makeResolver(index) {
  * lists { from, to } pairs. `preamble` is everything before the first
  * operation section, trimmed — non-empty only for a delta that mints a new
  * capability, where it carries the capability's `## Purpose` section
- * (spec:fold builds specs/<capability>/spec.md from it). `renamesCapability`
- * is the source capability name when the preamble carries a
+ * (spec:fold builds specs/<capability>/spec.md from it).
+ * `modifiedPurpose` is the replacement Purpose body from a
+ * `## MODIFIED Purpose` section — the sanctioned amendment path for an
+ * EXISTING capability's Purpose (and the only way its `Depends on:`
+ * declaration can change); empty when the delta does not amend it.
+ * `renamesCapability` is the source capability name when the preamble carries a
  * `## RENAMES CAPABILITY: <old>` directive — the delta's capability is that
  * source renamed: fold carries the source's requirements over (re-prefixed)
  * and appends the delta's ADDED. The directive is stripped from `preamble`
@@ -139,6 +143,7 @@ export function parseDeltaOps(content) {
   const removed = [];
   const renamed = [];
   const preambleLines = [];
+  const modifiedPurposeLines = [];
   let section = null;
   let blockName = null;
   let blockLines = [];
@@ -157,6 +162,21 @@ export function parseDeltaOps(content) {
     if (sec) {
       flush();
       section = sec[1];
+      continue;
+    }
+    // `## MODIFIED Purpose` amends an EXISTING capability's Purpose section —
+    // the only sanctioned way it ever changes, and the only way a capability
+    // can gain a dependency (the lint-load-bearing `Depends on:` sentence
+    // lives there). Its body is the replacement Purpose, full-block like a
+    // MODIFIED requirement, so the amendment is reviewed as a word-diff.
+    // Distinct from `preamble`, which mints a capability that has no spec yet.
+    if (/^## MODIFIED Purpose\s*$/.test(line)) {
+      flush();
+      section = "PURPOSE";
+      continue;
+    }
+    if (section === "PURPOSE") {
+      modifiedPurposeLines.push(line);
       continue;
     }
     if (section === null) {
@@ -192,7 +212,8 @@ export function parseDeltaOps(content) {
   const rc = preambleRaw.match(DIRECTIVE);
   const renamesCapability = rc ? rc[1] : null;
   const preamble = renamesCapability ? preambleRaw.replace(DIRECTIVE, "").trim() : preambleRaw;
-  return { added, modified, removed, renamed, renamesCapability, preamble };
+  const modifiedPurpose = modifiedPurposeLines.join("\n").trim();
+  return { added, modified, removed, renamed, renamesCapability, preamble, modifiedPurpose };
 }
 
 /**

@@ -30,8 +30,22 @@ game-engine/team-potion-effects#sacrificial-collection   # one of its scenarios
   changes that cite the old name stay traceable.
 - Code cites `// spec: <capability>/<slug>[#<scenario>]`; archived decision
   rationale is cited `// design: <archived-change-folder>`.
-- `pnpm spec:check` validates structure (strict OpenSpec validation),
-  every reference (`scripts/check-spec-citations.mjs`), and open changes'
+- The capability dependency rule is lint-enforced: every Purpose (a
+  capability's `spec.md`, a mint delta's preamble, or a `## MODIFIED
+  Purpose` amendment) declares its dependencies in a `Depends on:`
+  sentence; a capability's spec may reference only itself and those
+  declared dependencies, and the declared graph must stay acyclic.
+- A capability's Purpose is amended **only** through a `## MODIFIED
+  Purpose` delta section — the sole way `Depends on:` can ever change, so
+  gaining a dependency is a reviewed edit rather than an edit to `specs/`
+  behind the change machinery's back. It is full-block and seeded like a
+  MODIFIED requirement, and two open changes may not amend one
+  capability's Purpose (fold replaces it wholesale, with no merge). A
+  `## Purpose` **preamble** is the different thing: it *mints* a
+  capability that has no `spec.md` yet.
+- `pnpm spec:check` validates structure (strict OpenSpec validation of
+  `specs/` and of every open change), every reference and the capability
+  dependency graph (`scripts/check-spec-citations.mjs`), and open changes'
   seed freshness (`scripts/check-change-freshness.mjs`).
 
 ## Migration cutover table
@@ -108,8 +122,9 @@ final commit → merge. Four conventions bind agents:
   spec:freshness`, and as fold's hard precondition): a missing capability
   *without* a preamble fails — otherwise a typo'd capability folder name
   would silently mint a bogus capability — and a preamble whose capability
-  *already exists* fails, because another change minted it first (e.g.
-  across a rebase) and the Purpose was never reconciled. Minting a
+  *already exists* fails, because a preamble means "mint": use a `##
+  MODIFIED Purpose` section to amend the Purpose of a capability that is
+  already there. Minting a
   capability also means adding it to the capability list in
   `config.yaml`'s context block at archive time.
 - **Archiving is the PR's final commit, on a human decision.** Archiving

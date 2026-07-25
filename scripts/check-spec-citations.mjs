@@ -25,13 +25,16 @@
 //     overlapping open changes would clobber each other. (Several open
 //     changes MAY share one PR — a change train — precisely because this
 //     guard forces their requirement sets to be disjoint.)
-//   - Capability dependency rule: every Purpose (specs/ or a mint delta's
-//     preamble) declares its dependencies in a "Depends on:" sentence; a
+//   - Capability dependency rule: every Purpose (specs/, a mint delta's
+//     preamble, or a `## MODIFIED Purpose` amendment) declares its
+//     dependencies in a "Depends on:" sentence; a
 //     capability's spec may reference only itself and its declared
 //     dependencies, and the declared graph must be acyclic.
 //   - Identifier-map entries may carry a `change` field — the archived
 //     change folder that retired the id, added at that change's archive
 //     commit — which must resolve under openspec/changes/archive/.
+//   - Capability Purposes are amended only through a `## MODIFIED Purpose`
+//     delta section; two open changes may not amend one capability's Purpose.
 // Seed freshness (stale deltas vs an advanced specs/) is the companion
 // check scripts/check-change-freshness.mjs (pnpm spec:freshness).
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
@@ -107,9 +110,29 @@ if (existsSync(specsDir))
     if (existsSync(f))
       declareDepsFrom(cap, readFileSync(f, "utf8"), `openspec/specs/${cap}/spec.md`);
   }
+// An open delta's declaration overrides the specs/ one: a mint declares in its
+// `## Purpose` preamble, and an amendment in its `## MODIFIED Purpose` section.
+// Reading the amendment here is what makes adding a dependency legal WHILE the
+// change is open — the citations it authorises resolve against the amended
+// declaration, not the pre-change one.
+const purposeAmendedBy = new Map(); // cap -> change that amends its Purpose
 for (const { file, cap } of openDeltas) {
-  const { preamble } = parseDeltaOps(readFileSync(file, "utf8"));
-  if (preamble) declareDepsFrom(cap, preamble, file.replace(root, ""));
+  const { preamble, modifiedPurpose } = parseDeltaOps(readFileSync(file, "utf8"));
+  const where = file.replace(root, "");
+  if (preamble) declareDepsFrom(cap, preamble, where);
+  if (modifiedPurpose) {
+    // Purpose-overlap tripwire: fold replaces the Purpose wholesale with no
+    // three-way merge, exactly like a MODIFIED requirement block, so two open
+    // changes amending one capability's Purpose would clobber each other.
+    const change = where.match(/changes\/([^/]+)\//)?.[1] ?? where;
+    const prior = purposeAmendedBy.get(cap);
+    if (prior)
+      errors.push(
+        `${cap}: Purpose is amended by two open changes ("${prior}" and "${change}") — fold replaces it wholesale with no merge; archive one before authoring the other`,
+      );
+    else purposeAmendedBy.set(cap, change);
+    declareDepsFrom(cap, modifiedPurpose, where);
+  }
 }
 for (const [cap, deps] of declaredDeps)
   for (const d of deps) {

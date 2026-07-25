@@ -112,6 +112,14 @@ rules:
       silently resolve it. Open Questions must be resolved by a human before
       specs deltas are created; record the Decision in place when resolved.
   specs:
+    - 'A capability''s Purpose is amended ONLY through a "## MODIFIED
+      Purpose" delta section — the sole way its "Depends on:" declaration
+      can change, so a change that needs a new dependency declares it
+      there rather than editing specs/ outside the change machinery.
+      Full-block and seeded like a MODIFIED requirement (two-commit
+      seed/edit pair), and at most one open change may amend a given
+      capability''s Purpose. A "## Purpose" PREAMBLE is the different
+      thing: it mints a capability that has no spec.md yet.'
     - New requirements take a fresh kebab-case slug under their capability;
       never re-mint a removed slug or a tombstoned numeric identifier.
     - Requirement headers and scenario slugs are frozen once merged; renames
