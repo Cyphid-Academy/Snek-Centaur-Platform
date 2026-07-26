@@ -29,10 +29,10 @@ implementations enforce them" tasks do not apply here and are replaced below.
 
 ## Archive
 
-- [ ] 2.1 On explicit author instruction, `pnpm spec:fold extend-global-invariants`
+- [x] 2.1 On explicit author instruction, `pnpm spec:fold extend-global-invariants`
   then `openspec archive --skip-specs -y extend-global-invariants` at the tail
   of this PR (gi depends only on `game-engine`, already in `specs/`, so it
   folds ahead of the train changes that cite it; the capability already exists,
   so there is no `config.yaml` capability-list edit and no identifier-map edit)
-- [ ] 2.2 Re-run `pnpm spec:freshness` immediately before folding
-- [ ] 2.3 Run `pnpm spec:check` after archiving
+- [x] 2.2 Re-run `pnpm spec:freshness` immediately before folding
+- [x] 2.3 Run `pnpm spec:check` after archiving
