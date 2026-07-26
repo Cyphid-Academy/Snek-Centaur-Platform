@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { freshnessProblemsFor } from "./check-change-freshness.mjs";
 import { taskProgress } from "./check-open-changes.mjs";
 import { foldChange } from "./fold-change.mjs";
+import { entryProblems, primaryTarget } from "./identifier-map.mjs";
 import {
   buildSpecIndex,
   makeResolver,
@@ -532,6 +533,110 @@ describe("## MODIFIED Purpose (amending an existing capability's Purpose)", () =
     const { problems } = freshnessProblemsFor(root, "amend-test");
     expect(problems.join("\n")).toMatch(/mints a capability/);
     expect(problems.join("\n")).toMatch(/use a "## MODIFIED Purpose" section/);
+  });
+});
+
+describe("identifier-map schema (disposition + carriedBy)", () => {
+  const ctx = {
+    resolves: (r) => ["cap/alpha", "cap/beta", "cap/alpha#s1"].includes(r),
+    changeResolves: (c) => ["mint-cap", "other-change"].includes(c),
+  };
+  const check = (entry, kind = "requirement") =>
+    entryProblems("07-REQ-001", entry, { ...ctx, kind }).join("\n");
+
+  it("accepts an authored entry with one resolving home", () => {
+    expect(
+      check({ disposition: "authored", carriedBy: [{ target: "cap/alpha", change: "mint-cap" }] }),
+    ).toBe("");
+  });
+
+  it("accepts an authored entry with several homes — a legacy id may split", () => {
+    expect(
+      check({
+        disposition: "authored",
+        carriedBy: [
+          { target: "cap/alpha", change: "mint-cap", part: "first half" },
+          { target: "cap/beta", change: "other-change", part: "second half" },
+        ],
+      }),
+    ).toBe("");
+  });
+
+  it("rejects an authored entry with no home", () => {
+    expect(check({ disposition: "authored", carriedBy: [] })).toMatch(/names no home in carriedBy/);
+  });
+
+  it("rejects an authored home that has no target", () => {
+    expect(check({ disposition: "authored", carriedBy: [{ change: "mint-cap" }] })).toMatch(
+      /authored but a carriedBy element has no target/,
+    );
+  });
+
+  it("requires dropped to carry nowhere at all", () => {
+    expect(
+      check({
+        disposition: "dropped",
+        reason: "obsolete",
+        carriedBy: [{ target: "cap/alpha", change: "mint-cap" }],
+      }),
+    ).toMatch(/dropped but carriedBy is non-empty/);
+    expect(check({ disposition: "dropped", reason: "obsolete", carriedBy: [] })).toBe("");
+  });
+
+  it("requires a reason for mechanism and dropped, but not for authored", () => {
+    expect(check({ disposition: "mechanism", carriedBy: [{ change: "mint-cap" }] })).toMatch(
+      /is mechanism and must carry a "reason"/,
+    );
+    expect(check({ disposition: "dropped", carriedBy: [] })).toMatch(
+      /is dropped and must carry a "reason"/,
+    );
+    expect(
+      check({ disposition: "authored", carriedBy: [{ target: "cap/alpha", change: "mint-cap" }] }),
+    ).toBe("");
+  });
+
+  it("lets mechanism carry any number of homes, with or without targets", () => {
+    expect(check({ disposition: "mechanism", reason: "code", carriedBy: [] })).toBe("");
+    expect(
+      check({ disposition: "mechanism", reason: "code", carriedBy: [{ change: "mint-cap" }] }),
+    ).toBe("");
+    expect(
+      check({
+        disposition: "mechanism",
+        reason: "code",
+        carriedBy: [{ target: "cap/beta", change: "mint-cap" }],
+      }),
+    ).toBe("");
+  });
+
+  it("validates every home's target, change, and the entry's scenario anchors", () => {
+    const out = check({
+      disposition: "authored",
+      carriedBy: [{ target: "cap/ghost", change: "no-such-change" }],
+      scenarios: ["cap/alpha#nope"],
+    });
+    expect(out).toMatch(/carriedBy target "cap\/ghost" does not resolve/);
+    expect(out).toMatch(/carriedBy change "no-such-change" matches no open change/);
+    expect(out).toMatch(/scenario anchor "cap\/alpha#nope" does not resolve/);
+  });
+
+  it("rejects an unknown disposition and a missing carriedBy array", () => {
+    expect(check({ disposition: "parked", carriedBy: [] })).toMatch(/is not one of/);
+    expect(check({ disposition: "authored" })).toMatch(/has no carriedBy array/);
+  });
+
+  it("holds reviews to attribution only — no disposition required", () => {
+    expect(check({ carriedBy: [{ change: "mint-cap" }] }, "review")).toBe("");
+    expect(check({ carriedBy: [{ change: "nope" }] }, "review")).toMatch(/matches no open change/);
+  });
+
+  it("primaryTarget is the first home carrying a target", () => {
+    expect(
+      primaryTarget({
+        carriedBy: [{ change: "mint-cap" }, { target: "cap/beta", change: "mint-cap" }],
+      }),
+    ).toBe("cap/beta");
+    expect(primaryTarget({ carriedBy: [] })).toBeNull();
   });
 });
 

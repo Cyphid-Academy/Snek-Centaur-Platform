@@ -37,15 +37,20 @@
 //     dependencies in a "Depends on:" sentence; a
 //     capability's spec may reference only itself and its declared
 //     dependencies, and the declared graph must be acyclic.
-//   - Identifier-map entries may carry a `change` field — the archived
-//     change folder that retired the id, added at that change's archive
-//     commit — which must resolve under openspec/changes/archive/.
+//   - Identifier-map entries declare a `disposition` (authored / mechanism /
+//     dropped) and their homes in `carriedBy` — one element per place the
+//     legacy id's substance now lives. The disposition constrains the array
+//     (dropped MUST carry nowhere; authored must name >= 1 resolving target)
+//     and mandates a `reason` where nothing authored it. Rules live in
+//     ./identifier-map.mjs; COMPLETENESS against the legacy corpus is
+//     scripts/audit-all-modules.mjs (pnpm spec:audit).
 //   - Capability Purposes are amended only through a `## MODIFIED Purpose`
 //     delta section; two open changes may not amend one capability's Purpose.
 // Seed freshness (stale deltas vs an advanced specs/) is the companion
 // check scripts/check-change-freshness.mjs (pnpm spec:freshness).
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { entryProblems, primaryTarget } from "./identifier-map.mjs";
 import {
   buildSpecIndex,
   makeResolver,
@@ -58,7 +63,9 @@ import {
 } from "./spec-index.mjs";
 
 const root = new URL("..", import.meta.url).pathname;
-const MIGRATED_MODULES = new Set(["01"]); // numeric prefixes now tombstoned
+// Every module is migrated (corpus retired in full 2026-07-24): all numeric
+// prefixes are tombstoned and review-item citations are errors everywhere.
+const MIGRATED_MODULES = new Set(["01", "02", "03", "04", "05", "06", "07", "08"]);
 
 const walk = (dir, out = []) => {
   if (!existsSync(dir)) return out;
@@ -207,9 +214,6 @@ const archivedChanges = new Set(
 const mapPath = join(root, "legacy-spec-archive", "maps", "identifier-map.json");
 const retiredTarget = new Map();
 if (existsSync(mapPath)) {
-  const anchorOk = (ref, where) => {
-    if (!resolves(ref)) errors.push(`identifier-map.json: ${where} references unknown "${ref}"`);
-  };
   const map = JSON.parse(readFileSync(mapPath, "utf8"));
   if (map.provenance?.change && !archivedChanges.has(map.provenance.change))
     errors.push(
@@ -231,24 +235,15 @@ if (existsSync(mapPath)) {
     archivedChanges.has(name) ||
     openChangeNames.has(name) ||
     [...archivedChanges].some((a) => a.endsWith(`-${name}`));
-  const changeOk = (e, where) => {
-    if (e.change && !changeResolves(e.change))
-      errors.push(
-        `identifier-map.json: ${where} change "${e.change}" matches no open change or archive folder`,
-      );
-  };
+  // Entry schema (disposition + carriedBy) lives in ./identifier-map.mjs so
+  // the rules are unit-testable independently of this script's repo-wide scan.
   for (const [lid, e] of Object.entries(map.requirements ?? {})) {
-    if (e.target) {
-      anchorOk(e.target, lid);
-      retiredTarget.set(lid, e.target);
-    }
-    for (const sc of e.scenarios ?? []) anchorOk(sc, lid);
-    changeOk(e, lid);
+    errors.push(...entryProblems(lid, e, { resolves, changeResolves }));
+    const primary = primaryTarget(e);
+    if (primary) retiredTarget.set(lid, primary);
   }
-  for (const [rid, e] of Object.entries(map.reviews ?? {})) {
-    for (const sc of e.scenarios ?? []) anchorOk(sc, rid);
-    changeOk(e, rid);
-  }
+  for (const [rid, e] of Object.entries(map.reviews ?? {}))
+    errors.push(...entryProblems(rid, e, { resolves, changeResolves, kind: "review" }));
   for (const lid of Object.keys(map.requirements ?? {})) tombstones.add(lid);
 }
 
