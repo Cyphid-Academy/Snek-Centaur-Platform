@@ -11,11 +11,14 @@ admission test in the gi Purpose was applied to each id; the ids that
 failed it were routed by the matrix to user-story capabilities and are not
 touched here.
 
-Compression: the 27 ids yield 9 new requirements and 2 extensions of
-existing ones — dedupe fell mostly along the legacy modules' habit of
-restating the same topology rule once per runtime (module 04's "no
+Compression: these legacy ids yield nine new requirements and three
+extensions of existing ones — dedupe fell mostly along the legacy modules'
+habit of restating the same topology rule once per runtime (module 04's "no
 platform-wide state", module 05's "no live-game mirror", and module 08's
-"no client persistence" are one confinement rule seen from three sides).
+"no client persistence" are one confinement rule seen from three sides). A
+tenth new requirement, `team-private-centaur-state`, is minted with no legacy
+predecessor — a cross-cutting privacy invariant the train's dependent
+capabilities need to depend on (Cluster 3).
 
 ## Cluster 1 — State ownership and authority placement
 
@@ -68,6 +71,22 @@ transactional scenario gestures at this) — rejected because deployment
 cardinality and enforcement discipline are different behaviours; a reader
 hunting for "why must the guard be in the mutation" should find a
 requirement saying exactly that.
+
+### Convex joins the shared engine's consumers (MODIFIED `one-shared-engine`)
+
+The inherited requirement enumerated the SpacetimeDB module, the Server, and
+the web clients as consumers of the one `game-engine` build, but not Convex —
+which validates a game configuration against the engine's parameter
+vocabulary. `game-configuration` could not legitimately depend on the
+requirement its schema fidelity rests on while that requirement did not name
+Convex, so the enumeration is widened to four consumers, not three: same
+authority-placement principle (the engine is the sole source of the rules),
+one more runtime, so the requirement is extended, not duplicated. **If
+reversed** (Convex left out): the deployment either reimplements the engine's
+parameter schema — a parallel copy free to drift from the authoritative
+rules — or validates configurations against nothing, and the
+one-authoritative-rules guarantee grows a blind spot exactly where
+configurations enter the platform.
 
 ## Cluster 2 — Game-instance hermeticity
 
@@ -133,6 +152,27 @@ team-server-management trust paragraph (authored by that change).
 **If reversed**: any invariant "enforced" by UI absence is an invariant
 that a fork deletes; the open-source, fully-forkable application model
 becomes incompatible with security.
+
+### A team's Centaur state is private while it competes
+(`team-private-centaur-state`)
+
+This one is minted, not compressed from a legacy id: the train's observation,
+decision-transparency, bot-configuration, replay-and-audit, and bot-framework
+capabilities each need one cross-cutting invariant to depend on for the rule
+that a team's Centaur-subsystem state — its configuration, its per-game bot
+and operator coordination state, and its bot's recorded deliberation — is
+readable only by that team (and the identities it grants read scope) for as
+long as the competition is live, enforced by the subsystem's own function
+contract and widenable by no surface. Their local requirements
+(`live-game-observation/team-private-live-state`, `bot-configuration`'s read
+scoping, `decision-transparency`'s live-privacy clauses) instantiate it;
+owning it once here keeps a single identifier for "a team's reasoning is
+private while it competes" rather than five near-twins that could drift apart.
+**If reversed** (left to each capability): the same privacy boundary is
+restated five times, each free to draw the live/finished line or the
+read-scope set slightly differently, and an opponent gains a read path through
+whichever restatement is loosest — while every capability still looks locally
+compliant.
 
 ## Cluster 4 — Identity and credential discipline
 
@@ -210,6 +250,9 @@ depend on an invariant a future implementer could silently violate?
 - The decision to keep invisibility-filter mechanics out of gi depends on
   the observation capability owning them — enforced by the train's
   assignment, not mintable here without trampling that owner.
+- `team-private-centaur-state` is minted here not from a decision's mined
+  invariant but from the carving rule (Cluster 3): the dependents that need
+  it cite one owner rather than each restating it.
 - No other decision yielded a new invariant that is not already one of
   this change's requirements: this change, like the mint before it, is
   made *of* mined invariants.
@@ -218,7 +261,7 @@ depend on an invariant a future implementer could silently violate?
 
 - **Dumping-ground drift** remains gi's standing risk; every addition here
   was checked against the Purpose's three-prong admission test, and the
-  two MODIFIEDs extend existing identifiers rather than minting near-twins.
+  three MODIFIEDs extend existing identifiers rather than minting near-twins.
 - **Seam fidelity** — several ids split across changes (observation
   mechanics, API parity, trust prose). The map entries name the seams so
   the sibling changes' reviews can verify both halves landed.

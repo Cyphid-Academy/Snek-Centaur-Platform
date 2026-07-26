@@ -15,23 +15,33 @@ minted when the capability was created from module 02.
 
 ## What Changes
 
-- **`global-invariants` gains nine requirements and two extensions.** The
+- **`global-invariants` gains ten requirements and three extensions.** The
   additions are organised by five clusters (the section structure of
   `design.md`): state ownership and authority placement
   (`state-confined-to-owning-runtime`, `centaur-state-boundary`,
   `transactional-invariant-enforcement`), game-instance hermeticity
   (`game-instance-hermeticity`), cross-team information security
-  (`bot-compute-view-confinement`, plus MODIFIED
-  `team-granularity-authorization` and
+  (`bot-compute-view-confinement` and `team-private-centaur-state`, plus
+  MODIFIED `team-granularity-authorization` and
   `security-enforced-outside-the-library`), identity and credential
   discipline (`authenticated-unambiguous-identity`,
   `credential-confinement`), and client truthfulness
-  (`one-contract-many-surfaces`, `client-truthfulness`).
-- **27 legacy ids retire onto this capability**, recorded in the
-  identifier map under this change's name. Four of them are map-entry-only
-  retirements onto existing requirements whose text already carries their
-  substance; two more retire onto existing requirements that this change
-  extends; the rest retire onto the nine new requirements.
+  (`one-contract-many-surfaces`, `client-truthfulness`). A third extension,
+  MODIFIED `one-shared-engine`, enumerates Convex as a fourth consumer of
+  the shared engine build (it validates configuration against the engine's
+  parameter vocabulary), so `game-configuration` can depend on the invariant
+  its schema fidelity rests on.
+- **29 legacy homes retire onto this capability**, recorded in the
+  identifier map under this change's name: 27 `authored` (their substance is
+  now this capability's requirement text) and two `mechanism` (`05-REQ-001`,
+  `06-REQ-030` — enforcement lives in code, the invariant governing it named
+  here). One `authored` home is a map-entry-only retirement onto an existing
+  requirement whose text already carried its substance
+  (`access-follows-identity`); five retire onto the three requirements this
+  change extends; the remaining twenty-one, plus the two `mechanism` homes,
+  land on nine of the ten new requirements. `team-private-centaur-state` is
+  minted with no legacy predecessor — a cross-cutting privacy invariant the
+  train's observation, transparency, and bot capabilities depend on.
 - **No other capability is touched.** The seams noted in the disposition
   work (e.g. the invisibility-filter mechanics, API/frontend parity as an
   integrator story, the trust-model Purpose prose) are owned by their
@@ -60,19 +70,22 @@ authored by that change, not this one.
 
 ### Modified: global-invariants
 
-Nine ADDED requirements; two MODIFIED (`team-granularity-authorization`
+Ten ADDED requirements; three MODIFIED (`team-granularity-authorization`
 gains the observation-side sentence and a spectator scenario;
 `security-enforced-outside-the-library` is broadened from "never the Server
 library" to "never any client's presentation" and gains a forked-app
-scenario). Dependencies unchanged: game-engine only.
+scenario; `one-shared-engine` adds Convex as a fourth consumer of the shared
+engine build). Dependencies unchanged: game-engine only.
 
-## Disposition of the 27 legacy ids
+## Disposition of the legacy ids
 
-The legacy requirements and review items this change absorbs are recorded
-in the identifier map under this change's name. Two existing invariants
-were extended rather than duplicated, and four absorptions retire
-map-entry-only onto existing requirements whose text already carries their
-substance.
+The legacy requirements this change absorbs are recorded in the identifier
+map under this change's name — 29 homes: 27 `authored`, two `mechanism`, no
+review items. Three existing invariants were extended rather than duplicated
+(`team-granularity-authorization`, `security-enforced-outside-the-library`,
+`one-shared-engine`), and one absorption retires map-entry-only onto an
+existing requirement whose text already carries its substance
+(`access-follows-identity`).
 
 The `transactional-invariant-enforcement` requirement mints the one
 constraint-mining lead the atlas routed to `global-invariants` (uniqueness
@@ -83,7 +96,7 @@ change, minting it anywhere else in the train is barred, so it lands here.
 ## Impact
 
 - `openspec/changes/extend-global-invariants/specs/global-invariants/spec.md`
-  — the delta (9 ADDED, 2 MODIFIED).
+  — the delta (10 ADDED, 3 MODIFIED).
 - **Retirements**: this change's legacy absorptions are recorded in the
   identifier map (completed with the corpus retirement in this PR); the
   migration planning artifacts are archived under
