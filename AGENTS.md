@@ -7,7 +7,11 @@ This is the top-level agent context for **implementation work** in the Snek Cent
 > table in `openspec/README.md`). The pre-OpenSpec corpus is quarantined in
 > `legacy-spec-archive/` and remains binding for modules not yet migrated.
 > Spec changes flow through `/opsx:*` change folders. Run `pnpm spec:check`
-> after any change touching spec content or spec references.
+> after any change touching spec content or spec references. Changing a
+> `Depends on:` declaration additionally means running `pnpm spec:graph` in the
+> same commit: it regenerates `openspec/capability-graph.md`, the rendered
+> dependency graph, which is generated output and never hand-edited.
+> `pnpm spec:check` fails while that file is stale.
 
 - For **package-scoped implementation**: read the `AGENTS.md` in the relevant `packages/*/` or `apps/*/` directory.
 - This file covers repo-wide implementation conventions that apply everywhere.

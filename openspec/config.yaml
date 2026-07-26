@@ -212,6 +212,14 @@ rules:
       concept. When a dependency reaches a capability the owning capability
       does not declare, extend the Purpose via `## MODIFIED Purpose` — the
       declared list is an affordance, never a budget."
+    - "REGENERATE THE GRAPH VIEW whenever a dependency changes. Adding,
+      removing or re-pointing a `Depends on:` — at either grain, in specs/
+      or in a delta — moves the capability graph, so run `pnpm spec:graph`
+      in the same commit and include openspec/capability-graph.md in it.
+      That file is GENERATED: never hand-edit it, and never resolve a
+      conflict in it by hand — rerun the command. `pnpm spec:check` fails
+      while it is stale, so a forgotten regeneration is caught in CI, not
+      in review."
 
     - "NEW-CAPABILITY DELTAS: a delta file for a capability with no existing
       specs/<capability>/spec.md mints that capability. It must open with a

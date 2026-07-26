@@ -82,7 +82,8 @@ game-engine/team-potion-effects#sacrificial-collection   # one of its scenarios
 - `pnpm spec:check` validates structure (strict OpenSpec validation of
   `specs/` and of every open change), every reference, the capability
   dependency graph, and each requirement's structural dependencies
-  (`scripts/check-spec-citations.mjs`), open changes'
+  (`scripts/check-spec-citations.mjs`), the rendered graph's freshness
+  (`scripts/spec-graph.mjs --check`), open changes'
   seed freshness (`scripts/check-change-freshness.mjs`), and the
   identifier map's completeness against the legacy corpus
   (`scripts/audit-all-modules.mjs`, `pnpm spec:audit`).
@@ -148,7 +149,13 @@ parked ledger, staged retirements — are archived permanently under
 [`docs/spec-migration/`](../docs/spec-migration/).
 The capability dependency graph's live home is the `Depends on:`
 declaration in each capability's Purpose (lint-derived and acyclic;
-`spec:fold` enforces dependency-ordered archiving).
+`spec:fold` enforces dependency-ordered archiving);
+[`capability-graph.md`](capability-graph.md) is that graph rendered, and it is
+a view — never a second place to edit. **Any commit that changes a `Depends
+on:` declaration, at either grain, regenerates it**: run `pnpm spec:graph` and
+include the result. `pnpm spec:check` re-derives the file and fails while it
+is stale, naming the command, so the regeneration is enforced rather than
+remembered.
 
 ## Workflow
 
