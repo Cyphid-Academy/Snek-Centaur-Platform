@@ -1,3 +1,10 @@
+> **CLOSED** — every identifier listed here was migrated by the 2026-07-24
+> change train and now carries an entry in
+> `legacy-spec-archive/maps/identifier-map.json`. Nothing below is still
+> parked; this file is the record of what the partial-migration era deferred
+> and is retained for that reason. The migration audit treats a ledger
+> bearing this marker as historical.
+
 # Module 02 — Parked Requirements
 
 Module 02 migrated **partially**: its cross-cutting invariants became the

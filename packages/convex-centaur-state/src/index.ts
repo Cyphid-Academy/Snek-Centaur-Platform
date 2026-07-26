@@ -1,4 +1,4 @@
-// spec: 06-REQ-001
+// spec: global-invariants/centaur-state-boundary
 // Convex Component: centaur-state
 // Owns Centaur subsystem tables: snake_config, snake_drives, heuristic_config,
 // snake_heuristic_overrides, bot_params, centaur_action_log.
@@ -6,9 +6,11 @@
 
 // ---------------------------------------------------------------------------
 // Table record types
-// spec: 06-REQ-010 (snake_config), 06-REQ-020 (snake_drives),
-//       06-REQ-030 (heuristic_config), 06-REQ-040 (bot_params),
-//       06-REQ-033 (centaur_action_log)
+// spec: operator-control/exclusive-selection (snake_config),
+//       bot-configuration/per-snake-portfolio-record (snake_drives),
+//       bot-configuration/team-heuristic-defaults (heuristic_config),
+//       bot-configuration/team-bot-parameters (bot_params),
+//       replay-and-audit/team-action-log (centaur_action_log)
 // ---------------------------------------------------------------------------
 
 export interface SnakeConfigRecord {
@@ -58,7 +60,7 @@ export interface BotParamsRecord {
 
 // ---------------------------------------------------------------------------
 // Centaur action log — discriminated union
-// spec: 06-REQ-033, 06-REQ-034, 06-REQ-036
+// spec: replay-and-audit/team-action-log
 // ---------------------------------------------------------------------------
 
 export type CentaurActionType =
@@ -89,8 +91,7 @@ export interface CentaurActionRecord {
 
 // ---------------------------------------------------------------------------
 // Selection invariant types
-// spec: 06-REQ-019 (at-most-one-operator-per-snake),
-//       06-REQ-020 (at-most-one-snake-per-operator)
+// spec: operator-control/exclusive-selection
 // ---------------------------------------------------------------------------
 
 export interface SelectionState {

@@ -13,9 +13,9 @@
 //      seed/edit pair are flagged.
 //   2. FRESHNESS — every seeded MODIFIED block still matches the current
 //      specs/ block verbatim, and REMOVED / RENAMED-from headers still
-//      exist in specs/. specs/ advancing under an open change — the main
-//      case being a PR rebased onto an advanced main, since archiving is
-//      standardised as a PR's final commit — makes the change stale:
+//      exist in specs/. specs/ advancing under an open change — another
+//      change archiving while this one stays open, or a PR rebasing onto
+//      an advanced main — makes the change stale:
 //      re-seed (rewrite the seed/edit pair against the new base) and
 //      re-review the word-diff.
 //   3. NEW-CAPABILITY SHAPE — a delta whose capability has no
@@ -36,7 +36,7 @@
 // base still matches specs/.
 import { execSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { isAbsolute, join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
 import { extractRequirementBlock, openChangeDeltaFiles, parseDeltaOps } from "./spec-index.mjs";
 
@@ -56,6 +56,21 @@ function liveSpecBlock(root, cap, slug) {
 }
 
 /**
+ * Current specs/ `## Purpose` body for cap (heading excluded), or null when
+ * the capability or its Purpose section is absent. This is the base a
+ * `## MODIFIED Purpose` delta amends.
+ */
+function livePurpose(root, cap) {
+  const file = join(root, "openspec", "specs", cap, "spec.md");
+  if (!existsSync(file)) return null;
+  const content = readFileSync(file, "utf8").replace(/\r\n?/g, "\n");
+  const start = content.indexOf("## Purpose");
+  if (start === -1) return null;
+  const after = content.indexOf("\n## ", start + 1);
+  return content.slice(start + "## Purpose".length, after === -1 ? undefined : after).trim();
+}
+
+/**
  * Run the seed-freshness check. With `changeName`, only that open change's
  * delta files are checked (fold-change's precondition); without it, all open
  * changes are. Returns { problems, notes, checkedBlocks, checkedFiles,
@@ -66,6 +81,31 @@ export function freshnessProblemsFor(root, changeName) {
   const notes = [];
   let checkedBlocks = 0;
   let skipped = 0;
+  // Seed detection needs the seed commit to be visible. In a shallow clone
+  // whose boundary swallows the seed (e.g. CI fetch-depth 1), the delta
+  // file's earliest VISIBLE commit is the boundary commit, so the edited
+  // delta masquerades as its own seed and fails freshness with a
+  // misleading "specs/ has advanced". Only that boundary case is
+  // unreliable — a shallow clone whose visible history still reaches the
+  // true seed checks fine.
+  let shallowBoundary = null;
+  const boundarySet = () => {
+    if (shallowBoundary === null) {
+      try {
+        const common = execSync("git rev-parse --git-common-dir", {
+          cwd: root,
+          encoding: "utf8",
+        }).trim();
+        const p = join(isAbsolute(common) ? common : join(root, common), "shallow");
+        shallowBoundary = new Set(
+          existsSync(p) ? readFileSync(p, "utf8").split("\n").filter(Boolean) : [],
+        );
+      } catch {
+        shallowBoundary = new Set();
+      }
+    }
+    return shallowBoundary;
+  };
   const deltas = openChangeDeltaFiles(root).filter(
     ({ file }) => !changeName || file.includes(`/changes/${changeName}/`),
   );
@@ -105,9 +145,13 @@ export function freshnessProblemsFor(root, changeName) {
       } else if (current.preamble && current.added.size === 0 && !current.renamesCapability) {
         problems.push(`${change}: new capability "${cap}" has no ADDED requirements`);
       }
+      if (current.modifiedPurpose)
+        problems.push(
+          `${change}: "${cap}" delta carries "## MODIFIED Purpose" but the capability does not exist in specs/ — a minting delta declares its Purpose in the "## Purpose" preamble instead`,
+        );
     } else if (current.preamble) {
       problems.push(
-        `${change}: "${cap}" delta carries a new-capability "## Purpose" preamble but openspec/specs/${cap}/spec.md already exists — another change minted the capability first; reconcile the Purpose by hand and re-author the delta without the preamble`,
+        `${change}: "${cap}" delta carries a new-capability "## Purpose" preamble but openspec/specs/${cap}/spec.md already exists — a "## Purpose" preamble mints a capability; to amend an existing capability's Purpose use a "## MODIFIED Purpose" section`,
       );
     }
 
@@ -125,6 +169,12 @@ export function freshnessProblemsFor(root, changeName) {
         skipped++;
         continue;
       }
+      if ((current.modified.size > 0 || current.modifiedPurpose) && boundarySet().has(commits[0])) {
+        problems.push(
+          `${change}: the seed commit is hidden behind a shallow-clone boundary — its MODIFIED deltas cannot be freshness-checked; fetch full history (CI: actions/checkout with fetch-depth: 0)`,
+        );
+        continue;
+      }
       seedContent = execSync(`git show ${commits[0]}:"${rel}"`, { cwd: root, encoding: "utf8" });
     } catch {
       notes.push(`git unavailable for ${rel} — seed check skipped`);
@@ -140,6 +190,10 @@ export function freshnessProblemsFor(root, changeName) {
           `${change}: MODIFIED "${name}" is not in the seed commit — rewrite the seed/edit pair instead of extending the delta in place`,
         );
     }
+    if (current.modifiedPurpose && !seed.modifiedPurpose)
+      problems.push(
+        `${change}: "## MODIFIED Purpose" for "${cap}" is not in the seed commit — rewrite the seed/edit pair instead of extending the delta in place`,
+      );
     // 2. Freshness: seeded blocks must match current specs/ verbatim.
     for (const [name, raw] of seed.modified) {
       const [cap, slug] = name.split("/");
@@ -154,6 +208,18 @@ export function freshnessProblemsFor(root, changeName) {
           `${change}: specs/ has advanced since "${name}" was seeded — re-seed the change against the current base and re-review the word-diff`,
         );
       }
+    }
+    if (seed.modifiedPurpose) {
+      const live = livePurpose(root, cap);
+      checkedBlocks++;
+      if (live === null)
+        problems.push(
+          `${change}: seeded Purpose base for "${cap}" no longer exists in specs/ — re-seed the change`,
+        );
+      else if (normalize(live) !== normalize(seed.modifiedPurpose))
+        problems.push(
+          `${change}: specs/ has advanced since "${cap}"'s Purpose was seeded — re-seed the change against the current base and re-review the word-diff`,
+        );
     }
     // REMOVED / RENAMED-from headers must still resolve in specs/.
     for (const name of [...current.removed, ...current.renamed.map(({ from }) => from)]) {

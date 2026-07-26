@@ -18,6 +18,15 @@ Claude Code Web is a **co-equal development context** with Replit for this repo 
 
 **When you discover a *durable* dependency or setup step** future sessions will also need — a newly adopted tool, a build-script approval, an environment-prep step — encode it in the persistent Claude tooling config in `.claude/` (the SessionStart hook and `settings.json`), not merely ad hoc in the current session. A new package added to `package.json` is picked up by the hook's `pnpm install` automatically; anything beyond a plain install (a `pnpm.onlyBuiltDependencies` approval, a global tool, a generated-file step) belongs in `.claude/hooks/session-start.sh` so the next session inherits it.
 
+### Commit identity and signing key — always together
+
+Claude Code Web signs **every** commit with Anthropic's SSH signing key (`commit.gpgsign true`, `gpg.format ssh`, signer supplied by the environment). That key is registered to the **`claude` GitHub account**, and GitHub verifies a signature against the account that owns the key — matching it to the commit's **committer** email, which must be a verified email on that same account. The identity and the key are therefore a pair, and that pair is the environment's default: leave it alone.
+
+- **Commit as `Claude <noreply@anthropic.com>`.** Never override `user.name` / `user.email` to the human author's, however tempting it is to make authorship read as theirs. The commit is then signed by claude's key but committed as someone else; GitHub can reconcile neither, and **every** such commit is flagged Unverified — including ones a later rewrite merely replays.
+- **Attribute a human with a `Co-Authored-By:` trailer**, never by changing the committer. Authorship is a trailer's job; the committer field is load-bearing for verification.
+- **History rewrites re-sign.** A rebase, amend, or cherry-pick re-signs with the same key, so a rewrite keeps its verified status only while the committer identity stays Claude's — and a rewrite is the cheapest moment to *fix* a branch that drifted, since every commit is rewritten anyway.
+- **Check before pushing a long branch:** `git log --format='%h %ce' <base>..HEAD | sort -u -k2` should show `noreply@anthropic.com` and nothing else. A commit's badge and signer are visible in GitHub's per-commit tooltip.
+
 ### Secrets and third-party resources
 
 Claude Code Web has **no encrypted secrets store yet** (unlike Replit): variables set in an environment's configuration are stored there and are visible to anyone who can edit that environment. The provisioning strategy for this project is therefore:

@@ -1,4 +1,4 @@
-// spec: 08-REQ-010
+// spec: team-server-management/server-healthcheck
 // GET /healthcheck — liveness probe stub.
 // Returns 200 OK with a JSON body indicating the server is up.
 // Real implementation will include Convex connectivity check, game count, etc.

@@ -25,7 +25,9 @@ The visual tester SHALL be a dedicated application for game-engine testing, sepa
 - **THEN** the visual tester is not part of them and nothing in them depends on it
 
 ### Requirement: visual-tester/board-editor
-The tool SHALL provide a map editor over every authorable component of game state: per-cell terrain (Hazard/Fertile/Normal within the fixed Wall ring per game-engine/board-geometry), board size, snakes (add/remove, team, ordered body cells of any length ≥ 1, health, active effects; the letter is derived, see #letters-auto-assigned), items (place/remove any item type on any cell not occupied by a snake body; placing over an existing item replaces it), the runtime game configuration, and the game seed. A fresh session with no loaded sequence SHALL always start with a valid game seed and a board, so editing and board generation are immediately available without any manual setup. Two snake fields are lifecycle-derived and never directly editable: a snake present in the editor is alive — death arises only from turn resolution — and last direction is null in a hand-authored state, otherwise the direction the snake last moved. The editor SHALL permit any structurally valid state — including states board generation would never produce — enforcing only structural validity: in-bounds cells, the closed domain vocabulary per game-engine/domain-vocabulary, snake-body contiguity (each consecutive segment pair orthogonally adjacent or sharing a cell, the only shapes producible under game-engine/movement), and shared head parity (see #head-parity-enforced).
+Depends on: game-engine/board-geometry, game-engine/domain-vocabulary, game-engine/movement, game-engine/starting-placement#shared-parity, game-engine/item-spawning.
+
+The tool SHALL provide a map editor over every authorable component of game state: per-cell terrain (Hazard/Fertile/Normal within the fixed Wall ring), board size, snakes (add/remove, team, ordered body cells of any length ≥ 1, health, active effects; the letter is derived, see #letters-auto-assigned), items (place/remove any item type on any cell not occupied by a snake body; placing over an existing item replaces it), the runtime game configuration, and the game seed. A fresh session with no loaded sequence SHALL always start with a valid game seed and a board, so editing and board generation are immediately available without any manual setup. Two snake fields are lifecycle-derived and never directly editable: a snake present in the editor is alive — death arises only from turn resolution — and last direction is null in a hand-authored state, otherwise the direction the snake last moved. The editor SHALL permit any structurally valid state — including states board generation would never produce — enforcing only structural validity: in-bounds cells, the closed domain vocabulary, snake-body contiguity (each consecutive segment pair orthogonally adjacent or sharing a cell, the only shapes the engine's movement rules can produce), and shared head parity (see #head-parity-enforced).
 
 #### Scenario: #arbitrary-states-allowed
 - **WHEN** a tester authors a state board generation would never produce — disconnected hazard regions, diagonally adjacent heads, or a single-segment snake
@@ -33,7 +35,7 @@ The tool SHALL provide a map editor over every authorable component of game stat
 
 #### Scenario: #head-parity-enforced
 - **WHEN** the tester places a new snake head while other snakes are present
-- **THEN** the head is accepted only on a cell whose `(x + y) mod 2` matches the parity the existing heads share this turn (game-engine/starting-placement#shared-parity, preserved every turn because all heads step one cell together), a head on the wrong parity is rejected at the editor boundary, and the board marks every wrong-parity cell with a translucent red checkerboard overlay while the add-snake tool is active; the first head, with no parity yet fixed, may go on any cell
+- **THEN** the head is accepted only on a cell whose `(x + y) mod 2` matches the parity the existing heads share this turn (fixed at starting placement and preserved every turn, because all heads step one cell together), a head on the wrong parity is rejected at the editor boundary, and the board marks every wrong-parity cell with a translucent red checkerboard overlay while the add-snake tool is active; the first head, with no parity yet fixed, may go on any cell
 
 #### Scenario: #item-placement-replaces
 - **WHEN** the tester places an item on a cell that already holds an item
@@ -41,7 +43,7 @@ The tool SHALL provide a map editor over every authorable component of game stat
 
 #### Scenario: #item-not-on-body
 - **WHEN** the tester places an item on a cell holding a snake body, or extends/adds a snake body onto a cell holding an item
-- **THEN** the edit is rejected — the engine never lets an item share a cell with an alive snake body (game-engine/item-spawning), and every editor snake is alive
+- **THEN** the edit is rejected — the engine never lets an item share a cell with an alive snake body, and every editor snake is alive
 
 #### Scenario: #fresh-session-ready
 - **WHEN** the app is opened with no sequence selected
@@ -90,20 +92,26 @@ The tool SHALL track the selected snake in a single value changed through one at
 - **THEN** the cell is appended to the selected snake; with no snake selected the click makes no edit and the tool explains that a snake must be selected first
 
 ### Requirement: visual-tester/invalid-state-surfacing
-The whole point of the tool is to catch bugs, so it SHALL surface — never silently render as a normal state — any structurally invalid state it is asked to display. In particular, when a state contains a snake whose body is discontinuous (a consecutive segment pair neither orthogonally adjacent nor stacked), the tool SHALL show a prominent on-page error identifying the snake and the offending segment pair, and SHALL NOT draw that snake as a continuous silhouette. Because such a state cannot be authored or imported (game-engine/movement shapes are enforced by visual-tester/board-editor and test-sequences/validation), its only source is a turn-resolution bug or a corrupt sequence — exactly what must be caught.
+Depends on: game-engine/movement, visual-tester/board-editor, test-sequences/validation.
+
+The whole point of the tool is to catch bugs, so it SHALL surface — never silently render as a normal state — any structurally invalid state it is asked to display. In particular, when a state contains a snake whose body is discontinuous (a consecutive segment pair neither orthogonally adjacent nor stacked), the tool SHALL show a prominent on-page error identifying the snake and the offending segment pair, and SHALL NOT draw that snake as a continuous silhouette. Because such a state cannot be authored or imported — the editor and sequence validation both enforce the movement-producible body shapes — its only source is a turn-resolution bug or a corrupt sequence — exactly what must be caught.
 
 #### Scenario: #discontinuous-body-flagged
 - **WHEN** a state to be displayed contains a snake whose consecutive body segments are neither adjacent nor stacked
 - **THEN** the tool shows a prominent error naming the snake and the discontinuous segment pair, and marks that snake's raw segments rather than drawing a plausible continuous body
 
 ### Requirement: visual-tester/snake-rendering
-The tool SHALL render exactly the snakes that are on the board: every alive snake, plus — as a faded one-turn ghost — each snake that died on the turn currently displayed. A dead snake is off the board after its death turn (game-engine/collisions-and-severing keeps a severed body on the board only for the death turn; the engine retains the dead snake in state solely so its effects run their course), so it SHALL NOT be drawn on any later turn. Ghosting the death position for a single turn hints where a snake fell without implying it is still logically present.
+Depends on: game-engine/collisions-and-severing.
+
+The tool SHALL render exactly the snakes that are on the board: every alive snake, plus — as a faded one-turn ghost — each snake that died on the turn currently displayed. A dead snake is off the board after its death turn (severing keeps a severed body on the board only for the death turn; the engine retains the dead snake in state solely so its effects run their course), so it SHALL NOT be drawn on any later turn. Ghosting the death position for a single turn hints where a snake fell without implying it is still logically present.
 
 #### Scenario: #dead-snake-ghost-one-turn
 - **WHEN** a snake dies on turn k and the tester displays turn k, then turn k+1
 - **THEN** the snake is drawn as a faded ghost on turn k (it was alive at turn k−1) and is not drawn at all on turn k+1 or any later turn
 
 ### Requirement: visual-tester/move-staging
+Depends on: game-engine/collisions-and-severing.
+
 The tool SHALL allow manually staging a move direction for each living snake and leaving any snake unstaged. Every direction is stageable — the game rules never reject a staged move — and the tool SHALL mark, as a purely advisory hint, staged moves the engine's pre-validation identifies as certain death from the snake's own deterministic future, submitting them unchanged on simulation. The board SHALL draw each staged move as a direction arrow on the staged snake's head, so pending moves read at a glance before simulation.
 
 #### Scenario: #staged-arrows
@@ -112,14 +120,16 @@ The tool SHALL allow manually staging a move direction for each living snake and
 
 #### Scenario: #certain-death-moves-stageable
 - **WHEN** a tester stages a move whose death is certain from the snake's own body or the wall (e.g. reversing into the still-occupied neck cell)
-- **THEN** the tool marks it as certain death but submits it unchanged, so the resolver's own collision handling per game-engine/collisions-and-severing is what gets exercised
+- **THEN** the tool marks it as certain death but submits it unchanged, so the resolver's own collision handling is what gets exercised
 
 #### Scenario: #unstaged-snakes-omitted
 - **WHEN** a snake is left unstaged and the turn is simulated
 - **THEN** the resolver receives no entry for that snake
 
 ### Requirement: visual-tester/turn-simulation
-The tool SHALL simulate the next turn on demand: it resolves the current state with the currently staged moves and the turn seed derived per test-sequences/determinism, appends the resolver's full output (next state, events, outcome) as a new turn in the session, and makes the next state current so the process repeats.
+Depends on: test-sequences/determinism.
+
+The tool SHALL simulate the next turn on demand: it resolves the current state with the currently staged moves and the turn seed derived from the game seed and that turn's number, appends the resolver's full output (next state, events, outcome) as a new turn in the session, and makes the next state current so the process repeats.
 
 #### Scenario: #repeatable
 - **WHEN** a turn is simulated
@@ -130,7 +140,9 @@ The tool SHALL simulate the next turn on demand: it resolves the current state w
 - **THEN** the session records the resolver's next state, events, and outcome for that turn, so saving the session yields expectations without re-resolving
 
 ### Requirement: visual-tester/session-history
-The tool SHALL keep the session's full turn history in memory — initial state plus every simulated turn with its staged moves and resolver output — navigable via a scrub bar; scrubbing to any turn displays that turn's board state and, where present, its staged moves, events, and outcome. The session is continuously auto-saved to a scratch sequence (see visual-tester/auto-persist); durability across environments comes only from promoting a snapshot to a git-tracked fixture.
+Depends on: visual-tester/auto-persist.
+
+The tool SHALL keep the session's full turn history in memory — initial state plus every simulated turn with its staged moves and resolver output — navigable via a scrub bar; scrubbing to any turn displays that turn's board state and, where present, its staged moves, events, and outcome. The session is continuously auto-saved to a scratch sequence; durability across environments comes only from promoting a snapshot to a git-tracked fixture.
 
 #### Scenario: #scrub-navigation
 - **WHEN** the tester scrubs to any recorded turn
@@ -163,7 +175,9 @@ When the tester edits the board state or staged moves at a past (non-head) turn 
 - **THEN** a new scratch sequence holding turns 0..k is created and becomes the session's binding, while the previously bound sequence retains its full history unchanged
 
 ### Requirement: visual-tester/sequence-management
-The tool SHALL promote the current session to a git-tracked fixture as its one explicit save; list all saved sequences filtered by tier (fixtures, scratch, or the union) and distinguishing the two; load a saved sequence into the session (a fixture loads read-only, forking to a scratch on first edit per visual-tester/auto-persist); copy any saved sequence's JSON document to the clipboard; and import pasted raw JSON as a new scratch sequence, accepting it only if it passes test-sequences/validation.
+Depends on: visual-tester/auto-persist, test-sequences/validation.
+
+The tool SHALL promote the current session to a git-tracked fixture as its one explicit save; list all saved sequences filtered by tier (fixtures, scratch, or the union) and distinguishing the two; load a saved sequence into the session (a fixture loads read-only, forking to a scratch on first edit); copy any saved sequence's JSON document to the clipboard; and import pasted raw JSON as a new scratch sequence, accepting it only if it passes sequence validation.
 
 #### Scenario: #save-from-session
 - **WHEN** the tester saves the session as a fixture
@@ -198,7 +212,9 @@ The tool SHALL promote the current session to a git-tracked fixture as its one e
 - **THEN** the URL's `seq` parameter reflects that sequence's id, and opening a URL carrying a `seq` restores that sequence — so the selection is shareable and survives a reload
 
 ### Requirement: visual-tester/sequence-run
-The tool SHALL run a Test Sequence per test-sequences/replay-check and present the result on the board view: on success, a pass indication over all turns; on divergence, the run halts at the first divergent turn, displays that turn, and annotates every reported difference below the board as a colour-coded diff distinguishing expected values from computed values, covering state, event, and outcome differences.
+Depends on: test-sequences/replay-check.
+
+The tool SHALL run a Test Sequence's replay check and present the result on the board view: on success, a pass indication over all turns; on divergence, the run halts at the first divergent turn, displays that turn, and annotates every reported difference below the board as a colour-coded diff distinguishing expected values from computed values, covering state, event, and outcome differences.
 
 #### Scenario: #divergence-annotated
 - **WHEN** a run halts at a divergent turn

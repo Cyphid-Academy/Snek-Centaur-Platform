@@ -1,12 +1,13 @@
-// spec: 03-REQ-001, 05-REQ-001
+// spec: identity-and-authorization/identity-kinds, game-lifecycle/game-record
 // Convex Component: snek-platform
 // Owns platform-wide tables: users, rooms, games, replays, api_keys, webhooks.
 // This is a typed skeleton — implementation deferred.
 
 // ---------------------------------------------------------------------------
 // Table record types
-// spec: 05-REQ-004 (users), 05-REQ-020 (centaur_teams),
-//       05-REQ-030 (rooms), 05-REQ-040 (games)
+// spec: accounts-and-profiles/user-record (users), team-management/team-record
+//       (centaur_teams), rooms-and-matchmaking/room-record (rooms),
+//       game-lifecycle/game-record (games)
 // ---------------------------------------------------------------------------
 
 export interface UserRecord {
@@ -58,7 +59,7 @@ export interface GameRecord {
   readonly config: GameConfigRecord;
   readonly stdbInstanceId: string | null;
   readonly startedAt: number | null;
-  readonly endedAt: number | null;
+  readonly finishedAt: number | null;
   readonly winnerTeamId: string | null;
 }
 
@@ -88,7 +89,7 @@ export interface WebhookRecord {
 
 // ---------------------------------------------------------------------------
 // Game invitation payload
-// spec: 03-REQ-050, 05-REQ-060
+// spec: team-server-management/game-invitations, team-server-management/invitation-credential-carriage
 // ---------------------------------------------------------------------------
 
 export interface GameInvitationPayload {

@@ -1,4 +1,4 @@
-// spec: 07-REQ-001
+// spec: bot-framework/embedded-team-player
 // Centaur Server Library — bot framework + invitation handler + healthcheck.
 // Teams use this library to build their Centaur Server implementation.
 // This is a typed skeleton — implementation deferred.
@@ -28,7 +28,7 @@ export type {
 
 // ---------------------------------------------------------------------------
 // Healthcheck contract
-// spec: 08-REQ-010 (healthcheck endpoint at /.well-known/snek-game-invite)
+// spec: team-server-management/server-healthcheck
 // ---------------------------------------------------------------------------
 
 export interface HealthcheckResponse {
@@ -39,7 +39,7 @@ export interface HealthcheckResponse {
 
 // ---------------------------------------------------------------------------
 // Game invitation handler
-// spec: 03-REQ-050, 08-REQ-020
+// spec: team-server-management/game-invitations, team-server-management/invitation-acceptance
 // ---------------------------------------------------------------------------
 
 export interface GameInvitationHandler {
@@ -55,7 +55,7 @@ export interface GameInvitationHandler {
 
 // ---------------------------------------------------------------------------
 // Bot framework — Drive and Preference abstractions
-// spec: 07-REQ-010, 07-REQ-020
+// spec: bot-framework/heuristic-vocabulary
 // ---------------------------------------------------------------------------
 
 export type Target =
@@ -101,7 +101,7 @@ export interface Portfolio {
 
 // ---------------------------------------------------------------------------
 // defineBot — entry point for teams building a Centaur Server
-// spec: 07-REQ-001
+// spec: bot-framework/embedded-team-player, bot-framework/heuristic-vocabulary
 // ---------------------------------------------------------------------------
 
 export interface BotDefinition {
@@ -135,7 +135,7 @@ export interface BotRunner {
 
 // ---------------------------------------------------------------------------
 // Typed Convex component clients — stubs
-// spec: 07-REQ-050 (component client types)
+// spec: bot-framework/embedded-team-player (component client types)
 // ---------------------------------------------------------------------------
 
 /**

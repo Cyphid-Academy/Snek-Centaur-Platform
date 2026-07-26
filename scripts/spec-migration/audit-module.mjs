@@ -46,18 +46,24 @@ const map = JSON.parse(
 
 const resolves = makeResolver(buildSpecIndex(root, { overlayOpenChanges: true }));
 
-// Parked ledger: under capability-at-a-time carving a module may migrate
-// PARTIALLY. A backticked module-NN id in docs/spec-migration/
-// module-NN-parked.md marks the id parked — still binding in the legacy
-// file, no map entry (an entry is what retires an id), disposition
-// satisfied by the ledger instead.
+// Parked ledger (historical): during the migration a module could migrate
+// PARTIALLY, with unretired ids parked in docs/spec-migration/
+// module-NN-parked.md. The corpus retired in full on 2026-07-24 and the
+// ledgers are archived under docs/spec-migration/, so no
+// ledger exists at the read path — the parked set is empty and every id
+// must be mapped.
 const parkedPath = join(root, "docs", "spec-migration", `module-${mod}-parked.md`);
 const parked = new Set();
-if (existsSync(parkedPath))
-  for (const m of readFileSync(parkedPath, "utf8").matchAll(
-    new RegExp(`\`(${mod}-REQ-\\d{3}[a-z]?\\d?)\``, "g"),
-  ))
-    parked.add(m[1]);
+if (existsSync(parkedPath)) {
+  const ledger = readFileSync(parkedPath, "utf8");
+  // A ledger marked CLOSED is a historical record: every id it lists has since
+  // been migrated and carries a map entry, so none is still parked. Without
+  // this, a closed ledger would make every one of its ids read as both mapped
+  // and parked. The drift guard stays live for any ledger not yet closed.
+  if (!/^>\s*\*\*CLOSED\*\*/m.test(ledger))
+    for (const m of ledger.matchAll(new RegExp(`\`(${mod}-REQ-\\d{3}[a-z]?\\d?)\``, "g")))
+      parked.add(m[1]);
+}
 
 const problems = [];
 for (const lid of legacyIds) {
@@ -70,9 +76,15 @@ for (const lid of legacyIds) {
     problems.push(
       `${lid}: both mapped and parked — a map entry retires the id; remove it from the parked ledger`,
     );
-  if (e.target && !resolves(e.target))
-    problems.push(`${lid}: target "${e.target}" does not resolve`);
-  if (!e.target && !e.note) problems.push(`${lid}: neither target nor note`);
+  // Disposition + carriedBy shape is enforced in full by
+  // scripts/check-spec-citations.mjs; the audit re-checks the part that
+  // makes a module's disposition COMPLETE — every home resolves, and an id
+  // carried nowhere says why.
+  for (const h of e.carriedBy ?? [])
+    if (h.target && !resolves(h.target))
+      problems.push(`${lid}: carriedBy target "${h.target}" does not resolve`);
+  if ((e.carriedBy ?? []).length === 0 && !e.reason)
+    problems.push(`${lid}: carried nowhere and gives no reason`);
   for (const sc of e.scenarios ?? [])
     if (!resolves(sc)) problems.push(`${lid}: anchor "${sc}" does not resolve`);
 }

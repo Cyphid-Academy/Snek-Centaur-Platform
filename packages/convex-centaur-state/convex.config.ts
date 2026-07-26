@@ -1,4 +1,4 @@
-// spec: 06-REQ-001
+// spec: global-invariants/centaur-state-boundary
 // Convex Component declaration for centaur-state.
 // Owns Centaur subsystem tables: snake_config, snake_drives, heuristic_config,
 // snake_heuristic_overrides, bot_params, centaur_action_log.

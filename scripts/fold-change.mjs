@@ -35,11 +35,17 @@
 // Apply order and loud-failure rules mirror the stock machinery
 // (RENAMED → REMOVED → MODIFIED → ADDED; unknown or colliding headers
 // abort), minus the scenario guard that full-block authoring supersedes.
+//
+// A requirement's structural dependency declaration (its "Depends on:" line)
+// needs no handling of its own: it lives inside the requirement block, so
+// full-block replacement carries it, and the DAG-order guard below scans the
+// delta's raw text — which includes the declaration — for requirements that
+// exist only in another open change.
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { freshnessProblemsFor } from "./check-change-freshness.mjs";
-import { openChangeDeltaFiles, parseDeltaOps } from "./spec-index.mjs";
+import { buildSpecIndex, openChangeDeltaFiles, parseDeltaOps } from "./spec-index.mjs";
 
 const fail = (msg) => {
   console.error(`spec:fold FAILED: ${msg}`);
@@ -139,6 +145,42 @@ export function foldChange(root, changeName) {
     process.exit(1);
   }
 
+  // DAG-order precondition: once folded, specs/ must never cite a
+  // capability that exists only in another OPEN change's deltas. The
+  // reference lint's overlay legitimately resolves such citations while
+  // both changes are open; fold is the moment they become binding, so the
+  // cited capability's minting change must archive first.
+  // Granularity matters: checking whole CAPABILITIES misses the case where the
+  // cited capability is already in specs/ but the cited REQUIREMENT is added by
+  // another open change — e.g. a concrete capability citing a global-invariants
+  // requirement that only `extend-global-invariants` introduces. Fold then
+  // writes a citation into specs/ that resolves only through the overlay, and
+  // the lint stays green until that change archives (or dangles forever if it
+  // never does). So compare requirement by requirement.
+  {
+    const bindingIdx = buildSpecIndex(root);
+    const overlayIdx = buildSpecIndex(root, { overlayOpenChanges: true });
+    const ownCaps = new Set(deltas.map((d) => d.cap));
+    const phantom = new Set();
+    for (const [cap, reqs] of overlayIdx) {
+      if (ownCaps.has(cap)) continue; // the change's own capabilities fold with it
+      for (const slug of reqs.keys())
+        if (!bindingIdx.get(cap)?.has(slug)) phantom.add(`${cap}/${slug}`);
+    }
+    if (phantom.size > 0) {
+      const re = /(?<![\w/-])([a-z0-9-]+\/[a-z0-9-]+)/g;
+      for (const { file } of deltas) {
+        const hits = [
+          ...new Set([...readFileSync(file, "utf8").matchAll(re)].map((m) => m[1])),
+        ].filter((r) => phantom.has(r));
+        if (hits.length > 0)
+          fail(
+            `${changeName}: delta cites requirements not yet in specs/ (${hits.join(", ")}) — they exist only in another open change; archive that change first (capability-dependency order)`,
+          );
+      }
+    }
+  }
+
   for (const { file, cap } of deltas) {
     const ops = parseDeltaOps(readFileSync(file, "utf8"));
     validateOps(cap, ops);
@@ -217,7 +259,7 @@ export function foldChange(root, changeName) {
     }
     if (ops.preamble)
       fail(
-        `${cap}: delta carries a new-capability "## Purpose" preamble but openspec/specs/${cap}/spec.md already exists — reconcile the Purpose by hand and re-author the delta without the preamble`,
+        `${cap}: delta carries a new-capability "## Purpose" preamble but openspec/specs/${cap}/spec.md already exists — a "## Purpose" preamble mints a capability. To amend an existing capability's Purpose (the only way its "Depends on:" declaration can change), use a "## MODIFIED Purpose" section instead`,
       );
     const spec = splitSpec(readFileSync(target, "utf8"));
     if (spec === null) fail(`${cap}: spec.md has no "## Requirements" section`);
@@ -251,9 +293,22 @@ export function foldChange(root, changeName) {
       appended.push(b);
     }
     const blocks = [...spec.blocks.filter((b) => byName.get(b.name) === b), ...appended];
-    writeFileSync(target, recompose({ ...spec, blocks }));
+    // MODIFIED Purpose replaces the `## Purpose` section inside `before` (the
+    // title line plus the Purpose). Everything above the Purpose heading is
+    // preserved, so the title survives verbatim.
+    let before = spec.before;
+    if (ops.modifiedPurpose) {
+      const idx = before.indexOf("## Purpose");
+      if (idx === -1)
+        fail(
+          `${cap}: delta carries "## MODIFIED Purpose" but openspec/specs/${cap}/spec.md has no "## Purpose" section to amend`,
+        );
+      before = `${before.slice(0, idx)}## Purpose\n\n${ops.modifiedPurpose}\n`;
+    }
+    writeFileSync(target, recompose({ ...spec, before, blocks }));
     const n = (c) => (c ? c : null);
     const counts = [
+      ops.modifiedPurpose ? "Purpose amended" : null,
       n(ops.renamed.length) && `${ops.renamed.length} renamed`,
       n(ops.removed.length) && `${ops.removed.length} removed`,
       n(ops.modified.size) && `${ops.modified.size} modified`,
