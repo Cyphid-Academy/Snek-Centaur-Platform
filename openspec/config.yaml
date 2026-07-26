@@ -38,10 +38,33 @@ context: |
   requirements from several legacy modules (legacy module boundaries were
   implementation sequencing, not semantic delineations). Cross-cutting
   rules no user story owns belong to global-invariants, gated by the
-  admission test in its Purpose. The prospective capability set is
-  docs/spec-migration/capability-map.md (draft until minted); each mint
-  still begins with a carving decision made WITH the human author,
-  recorded in that migration change's proposal and in the cutover table.
+  admission test in its Purpose. global-invariants is a META layer:
+  it constrains how concrete capabilities may be shaped, so the citation
+  direction is ALWAYS concrete -> gi, never gi -> a user-story capability
+  (game-engine is the one exception gi may cite: root domain vocabulary,
+  not a story). CITE A GI REQUIREMENT WHEN THIS REQUIREMENT'S SOUNDNESS
+  DEPENDS ON IT REMAINING TRUE. The citation graph is a
+  soundness-dependency record, not a conformance checklist: conformance to
+  gi is universal and implicit (every capability is bound by every
+  invariant whether or not it cites one, so the absence of a gi dependency
+  NEVER means unconstrained), whereas a citation says "relax this
+  invariant and my requirement stops making sense". That is what makes the
+  implications of relaxing a gi requirement systematically traceable
+  through its dependents — and because gi sits deep in the dependency tree
+  and its constraints are the most load-bearing in the corpus, citing it
+  FREQUENTLY for this purpose is correct, not over-citation. It should be
+  hard to change a rule that many requirements depend on. Corollary: when a
+  change mints a new invariant BECAUSE its local solution needs that
+  invariant to stay robust, the local requirement cites it. What does NOT
+  warrant a citation: a requirement that merely restates or specialises a
+  gi rule without depending on it (see the DRY rule below), a defensive
+  note that gi permits something, or a pointer used to fill a gap the
+  requirement should have specified itself. Declared dependencies are an
+  AFFORDANCE, extended whenever a citation is genuinely warranted — never
+  a permanent budget on what a capability may cite. The capability set was carved in
+  full by the 2026-07-24 migration train (planning record:
+  docs/spec-migration/); each capability's carving
+  decision is recorded in its migration change's proposal.
   Capabilities so far: game-engine — root of the dependency structure, no
   dependencies (module 01, carved as a single capability by author
   decision: it is already a coherent semantic unit — the complete rules of
@@ -120,6 +143,16 @@ rules:
       seed/edit pair), and at most one open change may amend a given
       capability''s Purpose. A "## Purpose" PREAMBLE is the different
       thing: it mints a capability that has no spec.md yet.'
+    - 'DO NOT RESTATE a constraint another requirement — global-invariants
+      or a peer — already cleanly implies. Duplicated constraints drift into
+      conflict, and the copy has no authority. Cite the owning requirement
+      where soundness depends on it, and pin the INTEGRATION of the local
+      requirement with the constraints bearing on it in design.md, which is
+      also a legitimate home for a gi citation: design and implementation
+      are as subject to global-invariants as the spec is, so a decision
+      motivated by an invariant (which runtime holds a record, why an
+      absolute is safe) cites it there rather than over-pinning the
+      requirement.'
     - New requirements take a fresh kebab-case slug under their capability;
       never re-mint a removed slug or a tombstoned numeric identifier.
     - Requirement headers and scenario slugs are frozen once merged; renames

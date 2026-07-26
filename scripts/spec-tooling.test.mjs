@@ -405,3 +405,54 @@ describe("## MODIFIED Purpose (amending an existing capability's Purpose)", () =
     expect(problems.join("\n")).toMatch(/use a "## MODIFIED Purpose" section/);
   });
 });
+
+describe("fold DAG order (requirement granularity)", () => {
+  // A capability already in specs/ whose CITED requirement exists only in
+  // another open change is the case a capability-granular guard misses.
+  function fixture() {
+    const root = mkdtempSync(join(tmpdir(), "dagreq-"));
+    write(
+      root,
+      "openspec/specs/base/spec.md",
+      "# base Specification\n\n## Purpose\n\nBase. Depends on: (none — root).\n\n## Requirements\n\n### Requirement: base/existing\nThe system SHALL do existing.\n\n#### Scenario: #e1\n- **WHEN** x\n- **THEN** y\n",
+    );
+    // an open change ADDS a new requirement to the existing capability
+    write(
+      root,
+      "openspec/changes/extend-base/specs/base/spec.md",
+      "## ADDED Requirements\n\n### Requirement: base/newcomer\nThe system SHALL do newcomer.\n\n#### Scenario: #n1\n- **WHEN** p\n- **THEN** q\n",
+    );
+    // a second open change mints a capability CITING that not-yet-folded requirement
+    write(
+      root,
+      "openspec/changes/mint-user/specs/user/spec.md",
+      "## Purpose\n\nUser cap. Depends on: base.\n\n## ADDED Requirements\n\n### Requirement: user/alpha\nThe system SHALL do alpha, shaped by base/newcomer.\n\n#### Scenario: #a1\n- **WHEN** m\n- **THEN** n\n",
+    );
+    execSync("git init -q && git add -A && git -c user.email=t@t -c user.name=t commit -qm seed", {
+      cwd: root,
+    });
+    return root;
+  }
+
+  it("refuses to fold a delta citing a requirement that only an open change adds", () => {
+    const root = fixture();
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exit = vi.spyOn(process, "exit").mockImplementation(() => {
+      throw new Error("exit");
+    });
+    expect(() => foldChange(root, "mint-user")).toThrow("exit");
+    const msg = err.mock.calls.flat().join("\n");
+    expect(msg).toMatch(/cites requirements not yet in specs\//);
+    expect(msg).toMatch(/base\/newcomer/);
+    err.mockRestore();
+    exit.mockRestore();
+  });
+
+  it("folds once the cited requirement is in specs/", () => {
+    const root = fixture();
+    foldChange(root, "extend-base");
+    foldChange(root, "mint-user");
+    const out = readFileSync(join(root, "openspec/specs/user/spec.md"), "utf8");
+    expect(out).toContain("### Requirement: user/alpha");
+  });
+});

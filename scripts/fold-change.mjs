@@ -144,18 +144,32 @@ export function foldChange(root, changeName) {
   // reference lint's overlay legitimately resolves such citations while
   // both changes are open; fold is the moment they become binding, so the
   // cited capability's minting change must archive first.
+  // Granularity matters: checking whole CAPABILITIES misses the case where the
+  // cited capability is already in specs/ but the cited REQUIREMENT is added by
+  // another open change — e.g. a concrete capability citing a global-invariants
+  // requirement that only `extend-global-invariants` introduces. Fold then
+  // writes a citation into specs/ that resolves only through the overlay, and
+  // the lint stays green until that change archives (or dangles forever if it
+  // never does). So compare requirement by requirement.
   {
     const bindingIdx = buildSpecIndex(root);
     const overlayIdx = buildSpecIndex(root, { overlayOpenChanges: true });
     const ownCaps = new Set(deltas.map((d) => d.cap));
-    const phantomCaps = [...overlayIdx.keys()].filter((c) => !bindingIdx.has(c) && !ownCaps.has(c));
-    if (phantomCaps.length > 0) {
-      const re = new RegExp(`(?<![\\w/-])(${phantomCaps.join("|")})/[a-z0-9-]+`, "g");
+    const phantom = new Set();
+    for (const [cap, reqs] of overlayIdx) {
+      if (ownCaps.has(cap)) continue; // the change's own capabilities fold with it
+      for (const slug of reqs.keys())
+        if (!bindingIdx.get(cap)?.has(slug)) phantom.add(`${cap}/${slug}`);
+    }
+    if (phantom.size > 0) {
+      const re = /(?<![\w/-])([a-z0-9-]+\/[a-z0-9-]+)/g;
       for (const { file } of deltas) {
-        const hits = [...new Set([...readFileSync(file, "utf8").matchAll(re)].map((m) => m[1]))];
+        const hits = [
+          ...new Set([...readFileSync(file, "utf8").matchAll(re)].map((m) => m[1])),
+        ].filter((r) => phantom.has(r));
         if (hits.length > 0)
           fail(
-            `${changeName}: delta cites capabilities not yet in specs/ (${hits.join(", ")}) — archive the changes minting them first (capability-dependency order)`,
+            `${changeName}: delta cites requirements not yet in specs/ (${hits.join(", ")}) — they exist only in another open change; archive that change first (capability-dependency order)`,
           );
       }
     }
