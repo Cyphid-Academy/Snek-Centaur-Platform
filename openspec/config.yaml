@@ -25,6 +25,13 @@ context: |
   - Slugs are kebab-case and FROZEN once merged — renames only via RENAMED
     deltas with a same-commit reference sweep (code + specs). The lint
     (`pnpm spec:check`) validates every reference.
+  - A requirement declares the identifiers its SOUNDNESS depends on in a
+    `Depends on:` line directly under its header — once each, requirement
+    grain or scenario grain, omitted entirely when it depends on nothing.
+    Requirement PROSE carries no identifiers at all: the sentence names the
+    concept, the declaration carries the identifier. It is the capability's
+    Purpose declaration at one finer grain, and the capability's must cover
+    every capability its requirements depend on.
   - Code cites specs as `// spec: <capability>/<slug>[#<scenario>]` and
     archived decision rationale as `// design: <archived-change-folder>`.
   - Removed requirements' slugs are never re-minted with a different
@@ -55,13 +62,13 @@ context: |
   FREQUENTLY for this purpose is correct, not over-citation. It should be
   hard to change a rule that many requirements depend on. Corollary: when a
   change mints a new invariant BECAUSE its local solution needs that
-  invariant to stay robust, the local requirement cites it. What does NOT
-  warrant a citation: a requirement that merely restates or specialises a
-  gi rule without depending on it (see the DRY rule below), a defensive
-  note that gi permits something, or a pointer used to fill a gap the
-  requirement should have specified itself. Declared dependencies are an
-  AFFORDANCE, extended whenever a citation is genuinely warranted — never
-  a permanent budget on what a capability may cite. The capability set was carved in
+  invariant to stay robust, the local requirement declares it. What does
+  NOT warrant a declared dependency: a requirement that merely restates or
+  specialises a gi rule without depending on it (see the DRY rule below), a
+  defensive note that gi permits something, or a pointer used to fill a gap
+  the requirement should have specified itself. Declared dependencies are
+  an AFFORDANCE, extended whenever a dependency is genuinely warranted —
+  never a permanent budget. The capability set was carved in
   full by the 2026-07-24 migration train (planning record:
   docs/spec-migration/); each capability's carving
   decision is recorded in its migration change's proposal.
@@ -104,8 +111,10 @@ context: |
   still-open change folder land in the same PR, and the reference lint
   resolves citations against specs/ OVERLAID with open changes' deltas, so
   code may already cite identifiers the deltas introduce or rename →
-  archive → merge. Archiving is the terminal act of a change and the ONLY
-  way specs/ advances, STANDARDISED as the last commit of the PR once
+  archive → merge. Archiving is the terminal act of a change and the only
+  way specs/ advances on SUBSTANCE (the lone exception is a mechanical
+  GRAMMAR migration, which moves no requirement's meaning — see
+  openspec/README.md), STANDARDISED as the last commit of the PR once
   review is resolved — but executed only on an explicit human instruction:
   an AI agent SHOULD point out when every thread is resolved and the change
   looks ready to archive, but MUST NEVER archive unprompted. Mechanics:
@@ -166,7 +175,18 @@ rules:
       re-prefixes at archive. Record the rename in
       openspec/maps/identifier-lineage.json."
     - MODIFIED deltas must copy the ENTIRE requirement block — header, body,
-      and all scenarios — then edit.
+      the `Depends on:` declaration, and all scenarios — then edit.
+    - "STRUCTURAL SOUNDNESS DEPENDENCIES: a requirement's dependencies are
+      data, not prose. Declare them in a `Depends on:` line directly under
+      the requirement header (`<capability>/<slug>[#<scenario>]`, comma
+      separated, one sentence ended by a period, each identifier ONCE — a
+      requirement-grain entry subsumes its own scenarios); omit the line when
+      the requirement depends on nothing. An identifier anywhere in
+      requirement prose is a lint error: reword the sentence to name the
+      concept. When a dependency reaches a capability the owning capability
+      does not declare, extend the Purpose via `## MODIFIED Purpose` — the
+      declared list is an affordance, never a budget."
+
     - "NEW-CAPABILITY DELTAS: a delta file for a capability with no existing
       specs/<capability>/spec.md mints that capability. It must open with a
       `## Purpose` preamble (the capability's Purpose section, including its

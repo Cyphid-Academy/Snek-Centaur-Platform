@@ -12,6 +12,13 @@
 //   - Numeric identifiers `MM-REQ-NNN` must resolve to a requirement in the
 //     legacy archive for a module that has NOT migrated; identifiers of
 //     migrated modules (tombstoned via the identifier map) are errors.
+//   - Structural per-requirement dependencies: a requirement declares the
+//     identifiers its soundness depends on in a "Depends on:" line directly
+//     under its header, once each, and requirement PROSE carries no
+//     identifiers at all — in a spec or delta file an identifier may appear
+//     only in a requirement header or in such a declaration. Each declared
+//     identifier must resolve, must not be the requirement itself, and its
+//     capability must be a declared dependency of the owning capability.
 //   - Capability specs — and open-change delta specs, which will fold into
 //     them — must not reference the legacy archive or any implementation
 //     location (spec purity).
@@ -45,6 +52,9 @@ import {
   openChangeDeltaFiles,
   parseDeltaOps,
   parseDependsOn,
+  parseRequirementDeps,
+  purposeSection,
+  splitRequirementBlocks,
 } from "./spec-index.mjs";
 
 const root = new URL("..", import.meta.url).pathname;
@@ -108,7 +118,11 @@ if (existsSync(specsDir))
   for (const cap of readdirSync(specsDir)) {
     const f = join(specsDir, cap, "spec.md");
     if (existsSync(f))
-      declareDepsFrom(cap, readFileSync(f, "utf8"), `openspec/specs/${cap}/spec.md`);
+      declareDepsFrom(
+        cap,
+        purposeSection(readFileSync(f, "utf8")),
+        `openspec/specs/${cap}/spec.md`,
+      );
   }
 // An open delta's declaration overrides the specs/ one: a mint declares in its
 // `## Purpose` preamble, and an amendment in its `## MODIFIED Purpose` section.
@@ -257,34 +271,7 @@ const specFiles = [
   ...openDeltas,
 ];
 
-const checkLine = (file, i, line, isCode, ownCap = null) => {
-  if (!isCode) {
-    // Spec purity: capability specs never reference the legacy archive or
-    // implementation locations — the identifier map is the sole bridge to
-    // the past, and code cites specs, never the reverse.
-    if (/legacy-spec-archive/.test(line))
-      errors.push(`${file}:${i + 1} spec references the legacy archive`);
-    if (/packages\/|@cyphid\//.test(line))
-      errors.push(`${file}:${i + 1} spec references an implementation location`);
-  }
-  if (isCode) {
-    const t = line.trimStart();
-    const inComment = t.startsWith("//") || t.startsWith("*") || t.startsWith("<!--");
-    const inString = /["'`]/.test(line);
-    if (!inComment && !inString) return;
-  }
-  if (namedRe)
-    for (const m of line.matchAll(namedRe)) {
-      const [, cap, req, scen] = m;
-      const reqs = resolved.get(cap);
-      if (!reqs.has(req)) errors.push(`${file}:${i + 1} unknown requirement "${cap}/${req}"`);
-      else if (scen && !reqs.get(req).has(scen))
-        errors.push(`${file}:${i + 1} unknown scenario "${cap}/${req}#${scen}"`);
-      if (!isCode && ownCap && cap !== ownCap && !declaredDeps.get(ownCap)?.has(cap))
-        errors.push(
-          `${file}:${i + 1} references "${cap}/${req}" but "${ownCap}" does not declare a dependency on "${cap}"`,
-        );
-    }
+const checkLegacyRefs = (file, i, line) => {
   for (const m of line.matchAll(numericRe)) {
     if (tombstones.has(m[0]))
       errors.push(
@@ -305,14 +292,80 @@ const checkLine = (file, i, line, isCode, ownCap = null) => {
   }
 };
 
+// Code: named identifiers in comments and strings must resolve.
 for (const f of codeFiles)
   readFileSync(f, "utf8")
     .split("\n")
-    .forEach((line, i) => checkLine(f, i, line, true));
-for (const { file, cap } of specFiles)
-  readFileSync(file, "utf8")
-    .split("\n")
-    .forEach((line, i) => checkLine(file, i, line, false, cap));
+    .forEach((line, i) => {
+      checkLegacyRefs(f, i, line);
+      const t = line.trimStart();
+      const inComment = t.startsWith("//") || t.startsWith("*") || t.startsWith("<!--");
+      if (!inComment && !/["'`]/.test(line)) return;
+      if (namedRe)
+        for (const m of line.matchAll(namedRe)) {
+          const [, cap, req, scen] = m;
+          const reqs = resolved.get(cap);
+          if (!reqs.has(req)) errors.push(`${f}:${i + 1} unknown requirement "${cap}/${req}"`);
+          else if (scen && !reqs.get(req).has(scen))
+            errors.push(`${f}:${i + 1} unknown scenario "${cap}/${req}#${scen}"`);
+        }
+    });
+
+// --- Structural per-requirement dependencies -------------------------------
+// A requirement's soundness dependencies are structural data, not prose: the
+// identifiers it depends on are declared once each directly under its header,
+// so the dependency graph is machine-readable at requirement grain rather
+// than recovered by scanning sentences. The corollary is enforced here too —
+// in a spec or delta file an identifier appears ONLY in a requirement header
+// or in a "Depends on:" declaration. A sentence that needs to point at
+// another requirement names the concept; the declaration carries the
+// identifier.
+let depEdges = 0;
+for (const { file, cap } of specFiles) {
+  const content = readFileSync(file, "utf8");
+  const lines = content.replace(/\r\n?/g, "\n").split("\n");
+  const structural = new Set(); // 0-based lines where an identifier is data, not prose
+  for (const block of splitRequirementBlocks(content)) {
+    structural.add(block.line - 1); // the header
+    const { found, ids, problem, lineCount } = parseRequirementDeps(block.raw);
+    if (found) for (let k = 0; k < lineCount; k++) structural.add(block.line + k);
+    if (problem) errors.push(`${file}:${block.line + 1} ${block.name}: ${problem}`);
+    for (const id of ids) {
+      depEdges++;
+      const depCap = id.split("/")[0];
+      if (id === block.name || id.startsWith(`${block.name}#`))
+        errors.push(`${file}:${block.line + 1} ${block.name} declares a dependency on itself`);
+      else if (!resolves(id))
+        errors.push(
+          `${file}:${block.line + 1} ${block.name} depends on unknown requirement "${id}"`,
+        );
+      if (depCap !== cap && !declaredDeps.get(cap)?.has(depCap))
+        errors.push(
+          `${file}:${block.line + 1} ${block.name} depends on "${id}" but "${cap}" does not declare a dependency on "${depCap}"`,
+        );
+    }
+  }
+  // A RENAMED section names its endpoints on `FROM:`/`TO:` lines rather than
+  // as bare headers: structural too, not prose.
+  lines.forEach((line, i) => {
+    if (/^\s*-?\s*(?:FROM|TO):\s*`?### Requirement: /.test(line)) structural.add(i);
+  });
+  lines.forEach((line, i) => {
+    // Spec purity: capability specs never reference the legacy archive or
+    // implementation locations — the identifier map is the sole bridge to
+    // the past, and code cites specs, never the reverse.
+    if (/legacy-spec-archive/.test(line))
+      errors.push(`${file}:${i + 1} spec references the legacy archive`);
+    if (/packages\/|@cyphid\//.test(line))
+      errors.push(`${file}:${i + 1} spec references an implementation location`);
+    checkLegacyRefs(file, i, line);
+    if (!namedRe || structural.has(i)) return;
+    for (const m of line.matchAll(namedRe))
+      errors.push(
+        `${file}:${i + 1} identifier "${m[0]}" in prose — declare it in the requirement's "Depends on:" line and name the concept here`,
+      );
+  });
+}
 
 if (errors.length) {
   console.error(`Spec-reference lint FAILED (${errors.length}):`);
@@ -325,5 +378,5 @@ const scenCount = [...binding.values()].reduce(
   0,
 );
 console.log(
-  `Spec-reference lint passed (${binding.size} capabilities, ${reqCount} requirements, ${scenCount} scenarios, ${legacyDefined.size} legacy IDs, ${tombstones.size} tombstones${openDeltas.length ? `, ${openDeltas.length} open-change delta file(s) overlaid` : ""}).`,
+  `Spec-reference lint passed (${binding.size} capabilities, ${reqCount} requirements, ${scenCount} scenarios, ${depEdges} declared requirement dependencies, ${legacyDefined.size} legacy IDs, ${tombstones.size} tombstones${openDeltas.length ? `, ${openDeltas.length} open-change delta file(s) overlaid` : ""}).`,
 );

@@ -217,10 +217,145 @@ export function parseDeltaOps(content) {
 }
 
 /**
+ * The `## Purpose` section of a capability spec (heading included), or the
+ * whole text when there is none. The capability-grain "Depends on:"
+ * declaration lives here; requirement blocks carry their own, one grain
+ * finer (parseRequirementDeps), so the two are never read out of each other.
+ */
+export function purposeSection(content) {
+  const text = content.replace(/\r\n?/g, "\n");
+  const start = text.indexOf("## Purpose");
+  if (start === -1) return text;
+  const after = text.indexOf("\n## ", start + 1);
+  return text.slice(start, after === -1 ? undefined : after);
+}
+
+/**
+ * Split a spec (or delta) file into its requirement blocks: header line
+ * through the line before the next requirement or section heading. Returns
+ * [{ cap, slug, name, line, raw }] with `line` 1-based. Malformed headers end
+ * the preceding block and start none (harvestSpecFile reports them).
+ */
+export function splitRequirementBlocks(content) {
+  const lines = content.replace(/\r\n?/g, "\n").split("\n");
+  const out = [];
+  let cur = null;
+  const flush = () => {
+    if (cur) out.push({ ...cur, raw: cur.lines.join("\n").trimEnd() });
+    cur = null;
+  };
+  lines.forEach((line, i) => {
+    const m = line.match(/^### Requirement: ([a-z0-9-]+)\/([a-z0-9-]+)\s*$/);
+    if (m) {
+      flush();
+      cur = { cap: m[1], slug: m[2], name: `${m[1]}/${m[2]}`, line: i + 1, lines: [line] };
+      return;
+    }
+    if (/^### Requirement:/.test(line) || /^## /.test(line)) {
+      flush();
+      return;
+    }
+    if (cur) cur.lines.push(line);
+  });
+  flush();
+  return out;
+}
+
+const REQ_ID_RE = /^[a-z0-9-]+\/[a-z0-9-]+(?:#[a-z0-9-]+)?$/;
+
+/**
+ * Parse a requirement block's structural dependency declaration: the
+ * identifiers whose remaining true this requirement's soundness depends on,
+ * declared once each on the line directly under the header —
+ *
+ *   ### Requirement: game-lifecycle/roster-snapshot
+ *   Depends on: global-invariants/game-instance-hermeticity,
+ *   identity-and-authorization/roster-snapshot-binding.
+ *
+ * — as a sentence terminated by a period, wrapping freely. Returns
+ * { found, ids, problem, lineCount }: `ids` the declared identifiers
+ * (requirement or scenario grain), `problem` a human-readable fault,
+ * `lineCount` how many lines the declaration spans (so a caller can exempt
+ * exactly those lines from the no-identifiers-in-prose rule). A requirement
+ * that depends on nothing carries no declaration at all.
+ */
+export function parseRequirementDeps(block) {
+  const lines = block.replace(/\r\n?/g, "\n").split("\n");
+  const at = lines.findIndex((l) => /^Depends on:/.test(l));
+  if (at === -1) return { found: false, ids: [], lineCount: 0 };
+  if (at !== 1)
+    return {
+      found: true,
+      ids: [],
+      lineCount: 1,
+      problem: `"Depends on:" must be the line directly under the requirement header`,
+    };
+  let sentence = "";
+  let lineCount = 0;
+  let terminated = false;
+  for (let i = at; i < lines.length && lines[i].trim() !== ""; i++) {
+    sentence += i === at ? lines[i] : ` ${lines[i].trim()}`;
+    lineCount++;
+    const dot = sentence.indexOf(".");
+    if (dot !== -1) {
+      sentence = sentence.slice(0, dot);
+      terminated = true;
+      break;
+    }
+  }
+  if (!terminated)
+    return {
+      found: true,
+      ids: [],
+      lineCount: Math.max(lineCount, 1),
+      problem: `"Depends on:" declaration is not terminated by a period`,
+    };
+  const ids = [];
+  const seen = new Set();
+  for (const part of sentence
+    .slice("Depends on:".length)
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)) {
+    if (!REQ_ID_RE.test(part))
+      return {
+        found: true,
+        ids,
+        lineCount,
+        problem: `unparseable "Depends on:" entry "${part}" — expected <capability>/<requirement>[#<scenario>]`,
+      };
+    if (seen.has(part))
+      return { found: true, ids, lineCount, problem: `"Depends on:" repeats "${part}"` };
+    seen.add(part);
+    ids.push(part);
+  }
+  if (ids.length === 0)
+    return {
+      found: true,
+      ids,
+      lineCount,
+      problem: `"Depends on:" names no requirement — omit the declaration when a requirement depends on nothing`,
+    };
+  for (const id of ids) {
+    const bare = id.split("#")[0];
+    if (bare !== id && seen.has(bare))
+      return {
+        found: true,
+        ids,
+        lineCount,
+        problem: `"Depends on:" names both "${bare}" and "${id}" — the requirement-grain entry already subsumes the scenario`,
+      };
+  }
+  return { found: true, ids, lineCount };
+}
+
+/**
  * Parse a Purpose's "Depends on:" declaration out of spec (or mint-preamble)
  * text: the sentence starting at the first "Depends on:" (anywhere in a
  * line — Purpose prose wraps freely) up to its first period, joining
- * wrapped lines. Returns { found, deps, problem } —
+ * wrapped lines. Callers pass the Purpose section alone (purposeSection),
+ * never a whole spec file: requirement blocks carry a "Depends on:" of their
+ * own at a finer grain. Returns { found, deps, problem } —
  * `deps` the declared capability names (a "(none …)" declaration yields
  * []), `problem` a human-readable fault when the sentence is malformed.
  * The capability dependency rule (a spec may reference only its declared

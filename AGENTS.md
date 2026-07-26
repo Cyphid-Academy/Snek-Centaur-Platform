@@ -65,6 +65,8 @@ Every non-trivial implementation decision that traces to a requirement must carr
 
 Named identifiers come from `openspec/specs/<capability>/spec.md` headers; numeric IDs are valid only for modules still pending migration (cutover table in `openspec/README.md`). All forms are lint-enforced by `pnpm spec:citations` — stale or unknown references fail, and retired numeric IDs point you to `legacy-spec-archive/maps/`.
 
+Code cites identifiers **inline**, as above. The rule that identifiers never appear in prose is a rule about the corpus itself: inside a spec or delta file a requirement's dependencies live in its `Depends on:` declaration (`openspec/README.md` → identifier grammar), and the sentences name concepts. Code is the other direction of the relation and is unaffected.
+
 ## Tooling Conventions
 
 **Package manager**: pnpm only. Use `pnpm add`, `pnpm install`, `pnpm remove`. Never use `npm install` or `yarn`.

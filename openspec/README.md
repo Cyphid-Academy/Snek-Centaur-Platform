@@ -35,37 +35,38 @@ game-engine/team-potion-effects#sacrificial-collection   # one of its scenarios
   Purpose` amendment) declares its dependencies in a `Depends on:`
   sentence; a capability's spec may reference only itself and those
   declared dependencies, and the declared graph must stay acyclic.
-- **`global-invariants` is a meta layer; cite it where your soundness
-  depends on it.** gi constrains how concrete capabilities may be shaped, so
+- **`global-invariants` is a meta layer; depend on it where your soundness
+  rests on it.** gi constrains how concrete capabilities may be shaped, so
   the direction is always concrete → gi, never gi → a user-story capability
-  (`game-engine` is the one thing gi may cite: root domain vocabulary, not a
-  story). **Cite a gi requirement when this requirement's soundness depends
-  on it remaining true.** The citation graph is a *soundness-dependency*
-  record, not a conformance checklist — conformance is universal and
-  implicit (every capability is bound by every invariant whether or not it
-  cites one, so the absence of a gi dependency never means "unconstrained"),
-  while a citation says *relax this invariant and my requirement stops
-  making sense*. That is what makes the blast radius of relaxing a gi
-  requirement traceable through its dependents, and because gi sits deep in
-  the dependency tree carrying the corpus's most load-bearing constraints,
-  citing it **frequently** for that purpose is correct — a rule many
-  requirements depend on should be hard to change. Corollary: when a change
-  mints an invariant *because* its local solution needs that invariant to
-  stay robust, the local requirement cites it.
-  What does *not* warrant a citation: a requirement that merely restates or
-  specialises a gi rule without depending on it (that's the DRY problem
-  below), a defensive note that gi permits something, or a pointer filling a
-  gap the requirement should have specified itself.
-- **Declared dependencies are an affordance, not a ceiling.** A capability's
-  `Depends on:` list is extended whenever a citation is genuinely warranted
-  — via `## MODIFIED Purpose` for an existing capability. It is never a
-  permanent budget that forces a capability to restate a rule it cannot
-  reach.
+  (`game-engine` is the one thing gi may depend on: root domain vocabulary,
+  not a story). **Declare a dependency on a gi requirement when this
+  requirement's soundness depends on it remaining true.** The dependency
+  graph is a *soundness* record, not a conformance checklist — conformance
+  is universal and implicit (every capability is bound by every invariant
+  whether or not it declares one, so the absence of a gi dependency never
+  means "unconstrained"), while a declared dependency says *relax this
+  invariant and my requirement stops making sense*. That is what makes the
+  blast radius of relaxing a gi requirement traceable through its
+  dependents, and because gi sits deep in the dependency tree carrying the
+  corpus's most load-bearing constraints, depending on it **frequently** for
+  that purpose is correct — a rule many requirements depend on should be
+  hard to change. Corollary: when a change mints an invariant *because* its
+  local solution needs that invariant to stay robust, the local requirement
+  declares it. What does *not* warrant a declared dependency: a requirement
+  that merely restates or specialises a gi rule without depending on it
+  (that's the DRY problem below), a defensive note that gi permits
+  something, or a pointer filling a gap the requirement should have
+  specified itself.
+- **Declared dependencies are an affordance, not a fixed budget.** A
+  capability's `Depends on:` list is extended whenever a dependency is
+  genuinely warranted — via `## MODIFIED Purpose` for an existing
+  capability. It is never a permanent budget that forces a capability to
+  restate a rule it cannot reach.
 - **Don't restate what another requirement implies.** A constraint gi or a
   peer already cleanly implies must not be repeated in a second requirement:
-  duplicates drift into conflict and the copy carries no authority. Cite the
-  owner where soundness depends on it, and pin the *integration* of the
-  local requirement with the constraints bearing on it in `design.md` —
+  duplicates drift into conflict and the copy carries no authority. Depend
+  on the owner where soundness depends on it, and pin the *integration* of
+  the local requirement with the constraints bearing on it in `design.md` —
   which is equally a home for gi citations, since design and implementation
   are as subject to the invariants as the spec is. A decision motivated by
   an invariant (which runtime holds a record, why an absolute is safe)
@@ -79,9 +80,12 @@ game-engine/team-potion-effects#sacrificial-collection   # one of its scenarios
   `## Purpose` **preamble** is the different thing: it *mints* a
   capability that has no `spec.md` yet.
 - `pnpm spec:check` validates structure (strict OpenSpec validation of
-  `specs/` and of every open change), every reference and the capability
-  dependency graph (`scripts/check-spec-citations.mjs`), and open changes'
-  seed freshness (`scripts/check-change-freshness.mjs`).
+  `specs/` and of every open change), every reference, the capability
+  dependency graph, and each requirement's structural dependencies
+  (`scripts/check-spec-citations.mjs`), open changes'
+  seed freshness (`scripts/check-change-freshness.mjs`), and the
+  identifier map's completeness against the legacy corpus
+  (`scripts/audit-all-modules.mjs`, `pnpm spec:audit`).
 
 ## Migration cutover table
 
@@ -193,6 +197,21 @@ final commit → merge. Four conventions bind agents:
   base) and have the word-diff re-reviewed. (Replit environment: the
   scripted-rebase tooling in `replit.md` → "Scripted history rewriting"
   performs these rewrites non-interactively.)
+
+**One thing that advances `specs/` without a fold: a grammar migration.** A
+change to the *grammar* requirements are written in — the structural
+dependency declaration was one — is not a spec change: applied mechanically
+to every requirement, it moves no requirement's meaning, so there is nothing
+for a reviewer to approve at the requirement level and routing it through a
+change folder would bury the real diff (the tooling) under a full-corpus
+MODIFIED delta whose word-diff says nothing. It lands as its own commit,
+ordered in history **before** any open change's seed commit so no seed/edit
+pair straddles the grammar, and it is verified block-by-block: every
+requirement header and scenario slug identical before and after, every
+requirement's set of referenced identifiers identical, and prose changed only
+where the grammar forced a rewording. The commit message states that
+verification. Anything that changes what a requirement *says* is a change
+folder, always.
 
 Design-time work ends with
 **constraint-mining** (see `config.yaml` design rules): any decision whose

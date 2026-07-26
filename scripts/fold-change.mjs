@@ -35,6 +35,12 @@
 // Apply order and loud-failure rules mirror the stock machinery
 // (RENAMED → REMOVED → MODIFIED → ADDED; unknown or colliding headers
 // abort), minus the scenario guard that full-block authoring supersedes.
+//
+// A requirement's structural dependency declaration (its "Depends on:" line)
+// needs no handling of its own: it lives inside the requirement block, so
+// full-block replacement carries it, and the DAG-order guard below scans the
+// delta's raw text — which includes the declaration — for requirements that
+// exist only in another open change.
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";

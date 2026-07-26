@@ -6,7 +6,15 @@ import { describe, expect, it, vi } from "vitest";
 import { freshnessProblemsFor } from "./check-change-freshness.mjs";
 import { taskProgress } from "./check-open-changes.mjs";
 import { foldChange } from "./fold-change.mjs";
-import { buildSpecIndex, makeResolver, parseDeltaOps, parseDependsOn } from "./spec-index.mjs";
+import {
+  buildSpecIndex,
+  makeResolver,
+  parseDeltaOps,
+  parseDependsOn,
+  parseRequirementDeps,
+  purposeSection,
+  splitRequirementBlocks,
+} from "./spec-index.mjs";
 
 const write = (root, path, content) => {
   mkdirSync(join(root, dirname(path)), { recursive: true });
@@ -30,7 +38,9 @@ Old purpose. Depends on: (none).
 ## Requirements
 
 ### Requirement: oldcap/alpha
-The system SHALL do alpha, see oldcap/beta.
+Depends on: oldcap/beta.
+
+The system SHALL do alpha.
 
 #### Scenario: #a1
 - **WHEN** x
@@ -101,7 +111,7 @@ describe("capability rename tooling", () => {
     expect(folded.startsWith("# newcap Specification")).toBe(true);
     expect(folded).toContain("New purpose for the renamed capability");
     expect(folded).toContain("### Requirement: newcap/alpha");
-    expect(folded).toContain("see newcap/beta"); // intra-capability ref re-prefixed
+    expect(folded).toContain("Depends on: newcap/beta."); // intra-capability dep re-prefixed
     expect(folded).toContain("#### Scenario: #a1"); // carried scenario preserved
     expect(folded).toContain("### Requirement: newcap/gamma"); // ADDED appended
     expect(folded).not.toContain("oldcap/"); // no stray source references
@@ -146,6 +156,123 @@ describe("parseDependsOn", () => {
   it("flags an unparseable entry", () => {
     expect(parseDependsOn("Depends on: the game engine.").problem).toBeTruthy();
   });
+
+  it("reads the capability grain out of the Purpose section alone", () => {
+    // A spec file declares at two grains: the capability's in its Purpose,
+    // each requirement's in its own block. Scoping the read to the Purpose is
+    // what keeps a first-match scan from picking up a requirement's line.
+    const spec = `# cap Specification
+
+## Purpose
+
+Cap. Depends on: game-engine.
+
+## Requirements
+
+### Requirement: cap/alpha
+Depends on: game-engine/movement.
+
+The system SHALL alpha.
+`;
+    expect(parseDependsOn(purposeSection(spec)).deps).toEqual(["game-engine"]);
+  });
+});
+
+describe("structural requirement dependencies", () => {
+  const block = (body) => `### Requirement: cap/alpha\n${body}`;
+
+  it("parses the declaration under the header, at either grain", () => {
+    const r = parseRequirementDeps(
+      block(
+        "Depends on: global-invariants/one-shared-engine, game-engine/movement#body-advance.\n\nThe system SHALL alpha.",
+      ),
+    );
+    expect(r.found).toBe(true);
+    expect(r.ids).toEqual([
+      "global-invariants/one-shared-engine",
+      "game-engine/movement#body-advance",
+    ]);
+    expect(r.problem).toBeUndefined();
+    expect(r.lineCount).toBe(1);
+  });
+
+  it("joins a declaration wrapped across lines", () => {
+    const r = parseRequirementDeps(
+      block(
+        "Depends on: game-engine/movement,\ngame-engine/determinism.\n\nThe system SHALL alpha.",
+      ),
+    );
+    expect(r.ids).toEqual(["game-engine/movement", "game-engine/determinism"]);
+    expect(r.lineCount).toBe(2);
+  });
+
+  it("treats a requirement with no declaration as depending on nothing", () => {
+    const r = parseRequirementDeps(block("The system SHALL alpha."));
+    expect(r.found).toBe(false);
+    expect(r.ids).toEqual([]);
+  });
+
+  it("requires the declaration to sit directly under the header", () => {
+    const r = parseRequirementDeps(
+      block("The system SHALL alpha.\n\nDepends on: game-engine/movement."),
+    );
+    expect(r.problem).toMatch(/directly under the requirement header/);
+  });
+
+  it("requires the declaration to be terminated by a period", () => {
+    const r = parseRequirementDeps(
+      block("Depends on: game-engine/movement\n\nThe system SHALL alpha."),
+    );
+    expect(r.problem).toMatch(/not terminated by a period/);
+  });
+
+  it("rejects a repeated identifier — each is declared once", () => {
+    const r = parseRequirementDeps(
+      block("Depends on: game-engine/movement, game-engine/movement."),
+    );
+    expect(r.problem).toMatch(/repeats/);
+  });
+
+  it("rejects a scenario entry its own requirement entry already subsumes", () => {
+    const r = parseRequirementDeps(
+      block("Depends on: game-engine/movement, game-engine/movement#body-advance."),
+    );
+    expect(r.problem).toMatch(/already subsumes the scenario/);
+  });
+
+  it("rejects a capability-grain entry — dependencies are requirements", () => {
+    expect(parseRequirementDeps(block("Depends on: game-engine.")).problem).toMatch(/unparseable/);
+  });
+
+  it("keeps a REMOVED header out of the block it precedes", () => {
+    // REMOVED names requirements by bare header; the splitter must not treat
+    // the next section's text as that requirement's body.
+    const blocks = splitRequirementBlocks(
+      "## REMOVED Requirements\n\n### Requirement: cap/gone\n\n## ADDED Requirements\n\n### Requirement: cap/fresh\nThe system SHALL fresh.\n",
+    );
+    expect(blocks.map((b) => b.name)).toEqual(["cap/gone", "cap/fresh"]);
+    expect(blocks[0].raw).toBe("### Requirement: cap/gone");
+  });
+
+  it("splits a spec file into blocks carrying their header line numbers", () => {
+    const spec = `# cap Specification
+
+## Requirements
+
+### Requirement: cap/alpha
+Depends on: cap/beta.
+
+The system SHALL alpha.
+
+### Requirement: cap/beta
+The system SHALL beta.
+`;
+    const blocks = splitRequirementBlocks(spec);
+    expect(blocks.map((b) => b.name)).toEqual(["cap/alpha", "cap/beta"]);
+    expect(blocks[0].line).toBe(5);
+    expect(parseRequirementDeps(blocks[0].raw).ids).toEqual(["cap/beta"]);
+    expect(parseRequirementDeps(blocks[1].raw).found).toBe(false);
+  });
 });
 
 // A temp repo with no specs/ yet and two open mint changes in one PR — a
@@ -180,7 +307,9 @@ Capability B. Depends on: cap-a.
 ## ADDED Requirements
 
 ### Requirement: cap-b/beta
-The system SHALL beta per cap-a/alpha.
+Depends on: cap-a/alpha.
+
+The system SHALL beta.
 
 #### Scenario: #b1
 - **WHEN** p
@@ -426,7 +555,7 @@ describe("fold DAG order (requirement granularity)", () => {
     write(
       root,
       "openspec/changes/mint-user/specs/user/spec.md",
-      "## Purpose\n\nUser cap. Depends on: base.\n\n## ADDED Requirements\n\n### Requirement: user/alpha\nThe system SHALL do alpha, shaped by base/newcomer.\n\n#### Scenario: #a1\n- **WHEN** m\n- **THEN** n\n",
+      "## Purpose\n\nUser cap. Depends on: base.\n\n## ADDED Requirements\n\n### Requirement: user/alpha\nDepends on: base/newcomer.\n\nThe system SHALL do alpha.\n\n#### Scenario: #a1\n- **WHEN** m\n- **THEN** n\n",
     );
     execSync("git init -q && git add -A && git -c user.email=t@t -c user.name=t commit -qm seed", {
       cwd: root,

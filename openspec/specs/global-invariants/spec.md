@@ -45,18 +45,22 @@ SpacetimeDB instances SHALL be isolated from one another: no instance has read o
 - **THEN** it cannot — the instances are separate SpacetimeDB databases sharing no state; the isolation is a security boundary, not an optimisation
 
 ### Requirement: global-invariants/authoritative-turn-resolution
+Depends on: game-engine/turn-resolution-model.
+
 The game's SpacetimeDB instance SHALL be the sole authoritative executor of turn resolution, running the shared engine's `resolveTurn` inside its turn-resolution reducer as one ACID transaction; no other runtime's execution of the engine produces committed game state.
 
 #### Scenario: #turn-resolution-is-atomic
 - **WHEN** the turn-resolution reducer runs
-- **THEN** either the whole turn (per game-engine/turn-resolution-model) commits and is observable, or the reducer rolls back and nothing changes
+- **THEN** either the whole turn commits and is observable, or the reducer rolls back and nothing changes
 
 #### Scenario: #server-simulation-is-not-authoritative
 - **WHEN** a Snek Centaur Server runs the same engine to simulate candidate worlds for bot decisions
 - **THEN** its output is never committed as game state; only the SpacetimeDB instance's resolution is
 
 ### Requirement: global-invariants/one-shared-engine
-The SpacetimeDB game module, the Snek Centaur Server, and the SvelteKit web clients SHALL each obtain the rules by consuming the one shared `game-engine` build directly; none SHALL reimplement its domain types or turn-resolution algorithm, and the engine SHALL stay pluggable into all three (see game-engine/runtime-portability).
+Depends on: game-engine/runtime-portability.
+
+The SpacetimeDB game module, the Snek Centaur Server, and the SvelteKit web clients SHALL each obtain the rules by consuming the one shared `game-engine` build directly; none SHALL reimplement its domain types or turn-resolution algorithm, and the engine SHALL stay pluggable into all three.
 
 #### Scenario: #no-parallel-implementation
 - **WHEN** any runtime needs turn resolution or the domain vocabulary — SpacetimeDB to resolve a turn, a Server to simulate, a web client to pre-validate a move
