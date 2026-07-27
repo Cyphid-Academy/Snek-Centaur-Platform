@@ -119,10 +119,31 @@ A manually started game SHALL NOT launch while any participating team's nominate
 - **WHEN** an override-governed start runs while one team's server is down or refusing
 - **THEN** the launch proceeds without that team — and if its server recovers in time to accept within the invitation window, the team is seated and plays
 
+### Requirement: game-lifecycle/instance-provisioning-authority
+Depends on: global-invariants/no-shared-secrets, global-invariants/issuer-anchored-trust, game-lifecycle/instance-per-game.
+
+The platform SHALL authenticate every provisioning call with a credential it issued itself, and SHALL hold no credential specific to the system instances are provisioned on. The identity that provisions an instance SHALL own it and SHALL be the only identity that can update or delete it. Because the provisioning host admits instance creation without authorization of its own, the deployment SHALL restrict the creation route at the network boundary to callers bearing a valid platform-issued credential — ownership protects instances that already exist, and nothing otherwise protects the act of creating them.
+
+#### Scenario: #no-provisioning-credential-is-stored
+- **WHEN** the platform's stored configuration is examined for what lets it provision instances
+- **THEN** there is nothing to find: it signs its own credential at the moment of the call, so there is no provisioning secret to leak, rotate, or forget to rotate
+
+#### Scenario: #only-the-provisioner-can-touch-an-instance
+- **WHEN** any party other than the platform attempts to update or delete a provisioned instance
+- **THEN** it is refused by the provisioning system on ownership, independently of anything the platform does — the instance belongs to the identity that created it
+
+#### Scenario: #open-creation-is-closed-at-the-boundary
+- **WHEN** the provisioning host is reached on its creation route by anything other than the platform's own orchestration
+- **THEN** it does not create an instance: the boundary in front of that route admits only callers bearing a valid platform-issued credential, and the credential check is what carries the guarantee — any narrowing by network origin is defence in depth on top of it, never the thing relied upon
+
 ### Requirement: game-lifecycle/instance-initialization
 Depends on: global-invariants/transactional-invariant-enforcement#both-stores-guard-their-own-invariants, global-invariants/game-instance-hermeticity#seeded-once-never-refreshed, game-configuration/generation-parameter-boundary, game-engine/determinism, game-lifecycle/roster-snapshot, game-lifecycle/finish-notification, game-lifecycle/no-orphans.
 
-A provisioned instance SHALL expose a privileged initialization operation, invocable exactly once, by the platform's authenticated orchestration only, before any client connection is admitted. Its payload SHALL deliver everything the instance needs to run its one game: the precomputed starting state and the dynamic gameplay parameters, the game's root seed — always forwarded, since turn-resolution randomness and the eventual export depend on it — the roster snapshot seeding admission, the game's unique identifier for validating access-token audience, and the finish-notification callback registration. The instance SHALL validate the payload's structural integrity and reject a malformed payload synchronously as an error to the caller; it never generates a board. Successful initialization SHALL leave turn 0 fully written and the instance ready to accept connections, move staging, and turn declarations.
+A provisioned instance SHALL expose a privileged initialization operation, invocable exactly once, before any client connection is admitted, and authorized by an ordinary platform-issued credential naming that instance and carrying the capability to initialize it — never by anything configured into the instance when it was built or deployed. Its payload SHALL deliver everything the instance needs to run its one game: the precomputed starting state and the dynamic gameplay parameters, the game's root seed — always forwarded, since turn-resolution randomness and the eventual export depend on it — the roster snapshot seeding admission, the game's unique identifier for validating access-token audience, and the finish-notification callback registration. The instance SHALL validate the payload's structural integrity and reject a malformed payload synchronously as an error to the caller; it never generates a board. Successful initialization SHALL leave turn 0 fully written and the instance ready to accept connections, move staging, and turn declarations.
+
+#### Scenario: #nothing-is-built-into-the-instance
+- **WHEN** an instance's build and deployment inputs are examined for what authorizes its initialization
+- **THEN** they contain no credential at all: the instance validates the caller's credential against the platform's published material like any other, so no build artifact is worth stealing
 
 #### Scenario: #initialization-is-once-only
 - **WHEN** the initialization operation is invoked again after it has once completed successfully
@@ -222,7 +243,7 @@ A finished game SHALL be followed by the auto-creation of its successor — by d
 - **THEN** the successor inherits neither the preview nor the lock: its preview lock is clear and no persisted preview is carried over, so the predecessor's board never silently becomes the successor's
 
 ### Requirement: game-lifecycle/host-warm-up
-The host from which per-game instances are provisioned MAY suspend when idle, and SHALL expose a warm-up signal distinct from provisioning: on receipt against a suspended host, the host SHALL become ready to accept a provisioning call and answer success within ten seconds; against an already-warm host the signal SHALL be a success no-op within the same budget. The signal SHALL provision nothing and mutate no existing instance, and SHALL NOT require the platform-management credential — a lightweight check sufficient to deter casual abuse suffices, because resuming the host is its only effect. Convex SHALL dispatch a best-effort warm-up on every path that creates a game record, decoupled from the creation itself: warm-up failure or timeout SHALL neither block nor roll back record creation, SHALL be retried at most once, and SHALL NOT be surfaced to the acting user; a launch behind which no warm-up succeeded simply bears the host's cold start.
+The host from which per-game instances are provisioned MAY suspend when idle, and SHALL expose a warm-up signal distinct from provisioning: on receipt against a suspended host, the host SHALL become ready to accept a provisioning call and answer success within ten seconds; against an already-warm host the signal SHALL be a success no-op within the same budget. The signal SHALL provision nothing and mutate no existing instance, and SHALL NOT require a credential carrying provisioning authority — a lightweight check sufficient to deter casual abuse suffices, because resuming the host is its only effect. Convex SHALL dispatch a best-effort warm-up on every path that creates a game record, decoupled from the creation itself: warm-up failure or timeout SHALL neither block nor roll back record creation, SHALL be retried at most once, and SHALL NOT be surfaced to the acting user; a launch behind which no warm-up succeeded simply bears the host's cold start.
 
 #### Scenario: #warm-up-never-blocks-creation
 - **WHEN** the warm-up dispatched on game-record creation fails or times out

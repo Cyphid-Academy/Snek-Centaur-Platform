@@ -51,12 +51,11 @@ Deliberate boundaries:
   endpoint contract and availability recording are cited from
   team-server-management/server-healthcheck, per the sibling's explicit
   exclusion of the branching.
-- **The invitation window is cited, not restated.** The sibling authored
+- **The invitation window is cited, not restated.** The sibling authors
   the bounded response window on the invitation contract
   (team-server-management/game-invitations); this capability owns only
   the sequencing — invitations resolve before initialization — and the
-  consequences of how they resolve. (See Open Question 1 on the window's
-  value.)
+  consequences of how they resolve.
 - **The roster snapshot's storage and orchestration are authored here;
   its authorization-binding half is cited** from
   identity-and-authorization/roster-snapshot-binding, per the matrix
@@ -136,29 +135,70 @@ Deliberate boundaries:
 
 ## Open Questions
 
+None remaining; the three this change carried are resolved in place below.
+
 1. **Invitation response window: ten seconds or thirty?**
-   - **Context**: the open sibling authored the invitation contract's
-     bounded response window as **thirty seconds**
-     (team-server-management/game-invitations, from the legacy module 03
-     Design's "waits up to 30 seconds"). But the binding legacy module 05
-     orchestration text — amended by a resolved review item routed to
-     this change — fixes the same window at **10 seconds**, with recorded
-     rationale (acceptance is a trivial store-and-return; a long window
-     only delays starts). The two binding legacy sources contradict each
-     other, and the train currently carries the 30-second value.
+   - **Context**: the sibling authors the invitation contract's bounded
+     response window (team-server-management/game-invitations). The legacy
+     module 03 Design says thirty seconds; the binding legacy module 05
+     orchestration text, amended by a resolved review item routed to this
+     change, fixes the same window at ten, with recorded rationale — the
+     answer is a status code, and a long window only delays starts.
    - **Question**: which value binds? The number lives on the invitation
-     contract requirement in the sibling change, so if ten seconds wins,
-     the fix is an edit there — this change's delta cites the window
-     without restating a number either way, and this change's map entry
-     for the routed review item records the resolution.
-   - **Options**: (A) thirty seconds — keep the sibling's authored value;
-     the later 05 review decision is treated as superseded by the 03
-     Design contract. (B) ten seconds — the 05 review decision is the
-     later, deliberately-reasoned value; amend the sibling's requirement
-     and its design rationale. (C) author the window as "bounded,
-     platform-defined" with no number — rejected by the sibling's
-     design rationale (the window is a cross-implementation protocol
-     deadline both sides must agree on).
-   - This change is authored to be correct under any resolution; a human
-     decision is required before the train archives.
-   - **Decision (author, 2026-07-24)**: Option B — ten seconds. The sibling's game-invitations requirement and design rationale are amended to the ten-second window; the 05 review decision is the later, deliberately reasoned value.
+     contract in the sibling change, so this change's delta cites the
+     window without restating a number either way.
+   - **Options**: (A) thirty seconds; (B) ten seconds; (C) "bounded,
+     platform-defined" with no number — rejected, because the window is a
+     cross-implementation deadline both sides must agree on.
+   - **Decision (author, 2026-07-24)**: Option B — ten seconds. The
+     sibling's requirement carries the ten-second window; the 05 review
+     decision is the later, deliberately reasoned value. A server that has
+     scaled to zero must cold-start within it, which is the constraint the
+     number now has to respect.
+
+2. **Does the managed provisioning target accept a platform-issued
+   credential, or gate creation on an account linked to its own web
+   console?**
+   - **Context**: `instance-provisioning-authority` has the platform sign
+     its own credential for provisioning and store nothing target-specific.
+     That is available on a self-hosted target. A managed target that binds
+     billing and tier semantics to a console account may require an identity
+     linked to that account, which an arbitrary platform-issued credential
+     is not.
+   - **Question**: does the managed target honour a platform-issued
+     credential for creating a database?
+   - **Options**: (A) it does — deployment target stays an operational
+     preference; (B) it does not — the only route is capturing a credential
+     from an interactive login and installing it on the automation host,
+     which is a stored credential the invariants forbid, so deployment
+     target becomes an architectural constraint rather than a preference.
+   - **Decision (author, 2026-07-27)**: Option B — it does not. The managed
+     target attaches the billing account an instance needs through an
+     interactive browser sign-in, so no platform-issued credential can stand
+     in for it, and the workaround would be a captured credential at rest —
+     which the invariants forbid. Game instances are therefore provisioned
+     on a self-hosted host, and that is an architectural constraint rather
+     than an operational preference. `instance-provisioning-authority` drops
+     its conditional framing accordingly: the host admits unauthenticated
+     creation, so the boundary in front of it is not optional.
+
+3. **Does a provisioned instance re-resolve the platform's signing keys, or
+   pin what it captured?**
+   - **Context**: an instance obtains token-verification material at startup
+     and makes no per-connection external call, and provisioning now
+     authenticates with a platform-issued credential.
+   - **Question**: does the provisioning target re-resolve the platform's
+     published verification material over an instance's life, or pin what it
+     captured at provisioning time?
+   - **Options**: (A) pinned — platform key rotation must be scheduled between
+     games, or instances need a re-key path; (B) re-resolved — rotation is a
+     routine background operation.
+   - **Decision (author, 2026-07-27, verified against the runtime)**:
+     Option B. The instance re-resolves the issuer's published material
+     every time it validates a token's identity claims, so a key rotation
+     reaches in-flight games without coordination. Platform key rotation is
+     therefore an ordinary background operation, needing neither a window
+     between games nor a re-key path for running instances — and the
+     hermeticity exception this rests on is already the one the invariant
+     sanctions, verification material obtained at startup rather than a
+     per-connection call to Convex.
