@@ -68,6 +68,37 @@ stored copy. *Reversed*, the platform re-acquires the property that some
 component somewhere holds a secret whose disclosure forges credentials
 undetectably, and every new participant needs a human to provision one.
 
+**The rule is scoped to the platform's own trust chain, and that scope is
+load-bearing rather than a hedge.** Read unconditionally it would forbid
+Google sign-in, because a consumer identity provider's authorization-code
+exchange admits no asymmetric client authentication: the platform must hold
+the client secret that protocol defines. Since `google-sign-in` makes Google
+the sole human credential, an unscoped `no-shared-secrets` would put two
+requirements of this corpus in direct contradiction — and the contradiction
+would surface at the worst moment, when someone first tries to configure
+sign-in and finds an invariant forbidding it.
+
+The scope that resolves it is the one that carries the invariant's actual
+meaning. What `no-shared-secrets` protects is the property that **nothing a
+component here holds can impersonate another party here**: examine any
+runtime's state and you find its own private key and other parties' public
+material. A third-party client secret does not weaken that. It authenticates
+the platform *outward*, as itself, to one named service; it confers nothing
+on anyone inside the chain; and no resource holder here would honour it as
+authority, because none is configured to. Its disclosure costs the platform
+its standing with that one provider — a real cost, contained and rotatable —
+and forges no credential any Convex function, game instance, or Snek Centaur
+Server would accept.
+
+*Reversed* — the carve-out omitted — the invariant is either violated in
+practice on day one and quietly disbelieved thereafter, or honoured by
+dropping the one human authentication provider the corpus mandates. The
+narrower rule is the one that can actually be kept, and a rule kept is worth
+more than a rule stated. What it must not become is a general licence: the
+permission is confined to protocols where no asymmetric option exists, for
+the platform's own outward authentication, and never for a party the platform
+is itself vouching for.
+
 ### Identity references name what the platform controls
 
 `durable-identity-references` is the invariant behind treating an external
