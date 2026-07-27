@@ -5,14 +5,15 @@ This package is `@cyphid/convex-snek-platform`: a Convex Component that owns the
 ## Spec scope
 
 - **Module 05** (`legacy-spec-archive/spec/05-convex-platform.md`) — platform schema, game lifecycle orchestration, HTTP API, webhooks.
-- **Module 03** (`legacy-spec-archive/spec/03-auth-and-identity.md`) — identity types, Google OAuth, game invitation flow.
+- **Module 03** (`legacy-spec-archive/spec/03-auth-and-identity.md`) — identity types, Google sign-in, credential issuance.
 
 ## What goes here
 
-- Convex schema for: `users`, `centaur_teams`, `centaur_team_members`, `game_teams`, `rooms`, `games`, `replays`, `api_keys`, `webhooks`.
+- Convex schema for: `users`, `user_credential_links`, `centaur_teams`, `centaur_team_members`, `team_homing`, `game_teams`, `rooms`, `games`, `replays`, `trusted_issuers`, `accepted_assertions`, `webhooks`.
 - Convex Component configuration (`convex.config.ts`).
 - Platform functions (queries, mutations, actions) for game lifecycle.
-- Game invitation delivery logic.
+- Game-invitation delivery (a bare wake notification carrying no credential).
+- The homing inbox query, scoped to the authenticated server's own domain.
 - Webhook delivery (at-least-once).
 
 ## What does NOT go here

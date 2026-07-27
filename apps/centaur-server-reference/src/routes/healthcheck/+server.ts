@@ -1,7 +1,11 @@
 // spec: team-server-management/server-healthcheck
 // GET /healthcheck — liveness probe stub.
 // Returns 200 OK with a JSON body indicating the server is up.
-// Real implementation will include Convex connectivity check, game count, etc.
+// The real implementation may add checks that inform the status (e.g. Convex
+// connectivity) but MUST NOT widen the body with team-scoped state such as a
+// hosted-team or active-game count: the endpoint answers unauthenticated
+// callers, so that is a violation of the contract, not an enrichment of it.
+// spec: team-server-management/server-healthcheck#unauthenticated-and-minimal
 
 import type { RequestHandler } from "@sveltejs/kit";
 

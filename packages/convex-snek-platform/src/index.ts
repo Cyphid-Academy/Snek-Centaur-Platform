@@ -88,14 +88,27 @@ export interface WebhookRecord {
 }
 
 // ---------------------------------------------------------------------------
-// Game invitation payload
-// spec: team-server-management/game-invitations, team-server-management/invitation-credential-carriage
+// The game-start invitation: a bare notification that wakes a possibly-idle
+// server and asks whether it will operate this team in this game. Carries no
+// credential and confers nothing; the response status is the whole answer.
+// spec: team-server-management/game-invitations
 // ---------------------------------------------------------------------------
 
-export interface GameInvitationPayload {
+export interface GameInvitation {
   readonly gameId: string;
   readonly teamId: string;
-  readonly gameCredential: string;
+}
+
+// ---------------------------------------------------------------------------
+// What a Centaur Server reads about a game once it has accepted and
+// authenticated for the team. Carries no credential: the server obtains its
+// own session and access token.
+// spec: team-server-management/invitation-acceptance#accepting-then-authenticating
+// ---------------------------------------------------------------------------
+
+export interface TeamGameContext {
+  readonly gameId: string;
+  readonly teamId: string;
   readonly stdbInstanceUrl: string;
   readonly boardSeed: string;
   readonly config: GameConfigRecord;

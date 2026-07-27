@@ -1,31 +1,18 @@
-// spec: team-server-management/game-invitations, team-server-management/invitation-endpoint-discipline
-// Game invitation endpoint. Convex POSTs here at game start with per-team
-// game credentials. The server must respond within the configured timeout.
-// Implementation is deferred — this stub always refuses (safe default).
+// spec: team-server-management/game-invitations
+// Game-start invitation endpoint. The platform POSTs a bare notification here
+// naming a game and a team, which wakes this server if it had scaled to zero.
+// Nothing in the request carries authority, so nothing about it is verified:
+// the answer comes from the whitelist, and everything the server can act on it
+// obtains afterwards by authenticating outward with its own key.
+// Implementation is deferred — this stub always declines (safe default).
 
 import type { RequestHandler } from "@sveltejs/kit";
 
 export const POST: RequestHandler = async ({ request }) => {
-  const _body = await request.json().catch(() => null);
+  const _invitation = await request.json().catch(() => null);
 
-  // TODO: implement invitation acceptance logic using centaur-server-lib
-  // spec: team-server-management/invitation-acceptance
-  return new Response(JSON.stringify({ accepted: false, reason: "not implemented" }), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
-};
-
-export const GET: RequestHandler = async () => {
-  return new Response(
-    JSON.stringify({
-      status: "ok",
-      version: "0.0.0",
-      activeTeamCount: 0,
-    }),
-    {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    },
-  );
+  // TODO: answer from the server's whitelist, then start the hosting session,
+  // which authenticates for the team and requests its access token.
+  // spec: team-server-management/invitation-acceptance#accepting-then-authenticating
+  return new Response(null, { status: 403 });
 };
