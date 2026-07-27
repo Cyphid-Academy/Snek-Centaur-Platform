@@ -24,11 +24,10 @@ whenever a citation is warranted, not a fixed allowance.
 Deliberate boundaries, per the author-resolved decisions:
 
 - **Identity semantics are cited, never restated.** Who counts as the
-  same human — email as canonical identity, the same-email merge, the
-  email-change fork — is identity-and-authorization's. This capability
-  owns the *record*: created at first sign-in, canonical email
-  immutable on it, never deleted, never merged, history staying on the
-  original record across a fork.
+  same human — which provider account is linked to whom, and what
+  happens when one is retired — is identity-and-authorization's. This
+  capability owns the *record*: created at first sign-in, its identifier
+  immutable, its attributes editable, never deleted, never merged.
 - **Authenticated-only, no public surface.** Profiles, histories,
   statistics, and leaderboards are offered exclusively to authenticated
   users (the resolved profile-visibility review); "public" in this

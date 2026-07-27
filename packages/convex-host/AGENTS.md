@@ -6,28 +6,27 @@ This package is `@cyphid/snek-convex-host`: the Convex deployment that mounts bo
 
 - **Module 02** (`legacy-spec-archive/spec/02-platform-architecture.md`) — `02-REQ-002` establishes that authorisation lives at the host layer.
 - **Module 03** (`legacy-spec-archive/spec/03-auth-and-identity.md`) — Google OAuth, game credentials, OIDC token issuance.
-- **Module 05** (`legacy-spec-archive/spec/05-convex-platform.md`) — HTTP API, game lifecycle (delegated to component).
+- **Module 05** (`legacy-spec-archive/spec/05-convex-platform.md`) — integration surface, game lifecycle (delegated to component).
 - **Module 06** (`legacy-spec-archive/spec/06-centaur-state.md`) — Centaur state mutations (delegated to component).
 
 ## What goes here
 
 - `convex/convex.config.ts` — mounts `convex-snek-platform` and `convex-centaur-state` components.
 - Auth wrappers around component functions (auth checks at the host layer, then delegate).
-- HTTP API endpoint routing (Bearer token via `api_keys` table).
-- OIDC token issuance for SpacetimeDB access tokens.
+- Capability declarations on public functions — external callers invoke them directly, so there is no separate HTTP API layer to route.
+- Credential issuance for SpacetimeDB access tokens, Centaur Servers' per-team game credentials, and external systems.
 - Game lifecycle orchestration that spans both components.
 
 ## Auth integration (DEFERRED)
 
-**Do not integrate `@convex-dev/auth` until the first Convex implementation task.**
+**Do not integrate the auth library until the first Convex implementation task.**
 
-The recommended plan is:
-1. `@convex-dev/auth` for Google OAuth (the standard Convex auth integration).
-2. Bespoke logic in this host package for:
-   - Per-Centaur-Team game credential generation and validation (spec: `03-REQ-050`).
-   - STDB OIDC token issuance (Convex acts as OIDC issuer; SpacetimeDB validates via OIDC discovery).
+The plan is:
+1. **Better Auth**, installed in **local install mode** — the component embedded in this package's Convex directory rather than consumed across a component boundary, so the schema can carry the linkage records, issuer registry, and accepted-assertion identifiers the spec requires. Forking the integration repository is explicitly rejected.
+2. A **project-owned Better Auth plugin** for the protocol layer: the issuance endpoint accepting signed client assertions, assertion verification against a registered principal's published material, single-use enforcement, ceiling intersection, and minting of the structured capability claim. It reuses Better Auth's key and publication infrastructure and manages no keys of its own.
+3. **Ordinary application code in this package for the policy layer** — the issuer registry and its ceilings, homing records and two-sided consent, the capability registry, principal-kind checks, per-client ceilings and attribution. Policy must not migrate into the plugin.
 
-When implementing auth, read `legacy-spec-archive/spec/03-auth-and-identity.md` in full first.
+When implementing auth, read the `identity-and-authorization` and `team-server-management` capabilities in full first, along with the design rationale in their change folders.
 
 ## Key files
 

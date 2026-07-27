@@ -35,17 +35,26 @@ synthesis, 2026-07-24):
   cites them where its own soundness rests on them (see `design.md`).
 - **Dedupe clusters authored once here** (each constituent id retires onto
   the one requirement): credential scoping; the admin role; discovery of
-  token-verification material; Convex as sole credential issuer; and
-  connection-admission validation.
+  token-verification material; the platform's Convex deployment as sole
+  credential issuer; and connection-admission validation.
+- **The delegation model is authored here once, not per relationship.** A
+  Snek Centaur Server earning a team's game credential and a peer Cyphid system
+  obtaining a capability token are the same mechanism with different
+  registrations, so the assertion exchange, the issuer registry, the
+  capability claim and the capability registry all live here. What each
+  registration means to the story that uses it — homing and whitelist
+  admission, the integration surface's client registrations — belongs to
+  those stories.
 - **Crypto-neutrality**: requirement text names no cryptographic
-  primitives; signature schemes and token formats are mechanism (see
-  `design.md`). The signing-independence invariant *is* carried as a
-  requirement — it is the deliberate architectural commitment the legacy
-  review affirmed, stated without naming schemes.
+  primitives, no document formats, no claim names, and no library;
+  signature schemes and token formats are mechanism (see `design.md`).
+  Compromise containment *is* carried as a requirement — the deliberate
+  architectural commitment the legacy review affirmed — stated as the
+  audience binding that delivers it rather than as a choice of scheme.
 
 ## What Changes
 
-- **New capability: `identity-and-authorization`** — 22 requirements,
+- **New capability: `identity-and-authorization`** — 28 requirements,
   ADDED-only mint delta with a `## Purpose` preamble declaring "Depends
   on: global-invariants."
 - **Retirements**: this change's legacy absorptions are recorded in the
@@ -55,20 +64,22 @@ synthesis, 2026-07-24):
   code-mechanism ids retire as note-only tombstones (the
   admin-designation mechanism, twice stated, and signing-material
   maintenance).
-- **6 legacy review items' edge cases are encoded as scenarios** (Google
-  specifically binding; email fork keeps history; expiry never
-  disconnects; signing independence; credential dead at game finish) or
-  carried as authoring policy (crypto-neutrality).
+- **Legacy review items' edge cases are encoded as scenarios** (Google
+  specifically binding; expiry never disconnects; compromise contained;
+  credential dead at game finish) or carried as authoring policy
+  (crypto-neutrality).
 - **Constraint-mined requirements** (see `design.md`): per-request
   liveness re-checks (`live-game-issuance`), reject-before-touching-state
   admission, admin-extends-read-only, memory-only client token custody
-  (`client-credential-custody`), and client-invisible admission records
-  (`admission-records-private`).
+  (`client-credential-custody`), client-invisible admission records
+  (`admission-records-private`), build-time totality of the capability
+  registry, principal-kind gating of team administration, proactive
+  credential renewal, and the structured capability claim.
 
 ## Impact
 
 - New: `openspec/specs/identity-and-authorization/spec.md` (folded at
-  archive; 22 requirements).
+  archive; 28 requirements).
 - `openspec/config.yaml` context capability list gains
   `identity-and-authorization` at archive.
 - Code citations of retired ids (currently `03-REQ-001` in
@@ -78,10 +89,59 @@ synthesis, 2026-07-24):
 
 ## Open Questions
 
-None. The carving, DAG position, dedupe clusters, and boundary rulings
-were settled with the author in the Phase B synthesis; the two judgment
-calls delegated to this change (the disposition of the credential-to-team
-resolution id and of the admission-record-privacy constraint lead) are
-resolved and recorded in `design.md`, and no contradiction or gap
-requiring a human decision surfaced while re-authoring from the legacy
-text.
+1. **Cyphid-wide identity reconciliation: who is authoritative for a person
+   across systems?**
+   - **Context**: `linked-provider-credentials` makes the platform's own user
+     record the durable identity and a provider account a credential linked to
+     it. A sibling Cyphid system will hold its own user table on the same
+     terms.
+   - **Question**: does the federation designate one system authoritative for
+     Cyphid identity, define a propagation obligation between systems, or
+     accept divergence with a documented reconciliation procedure?
+   - **Options**: (A) one authoritative identity system, others linking to it;
+     (B) a propagation obligation on every system that links or retires a
+     credential; (C) accept divergence and document reconciliation.
+   - **Decision (author, 2026-07-27)**: Option A, deferred. A centralised
+     Cyphid identity service will be built, and CGP users will be refactored
+     onto it then. Until it exists, no reconciliation obligation is taken on —
+     and the affordance that would create divergence, in-platform rebinding of
+     a user's Google account, is removed from this capability rather than
+     built. The provider-to-user mapping stays one-to-one in both directions,
+     which is what makes the later refactor a re-pointing of one table rather
+     than a reconciliation of histories.
+
+2. **Can a game instance's reducers read arbitrary claims from a validated
+   credential, or only the derived identity?**
+   - **Context**: `game-token-contents#subject-alone-decides-the-role` makes
+     a spectator's read-only status structural by putting the role in the
+     subject, which is worth doing on its own terms only if the alternative
+     exists.
+   - **Question**: is the capability claim readable inside the instance, or
+     is the derived identity all a reducer ever sees?
+   - **Decision (verified against the runtime, 2026-07-27)**: claims **are**
+     readable. A reducer reaches the validated token through the reducer
+     context (`ctx.sender_auth().jwt()` in Rust, `ctx.senderAuth.jwt` in
+     TypeScript), with `issuer`, `subject` and `audience` as direct accessors
+     and arbitrary custom claims through the raw payload. Identity remains
+     the hash of issuer and subject.
+   - **Consequence**: subject-encoded roles are kept, and the requirement
+     forbids deciding a role from a claim explicitly — being able to read one
+     is what makes the prohibition worth stating. The structural property is
+     that a spectator and an operator are *different identities*, so the
+     instance's seeded permissions exclude one of them with no check to omit.
+     Readable claims also mean in-game authorization finer than team
+     granularity is reachable later if it is ever wanted.
+
+3. **What should the operator application do when renewal fails and the
+   chess clock is running?**
+   - **Context**: holders renew ahead of expiry so a refusal never lands on a
+     turn. That leaves the case where the platform is briefly unreachable
+     during the renewal window.
+   - **Decision (author, 2026-07-27)**: retry silently while the credential
+     in hand is still valid, and surface the loss when it actually lapses.
+     This is an extreme edge case signalling a wider failure, and a team
+     spending turn clock through it costs little at the margin. Warning
+     earlier would spend the operator's attention on something they cannot
+     act on: standing down or handing off would take the same unreachable
+     platform. Minted as
+     `token-lifetime-and-refresh#renewal-failure-is-quiet-until-it-bites`.

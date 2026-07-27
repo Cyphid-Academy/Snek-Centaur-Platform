@@ -16,7 +16,8 @@ export type {
 } from "@cyphid/snek-engine";
 
 export type {
-  GameInvitationPayload,
+  GameInvitation,
+  TeamGameContext,
   GameRecord,
 } from "@cyphid/convex-snek-platform";
 
@@ -31,26 +32,53 @@ export type {
 // spec: team-server-management/server-healthcheck
 // ---------------------------------------------------------------------------
 
+// Liveness only. Team-scoped state (how many teams this server hosts, which
+// ones, whether any are playing) is deliberately absent: the endpoint answers
+// anyone without a credential, so enriching it would change the threat model.
+// spec: team-server-management/server-healthcheck#unauthenticated-and-minimal
 export interface HealthcheckResponse {
   readonly status: "ok";
   readonly version: string;
-  readonly activeTeamCount: number;
 }
 
 // ---------------------------------------------------------------------------
-// Game invitation handler
-// spec: team-server-management/game-invitations, team-server-management/invitation-acceptance
+// Game-start invitation handler. The platform POSTs a bare notification to
+// wake the server; the response status is accept or decline, decided from the
+// whitelist alone. Nothing in the request is trusted or verified — the server
+// authenticates outward afterwards to obtain anything it can act on.
+// spec: team-server-management/game-invitations#the-invitation-carries-no-authority
 // ---------------------------------------------------------------------------
 
 export interface GameInvitationHandler {
   /**
-   * Called by the framework when Convex POSTs to /.well-known/snek-game-invite.
-   * Must return accepted:true to join the game, or accepted:false to refuse.
+   * Answer a game-start invitation.
+   * spec: team-server-management/invitation-acceptance
    * @throws Error("not implemented")
    */
   handleInvitation(
-    payload: import("@cyphid/convex-snek-platform").GameInvitationPayload,
+    invitation: import("@cyphid/convex-snek-platform").GameInvitation,
   ): Promise<{ accepted: boolean }>;
+}
+
+// ---------------------------------------------------------------------------
+// Team whitelist — this server's half of two-sided consent. Asking the
+// platform for a team's session is the act of admission, so whitelisting and
+// a captain naming this domain are independent and order-independent.
+// spec: team-server-management/whitelist-admission
+// ---------------------------------------------------------------------------
+
+export interface TeamWhitelist {
+  /** Whether this server will operate the given team. */
+  has(teamId: string): Promise<boolean>;
+  /**
+   * Admit a team. Idempotent: admitting an already-admitted team succeeds
+   * unchanged, so an automation may retry freely.
+   * spec: team-server-management/server-administration-api#adding-an-already-whitelisted-team-succeeds
+   * @throws Error("not implemented")
+   */
+  add(teamId: string): Promise<void>;
+  /** Stop operating a team. Idempotent. @throws Error("not implemented") */
+  remove(teamId: string): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -120,12 +148,10 @@ export function defineBot(_definition: BotDefinition): BotRunner {
 
 export interface BotRunner {
   /**
-   * Start bot computation for a game after accepting an invitation.
+   * Start bot computation for a game the server's hosted team is in.
    * @throws Error("not implemented")
    */
-  start(
-    invitationPayload: import("@cyphid/convex-snek-platform").GameInvitationPayload,
-  ): Promise<void>;
+  start(context: import("@cyphid/convex-snek-platform").TeamGameContext): Promise<void>;
   /**
    * Stop bot computation after a game ends.
    * @throws Error("not implemented")
@@ -147,10 +173,10 @@ export interface PlatformClient {
   readonly getGame: (
     gameId: string,
   ) => Promise<import("@cyphid/convex-snek-platform").GameRecord | null>;
-  /** Fetch the game invitation payload for this server's team. */
-  readonly getInvitation: (
+  /** Fetch the context for a game this client's team is in. */
+  readonly getTeamGameContext: (
     gameId: string,
-  ) => Promise<import("@cyphid/convex-snek-platform").GameInvitationPayload | null>;
+  ) => Promise<import("@cyphid/convex-snek-platform").TeamGameContext | null>;
 }
 
 /**

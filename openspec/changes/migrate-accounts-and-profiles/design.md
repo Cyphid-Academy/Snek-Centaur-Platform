@@ -13,26 +13,31 @@ specs alone.
 
 ### The record is here; the identity is not (cite, don't restate)
 
-Legacy module 05 restated module 03's identity semantics (email
-canonical, fork on change) while adding the record substance. The mint
-keeps only the record: creation at first sign-in, the captured fields,
-canonical-email immutability on the record, permanence. Fork semantics
-are cited (identity-and-authorization/email-as-canonical-identity), and
-`#record-follows-the-fork` states only the *record-side* consequence —
-the original record keeps its state, the new identity gets a fresh one.
-Reversed — fork semantics restated here — two capabilities would own
-"who is the same human", and the first revision to one would silently
-contradict the other. The `user-record-permanence` requirement is kept
-separate from `user-record` because it is the archive-grade invariant
-everything downstream leans on: attribution, profiles, and statistics
-survive account loss and email forks only because no record is ever
-deleted or merged. Reversed — a "cleanup" of dormant or forked-away
+Legacy module 05 restated module 03's identity semantics while adding the
+record substance. The mint keeps only the record: creation at first sign-in,
+the captured fields, the immutability of its identifier, permanence. Which
+credential resolves to which person is cited
+(identity-and-authorization/linked-provider-credentials), never restated —
+reversed, two capabilities would own "who is the same human", and the first
+revision to one would silently contradict the other.
+
+The record's *identifier* is what never changes; the email is an ordinary
+attribute alongside the display name. That split is what makes attribution
+durable through a change of provider account, and it is the record-side face
+of global-invariants/durable-identity-references. Reversed — the email frozen
+on the record and treated as its identity — every downstream reference
+inherits a key the platform does not control.
+
+`user-record-permanence` is kept separate from `user-record` because it is
+the archive-grade invariant everything downstream leans on: attribution,
+profiles, and statistics survive the loss of a provider account only because
+no record is ever deleted or merged. Reversed — a "cleanup" of dormant
 records — every replay and history referencing them dangles, which the
 append-only record model forbids.
 
 Integration: both requirements stand on invariants they now cite.
-`user-record`'s one-record-per-identity and canonical-email freeze are
-achievable only as guards inside the writing transaction
+`user-record`'s one-record-per-person guarantee is
+achievable only as a guard inside the writing transaction
 (global-invariants/transactional-invariant-enforcement) — two racing
 first sign-ins are the case that fails otherwise; permanence's
 "anchored forever" presumes accounts live in exactly one persistent home
@@ -44,9 +49,9 @@ discipline is gi's, the record semantics are ours.
 ### Email confidentiality is a data-contract rule, not a UI rule (resolved review: profile visibility)
 
 The resolved email-visibility review chose the strictest option: emails
-never appear in any user-facing query, the user's own self-view
-included — the email is the sign-in provider's datum, and the platform
-has no authoritative reason to display it back. The mint authors this
+never appear in any user-facing query, the user's own self-view included.
+The address exists for contacting a person and for administrative
+operations; none of the surfaces this capability defines is either. The mint authors this
 as `email-confidentiality`, a rule over *record shapes*, not screens:
 user-facing shapes omit the email at the boundary, and participation
 snapshots never store it. What breaks if reversed (email returned, then
@@ -199,13 +204,13 @@ placement decision, not a further requirement.
 
 ## Constraint-mining (mandatory final step)
 
-- **Judged: email uniqueness (query-then-guard lead).** The legacy
-  design enforces one-record-per-email application-side via
+- **Judged: record uniqueness (query-then-guard lead).** The legacy
+  design enforces one-record-per-person application-side via
   query-then-guard over non-unique indexes. The *invariant* is already
   behaviour: `user-record#created-at-first-sign-in` pins "every later
   sign-in resolves to that same record — never a second record", and
-  identity-and-authorization/email-as-canonical-identity#same-email-merges
-  pins the identity half. The *enforcement discipline* — the guard must
+  identity-and-authorization/linked-provider-credentials#one-provider-account-one-person-forever
+  pins the credential half. The *enforcement discipline* — the guard must
   run inside the same serializable mutation as the insert — is exactly
   global-invariants/transactional-invariant-enforcement, which the
   scenario now cites: the uniqueness it asserts is unachievable if that

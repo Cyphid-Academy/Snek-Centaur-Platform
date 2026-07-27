@@ -30,11 +30,15 @@ The platform SHALL maintain a persistent record of every Centaur Team, capturing
 ### Requirement: team-management/team-creation
 Depends on: global-invariants/single-convex-deployment#cross-record-invariants-are-one-transaction.
 
-Any authenticated user SHALL be able to create a new Centaur Team. On creation the creating user SHALL become the team's captain and its first roster member, with no intermediate state in which the team exists captainless or memberless — a single-commit creation of the team record together with its first membership record, which is reachable only while every persistent record shares one deployment.
+Any authenticated caller SHALL be able to create a new Centaur Team. Creation SHALL name the team's captain — defaulting to the creating user where the caller is a human creating a team for themselves — and MAY additionally name initial members and coaches, so a caller creating a team on behalf of other people produces one that is complete from its first instant. The team record, the captain's membership, any other initial memberships, and any coach designations SHALL be committed together, with no intermediate state in which the team exists captainless or memberless — reachable only while every persistent record shares one deployment.
 
 #### Scenario: #creator-captains-from-the-first-instant
-- **WHEN** a user creates a team
+- **WHEN** a human creates a team without naming a captain
 - **THEN** they are its captain and its sole roster member from the moment the team exists, holding every captain authority immediately
+
+#### Scenario: #a-provisioned-team-is-complete-at-once
+- **WHEN** a team is created naming a captain, members, and coaches the caller is not among
+- **THEN** all of it commits together: the named captain is captain and a member, the members are on the roster, the coaches are designated, and no observer ever sees the team in a partial state — a roster system needs no follow-up calls to finish founding it
 
 #### Scenario: #no-special-standing-required
 - **WHEN** any authenticated user — with or without existing team memberships or any platform role — requests team creation

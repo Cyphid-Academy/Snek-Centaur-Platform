@@ -1159,7 +1159,7 @@
           "change": "migrate-team-management"
         }
       ],
-      "scenarios": ["team-server-management/server-nomination#unilateral-and-secretless"],
+      "scenarios": ["team-server-management/server-nomination#naming-is-the-captains-act-alone"],
       "note": "Captain unilaterally nominates the server domain on the team record; no server acceptance. The mid-game freeze half is carried by team-management/roster-freeze (which enumerates nomination changes) and the captain gate by team-management/captain-authority — cited, not re-owned."
     },
     "02-REQ-006": {
@@ -1708,7 +1708,7 @@
           "change": "mint-global-invariants"
         }
       ],
-      "scenarios": ["global-invariants/ephemeral-game-credentials#game-credentials-expire"]
+      "scenarios": ["global-invariants/ephemeral-game-credentials#no-credentials-at-rest"]
     },
     "02-REQ-058": {
       "disposition": "authored",
@@ -1818,12 +1818,12 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "identity-and-authorization/email-as-canonical-identity",
+          "target": "identity-and-authorization/linked-provider-credentials",
           "change": "migrate-identity-and-authorization"
         }
       ],
       "scenarios": ["identity-and-authorization/google-sign-in#google-account-specifically"],
-      "note": "Human = natural person with a Google account, identified by email (03-REVIEW-002/003 upheld)."
+      "note": "Human = natural person authenticating with a Google account; the account is a credential linked to the platform's durable user record."
     },
     "03-REQ-003": {
       "disposition": "authored",
@@ -1888,27 +1888,25 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "identity-and-authorization/email-as-canonical-identity",
+          "target": "identity-and-authorization/linked-provider-credentials",
           "change": "migrate-identity-and-authorization"
         }
       ],
       "scenarios": [
-        "identity-and-authorization/email-as-canonical-identity#same-email-merges",
-        "identity-and-authorization/email-as-canonical-identity#email-fork-keeps-history"
+        "identity-and-authorization/linked-provider-credentials#one-provider-account-one-person-forever",
+        "identity-and-authorization/linked-provider-credentials#one-provider-account-one-person-forever"
       ],
-      "note": "Email canonical; same email merges; provider email change forks a new identity, history stays on the old (03-REVIEW-003)."
+      "note": "The platform's user record is the durable identity and a provider account is a linked credential, one-to-one in both directions and settled at first sign-in; history is attached to the record rather than to the account."
     },
     "03-REQ-009": {
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "identity-and-authorization/email-as-canonical-identity",
+          "target": "identity-and-authorization/google-sign-in",
           "change": "migrate-identity-and-authorization"
         }
       ],
-      "scenarios": [
-        "identity-and-authorization/email-as-canonical-identity#no-human-shared-secrets"
-      ],
+      "scenarios": ["identity-and-authorization/google-sign-in#no-human-shared-secrets"],
       "note": "No passwords or shared secrets stored for humans."
     },
     "03-REQ-010": {
@@ -1926,13 +1924,13 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "team-server-management/invitation-credential-carriage",
+          "target": "team-server-management/game-invitations",
           "change": "migrate-team-server-management"
         }
       ],
       "scenarios": [
-        "team-server-management/invitation-credential-carriage#sole-secret-channel",
-        "team-server-management/server-nomination#unilateral-and-secretless"
+        "global-invariants/no-shared-secrets#no-secret-configured-into-a-component",
+        "team-server-management/server-nomination#naming-is-the-captains-act-alone"
       ],
       "note": "No shared secret stored, exchanged, or transmitted with a server at nomination or any other time; game invitations are the sole secret channel."
     },
@@ -2038,7 +2036,7 @@
       "scenarios": [
         "identity-and-authorization/participant-token-eligibility#bot-token-requires-team-credential"
       ],
-      "note": "Bot tokens require a valid game credential for a registered team."
+      "note": "Bot tokens require a current team session for a team registered to the game."
     },
     "03-REQ-026": {
       "disposition": "authored",
@@ -2148,24 +2146,24 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "platform-integrations/admin-api-keys",
+          "target": "platform-integrations/integration-clients",
           "change": "migrate-platform-integrations"
         }
       ],
-      "scenarios": ["platform-integrations/admin-api-keys#creator-no-longer-admin"],
+      "scenarios": ["platform-integrations/integration-clients#a-client-is-not-its-registrar"],
       "note": "HTTP API authorized by bearer API keys; admin-only creation (per resolved 05-REVIEW-004), revocable. The revocation means retires with 05-REQ-052 onto key-management."
     },
     "03-REQ-034": {
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "platform-integrations/key-custody",
+          "target": "platform-integrations/client-registration",
           "change": "migrate-platform-integrations"
         }
       ],
       "scenarios": [
-        "platform-integrations/key-custody#plaintext-shown-exactly-once",
-        "platform-integrations/key-custody#metadata-only-ever-after"
+        "platform-integrations/client-registration#nothing-to-disclose-at-creation",
+        "platform-integrations/client-registration#metadata-only-ever-after"
       ],
       "note": "Unrecoverable (one-way digest) storage; plaintext disclosed exactly once at creation. Dedupe cluster with 05-REQ-046 and 08-REQ-095b/095c; hash algorithm and key format are mechanism."
     },
@@ -2173,22 +2171,22 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "platform-integrations/admin-api-keys",
+          "target": "platform-integrations/integration-clients",
           "change": "migrate-platform-integrations"
         }
       ],
-      "scenarios": ["platform-integrations/admin-api-keys#key-follows-its-creator-only"],
+      "scenarios": ["platform-integrations/integration-clients#a-client-is-not-its-registrar"],
       "note": "Key bound permanently to the creating admin; global scope. Dedupe with 05-REQ-047; the scope's consistency with the strictly observational admin role is carried by key-capability-bounds (see design.md)."
     },
     "03-REQ-036": {
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "platform-integrations/key-capability-bounds",
+          "target": "platform-integrations/client-capability-bounds",
           "change": "migrate-platform-integrations"
         }
       ],
-      "scenarios": ["platform-integrations/key-capability-bounds#no-identity-creation"],
+      "scenarios": ["platform-integrations/client-capability-bounds#no-identity-creation"],
       "note": "Keys never authorize identity creation or actions requiring interactive OAuth. Dedupe with 05-REQ-048."
     },
     "03-REQ-037": {
@@ -2236,18 +2234,18 @@
           "change": "migrate-identity-and-authorization"
         }
       ],
-      "reason": "Code mechanism: maintaining game-credential signing material inside Convex without external key infrastructure. Behavioural residue is covered by identity-and-authorization/sole-credential-issuer, signing-independence, and verification-without-shared-secrets; key custody/format rationale in the minting change's design.md."
+      "reason": "Code mechanism: maintaining game-credential signing material inside Convex without external key infrastructure. Behavioural residue is covered by identity-and-authorization/sole-credential-issuer, audience-bound-tokens, and verification-without-shared-secrets; key custody/format rationale in the minting change's design.md."
     },
     "03-REQ-041": {
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "identity-and-authorization/signing-independence",
+          "target": "identity-and-authorization/audience-bound-tokens",
           "change": "migrate-identity-and-authorization"
         }
       ],
-      "scenarios": ["identity-and-authorization/signing-independence#compromise-contained"],
-      "note": "Deliberate architectural invariant (03-REVIEW-007) re-authored crypto-neutrally — scheme names (Ed25519/RS256) are mechanism."
+      "scenarios": ["identity-and-authorization/audience-bound-tokens#compromise-contained"],
+      "note": "Deliberate architectural invariant (03-REVIEW-007): a compromised credential is contained. Carried as audience binding — a credential names the one resource it may be used at — rather than as separated signing material."
     },
     "03-REQ-043": {
       "disposition": "authored",
@@ -2259,9 +2257,9 @@
       ],
       "scenarios": [
         "global-invariants/credential-confinement#signing-keys-never-leave-convex",
-        "global-invariants/credential-confinement#game-credential-has-one-delivery-path"
+        "global-invariants/credential-confinement#credentials-return-only-to-the-requester"
       ],
-      "note": "Credential/key material only to intended holders over authenticated channels; token-signing private keys never leave Convex (public verification keys only); per-team game credentials travel only via the game invitation to the nominated Server."
+      "note": "Credential/key material only to intended holders; token-signing private keys never leave the platform Convex deployment (public verification material only), every party keeps its own key, and an issued credential is returned only to the party whose own authentication earned it."
     },
     "03-REQ-044": {
       "disposition": "authored",
@@ -2325,7 +2323,7 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "team-server-management/no-server-identity",
+          "target": "team-server-management/two-sided-consent",
           "change": "migrate-team-server-management"
         },
         {
@@ -2338,10 +2336,10 @@
         }
       ],
       "scenarios": [
-        "team-server-management/no-server-identity#nothing-to-register",
-        "team-server-management/no-server-identity#credentials-name-teams-never-servers"
+        "team-server-management/two-sided-consent#asking-without-being-named-confers-nothing",
+        "global-invariants/ephemeral-game-credentials#no-standing-server-privilege"
       ],
-      "note": "Servers have no persistent platform identity; the domain is team configuration. The credential-scoping half (team+game scope, none at rest, expiry) is carried by identity-and-authorization/game-credential-scope and global-invariants/ephemeral-game-credentials (gi-dedupe checked — no re-authoring)."
+      "note": "A server is identified by the domain it proves control of, and that identity confers nothing on its own: authority exists only per team, and only where the team's captain also named the domain. The credential-scoping half is carried by identity-and-authorization/game-credential-scope and global-invariants/ephemeral-game-credentials (gi-dedupe checked — no re-authoring)."
     },
     "03-REQ-050": {
       "disposition": "authored",
@@ -2352,7 +2350,7 @@
         }
       ],
       "scenarios": ["team-server-management/game-invitations#bounded-concurrent-delivery"],
-      "note": "At game start the platform sends a game invitation to each participating team's nominated server. Where the send sits inside start orchestration (after config freeze and instance provisioning) is the game-lifecycle story's."
+      "note": "A server learns of its hosted teams' games through its own authenticated subscription rather than by delivery; the platform initiates nothing toward a server and waits on nothing from one. Where that sits inside launch orchestration is the game-lifecycle story's."
     },
     "03-REQ-051": {
       "disposition": "authored",
@@ -2363,10 +2361,10 @@
         }
       ],
       "scenarios": [
-        "team-server-management/game-invitations#one-invitation-per-team",
+        "team-server-management/library-tenant-separation#no-ambient-client",
         "team-server-management/game-invitations#https-only"
       ],
-      "note": "Delivery via HTTPS POST to a single well-known invitation endpoint path fixed platform-wide; the literal path is code-level, its stability spec'd via forkable-reference-app's enumerated surface."
+      "note": "One session per hosted team, each obtained by the server itself over an authenticated transport; the well-known address at which a server publishes its key is code-level, its stability spec'd via forkable-reference-app's enumerated surface."
     },
     "03-REQ-052": {
       "disposition": "authored",
@@ -2376,49 +2374,49 @@
           "change": "migrate-team-server-management"
         }
       ],
-      "scenarios": ["team-server-management/game-invitations#dns-is-the-proof"],
-      "note": "DNS resolution of the nominated domain is the sufficient ownership proof; the platform sends to the domain and receives no credentials from it, so no challenge is performed."
+      "scenarios": [
+        "team-server-management/server-nomination#naming-a-domain-you-do-not-control-is-harmless"
+      ],
+      "note": "Control of the named domain is proven by signing with the key published on it, checked afresh on every read of that material; naming a domain one does not control therefore confers nothing."
     },
     "03-REQ-053": {
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "team-server-management/invitation-credential-carriage",
+          "target": "team-server-management/game-invitations",
           "change": "migrate-team-server-management"
         }
       ],
-      "scenarios": [
-        "team-server-management/invitation-credential-carriage#self-sufficient-provisioning"
-      ],
-      "note": "The invitation carries the per-team game credential plus the game context needed to act on it; what the credential grants is identity-and-authorization/game-credential-scope."
+      "scenarios": ["team-server-management/game-invitations#bounded-concurrent-delivery"],
+      "note": "A server obtains its own per-team session and the game context it needs through its own requests; what the session grants is identity-and-authorization/game-credential-scope."
     },
     "03-REQ-054": {
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "team-server-management/invitation-acceptance",
+          "target": "team-server-management/whitelist-admission",
           "change": "migrate-team-server-management"
         }
       ],
       "scenarios": [
         "team-server-management/invitation-acceptance#acceptance-gates-the-team",
-        "team-server-management/invitation-acceptance#default-open"
+        "team-server-management/whitelist-admission#the-reference-server-does-not-auto-admit"
       ],
-      "note": "The server must accept for its team to proceed; the reference implementation auto-accepts by default. Refusal consequences for the game (03-REQ-056) are the game-lifecycle story's."
+      "note": "A server must have whitelisted a team for it to be operated, and asking for that team's session is the act of admission; a Cyphid-operated Reference Centaur Server does not admit automatically. Consequences for a game whose team has no operating server (03-REQ-056) are the game-lifecycle story's."
     },
     "03-REQ-055": {
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "team-server-management/invitation-acceptance",
+          "target": "team-server-management/whitelist-admission",
           "change": "migrate-team-server-management"
         }
       ],
       "scenarios": [
         "team-server-management/invitation-acceptance#whitelist-refusal",
-        "team-server-management/invitation-acceptance#default-open"
+        "team-server-management/whitelist-admission#the-reference-server-does-not-auto-admit"
       ],
-      "note": "Custom servers may reject; reference implementation offers a server-side whitelist, default unrestricted. The legacy 'by player email or Centaur Team ID' key enumeration is authored abstractly pending this change's Open Question (email keys collide with the email-free invitation payload)."
+      "note": "Every server holds its own whitelist, keyed by team identity, and admits on its own policy; whitelisting and being named as a team's home are independent and order-independent. The legacy 'by player email' key is dead under the email-free data flow."
     },
     "03-REQ-056": {
       "disposition": "authored",
@@ -2455,7 +2453,7 @@
         }
       ],
       "scenarios": ["identity-and-authorization/live-game-issuance#credential-dead-at-finish"],
-      "note": "Credential lifetime bounded to the game; enforced per request by live-game-issuance (05-REVIEW-012)."
+      "note": "Issuance for a game bounded to the game being played; enforced per request by live-game-issuance (05-REVIEW-012)."
     },
     "03-REQ-059": {
       "disposition": "authored",
@@ -3451,7 +3449,7 @@
         }
       ],
       "scenarios": ["accounts-and-profiles/user-record#created-at-first-sign-in"],
-      "note": "Persistent user record per human identity that has signed in, capturing at minimum canonical email, display name, and first-authentication timestamp. Identity semantics (email canonical) are cited from identity-and-authorization/email-as-canonical-identity, not restated."
+      "note": "Persistent user record per human who has signed in, capturing at minimum a platform-assigned identifier, display name, contact email, and first-authentication timestamp. Which credential resolves to which person is cited from identity-and-authorization/linked-provider-credentials, not restated."
     },
     "05-REQ-005": {
       "disposition": "authored",
@@ -3463,9 +3461,9 @@
       ],
       "scenarios": [
         "accounts-and-profiles/user-record#created-at-first-sign-in",
-        "accounts-and-profiles/user-record#record-follows-the-fork"
+        "accounts-and-profiles/user-record#attributes-change-the-identifier-does-not"
       ],
-      "note": "Record created at the moment of first successful sign-in; canonical email immutable on the record; a provider-side email change is a new identity with a fresh record. Fork semantics owned by identity-and-authorization/email-as-canonical-identity#email-fork-keeps-history (dedupe cluster with retired 03-REQ-008); this capability carries only the record-side consequence."
+      "note": "Record created at the moment of first successful sign-in; its platform-assigned identifier immutable, its attributes editable. Credential linkage owned by identity-and-authorization/linked-provider-credentials (dedupe cluster with retired 03-REQ-008); this capability carries only the record-side consequence."
     },
     "05-REQ-006": {
       "disposition": "authored",
@@ -3567,8 +3565,10 @@
           "change": "migrate-team-management"
         }
       ],
-      "scenarios": ["team-server-management/server-nomination#validity-not-checked-at-nomination"],
-      "note": "Captain sets/updates the nominated domain as a plain field update; validity verified implicitly at invitation delivery. The playing-freeze half is team-management/roster-freeze; the captain gate is team-management/captain-authority."
+      "scenarios": [
+        "team-server-management/server-nomination#naming-a-domain-you-do-not-control-is-harmless"
+      ],
+      "note": "Captain sets/updates the team's home domain; the platform confirms only that the domain publishes verification material, and naming a domain one does not control confers nothing. The playing-freeze half is team-management/roster-freeze; the captain gate is team-management/captain-authority."
     },
     "05-REQ-015": {
       "disposition": "authored",
@@ -4063,29 +4063,29 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "platform-integrations/admin-api-keys",
+          "target": "platform-integrations/integration-clients",
           "change": "migrate-platform-integrations"
         }
       ],
-      "scenarios": ["platform-integrations/admin-api-keys#creator-no-longer-admin"],
+      "scenarios": ["platform-integrations/integration-clients#a-client-is-not-its-registrar"],
       "note": "Bearer-key authorization of every HTTP API request; reject missing/invalid/revoked/creator-not-admin (per resolved 05-REVIEW-004). The 'expose an HTTP API' half retires with 05-REQ-049 onto http-api-surface."
     },
     "05-REQ-046": {
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "platform-integrations/key-custody",
+          "target": "platform-integrations/client-registration",
           "change": "migrate-platform-integrations"
         }
       ],
-      "scenarios": ["platform-integrations/key-custody#metadata-only-ever-after"],
+      "scenarios": ["platform-integrations/client-registration#metadata-only-ever-after"],
       "note": "Persistent per-key record: one-way digest, label, creating admin's user record, creation timestamp, null-until-revoked revocation timestamp; plaintext never stored or exposed after the single disclosure."
     },
     "05-REQ-047": {
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "platform-integrations/admin-api-keys",
+          "target": "platform-integrations/integration-clients",
           "change": "migrate-platform-integrations"
         }
       ],
@@ -4095,13 +4095,13 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "platform-integrations/key-capability-bounds",
+          "target": "platform-integrations/client-capability-bounds",
           "change": "migrate-platform-integrations"
         }
       ],
       "scenarios": [
-        "platform-integrations/key-capability-bounds#never-a-gameplay-actor",
-        "platform-integrations/key-capability-bounds#no-identity-creation"
+        "platform-integrations/client-capability-bounds#never-a-gameplay-actor",
+        "platform-integrations/client-capability-bounds#no-identity-creation"
       ],
       "note": "No endpoints for identity creation, OAuth interactions, direct game-access-token issuance, or Centaur-subsystem state."
     },
@@ -4109,13 +4109,13 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "platform-integrations/http-api-surface",
+          "target": "platform-integrations/functions-are-the-api",
           "change": "migrate-platform-integrations"
         }
       ],
       "scenarios": [
-        "platform-integrations/http-api-surface#the-families-are-a-floor",
-        "platform-integrations/http-api-surface#api-start-is-a-real-launch"
+        "platform-integrations/functions-are-the-api#the-families-are-a-floor",
+        "platform-integrations/functions-are-the-api#api-start-is-a-real-launch"
       ],
       "note": "Endpoint families as behavioural scope statements (teams, rooms, game read/start, webhooks, keys); URL shapes and payload schemas are mechanism per the author decision."
     },
@@ -4129,7 +4129,7 @@
       ],
       "scenarios": [
         "platform-integrations/first-party-parity#no-privileged-bypass",
-        "platform-integrations/first-party-parity#two-doors-one-rulebook"
+        "platform-integrations/first-party-parity#broad-ceiling-is-not-a-superuser"
       ],
       "note": "Authored generically per the matrix note: API mutations obey the same invariants as the first-party surface; the legacy roster-freeze example is not cited (that rule lives with its owning capability and binds through parity)."
     },
@@ -4137,7 +4137,7 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "platform-integrations/key-management",
+          "target": "platform-integrations/client-management",
           "change": "migrate-platform-integrations"
         }
       ],
@@ -4147,11 +4147,11 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "platform-integrations/key-management",
+          "target": "platform-integrations/client-management",
           "change": "migrate-platform-integrations"
         }
       ],
-      "scenarios": ["platform-integrations/key-management#revocation-immediate"],
+      "scenarios": ["platform-integrations/client-management#revocation-immediate"],
       "note": "Revocation means; all subsequent requests with the revoked key rejected, immediately (constraint-mined: no grace or cache window; revoked records retained per #revoked-records-retained)."
     },
     "05-REQ-053": {
@@ -4221,7 +4221,7 @@
           "change": "migrate-platform-integrations"
         }
       ],
-      "scenarios": ["platform-integrations/webhook-subscriptions#revoked-with-owning-key"],
+      "scenarios": ["platform-integrations/webhook-subscriptions#revoked-with-owning-client"],
       "note": "Subscriptions auto-revoked with their owning key; no deliveries for events occurring after revocation."
     },
     "05-REQ-059": {
@@ -5847,15 +5847,15 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "team-server-management/invitation-endpoint-discipline",
+          "target": "team-server-management/server-administration-api",
           "change": "migrate-team-server-management"
         }
       ],
       "scenarios": [
-        "team-server-management/invitation-endpoint-discipline#duplicate-delivery-idempotent",
-        "team-server-management/invitation-endpoint-discipline#credential-stays-in-process"
+        "team-server-management/server-administration-api#adding-an-already-whitelisted-team-succeeds",
+        "team-server-management/library-tenant-separation#no-ambient-client"
       ],
-      "note": "The app exposes the well-known invitation endpoint, accepts on behalf of the invited team, and uses the delivered credential for all subsequent hosting interactions; signature/hosted-team/idempotency checks constraint-mined from the legacy Design into the same requirement."
+      "note": "The server's only inbound surface requiring credential verification is its administration API, which admits and removes teams from its whitelist idempotently; the sessions it uses for hosting are ones it obtained itself and holds per team."
     },
     "08-REQ-006": {
       "disposition": "authored",
@@ -5913,8 +5913,8 @@
           "change": "migrate-identity-and-authorization"
         }
       ],
-      "scenarios": ["identity-and-authorization/client-credential-custody#single-disclosure-only"],
-      "note": "Never store/display/transmit credential plaintext; the one-time creation-time disclosure exception is stated generically here — the API-key surface that exercises it belongs to platform-integrations."
+      "scenarios": ["identity-and-authorization/client-credential-custody#memory-only"],
+      "note": "Never store/display/transmit credential plaintext; nothing a client holds survives its session, and the only material any party persists is its own signing key."
     },
     "08-REQ-009b": {
       "disposition": "authored",
@@ -7571,40 +7571,40 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "platform-integrations/key-management",
+          "target": "platform-integrations/client-management",
           "change": "migrate-platform-integrations"
         }
       ],
-      "scenarios": ["platform-integrations/key-management#revoked-records-retained"],
+      "scenarios": ["platform-integrations/client-management#revoked-records-retained"],
       "note": "The management surface listing active and revoked keys with label and timestamps. 'Every authenticated user' superseded by the admin-only resolution of 05-REVIEW-004 — re-authored as an admin affordance (design.md)."
     },
     "08-REQ-095b": {
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "platform-integrations/key-custody",
+          "target": "platform-integrations/client-registration",
           "change": "migrate-platform-integrations"
         }
       ],
-      "scenarios": ["platform-integrations/key-custody#plaintext-shown-exactly-once"],
+      "scenarios": ["platform-integrations/client-registration#nothing-to-disclose-at-creation"],
       "note": "Single creation-time plaintext display with an explicit copy affordance before dismissal."
     },
     "08-REQ-095c": {
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "platform-integrations/key-custody",
+          "target": "platform-integrations/client-registration",
           "change": "migrate-platform-integrations"
         }
       ],
-      "scenarios": ["platform-integrations/key-custody#metadata-only-ever-after"],
+      "scenarios": ["platform-integrations/client-registration#metadata-only-ever-after"],
       "note": "Never display/store/transmit plaintext after the single disclosure — deduped with the identity capability's custody hygiene by citing identity-and-authorization/client-credential-custody (whose one-time-disclosure exception this is) rather than restating it."
     },
     "08-REQ-095d": {
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "platform-integrations/key-management",
+          "target": "platform-integrations/client-management",
           "change": "migrate-platform-integrations"
         }
       ],
@@ -8014,7 +8014,7 @@
         }
       ],
       "scenarios": [
-        "identity-and-authorization/email-as-canonical-identity#email-fork-keeps-history"
+        "identity-and-authorization/linked-provider-credentials#one-provider-account-one-person-forever"
       ],
       "note": "Email canonical; provider email change forks a new identity and the prior identity keeps its history unmigrated."
     },
@@ -8061,8 +8061,8 @@
           "change": "migrate-identity-and-authorization"
         }
       ],
-      "scenarios": ["identity-and-authorization/signing-independence#compromise-contained"],
-      "note": "Independence-of-compromise between credential-type signing materials kept as a requirement, stated crypto-neutrally."
+      "scenarios": ["identity-and-authorization/audience-bound-tokens#compromise-contained"],
+      "note": "Containment of a compromised credential kept as a requirement, carried by audience binding and short lifetimes."
     },
     "03-REVIEW-008": {
       "carriedBy": [
@@ -8312,7 +8312,7 @@
         }
       ],
       "scenarios": ["identity-and-authorization/live-game-issuance#credential-dead-at-finish"],
-      "note": "Game credential effectively dies at game finish via per-request status re-check; the two-hour expiry is a leak backstop, not the access boundary."
+      "note": "Issuance for a game dies at game finish via per-request status re-check; credential expiry is a leak backstop, not the access boundary."
     },
     "05-REVIEW-013": {
       "carriedBy": [
@@ -8321,7 +8321,7 @@
         }
       ],
       "scenarios": ["team-server-management/game-invitations#bounded-concurrent-delivery"],
-      "note": "The invitation response window lives on the invitation contract (team-server-management), which this capability cites without restating a number. NOTE: this review decided ten seconds while the sibling change authored thirty (from the module-03 Design) — flagged as this change's Open Question 1; finalize this note with the human resolution."
+      "note": "The launch-time readiness signal is whether a participating team's home server currently holds a session for it, which this capability reads rather than waits on; the response-window question the review decided is moot now that nothing is delivered to a server at launch."
     },
     "05-REVIEW-014": {
       "carriedBy": [

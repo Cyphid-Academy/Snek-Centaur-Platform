@@ -36,7 +36,7 @@ The platform runs across three distinct runtimes:
 |---------|------|-----------|
 | SpacetimeDB | Authoritative game logic — turn resolution, RLS, chess timer | Per-game (transient) |
 | Convex | User accounts, rooms, replays, bot state, game orchestration | Global (persistent) |
-| Centaur Servers | Bot computation + operator UI + game invitation acceptance | Per-team |
+| Centaur Servers | Bot computation + serving the operator UI + game-invitation answering + per-team-per-game credentials | Per-team |
 
 Full architectural detail is in `legacy-spec-archive/spec/02-platform-architecture.md` (binding until that module migrates). The spec is the binding source of truth for every behavioural and structural decision.
 
@@ -48,8 +48,8 @@ Full architectural detail is in `legacy-spec-archive/spec/02-platform-architectu
 | `packages/stdb/` | `@cyphid/snek-stdb` | SpacetimeDB TypeScript module — reducers, RLS, schema, chess timer. | 04 |
 | `packages/convex-snek-platform/` | `@cyphid/convex-snek-platform` | Convex Component for platform-wide state (users, rooms, games, replays, webhooks). | 03, 05 |
 | `packages/convex-centaur-state/` | `@cyphid/convex-centaur-state` | Convex Component for Centaur subsystem (snake config, drives, action log). | 06 |
-| `packages/convex-host/` | `@cyphid/snek-convex-host` | Convex deployment that mounts both components, adds auth wrappers, HTTP API, game lifecycle. | 02, 03, 05, 06 |
-| `packages/centaur-server-lib/` | `@cyphid/snek-centaur-server-lib` | Bot framework + invitation handler + healthcheck contract + typed Convex clients. Published via GitHub tags for forkers. | 07 |
+| `packages/convex-host/` | `@cyphid/snek-convex-host` | Convex deployment that mounts both components, adds auth wrappers, capability declarations, game lifecycle. | 02, 03, 05, 06 |
+| `packages/centaur-server-lib/` | `@cyphid/snek-centaur-server-lib` | Bot framework + invitation handler + key publication + per-team-per-game credential handling + healthcheck contract + typed Convex clients. Published via GitHub tags for forkers. | 07 |
 | `apps/centaur-server-reference/` | *(app, not published)* | Svelte 5 reference implementation of the Centaur Server. Mirrored to `cyphid/snek-centaur-server` via `git subtree split`. | 08 |
 
 ## Monorepo Mirror Model
@@ -118,6 +118,6 @@ Both squash and merge-commit are enabled; **rebase-merge stays off** (it drops t
 
 **Verify a PR's live state before acting on it.** Before any step whose correctness depends on a PR being open or merged — pushing to its branch, adding an archive or "final" commit, rebasing it, merging, or telling the user to merge — re-check the current state first (`git fetch` and look for the PR's merge commit on the base branch, or the GitHub API `pull_request_read get`). **Never assume a PR is still open from an earlier check in the same session** — humans merge and close out of band, and there is no signal unless you look or `subscribe_pr_activity`. A merged PR is finished: its branch MUST NOT receive new commits — do follow-up work as a **fresh branch off the updated base**. When handing a PR off as "ready to merge," either subscribe to its activity or re-verify its state at the start of the next PR-related action.
 
-## Convex Auth Note
+## Auth Library Note
 
-`convex-host` has a `TODO` comment for `@convex-dev/auth` integration. Do not integrate it until the first Convex implementation task. See `packages/convex-host/AGENTS.md` for details.
+`convex-host` has a `TODO` comment for Better Auth integration (local install mode, plus the project-owned capability plugin that issues credentials to service principals). Do not integrate it until the first Convex implementation task. See `packages/convex-host/AGENTS.md` for details.

@@ -71,14 +71,14 @@ A tournament SHALL begin as an ordinary start of its room's current game through
 ### Requirement: tournaments/scheduled-start-override
 Depends on: game-lifecycle/launch-gates, team-server-management/server-healthcheck, team-server-management/game-invitations, team-server-management/invitation-acceptance, tournaments/walkover-and-no-contest.
 
-Tournament rounds SHALL be schedule-bound starts, exercising the launch gates' override concretely: a round SHALL start at its scheduled moment regardless of any participating team's recorded server health, and a team whose nominated server refuses the round's game invitation or fails to answer within the invitation window SHALL forfeit its seat in that round rather than delaying or aborting the start. Every round SHALL resolve within its own start orchestration — to play among the seated teams, or to a walkover or no-contest — never lingering unstarted awaiting a team's recovery.
+Tournament rounds SHALL be schedule-bound starts, exercising the launch gates' override concretely: a round SHALL start at its scheduled moment regardless of any participating team's recorded server health, and a team whose home server declines the round's game invitation or fails to answer within the invitation window SHALL forfeit its seat in that round rather than delaying or aborting the start. Every round SHALL resolve within its own start orchestration — to play among the seated teams, or to a walkover or no-contest — never lingering unstarted awaiting a team's recovery.
 
 #### Scenario: #unhealthy-is-ignored-at-the-bell
 - **WHEN** the scheduled moment arrives while a participating team's server reports unhealthy
 - **THEN** the start proceeds — the manual start's health block never applies to a scheduled round; if the server nevertheless accepts its invitation within the window the team plays, and otherwise the team forfeits the round
 
 #### Scenario: #refusal-costs-the-seat-not-the-round
-- **WHEN** a team's server refuses the invitation or times out while two or more other teams' servers accept
+- **WHEN** a team's server declines the invitation or times out while two or more other teams' servers accept
 - **THEN** the round proceeds with the seated teams and the absent team forfeits — the abort that would answer a manual start's refusal never fires for a scheduled round
 
 #### Scenario: #bounded-resolution

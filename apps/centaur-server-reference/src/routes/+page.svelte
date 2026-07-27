@@ -12,14 +12,15 @@ const subtitle = "Reference Implementation";
   <p>{subtitle}</p>
   <p>
     This is the reference implementation of the Snek Centaur Server.
-    See <code>spec/08-centaur-server-app.md</code> for the full specification.
+    Its behaviour is specified by the <code>team-server-management</code> capability.
   </p>
   <p>
     All feature code is pending implementation. This skeleton confirms the
     Svelte 5 / SvelteKit app scaffolds and serves correctly.
   </p>
   <ul>
-    <li><a href="/.well-known/snek-game-invite">Healthcheck endpoint (POST only)</a></li>
+    <li><a href="/healthcheck">Healthcheck endpoint</a></li>
+    <li><a href="/.well-known/jwks.json">Published signing keys</a></li>
   </ul>
 </main>
 

@@ -1,107 +1,123 @@
 ## Purpose
 
 An admin automates the platform from outside the first-party application:
-the HTTP API through which Centaur Teams, rooms, games, and webhook
-subscriptions are administered programmatically; the admin-only API keys
-that authorize it; and the webhooks by which external systems learn that
+the platform's own public function surface, called directly by registered
+integration clients rather than through any proxy of its own; the client
+registrations that authorize it and the capability ceilings they carry; and the webhooks by which external systems learn that
 games have started and finished. This capability owns the integration
-surface itself — who may hold a key, what a key can and cannot reach, the
-custody hygiene around key material, and the delivery semantics of event
-notifications. The platform behaviour reached *through* the surface — team
-management, rooms, game launch — is owned by the capabilities that own
-those workflows; this capability guarantees the surface is a second door
-to the same rules, never a second set of rules.
+surface itself — who may register a client, what a client can and cannot
+reach, and the delivery semantics of event notifications. The platform
+behaviour reached *through* it — team management, rooms, game launch — is
+owned by the capabilities that own those workflows; this capability
+guarantees external callers meet exactly those rules, because they call
+exactly those functions.
 
 Depends on: identity-and-authorization, game-lifecycle, global-invariants.
 
 ## ADDED Requirements
 
-### Requirement: platform-integrations/admin-api-keys
-Depends on: identity-and-authorization/platform-admin-role, global-invariants/authenticated-unambiguous-identity#identity-kind-is-decidable.
+### Requirement: platform-integrations/integration-clients
+Depends on: identity-and-authorization/service-principal-assertions, identity-and-authorization/trusted-issuer-registry, identity-and-authorization/platform-admin-role, global-invariants/no-shared-secrets.
 
-Every request to the platform's HTTP API SHALL be authorized by a bearer API key. API keys SHALL be an admin-only affordance: only holders of the platform admin role may create keys, and each key is bound permanently to the creating admin's user record — never transferable, so a request acts under its creating admin's own identity rather than under a principal of the key's own kind. A valid key's scope SHALL be global, never scoped down to a team, room, or game. A request SHALL be rejected when its key is missing, invalid, or revoked, and validation SHALL re-check on every request that the key's creator currently holds the admin role, so a key whose creator has lost admin standing stops working without needing separate revocation.
+Every request to the platform's HTTP API SHALL be authorized by a credential the platform issued to a registered **integration client**, obtained by that client proving who it is with its own key. A client SHALL act as itself and never as a person: what it may do is the capability ceiling recorded on its registration, never the authority of the admin who registered it. Registering a client SHALL be an admin-only affordance, and a client whose registration is revoked SHALL obtain no further credential.
 
-#### Scenario: #creator-no-longer-admin
-- **WHEN** a request presents a valid, unrevoked key whose creating admin has since lost the admin role
-- **THEN** the request is rejected — the admin check is made against the creator's current standing on every request, never cached from creation time, and the key works again only if the creator regains the role
+#### Scenario: #a-client-is-not-its-registrar
+- **WHEN** the admin who registered a client later gains or loses standing, or is granted some new power
+- **THEN** the client's reach does not move with them — it is its own recorded ceiling, so a client is never a way to hold a person's authority at rest
 
-#### Scenario: #key-follows-its-creator-only
-- **WHEN** any attempt is made to rebind a key to a different user, or to create a key on behalf of someone other than the authenticated admin creating it
-- **THEN** it is refused — a key's authority is exactly its creator's, for the key's whole life
+#### Scenario: #nothing-secret-is-created-to-register
+- **WHEN** an integrator sets up a client
+- **THEN** no secret is generated, disclosed, copied, or transmitted anywhere: the client publishes its own public material and the registration records where to read it
 
-### Requirement: platform-integrations/key-custody
-Depends on: identity-and-authorization/client-credential-custody.
+#### Scenario: #unregistered-caller-refused
+- **WHEN** a request arrives bearing a well-formed credential from a client the platform holds no registration for
+- **THEN** it is refused; a valid signature establishes who signed and nothing about what they may do
 
-The platform SHALL store API keys only in a form from which the key material cannot be recovered, in a persistent per-key record capturing at minimum: the one-way digest of the key material, a human-chosen label, the creating admin's user record, the creation timestamp, and a revocation timestamp that is null until the key is revoked. The plaintext of a newly created key SHALL be disclosed exactly once, at creation, to its creator — with an explicit affordance to copy it before the disclosure is dismissed — this being the designed one-time disclosure through which a client credential reaches its custodian.
+### Requirement: platform-integrations/client-registration
+Depends on: identity-and-authorization/trusted-issuer-registry#registry-holds-no-secret.
 
-#### Scenario: #plaintext-shown-exactly-once
-- **WHEN** an admin creates a key
-- **THEN** the plaintext appears once, at creation, with a copy affordance; once the disclosure is dismissed the plaintext is unrecoverable by anyone — creator, other admins, or the platform itself, which holds only the digest
+The platform SHALL hold a persistent record per registered integration client capturing at minimum: the client's issuer identifier, the location at which it publishes its verification material, its granted capability ceiling, a human-chosen label, the registering admin's user record, the registration timestamp, and a revocation timestamp that is null until the registration is revoked. The record SHALL contain nothing secret.
+
+#### Scenario: #nothing-to-disclose-at-creation
+- **WHEN** a client is registered
+- **THEN** no plaintext credential is presented to anyone, because none was created — there is no one-time disclosure to copy before it disappears, and nothing about the registration needs protecting in transit
 
 #### Scenario: #metadata-only-ever-after
-- **WHEN** a key is listed or inspected at any time after creation
-- **THEN** only its label and metadata are presented — no surface re-displays, exports, or transmits the plaintext or any recoverable form of it
+- **WHEN** a registration is listed or inspected at any time
+- **THEN** the whole record is presentable — label, ceiling, timestamps, registrar — because no part of it is sensitive
 
-### Requirement: platform-integrations/key-management
-The platform SHALL give admins the means — through the first-party application and through the HTTP API itself — to create API keys and to revoke them. The management surface SHALL list the admin's active and revoked keys with each key's label, creation timestamp, and revocation timestamp where applicable, and SHALL communicate that a key carries its creator's global admin authority and stops working if the creator loses the admin role. Revocation SHALL take effect immediately — every subsequent request presenting the revoked key is rejected — and revoked key records SHALL be retained, never deleted, so the history of what keys existed, who created them, and when they were revoked remains auditable.
+### Requirement: platform-integrations/client-management
+The platform SHALL give admins the means — through the first-party application and through the HTTP API itself — to register integration clients, adjust a client's capability ceiling, and revoke a registration. The management surface SHALL list active and revoked registrations with each one's label, ceiling, timestamps, and registering admin. Revocation SHALL take effect on issuance immediately, and revoked registration records SHALL be retained, never deleted, so the history of what was registered, by whom, with what reach, and when it ended remains auditable.
 
 #### Scenario: #revocation-immediate
-- **WHEN** a key is revoked while an integration is actively using it
-- **THEN** the very next request presenting that key is rejected — there is no grace period and no window in which a cached validity outlives the revocation
+- **WHEN** a registration is revoked while an integration is actively using it
+- **THEN** its very next credential request is refused with no grace period; the credential it already holds keeps working until it expires minutes later and nothing renews it — the delay a self-contained credential trades for stateless verification, and the reason lifetimes are short
 
 #### Scenario: #revoked-records-retained
-- **WHEN** a key has been revoked
-- **THEN** its record persists with its revocation timestamp and still appears in the management listing — revocation ends the key's authority, never the audit trail of its existence
+- **WHEN** a registration has been revoked
+- **THEN** its record persists with its revocation timestamp and still appears in the management listing — revocation ends the client's reach, never the audit trail of its existence
 
-### Requirement: platform-integrations/key-capability-bounds
-Depends on: global-invariants/credential-confinement#game-credential-has-one-delivery-path, platform-integrations/http-api-surface, identity-and-authorization/platform-admin-role#no-write-path-into-live-games.
+### Requirement: platform-integrations/client-capability-bounds
+Depends on: identity-and-authorization/peer-capability-ceiling, identity-and-authorization/principal-kind-gating, platform-integrations/functions-are-the-api, identity-and-authorization/platform-admin-role#no-write-path-into-live-games.
 
-An API key SHALL never authorize: creating a human identity, performing any action that requires an interactive sign-in flow, issuing game access tokens — a per-team game credential reaches its holder on exactly one channel, and the API is not it — or reading or writing Centaur-subsystem state. The API's mutating reach SHALL be exactly the management surface the HTTP API exposes, and no API request ever acts inside a game.
+No integration client's ceiling SHALL include: creating a human identity, any action that requires an interactive sign-in, changing any authentication configuration, issuing access tokens for a human or a team, or reading or writing Centaur-subsystem state. No client SHALL ever act inside a live game. Everything else the platform exposes is grantable, so a system that is the source of truth for its own teams may administer them.
 
 #### Scenario: #never-a-gameplay-actor
 - **WHEN** an API caller attempts by any means to act inside a live game — stage a move, mutate game state, or touch any Centaur-subsystem state
-- **THEN** it is refused: no part of the API affords it, and no key's scope unlocks it
+- **THEN** it is refused: no part of the API affords it, and no ceiling unlocks it
 
 #### Scenario: #no-identity-creation
-- **WHEN** an API caller attempts to create a human identity, or any action whose authorization inherently requires an interactive sign-in
-- **THEN** it is refused — humans enter the platform only through sign-in, never through the API
+- **WHEN** an API caller attempts to create a human identity, relink a person's credential, or any action whose authorization inherently requires an interactive sign-in
+- **THEN** it is refused — humans enter the platform only through sign-in, and whose credential belongs to whom is settled inside the platform alone
 
-### Requirement: platform-integrations/http-api-surface
-Depends on: game-lifecycle/launch-orchestration, platform-integrations/key-management.
+#### Scenario: #a-roster-system-may-run-its-rosters
+- **WHEN** an academy system that owns its classes creates teams, names their captains and coaches, and adds and removes students as enrolment changes
+- **THEN** it is permitted on its recorded ceiling: the exclusions above bound what a compromised client could do irreversibly to the platform's own authority, and a system administering the teams it created is not that
 
-The platform SHALL expose an HTTP API affording programmatic administration of, at minimum: Centaur Teams — listing and reading teams, creating a team, updating a team's attributes including its nominated server domain, and adding and removing members; rooms — listing and reading rooms with their current game, creating and updating a room, and enrolling and unenrolling teams; games — reading a game's state including its configuration, status, and final scores once finished, and starting a game in a room, which enters the same launch orchestration as a first-party start; webhook subscriptions — registering, listing, and deleting them; and API keys, on the terms key management sets.
+### Requirement: platform-integrations/functions-are-the-api
+Depends on: game-lifecycle/launch-orchestration, identity-and-authorization/capability-registry, platform-integrations/client-management.
+
+The platform SHALL maintain no integration-specific request surface: a registered client calls the platform's own public functions directly, the very ones the first-party application calls, and its capabilities name those functions. The platform's documented programmatic surface — at minimum administering Centaur Teams, rooms, games, webhook subscriptions, and client registrations — SHALL be reachable this way by a client whose ceiling reaches it, with no family of behaviour inside that surface requiring a fallback to the application. Functions outside it accept human identities alone, and their being unreachable programmatically is a declared kind restriction rather than a gap in this surface: what a client may reach grows by a function declaring the service-principal kind, never by widening a ceiling.
+
+#### Scenario: #no-second-surface-to-keep-in-step
+- **WHEN** a new platform behaviour is added and should be automatable
+- **THEN** nothing has to be built for it: it is a public function with a declared capability, and a client's ceiling either reaches it or does not — there is no proxy layer that could be forgotten, lag behind, or diverge
 
 #### Scenario: #api-start-is-a-real-launch
-- **WHEN** a game is started through the API
-- **THEN** the one launch orchestration runs — the same gates, the same freeze, the same provisioning — and the resulting game is indistinguishable from one started first-party
+- **WHEN** a game is started by a registered client
+- **THEN** the one launch orchestration runs — the same gates, the same freeze, the same provisioning — and the resulting game is indistinguishable from one started first-party, because it is the same function
 
 #### Scenario: #the-families-are-a-floor
-- **WHEN** an external integrator administers teams, rooms, games, webhooks, or keys
-- **THEN** each of these families is reachable programmatically with an API key alone — none of them requires falling back to the first-party application
+- **WHEN** an external integrator administers teams, rooms, games, webhooks, or client registrations
+- **THEN** each of these families is reachable programmatically with the client's own credential alone; none requires falling back to the first-party application
+
+#### Scenario: #outside-the-surface-is-not-a-fallback
+- **WHEN** a client calls a function outside the documented surface, which accepts human identities alone
+- **THEN** it is refused on principal kind, and that is not a family requiring fallback: the surface is what the platform undertakes to expose programmatically, and enlarging it is a deliberate act on the function
 
 ### Requirement: platform-integrations/first-party-parity
-Depends on: global-invariants/one-contract-many-surfaces, identity-and-authorization/mutation-authorization.
+Depends on: global-invariants/one-contract-many-surfaces, identity-and-authorization/mutation-authorization, identity-and-authorization/capability-registry#reachability-is-not-authorization.
 
-Every mutation made through the HTTP API SHALL be dispatched against the same owning-runtime function contract as the equivalent first-party action — never against a re-implementation of that contract's validations in the HTTP layer. A key's global admin-level scope widens who may act; it never widens what the platform's rules permit.
+Parity between programmatic and first-party access SHALL be structural rather than maintained: because both dispatch the same functions, no validation exists in one path and not the other. A client's ceiling SHALL widen who may act and never what the platform's rules permit — reaching a function is not permission to have done what it does.
 
 #### Scenario: #no-privileged-bypass
-- **WHEN** an API mutation targets state the platform's rules currently hold immutable — for example a launched game's frozen configuration
-- **THEN** it is rejected by the same rule that rejects the first-party attempt, with no API-only exemption
+- **WHEN** a client's call targets state the platform's rules currently hold immutable — a launched game's frozen configuration, say
+- **THEN** it is rejected by the same rule that rejects the first-party attempt, because it is the same code; there is no place an API-only exemption could live
 
-#### Scenario: #two-doors-one-rulebook
-- **WHEN** any invariant enforced on the first-party surface is probed through the API under equivalent authority
-- **THEN** it holds identically — a mutation acceptable through one surface and refused through the other is a violation, whichever direction the discrepancy runs
+#### Scenario: #broad-ceiling-is-not-a-superuser
+- **WHEN** a client whose ceiling reaches a function calls it in circumstances the function's own authorization refuses
+- **THEN** the call is rejected — the capability got it to the door and decided nothing else
 
 ### Requirement: platform-integrations/webhook-subscriptions
-The platform SHALL let API-key-authenticated callers register webhook subscriptions. Each subscription SHALL capture at minimum: a delivery URL, one or more event types drawn from the closed set `game_start`, `game_end`; a scope naming either one specific game or one specific room — a room-scoped subscription applying to every game hosted in that room; the API key under which it was created; and a creation timestamp. A subscription SHALL be revoked automatically when its owning key is revoked, and no notification SHALL be delivered to it for any event occurring after that revocation.
+The platform SHALL let authenticated integration clients register webhook subscriptions. Each subscription SHALL capture at minimum: a delivery URL, one or more event types drawn from the closed set `game_start`, `game_end`; a scope naming either one specific game or one specific room — a room-scoped subscription applying to every game hosted in that room; the integration client under which it was created; and a creation timestamp. A subscription SHALL be revoked automatically when its owning client's registration is revoked, and no notification SHALL be delivered to it for any event occurring after that revocation.
 
 #### Scenario: #room-scope-follows-the-room
 - **WHEN** a room-scoped subscription exists and a new game comes to be hosted in that room
 - **THEN** the subscription covers the new game without re-registration — the scope names the room, not any one game
 
-#### Scenario: #revoked-with-owning-key
-- **WHEN** a subscription's owning key is revoked
-- **THEN** the subscription dies with it: events occurring after the revocation produce no delivery to that URL, and the revoked key cannot be used to resurrect it
+#### Scenario: #revoked-with-owning-client
+- **WHEN** a subscription's owning client registration is revoked
+- **THEN** the subscription dies with it: events occurring after the revocation produce no delivery to that URL, and the revoked registration cannot be used to resurrect it
 
 ### Requirement: platform-integrations/lifecycle-event-notifications
 Depends on: game-lifecycle/status-authority.

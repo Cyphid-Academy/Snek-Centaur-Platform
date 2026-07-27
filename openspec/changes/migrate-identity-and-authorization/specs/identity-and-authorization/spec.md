@@ -1,15 +1,18 @@
 ## Purpose
 
-Who someone is on the platform and what that identity may reach: signing in
-with a Google account, the identity kinds (humans, Centaur Teams, and the
-per-game participant identities derived from them), the platform admin
-role, and every credential Convex issues — persistent sessions, per-team
-game credentials, and the game access tokens under which a game's
-SpacetimeDB instance admits operators, bots, spectators, and coaches. This
-capability owns identity, credential issuance, and admission: who may
-obtain access to a game and on what terms. What an admitted participant
-then does — operating a snake, watching the board, running a team — belongs
-to the capabilities that own those workflows.
+Who someone is on the platform and what that identity may reach: the
+provider account a human signs in with and the durable user record it is
+linked to, the identity kinds (humans, Centaur Teams, external systems, and
+the per-game participant identities derived from them), the platform admin
+role, the issuers the platform trusts and the capabilities each may confer,
+and every credential the platform's Convex deployment issues — human
+sessions, the per-team, per-game credentials a Snek Centaur Server earns,
+capability tokens for registered external systems, and the game access tokens under
+which a game's SpacetimeDB instance admits operators, bots, spectators, and
+coaches. This capability owns identity, credential issuance, and admission:
+who may obtain access and on what terms. What an admitted participant then
+does — operating a snake, watching the board, running a team — belongs to
+the capabilities that own those workflows.
 
 Depends on: global-invariants.
 
@@ -18,10 +21,10 @@ Depends on: global-invariants.
 ### Requirement: identity-and-authorization/identity-kinds
 Depends on: global-invariants/authenticated-unambiguous-identity#identity-kind-is-decidable.
 
-The platform SHALL recognize exactly two kinds of persistent identity — **human identities** and **Centaur Team identities** — plus **game-participant identities**: derived identities scoped to a single game, one per authenticated connection, in one of the roles operator, bot, spectator, or coach. Operator, spectator, and coach identities derive from a human identity; bot identities derive from a Centaur Team identity via its game credential. The enumeration is closed so that every identity platform code meets falls in exactly one kind. A Centaur Team is the persistent competitive unit, identified by a platform-assigned id; its nominated server domain is configuration, not identity.
+The platform SHALL recognize exactly three kinds of persistent identity — **human identities**, **Centaur Team identities**, and **external system identities** (a peer Cyphid system or an automation registered to act as itself) — plus **game-participant identities**: derived identities scoped to a single game, one per authenticated connection, in one of the roles operator, bot, spectator, or coach. Operator, spectator, and coach identities derive from a human identity; bot identities derive from a Centaur Team identity. The enumeration is closed so that every identity platform code meets falls in exactly one kind. A Centaur Team is the persistent competitive unit, identified by a platform-assigned id; the domain of the server operating it is recorded so its actions can be attributed, and is never an identity of its own.
 
 #### Scenario: #server-domain-is-not-identity
-- **WHEN** a Centaur Team's nominated server domain changes
+- **WHEN** a Centaur Team changes the server domain it is operated from
 - **THEN** the team's identity is unchanged — no new team identity is created, and the team's history, membership, and records remain attached
 
 #### Scenario: #participants-are-derived
@@ -29,11 +32,15 @@ The platform SHALL recognize exactly two kinds of persistent identity — **huma
 - **THEN** its participant identity is a derivation — from the human identity or team game credential that obtained the access token — scoped to that one game, never a new persistent identity
 
 ### Requirement: identity-and-authorization/google-sign-in
-Humans SHALL sign in exclusively with a Google account, via Google OAuth integrated with Convex; the platform maintains no independent credential store for humans. A successful sign-in SHALL produce a persistent session that survives page loads until it expires or the user signs out, and sign-out SHALL terminate the session and revoke client-held session tokens, returning the client to the unauthenticated state.
+Humans SHALL sign in exclusively with a Google account, and the platform SHALL maintain no independent credential store for humans. A successful sign-in SHALL produce a persistent session that survives page loads until it expires or the user signs out — persistent in the script-inaccessible cookie credential custody permits, never in storage a page can read — and sign-out SHALL terminate the session and revoke the client-held session credential, returning the client to the unauthenticated state.
 
 #### Scenario: #google-account-specifically
 - **WHEN** any human authentication path exists
-- **THEN** it authenticates a Google account — the Google binding is deliberate (Google-account email addresses serve as stable identifiers in systems beyond this platform), so supporting any other provider requires revising this requirement, never provider-neutral drift
+- **THEN** it authenticates a Google account — the binding is deliberate, so supporting any other provider requires revising this requirement, never provider-neutral drift
+
+#### Scenario: #no-human-shared-secrets
+- **WHEN** the platform's stored state is examined
+- **THEN** it contains no password, password hash, or other secret capable of authenticating a human directly
 
 #### Scenario: #session-survives-reload
 - **WHEN** a signed-in user reloads or reopens the application
@@ -43,22 +50,22 @@ Humans SHALL sign in exclusively with a Google account, via Google OAuth integra
 - **WHEN** a user signs out
 - **THEN** the session is terminated and client-held session tokens are revoked; nothing retained by the client continues to authenticate
 
-### Requirement: identity-and-authorization/email-as-canonical-identity
-Depends on: global-invariants/transactional-invariant-enforcement#concurrent-mutations-cannot-race-past-a-guard.
+### Requirement: identity-and-authorization/linked-provider-credentials
+Depends on: global-invariants/durable-identity-references, global-invariants/transactional-invariant-enforcement#concurrent-mutations-cannot-race-past-a-guard.
 
-A human SHALL be identified canonically by the email address of their Google account: any two successful authentications yielding the same email are the same human identity, irrespective of other provider-side attributes. The platform SHALL store no passwords, password hashes, or shared secrets that could authenticate a human outside Google sign-in.
+A human's durable identity SHALL be their platform user record, and a provider account SHALL be a credential *linked* to it: the platform SHALL hold a linkage record naming the provider and the provider's immutable subject for that account, created with the user record at first sign-in. Authentication SHALL resolve a provider and subject to a user through that linkage alone. The mapping SHALL be one-to-one in both directions — one linked account per user, one user per linked account — and the platform SHALL afford no operation that repoints, replaces, or detaches a linkage.
 
-#### Scenario: #same-email-merges
-- **WHEN** a human authenticates and a platform identity already exists for that email
-- **THEN** the sign-in attaches to the existing identity — no duplicate is created, even when two first sign-ins for one email race
+#### Scenario: #one-provider-account-one-person-forever
+- **WHEN** a provider account already linked to one user is presented for linking to another
+- **THEN** it is refused, and two racing first sign-ins for the same account cannot both commit — whom an account belongs to is settled once, at first sign-in, and never revised
 
-#### Scenario: #email-fork-keeps-history
-- **WHEN** a Google account's email address changes at the provider
-- **THEN** subsequent sign-ins under the new email are a new, distinct human identity, and the prior email's identity remains attached to all of its historical state — memberships, attributions, replays — with no migration
+#### Scenario: #the-linkage-is-the-only-lookup
+- **WHEN** an authenticated session is resolved to a user
+- **THEN** it is resolved through the linkage record and nothing else: no other field of the user record identifies them to a provider, so the provider's subject appears in exactly one place
 
-#### Scenario: #no-human-shared-secrets
-- **WHEN** the platform's stored state is examined
-- **THEN** it contains no password, password hash, or other shared secret capable of authenticating a human directly
+#### Scenario: #no-auto-linking-by-email
+- **WHEN** an authentication presents an email address matching an existing user's
+- **THEN** nothing is linked and no session is established for that user: whom an account belongs to is settled by the provider's subject alone, never inferred from a claim that can change or repeat
 
 ### Requirement: identity-and-authorization/authentication-required
 Depends on: global-invariants/authenticated-unambiguous-identity#no-anonymous-mutation-path, global-invariants/single-convex-deployment.
@@ -74,39 +81,156 @@ Every affordance that reads or writes user-scoped state SHALL require an authent
 - **THEN** it is answered against the actor's resolved user record, and every action taken in the session is attributed to that record
 
 ### Requirement: identity-and-authorization/sole-credential-issuer
-Depends on: global-invariants/credential-confinement#signing-keys-never-leave-convex.
+Depends on: global-invariants/credential-confinement#signing-keys-never-leave-convex, global-invariants/issuer-anchored-trust#recognition-is-not-authorization.
 
-Convex SHALL host all identity and credential infrastructure and SHALL be the sole issuer of every credential any platform runtime accepts — sessions, per-team game credentials, and game access tokens. A game's SpacetimeDB instance SHALL admit connections only on access tokens Convex issued, with no alternative admission mechanism. Sole issuance is achievable only because the signing material stays inside Convex.
+The platform's Convex deployment SHALL be the sole authorization server for the platform's own affordances and the sole issuer of every credential the platform's runtimes accept as authority — human sessions, Snek Centaur Servers' per-team game credentials, capability tokens for registered external systems, and game access tokens. A game's SpacetimeDB instance SHALL admit connections only on access tokens the platform issued, with no alternative admission mechanism. A credential another system issued SHALL be evidence of who is calling and never authority over platform resources.
 
 #### Scenario: #no-alternative-admission
-- **WHEN** a connection attempts admission to a game instance on any basis other than a Convex-issued access token
+- **WHEN** a connection attempts admission to a game instance on any basis other than a platform-issued access token
 - **THEN** it is refused — there is no secondary admission path
 
 #### Scenario: #app-never-self-issues
 - **WHEN** the web application or a Snek Centaur Server needs a game access token
-- **THEN** it obtains one through Convex's issuance path; it never mints, forges, or re-derives one itself
+- **THEN** it obtains one through the platform's issuance path; it never mints, forges, or re-derives one itself
+
+#### Scenario: #peer-tokens-carry-no-platform-authority
+- **WHEN** a registered peer system presents a credential its own deployment signed
+- **THEN** the platform reads it as proof of who is calling and answers from the grants it holds for that peer; nothing the peer's own credential asserts about its authority is honoured
+
+### Requirement: identity-and-authorization/service-principal-assertions
+Depends on: global-invariants/no-shared-secrets, global-invariants/issuer-anchored-trust.
+
+A non-human principal SHALL authenticate to the platform by presenting a short-lived assertion it signed with its own private key, naming itself, naming the platform's issuance endpoint as the only place it may be used, and carrying an identifier unique to that assertion. The platform SHALL verify the signature against public material published at the location recorded for that principal's registration, check the audience and expiry, and refuse any assertion whose identifier it has already accepted.
+
+#### Scenario: #unregistered-principal-refused
+- **WHEN** an assertion arrives from a principal the platform holds no registration for
+- **THEN** it is refused: a valid signature over a well-formed assertion proves only that someone holds a key
+
+#### Scenario: #replayed-assertion-refused
+- **WHEN** a captured assertion is presented a second time, still within its lifetime
+- **THEN** it is refused — each assertion is accepted once, and the record of accepted identifiers is expired on the assertion lifetime rather than retained indefinitely
+
+#### Scenario: #rotation-needs-no-coordination
+- **WHEN** a principal rotates its signing key
+- **THEN** it publishes the new public material alongside the old and switches; the platform re-reads the published material on meeting a key it does not know, so nothing about the registration changes and no exchange with the platform is required
+
+### Requirement: identity-and-authorization/trusted-issuer-registry
+Depends on: global-invariants/issuer-anchored-trust.
+
+The platform SHALL hold a registry of the issuers it trusts — its own deployment and zero or more registered external systems — each recorded with an issuer identifier, the location at which that issuer publishes its verification material, and the ceiling of capabilities it may confer. The registry SHALL hold no secret for any issuer. A request for capabilities outside the requesting issuer's ceiling SHALL be refused with the excess named, never quietly narrowed to the permitted subset.
+
+#### Scenario: #excess-fails-loudly
+- **WHEN** a caller requests more capability than its issuer's ceiling allows
+- **THEN** the request is refused and the excess is named; narrowing silently would surface later as an unexplained runtime failure far from the misconfiguration that caused it
+
+#### Scenario: #registry-holds-no-secret
+- **WHEN** an issuer is registered
+- **THEN** everything recorded is public — an identifier, where its material is published, and a ceiling; the record has no field a secret could occupy
+
+#### Scenario: #the-set-is-never-assumed-singular
+- **WHEN** any code resolves the issuer of a presented credential
+- **THEN** it resolves against the registry as a set, so registering a second issuer requires no change to how credentials are validated
+
+### Requirement: identity-and-authorization/capability-claim-structure
+Every credential the platform issues SHALL carry the capabilities it confers as a structured claim — a sequence of entries rather than an unstructured string — and enforcement SHALL read that structure from the first line of enforcement code written. An entry SHALL name one capability as a bare verb identifier and carry nothing else; the claim is a sequence so that constraining an entry later is a change to minting alone, and no entry carries a constraint today. Where a service principal obtained a credential to act with, the credential SHALL also name that principal.
+
+#### Scenario: #structured-from-the-first-token
+- **WHEN** an enforcement site reads a credential's capabilities
+- **THEN** it reads entries, not a string it splits — so later constraining an entry changes minting alone, and no enforcement site, audit consumer, or external system's credential-reading code
+
+#### Scenario: #uniform-today-attenuable-tomorrow
+- **WHEN** a Snek Centaur Server's game credential for a team is issued
+- **THEN** it carries the structured claim like every other credential, with the same value for every Server today — so narrowing one later adds a constraint rather than changing the shape of what every Server already reads
+
+#### Scenario: #acting-principal-is-recorded
+- **WHEN** an action is taken under a credential a service principal obtained
+- **THEN** the platform can name that principal afterwards, because the credential carried it and the record kept it
+
+### Requirement: identity-and-authorization/capability-registry
+Every function the platform exposes publicly SHALL declare the capability that reaches it, explicitly and never derived from where its code lives, and the declaration SHALL be total: a public function with no declared capability SHALL fail the build. A capability SHALL grant reachability only — the function's own authorization decision runs regardless of how broadly the caller was scoped.
+
+#### Scenario: #unregistered-function-fails-the-build
+- **WHEN** a public function is added without declaring its capability
+- **THEN** the build fails; the registry is complete by construction, not by review, because a function reachable under no declared capability is the one nobody notices
+
+#### Scenario: #capabilities-are-declared-not-derived
+- **WHEN** two functions of different risk sit in the same module
+- **THEN** they may belong to different capabilities — grouping follows what a function does, never where it lives, because module structure is organised for developers
+
+#### Scenario: #reachability-is-not-authorization
+- **WHEN** a broadly scoped credential reaches a function
+- **THEN** the function still decides whether this caller may do this thing; no handler may treat the capability as having settled the question
+
+#### Scenario: #naming-one-function-is-a-contract
+- **WHEN** a grant names an individual function rather than a capability group
+- **THEN** the grant is recorded as unstable, so renaming that function is knowable in advance as a breaking change for whoever holds it
+
+### Requirement: identity-and-authorization/principal-kind-gating
+Depends on: global-invariants/authenticated-unambiguous-identity#identity-kind-is-decidable.
+
+Every public function SHALL declare which kinds of principal it accepts, and SHALL itself refuse a caller of an undeclared kind however broad that caller's capabilities. The capability check and the kind check are distinct and ordered: whether a credential reaches a function at all is decided from its capabilities first, and acceptance of the caller's kind is decided after, by the function. Accepting human identities alone SHALL be the default a function departs from explicitly, so a function is reachable by a service principal only where it declares that kind — and the functions behind the platform's documented programmatic surface SHALL declare it. Administering a team — re-homing it, changing its membership or captaincy, altering its identity, entering or leaving rooms — SHALL exclude the Centaur Team principal, whose whole authority exists to operate that team in play. Changing authentication configuration SHALL be declared reachable by human identities alone.
+
+#### Scenario: #a-service-principal-cannot-administer-a-team
+- **WHEN** the Snek Centaur Server operating a team attempts to re-home it, alter its roster, transfer captaincy, or change its identity
+- **THEN** it is refused on principal kind: a compromised Server can play badly with snakes the team already owns, and can neither lock the team's captains out nor move the team to a domain of its own choosing
+
+#### Scenario: #kind-is-checked-independently-of-capability
+- **WHEN** a principal of a barred kind presents a credential whose capabilities include the operation
+- **THEN** the call is still refused; the two checks are independent and both must pass — the capabilities decided only that the function was reachable
+
+#### Scenario: #service-reach-is-declared-never-inferred
+- **WHEN** a registered external system holds a capability naming a function that declares human identities alone
+- **THEN** the call is refused on kind: breadth of capability never implies acceptance of kind, so widening what a system can reach means a function declaring the additional kind, never a wider ceiling
+
+### Requirement: identity-and-authorization/peer-capability-ceiling
+Depends on: global-invariants/issuer-anchored-trust#ceiling-is-checked-at-the-resource, identity-and-authorization/capability-claim-structure#acting-principal-is-recorded.
+
+No external system's ceiling SHALL include operations that destroy platform state, issue credentials for a human, or change authentication configuration, regardless of what a user that system acts for could do directly. The platform SHALL additionally bound each registered system's call rate, and SHALL be able to show a user which actions on their behalf were taken through which system.
+
+#### Scenario: #ceiling-sits-below-the-user
+- **WHEN** an external system acts for a user who could perform an excluded operation themselves
+- **THEN** the system still cannot: the exclusion is a property of the system, and it is the only control that shrinks what a compromised peer can do rather than merely shortening how long it can do it
+
+#### Scenario: #attribution-is-user-visible
+- **WHEN** a user reviews the actions taken on their account
+- **THEN** those taken through an external system are identified as such, and by which system
 
 ### Requirement: identity-and-authorization/verification-without-shared-secrets
-Depends on: global-invariants/game-instance-hermeticity.
+Depends on: global-invariants/game-instance-hermeticity, global-invariants/no-shared-secrets.
 
-Convex SHALL publish, at stable well-known addresses, the verification material for the game access tokens it signs, sufficient for any game's SpacetimeDB instance to validate tokens entirely on its own. No per-instance secret SHALL ever be provisioned or exchanged for token validation. Self-sufficient validation is what a hermetic instance requires.
+The platform SHALL publish, at stable well-known addresses, the verification material for the credentials it signs — sufficient for a game's SpacetimeDB instance, a Snek Centaur Server, or any other party to validate them entirely on its own. Self-sufficient validation is what a hermetic instance requires.
 
 #### Scenario: #instance-validates-alone
 - **WHEN** a game's instance validates an access token
-- **THEN** it does so using only the published verification material — no secret was seeded into the instance and none is consulted elsewhere
+- **THEN** it does so using only the published verification material it obtained at startup, consulting nothing else and no one else
 
 #### Scenario: #same-material-platform-wide
 - **WHEN** a new game instance comes into existence
 - **THEN** no new verification arrangement is negotiated; the platform-wide published material already covers its tokens
 
-### Requirement: identity-and-authorization/game-token-contents
-Depends on: global-invariants/authenticated-unambiguous-identity#identity-kind-is-decidable.
+### Requirement: identity-and-authorization/audience-bound-tokens
+Every credential the platform issues SHALL name the exact resource it may be used at, and every resource SHALL refuse a credential naming another — checking the binding before anything else about the credential is considered. A credential is therefore inert everywhere but where it was meant to be used.
 
-Every game access token SHALL be signed by Convex and SHALL carry, at minimum: the specific game it grants admission to, a subject encoding the holder's role (operator, bot, spectator, or coach) with its identity binding — the acting human for operators, the Centaur Team for bots, and for coaches both the human and the team whose view the token grants; spectator tokens carry no team binding — and an expiry beyond which the token is not accepted. The subject is what makes the admitted identity's kind decidable inside the instance.
+#### Scenario: #wrong-audience-refused
+- **WHEN** a credential issued for one resource — a particular game's instance, the platform's own functions, another system — is presented at a different one
+- **THEN** it is refused on the binding alone, whatever capabilities it carries and however valid its signature
+
+#### Scenario: #compromise-contained
+- **WHEN** an issued credential leaks
+- **THEN** what it reaches is one named resource for the few minutes of its life and nothing anywhere else — which is what makes a single signing arrangement behind all of the platform's credentials safe, rather than a concentration of risk
+
+### Requirement: identity-and-authorization/game-token-contents
+Depends on: global-invariants/authenticated-unambiguous-identity#identity-kind-is-decidable, global-invariants/durable-identity-references#derived-identities-inherit-durability.
+
+Every game access token SHALL be signed by the platform and SHALL carry, at minimum: the specific game it grants admission to, a subject naming the holder by the platform's own durable identifier for it and encoding the holder's role (operator, bot, spectator, or coach) with its identity binding — the acting human for operators, the Centaur Team for bots, and for coaches both the human and the team whose view the token grants; spectator tokens carry no team binding — and an expiry beyond which the token is not accepted. The subject is what makes the admitted identity's kind and role decidable inside the instance, and the instance SHALL decide them from the identity it derived rather than by reading any other claim, whatever claim access its runtime affords.
 
 #### Scenario: #token-names-its-game
 - **WHEN** an access token issued for one game is presented to a different game's instance
 - **THEN** admission is refused — the token's game binding is checked, not merely its signature
+
+#### Scenario: #subject-alone-decides-the-role
+- **WHEN** an instance must tell a spectator connection from an operator connection
+- **THEN** the distinction is already in the identity it derived from the subject, so a read-only role is structural: the two are different identities, one of which the instance's seeded permissions simply do not name. No role record is consulted and no claim is read, so no coding error can promote a spectator to an actor
 
 ### Requirement: identity-and-authorization/connect-time-validation
 Depends on: global-invariants/game-instance-hermeticity.
@@ -161,7 +285,7 @@ The records a game's instance keeps of admitted connections and their identity b
 - **THEN** no queryable or subscribable surface exposes the admission and attribution records
 
 ### Requirement: identity-and-authorization/participant-token-eligibility
-Convex SHALL issue an operator access token only to an authenticated human who is, per the target game's roster snapshot, a member of a participating team; and a bot access token only to the holder of a valid game credential whose Centaur Team is registered to the target game.
+The platform SHALL issue an operator access token only to an authenticated human who is, per the target game's roster snapshot, a member of a participating team; and a bot access token only to the holder of a valid game credential whose Centaur Team is registered to the target game.
 
 #### Scenario: #operator-outside-roster-refused
 - **WHEN** an authenticated human requests an operator token for a game whose roster snapshot does not include them on a participating team
@@ -174,7 +298,7 @@ Convex SHALL issue an operator access token only to an authenticated human who i
 ### Requirement: identity-and-authorization/spectator-tokens
 Depends on: global-invariants/team-granularity-authorization#spectators-hold-no-private-state.
 
-Convex SHALL issue spectator access tokens to any authenticated human who requests to spectate a game being played. A spectator token SHALL carry no team binding — which is what makes the connection a spectator connection, and so read-only and private-state-free.
+The platform SHALL issue spectator access tokens to any authenticated human who requests to spectate a game being played. A spectator token SHALL carry no team binding — which is what makes the connection a spectator connection, and so read-only and private-state-free.
 
 #### Scenario: #any-authenticated-human-may-request
 - **WHEN** any authenticated human — team member or not — requests to spectate a playing game
@@ -187,7 +311,7 @@ Convex SHALL issue spectator access tokens to any authenticated human who reques
 ### Requirement: identity-and-authorization/coach-tokens
 Depends on: global-invariants/team-granularity-authorization.
 
-Convex SHALL issue a coach access token to an authenticated human who is a designated coach of a participating team — the platform admin counting as an implicit coach of every team — for a game being played. A coach token SHALL be bound to that team, SHALL grant read access to the game on the same filtered terms as a member of that team — the team-granularity view is the only view there is to grant — and SHALL confer no mutating privilege.
+The platform SHALL issue a coach access token to an authenticated human who is a designated coach of a participating team — the platform admin counting as an implicit coach of every team — for a game being played. A coach token SHALL be bound to that team, SHALL grant read access to the game on the same filtered terms as a member of that team — the team-granularity view is the only view there is to grant — and SHALL confer no mutating privilege.
 
 #### Scenario: #coach-reads-as-bound-team
 - **WHEN** a coach connection is admitted
@@ -200,11 +324,19 @@ Convex SHALL issue a coach access token to an authenticated human who is a desig
 ### Requirement: identity-and-authorization/token-lifetime-and-refresh
 Depends on: global-invariants/state-confined-to-owning-runtime#game-instance-holds-only-its-games-state.
 
-Game access tokens of every role SHALL expire two hours after issuance, and a holder SHALL be able to obtain a replacement without re-authenticating from scratch — an operator without repeating Google sign-in, a bot without a new game credential — so long as the underlying session or credential is still valid. Expiry is defense-in-depth against leaked tokens: the boundary that ends access after a game is the game instance's decommissioning, not token expiry — the instance's state dies with its game, so there is nothing left to authenticate against.
+Every credential the platform issues SHALL expire fifteen minutes after issuance, and a holder SHALL be able to obtain a replacement without re-authenticating from scratch, so long as its underlying session or registration is still valid. Holders SHALL renew ahead of expiry on their own schedule, never in reaction to a refusal. Short lifetimes are what make a self-contained credential's revocation delay tolerable; the boundary that ends access after a game is the instance's decommissioning, not expiry.
 
 #### Scenario: #refresh-without-reauth
-- **WHEN** a token holder needs a fresh token during a long game — for example to reconnect after an interruption
-- **THEN** they obtain one from Convex on the strength of their still-valid session or credential, with no interactive re-authentication
+- **WHEN** a holder needs a fresh credential during a long game — to reconnect after an interruption, or simply because the last one is ageing
+- **THEN** they obtain one on the strength of their still-valid session or registration, with no interactive re-authentication
+
+#### Scenario: #renewal-is-proactive-never-reactive
+- **WHEN** a holder's credential approaches expiry during a live game
+- **THEN** it is replaced before it lapses; discovering the expiry from a refused call is a violation, because the game's clock keeps running while that call is retried and a lost turn is a real cost
+
+#### Scenario: #renewal-failure-is-quiet-until-it-bites
+- **WHEN** renewal fails because the platform is briefly unreachable, while the credential in hand is still valid
+- **THEN** the holder keeps retrying and says nothing: the failure is surfaced when the credential actually lapses and access is really lost, not while it is still working. A holder that cannot renew has no way to hand off or stand down either — that would take the same unreachable platform — so warning earlier would cost attention without offering an action
 
 #### Scenario: #teardown-not-expiry-ends-access
 - **WHEN** a game ends and its instance is decommissioned
@@ -213,7 +345,7 @@ Game access tokens of every role SHALL expire two hours after issuance, and a ho
 ### Requirement: identity-and-authorization/game-credential-scope
 Depends on: global-invariants/ephemeral-game-credentials, global-invariants/centaur-state-boundary.
 
-A per-team game credential SHALL be scoped to exactly one Centaur Team and one game, and SHALL be non-transferable: Convex SHALL resolve every credential-authenticated call to the credential's own team and enforce that scope on every access. The credential SHALL grant exactly two capabilities — writes to that team's own Centaur-subsystem state, which holds nothing authoritative for game outcome, and requests for that team's bot access tokens — and nothing else.
+A per-team game credential SHALL be scoped to exactly one Centaur Team and one game, and SHALL be non-transferable: the platform SHALL resolve every credential-authenticated call to the credential's own team and enforce that scope on every access. The credential SHALL grant exactly two capabilities — writes to that team's own Centaur-subsystem state, which holds nothing authoritative for game outcome, and requests for that team's bot access tokens — and nothing else.
 
 #### Scenario: #not-valid-for-another-team
 - **WHEN** a credential issued for team A is used in any attempt to read or write team B's state, or to obtain tokens for team B
@@ -221,20 +353,20 @@ A per-team game credential SHALL be scoped to exactly one Centaur Team and one g
 
 #### Scenario: #not-valid-for-another-game
 - **WHEN** a credential issued for one game is presented in the context of any other game
-- **THEN** it is refused
+- **THEN** it is refused — a server operating a team in two games at once holds two credentials, and neither reaches the other's game
 
 #### Scenario: #grants-nothing-beyond-the-two
 - **WHEN** a credential holder attempts anything beyond its team's Centaur-subsystem writes and bot-token requests — platform mutations, other teams' reads, roster changes
 - **THEN** the request is refused
 
 ### Requirement: identity-and-authorization/live-game-issuance
-Depends on: global-invariants/ephemeral-game-credentials#game-credentials-expire.
+Depends on: global-invariants/ephemeral-game-credentials.
 
-Convex SHALL honour game credentials and issue game access tokens only for a game currently being played. Every credential-authenticated request and every token issuance SHALL re-check the game's status at request time, refusing when the game is finished or not yet started — regardless of the credential's or token request's remaining cryptographic validity. The re-check is what actually delivers the end-of-game expiry a game credential's ephemerality promises.
+The platform SHALL issue game access tokens only for a game currently being played, re-checking the game's status at the moment of the request and refusing when the game is finished or not yet started — regardless of the requester's remaining credential validity.
 
 #### Scenario: #credential-dead-at-finish
-- **WHEN** a game finishes well inside a game credential's two-hour lifetime
-- **THEN** the credential's very next request is refused — liveness is re-checked per request; expiry is only a backstop against leaks
+- **WHEN** a game finishes while its participants' credentials and tokens remain cryptographically valid
+- **THEN** the very next request under them is refused; liveness is re-checked per request, and remaining cryptographic validity confers nothing toward a game that has ended
 
 #### Scenario: #no-tokens-for-finished-games
 - **WHEN** any access token — operator, bot, spectator, or coach — is requested for a finished game
@@ -243,7 +375,7 @@ Convex SHALL honour game credentials and issue game access tokens only for a gam
 ### Requirement: identity-and-authorization/roster-snapshot-binding
 Depends on: global-invariants/game-instance-hermeticity#seeded-once-never-refreshed.
 
-Authorization for a game SHALL be bound by the roster snapshot taken when the game is initialized: which humans may obtain operator tokens, and which Centaur Team identities participate. The snapshot SHALL bind for the entire game — the in-game authorization state of a running game SHALL never change in response to later mutations of team records, on the instance side because it is seeded once and never refreshed and on the Convex side because issuance is answered from the snapshot.
+Authorization for a game SHALL be bound by the roster snapshot taken when the game is initialized: which humans may obtain operator tokens, and which Centaur Team identities participate. The snapshot SHALL bind for the entire game — the in-game authorization state of a running game SHALL never change in response to later mutations of team records, on the instance side because it is seeded once and never refreshed and on the platform side because issuance is answered from the snapshot.
 
 #### Scenario: #running-game-reads-only-the-snapshot
 - **WHEN** any team-record change occurs while one of the team's games is running
@@ -274,25 +406,22 @@ The platform SHALL support an **admin** role as a platform-level designation on 
 - **WHEN** a user's admin designation changes
 - **THEN** admin affordances appear or disappear from the user record's current value without requiring a page reload or fresh session
 
-### Requirement: identity-and-authorization/signing-independence
-Convex SHALL maintain separate signing material for each credential type it issues — per-team game credentials and game access tokens — such that compromise of one type's signing material never compromises the other.
-
-#### Scenario: #compromise-contained
-- **WHEN** the signing material behind one credential type is compromised
-- **THEN** credentials of the other type remain trustworthy — the attacker cannot parlay forging one type into forging the other, and unifying the two signing paths under shared material is a violation of this requirement, not a simplification
-
 ### Requirement: identity-and-authorization/client-credential-custody
 Depends on: global-invariants/credential-confinement, global-invariants/state-confined-to-owning-runtime#clients-restart-clean.
 
-Clients SHALL hold received credentials — access tokens, game credentials, session tokens — in memory only, for the duration of use, and SHALL never store, display, or transmit credential plaintext, with the sole exception of a credential's designed one-time creation-time disclosure to its creator. Memory-only custody is what keeps a credential's delivery to its intended holder final and is the credential's case of a client that survives no session boundary.
+Clients SHALL hold received credentials — access tokens, game credentials — in memory only, for the duration of use, and SHALL never store, display, or transmit credential plaintext. The single exception is the session credential established at sign-in, which SHALL be held in a cookie the browser withholds from page scripts and sends only to the platform's own origin, over HTTPS: it is the one credential a page reload recovers, and every other credential is obtained afresh under it rather than persisted. A signing key a party generates for itself is the one thing it persists, and it never leaves the party that generated it.
 
 #### Scenario: #memory-only
 - **WHEN** the web application holds a game access token
 - **THEN** the token lives in component memory only — never persisted to browser storage, never placed in a URL — and a page reload re-obtains a token rather than recovering one
 
-#### Scenario: #single-disclosure-only
-- **WHEN** a credential's design includes a one-time creation-time disclosure
-- **THEN** the plaintext is shown exactly once, at creation, and is never displayable or recoverable afterwards
+#### Scenario: #the-session-is-the-only-thing-a-reload-recovers
+- **WHEN** a signed-in user reloads the page
+- **THEN** the session cookie is the only credential that survived, and no page script could read it while it did; every access token and game credential the page needs is obtained again under it
+
+#### Scenario: #own-key-is-the-only-thing-at-rest
+- **WHEN** a Snek Centaur Server restarts
+- **THEN** what it recovers is its own signing key, from which it earns fresh credentials; no credential it was issued survived the restart
 
 ### Requirement: identity-and-authorization/mutation-authorization
 Depends on: global-invariants/authenticated-unambiguous-identity#no-anonymous-mutation-path, global-invariants/one-contract-many-surfaces#every-surface-hits-the-same-invariants.

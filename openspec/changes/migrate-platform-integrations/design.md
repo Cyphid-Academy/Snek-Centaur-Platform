@@ -3,8 +3,9 @@
 ## Context
 
 This change mints the train's last capability from 22 legacy ids across
-modules 03 (API-key authorization), 05 (HTTP API and webhooks — the core),
-and 08 (the key-management view), plus one resolved review decision.
+modules 03 (programmatic authorization), 05 (the integration surface and
+webhooks — the core), and 08 (the management view), plus one resolved review
+decision.
 Legacy text was binding throughout; the assignment matrix supplied routing
 only. The decisions below record how the substance compressed to 10
 requirements at intent grain, where the boundaries fall, and the
@@ -16,9 +17,12 @@ reconciliations performed.
 
 The capability declares **Depends on: identity-and-authorization,
 game-lifecycle, global-invariants**. It cites six requirements of the two
-story capabilities: `platform-admin-role` (the role keys are gated on and
-the observational bound keys must respect), `client-credential-custody` (key
-plaintext hygiene), `mutation-authorization` (parity is enforced at the
+story capabilities: `platform-admin-role` (the role registration is gated
+on and the observational bound a client must respect),
+`service-principal-assertions` and `trusted-issuer-registry` (how a client
+proves who it is and where its ceiling is recorded),
+`peer-capability-ceiling` and `principal-kind-gating` (what no client's
+ceiling may reach), `mutation-authorization` (parity is enforced at the
 same server-side contracts), `launch-orchestration` (the API's game-start
 is the same launch), `status-authority` (the transitions webhooks fire
 on), and `teardown-after-persistence` (what delivery must never delay).
@@ -45,37 +49,36 @@ stories would not.
 - **`first-party-parity` → `global-invariants/one-contract-many-surfaces`.**
   gi is the only home of the cross-surface no-private-bypass rule, and
   parity's soundness is exactly that rule: without it, "the same
-  invariants as the equivalent first-party action" is satisfiable by an
-  HTTP layer that re-implements the validations itself and drifts — which
-  is the failure parity exists to prevent. The requirement therefore no
-  longer restates "subject to the same invariants, enforced server-side";
+  invariants as the equivalent first-party action" is satisfiable by a
+  proxy layer that re-implements the validations itself and drifts — which
+  is the failure parity exists to prevent, and which this capability now
+  forecloses structurally by having no proxy at all. The requirement
+  therefore no longer restates "subject to the same invariants, enforced
+  server-side";
   it cites the owner (alongside `mutation-authorization`, the
   server-side-at-the-function-contract rule for platform state) and keeps
-  only what is local to a key-authorized surface: a key's global scope
-  widens *who* may act, never *what* the rules permit, and the API
+  only what is local to this surface: a client's ceiling widens *who* may
+  act, never *what* the rules permit, and the API
   dispatches against the one contract rather than a copy of it. Both
   scenarios stay: `#no-privileged-bypass` and `#two-doors-one-rulebook`
   pin the two drift directions on this surface concretely, which gi's
   general scenario does not.
-- **`admin-api-keys` → `global-invariants/authenticated-unambiguous-identity`.**
-  A key is welded to its creator's user record rather than being a
-  principal in its own right, and that shape is available only because gi
-  closes the kinds of identity platform code may meet at human, Centaur
-  Team, and derived game participant. Relax that closure and "API client"
-  becomes an admissible fourth kind — at which point binding a key to its
-  creator, and re-checking the creator's role on every request, read as
-  arbitrary self-restraint rather than the only shape the platform's
-  identity model affords.
-- **`key-capability-bounds` → `global-invariants/credential-confinement`.**
-  The bound "no key issues game access tokens" depends on a per-team game
-  credential having exactly one delivery channel: an API able to mint one
-  would be a second channel, so relaxing the confinement rule dissolves
-  the prohibition's point. The requirement's other exclusion — Centaur
-  state — holds `global-invariants/team-private-centaur-state` at this
-  surface: a globally scoped bearer credential reading a team's
-  configuration or recorded deliberation would be precisely a surface
-  widening a team-private read scope, which is why the exclusion is
-  absolute here rather than deferred to the admin role's read breadth.
+- **`integration-clients` → `global-invariants/authenticated-unambiguous-identity`.**
+  A client is a principal of its own kind, and platform code must be able
+  to tell that kind from a human's without guesswork — which is exactly
+  what the closed enumeration guarantees. Relax the closure and the
+  principal-kind checks that bar a client from authentication
+  configuration lose the thing they test against.
+- **`client-capability-bounds` → `global-invariants/credential-confinement`.**
+  The bound "no client issues access tokens for a human or a team" depends
+  on an issued credential reaching only the party whose own authentication
+  earned it: an API able to mint one for someone else is precisely the
+  second channel that rule forecloses. The requirement's other exclusion —
+  Centaur state — holds `global-invariants/team-private-centaur-state` at
+  this surface: a client reading a team's configuration or recorded
+  deliberation would be a surface widening a team-private read scope,
+  which is why the exclusion is absolute here rather than deferred to the
+  admin role's read breadth.
 - **`non-blocking-delivery` → `global-invariants/game-instance-hermeticity`.**
   Webhook delivery is Convex's act, never a game instance's: the
   instance's only sanctioned egress is its game-end notification with the
@@ -85,57 +88,74 @@ stories would not.
   deliverable rather than aspirational — with hermeticity relaxed,
   delivery could legitimately be implemented as instance egress and an
   unresponsive endpoint would sit directly between game end and teardown.
-- **Declined.** `key-custody` → `credential-confinement` was weighed and
-  not taken: the ground key-custody depends on is the *designed one-time
-  disclosure*, owned by `identity-and-authorization/client-credential-custody`,
-  which it cites; gi's confinement rule governs channels this requirement
-  forecloses outright rather than depends on. Its "never stored,
-  displayed, or transmitted afterwards" clause was a verbatim restatement
-  of that cited peer and is gone; what remains local is digest-only
-  storage, the per-key record's contents, and the copy affordance.
+- **Declined.** `client-registration` → `credential-confinement` was
+  weighed and not taken: the registration record holds nothing secret, so
+  the rule governing how credentials reach their holders has nothing to
+  bear on it. What remains local is the record's contents and the fact
+  that all of them are presentable.
 
-### Admin-only keys, reconciled with the observational admin
+### Clients act as themselves, not as the admin who registered them
 
-The legacy corpus's own resolved review position (admin-only
-simplification) is carried as binding: keys are created only by admins,
-bound to their creator, global in scope. Two reconciliations follow:
+The legacy resolved position — creation is admin-only, no per-key scope
+machinery — is carried, but what a client *is* changes. In the legacy
+design a key was welded to its creator's user record and carried that
+person's authority, re-checked on every request. Now a client is a principal of its
+own with a recorded ceiling, and the registrar's standing is irrelevant to
+it afterwards.
 
-- **The module 08 view text predates the resolution** ("accessible to
-  every authenticated user", scope "bounded by the user's own current
-  authorization scope"). Re-authored admin-only: the management surface
-  is an admin affordance, and the scope communication becomes "the key
-  carries its creator's global admin authority and dies with it" —
-  which is the same user-facing lesson the legacy id taught (losing the
-  role reduces what your keys can do), specialized to the admin-only
-  model.
-- **"Full platform access equivalent to the admin role" is not restated
-  verbatim.** The identity capability's admin role extends *read* access
-  only and is strictly observational over game and Centaur state; an
-  unqualified "equivalent to admin" scope for a *mutating* API would
-  contradict it. The spec instead states the scope as: global (never
-  scoped down), with the API's mutating reach being exactly its
-  management surface, and gameplay/Centaur state unreachable
-  (`key-capability-bounds`). This preserves the legacy intent — no
-  per-key scope machinery, no partial keys — without minting a mutation
-  power the admin role was deliberately denied. *If reversed* (scope
-  stated as "everything an admin is plus mutations"), the admin role's
-  safety story — grantable casually because it cannot act — silently
-  breaks the moment a role-holder mints a key.
+Two things drove that. A bearer key is a shared secret, which the platform
+no longer has anywhere; and a credential that carries a person's authority
+while being held by a service is precisely the arrangement that makes a
+compromised integration indistinguishable from a compromised admin.
+*Reversed* — the client acting as its registrar — the surface reacquires
+both properties at once, and its blast radius is whatever the most senior
+admin who ever registered something can do.
 
-### Endpoint families are scope, not endpoint specs
+The property the old model bought — a key stops working when its creator
+loses admin — is not lost so much as made unnecessary: there is no
+inherited authority to revoke, only a registration to revoke, and
+`client-management#revocation-immediate` covers that directly. What
+revocation cannot do instantly is invalidate a credential already issued;
+that is the standing trade of self-contained credentials, and the reason
+their lifetime is minutes.
 
-Per the author decision, `http-api-surface` enumerates the families that
-must be administrable programmatically (teams, rooms, game read/start,
-webhooks, keys) and nothing about URL shapes, payload schemas, HTTP
-methods, or status codes — the legacy design's `/api/v1/*` tables are
-mechanism, owned by code. The scenario `#the-families-are-a-floor` pins
-the behavioural substance: an integrator never needs the first-party app
-for these families. *If reversed* (endpoint shapes in spec), every
-routing or schema refactor reads falsely as a behavioural spec change,
-and the spec competes with code as the source of truth for the wire
-format. The key-generation format (prefix, encoding) and digest algorithm
-are likewise mechanism behind `key-custody`'s "form from which the key
-material cannot be recovered".
+`client-capability-bounds` keeps the exclusions that are absolute — identity
+creation, authentication configuration, issuing credentials for a human or a
+team, Centaur state, anything inside a game — and grants everything else on
+the ceiling. Team administration is squarely in the grantable set: the
+motivating integration is an academy system that owns its classes, and it
+must be able to create teams, name their captains and coaches, and follow
+enrolment as it changes. The exclusions bound what a compromised client could
+do irreversibly to authority the platform itself is the source of truth for —
+who a person is, what may authenticate as them — and a system administering
+the teams it created is not that. *Reversed* — team administration excluded
+too — the roster automation goes back to a human clicking through the
+first-party application, which is the friction this surface exists to
+remove.
+
+### The function surface is the API; there is no proxy to keep in step
+
+The legacy design had an HTTP API in front of the platform: a route per
+affordance, its own authorization, its own request and response shapes. That
+is deleted rather than re-specified. A registered client calls the platform's
+public functions directly, and a capability names the functions it reaches —
+which is the same alignment the capability registry already requires of every
+public function, so the integration surface costs nothing extra to define and
+nothing at all to keep current.
+
+What the proxy was buying was a place to put authorization for external
+callers. Credentials carrying a structured capability claim put that
+somewhere better: at the function, where the first-party caller's
+authorization already lives. What the proxy was costing was a second surface
+that has to be extended for every new affordance, that can lag, and whose
+validations can drift from the ones behind them. *Reversed* — the proxy kept
+— every automatable behaviour is built twice, and `first-party-parity` goes
+from structurally true to a discipline someone has to maintain.
+
+`functions-are-the-api` therefore enumerates families as a *floor* on what
+must be reachable (teams, rooms, game read and start, webhooks, client
+registrations) and says nothing about shapes: there are no wire shapes of
+this capability's own left to specify.
 
 ### Parity as the API's one rulebook clause
 
@@ -174,8 +194,8 @@ At-least-once with exponential backoff and a bounded budget is carried
 from legacy verbatim (the concrete retry schedule — counts, intervals —
 is mechanism). The subscriber-side contract that makes at-least-once
 usable is the dedup identifier, minted below. Auto-revocation of
-subscriptions with their owning key lives in `webhook-subscriptions` so
-the key lifecycle and the subscription lifecycle cannot be implemented
+subscriptions with their owning client lives in `webhook-subscriptions` so
+the registration lifecycle and the subscription lifecycle cannot be implemented
 apart; delivery's independence from the lifecycle lives in its own
 requirement (`non-blocking-delivery`) because it constrains the
 *lifecycle* side of the seam — it is the one clause a game-lifecycle
@@ -190,22 +210,21 @@ an external dependency inside the platform's own terminal handling.
 Each routed lead was judged: does a design decision's quality depend on
 an invariant a future implementer could silently violate?
 
-1. **Key validation re-checks the creator is still an admin on every
-   request** — *minted*: `admin-api-keys` text +
-   `#creator-no-longer-admin`. The admin-only model is safe *only
-   because* a key's authority tracks its creator's current standing; an
-   implementer who checks admin-ness at creation time only leaves orphan
-   keys with global scope after a role removal. What breaks if violated:
-   removing an admin no longer removes their automation's power — the
-   exact event revocation-by-role-loss exists for.
+1. **A client's reach never tracks its registrar's standing** —
+   *minted*: `integration-clients` text +
+   `#a-client-is-not-its-registrar`. The natural implementation of an
+   admin-created client is to let it act as its creator, which quietly
+   turns every integration into a standing impersonation of a person. What
+   breaks if violated: a compromised integration is indistinguishable from
+   a compromised admin, and its reach grows whenever its registrar's does.
 2. **Revocation immediate; revoked records retained for audit** —
-   *minted*: `key-management#revocation-immediate` and
-   `#revoked-records-retained`. Hash-only storage means a leaked key can
-   only be killed, never rotated in place — so the kill must be
-   instantaneous; and because plaintext is unrecoverable, the record is
-   the only evidence a key ever existed. What breaks: a validity cache
-   gives a leaked key a live window after its revocation; deleting
-   records destroys the audit trail of what could have acted as admin,
+   *minted*: `client-management#revocation-immediate` and
+   `#revoked-records-retained`. Revocation is the only lever there is —
+   there is no secret to rotate — so it must bite on the next request
+   rather than at the end of some cache interval, and the record is the
+   only evidence a client ever existed. What breaks: a validity cache
+   extends a revoked client's reach past the decision to end it; deleting
+   records destroys the audit trail of what could act, with what ceiling,
    and when.
 3. **Dedup-identifier stability** — *minted*:
    `at-least-once-delivery#same-id-on-every-redelivery`, stated as
@@ -219,7 +238,7 @@ an invariant a future implementer could silently violate?
    processed-but-timed-out delivery fires the subscriber's automation
    twice.
 
-No further lead survived judgment: retry schedules, key formats, digest
+No further lead survived judgment: retry schedules, registration shapes,
 algorithms, scheduler decoupling, and endpoint/payload shapes are
 mechanism whose violation is caught by the minted behavioural
 requirements above.
