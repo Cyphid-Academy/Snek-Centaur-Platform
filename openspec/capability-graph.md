@@ -49,8 +49,8 @@ flowchart TD
   turn-pacing["turn-pacing"]:::open
   visual-tester["visual-tester"]
 
-  accounts-and-profiles -->|7| global-invariants
-  accounts-and-profiles -->|3| identity-and-authorization
+  accounts-and-profiles -->|9| global-invariants
+  accounts-and-profiles -->|2| identity-and-authorization
   accounts-and-profiles -->|2| replay-and-audit
   accounts-and-profiles -->|5| team-management
   bot-configuration -->|8| bot-framework
@@ -67,11 +67,11 @@ flowchart TD
   game-configuration -->|10| global-invariants
   game-lifecycle -->|7| game-configuration
   game-lifecycle -->|2| game-engine
-  game-lifecycle -->|22| global-invariants
+  game-lifecycle -->|24| global-invariants
   game-lifecycle -->|2| identity-and-authorization
   game-lifecycle -->|3| team-server-management
   global-invariants -->|2| game-engine
-  identity-and-authorization -->|26| global-invariants
+  identity-and-authorization -->|35| global-invariants
   live-game-observation -->|5| game-engine
   live-game-observation -->|7| global-invariants
   live-game-observation -->|4| identity-and-authorization
@@ -80,8 +80,8 @@ flowchart TD
   operator-control -->|1| identity-and-authorization
   operator-control -->|2| live-game-observation
   platform-integrations -->|3| game-lifecycle
-  platform-integrations -->|4| global-invariants
-  platform-integrations -->|4| identity-and-authorization
+  platform-integrations -->|3| global-invariants
+  platform-integrations -->|10| identity-and-authorization
   replay-and-audit -->|4| decision-transparency
   replay-and-audit -->|5| game-engine
   replay-and-audit -->|3| game-lifecycle
@@ -96,8 +96,8 @@ flowchart TD
   rooms-and-matchmaking -->|2| team-management
   team-management -->|7| global-invariants
   team-management -->|3| identity-and-authorization
-  team-server-management -->|7| global-invariants
-  team-server-management -->|3| identity-and-authorization
+  team-server-management -->|13| global-invariants
+  team-server-management -->|1| identity-and-authorization
   team-server-management -->|4| team-management
   test-sequences -->|4| game-engine
   tournaments -->|7| game-lifecycle
