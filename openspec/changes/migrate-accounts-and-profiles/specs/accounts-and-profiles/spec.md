@@ -17,39 +17,39 @@ Depends on: global-invariants, identity-and-authorization, team-management, repl
 ## ADDED Requirements
 
 ### Requirement: accounts-and-profiles/user-record
-Depends on: identity-and-authorization/email-as-canonical-identity, global-invariants/transactional-invariant-enforcement.
+Depends on: identity-and-authorization/linked-provider-credentials, global-invariants/durable-identity-references, global-invariants/transactional-invariant-enforcement.
 
-The platform SHALL maintain a persistent user record for every human identity that has successfully signed in, created at the moment of the identity's first successful sign-in and capturing at minimum the identity's canonical email address, a display name, and the timestamp of that first authentication. A record's canonical email SHALL never change: the record follows its identity for life, and a provider-side email change is a new identity with its own fresh record.
+The platform SHALL maintain a persistent user record for every human who has successfully signed in, created at the moment of that first sign-in and capturing at minimum a platform-assigned identifier, a display name, a contact email address, and the timestamp of that first authentication. The identifier SHALL be the record's identity and SHALL never change; every other field, the email included, is an attribute of the person that they or an administrator may change without the record becoming a different one.
 
 #### Scenario: #created-at-first-sign-in
 - **WHEN** a human completes their first successful sign-in
-- **THEN** their user record exists from that moment, and every later sign-in under the same canonical email resolves to that same record — never a second record for the same identity, and never two when two first sign-ins race
+- **THEN** their user record exists from that moment, and every later sign-in through its linkage resolves to that same record — never a second record for the same person, and never two when two first sign-ins race
 
-#### Scenario: #record-follows-the-fork
-- **WHEN** a provider-side email change forks the identity
-- **THEN** the original record stays intact under its original canonical email with all of its state, and the new identity receives a fresh record — no existing record is ever rewritten to a new email
+#### Scenario: #attributes-change-the-identifier-does-not
+- **WHEN** a person's contact email or display name changes
+- **THEN** the record is updated in place and everything attributed to it stays attached; nothing forks, and no other record comes into existence
 
 ### Requirement: accounts-and-profiles/user-record-permanence
 Depends on: global-invariants/single-convex-deployment.
 
-A user record SHALL never be deleted — including when the human loses access to the underlying Google account — and two user records SHALL never be merged, whatever provider-side history relates them. Historical attribution remains anchored to the record that earned it, forever, in the one persistent home that holds every account.
+A user record SHALL never be deleted — including when the human loses access to the provider account behind it — and two user records SHALL never be merged, whatever relates them. Historical attribution remains anchored to the record that earned it, forever, in the one persistent home that holds every account.
 
 #### Scenario: #lost-account-deletes-nothing
-- **WHEN** a human permanently loses access to the Google account behind their identity
-- **THEN** the user record and everything attributed to it persist unchanged; no cleanup, expiry, or deletion path removes it
+- **WHEN** a human permanently loses access to the provider account behind their identity
+- **THEN** the user record and everything attributed to it persist unchanged; no cleanup, expiry, or deletion path removes it — and nothing re-links a different provider account to it either, so the history stays intact and attributable while the person themselves signs in no more
 
 #### Scenario: #never-merged
-- **WHEN** two user records exist with distinct canonical emails — even ones known to belong to the same human across an email fork
+- **WHEN** two user records exist that are known to belong to the same human
 - **THEN** they remain distinct records; history stays on the record that earned it, and no operation folds one record's memberships, attributions, or statistics into the other
 
 ### Requirement: accounts-and-profiles/email-confidentiality
-Depends on: identity-and-authorization/email-as-canonical-identity, global-invariants/security-enforced-outside-the-library#customised-app-changes-no-invariant.
+Depends on: global-invariants/durable-identity-references, global-invariants/security-enforced-outside-the-library#customised-app-changes-no-invariant.
 
-A user's canonical email address SHALL be stored solely for identity matching and administrative operations, and SHALL never be exposed on any user-facing surface — no query, view, or exported record shape serving user-facing consumers may include any user's email, whether on profiles (the user's own included), member listings, game-history attribution, leaderboards, or anywhere else. Record shapes serving user-facing consumers SHALL omit the email at the data-contract boundary itself, and per-game participation snapshots SHALL store no email at all: display names resolve through email-free paths.
+A user's email address SHALL be held solely for contacting them, for inviting a person who has no account yet, and for administrative operations, and SHALL never be exposed on any user-facing surface — no query, view, or exported record shape serving user-facing consumers may include any user's email, whether on profiles (the user's own included), member listings, game-history attribution, leaderboards, or anywhere else. Record shapes serving user-facing consumers SHALL omit the email at the data-contract boundary itself, and per-game participation snapshots SHALL store no email at all: display names resolve through email-free paths.
 
 #### Scenario: #hidden-even-from-self-view
 - **WHEN** a user views their own profile or any other surface presenting their own account
-- **THEN** their email address does not appear — the email is owned by the sign-in provider, and any change to it is made there, so the platform has no reason to display it back even to its owner
+- **THEN** their email address does not appear on it; the address is contact information and administrative state, and the surfaces this capability defines have no reason to render it — to its owner least of all, who did not need telling
 
 #### Scenario: #omitted-at-the-boundary
 - **WHEN** the record shape returned by any user-facing query or subscription is examined
@@ -102,7 +102,7 @@ Depends on: replay-and-audit/team-game-history.
 The application SHALL provide a Player Profile view for every user record: the user reaches their own profile through the application's global navigation, and other users' profiles are linked at minimum from team member listings and game histories. The profile SHALL display at minimum the user's display name, their current and historical Centaur Team memberships, and a chronological game history — each game's room, date, participating teams, result, and final scores — listing every game in which the user was a member of a participating team at the time of the game (per its participating-team snapshot) or is a current member of such a team: the same historical-or-current rule that scopes a team's own history listing.
 
 #### Scenario: #every-user-has-one
-- **WHEN** any user record exists — freshly created, long inactive, or belonging to a forked-away identity
+- **WHEN** any user record exists — freshly created, long inactive, or holding no active credential at all
 - **THEN** a Player Profile view exists for it
 
 #### Scenario: #history-outlives-membership
@@ -112,7 +112,7 @@ The application SHALL provide a Player Profile view for every user record: the u
 ### Requirement: accounts-and-profiles/team-profile
 Depends on: team-management/team-record, team-management/team-management-view.
 
-The application SHALL provide a Team Profile view for every Centaur Team — archived teams included — displaying at minimum the team's name, display colour, current captain, current member roster, its server nomination with the latest recorded health status, and a chronological game history of every game the team has participated in, with each game's room, date, opposing teams, result, and final scores. The view SHALL expose no mutating affordance over team state: mutation belongs solely to the management surface.
+The application SHALL provide a Team Profile view for every Centaur Team — archived teams included — displaying at minimum the team's name, display colour, current captain, current member roster, the server domain it is homed on with the latest recorded health status, and a chronological game history of every game the team has participated in, with each game's room, date, opposing teams, result, and final scores. The view SHALL expose no mutating affordance over team state: mutation belongs solely to the management surface.
 
 #### Scenario: #full-history-for-any-viewer
 - **WHEN** an authenticated user with no relationship to a team opens its profile
