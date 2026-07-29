@@ -105,9 +105,9 @@ flowchart TD
   replay-and-audit -->|5| live-game-observation
   replay-and-audit -->|4| operator-control
   replay-and-audit -->|2| turn-pacing
-  rooms-and-matchmaking -->|3| game-configuration
-  rooms-and-matchmaking -->|7| game-lifecycle
-  rooms-and-matchmaking -->|8| global-invariants
+  rooms-and-matchmaking -->|6| game-configuration
+  rooms-and-matchmaking -->|11| game-lifecycle
+  rooms-and-matchmaking -->|9| global-invariants
   rooms-and-matchmaking -->|2| team-management
   team-management -->|7| global-invariants
   team-management -->|3| identity-and-authorization
