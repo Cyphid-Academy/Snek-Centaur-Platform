@@ -7,9 +7,7 @@ import {
   type Agent,
   CellType,
   type CentaurTeamId,
-  DEFAULT_GAME_CONFIG,
   Direction,
-  type GameConfig,
   type GameState,
   type Item,
   type SnakeId,
@@ -20,6 +18,7 @@ import {
   itemsByCell,
   resolveTurn,
 } from "@cyphid/snek-engine";
+import { DEFAULT_GAME_CONFIG, type GameConfig } from "@cyphid/snek-game-configuration";
 import type { TestSequence, TurnRecord } from "./codec.js";
 
 export const TEAM_RED = "team-red" as CentaurTeamId;
@@ -130,6 +129,6 @@ export function recordSequence(
 export function defaultConfig(): GameConfig {
   return {
     ...DEFAULT_GAME_CONFIG,
-    orchestration: { ...DEFAULT_GAME_CONFIG.orchestration, boardSize: 9, snakesPerTeam: 1 },
+    generation: { ...DEFAULT_GAME_CONFIG.generation, boardSize: 9, snakesPerTeam: 1 },
   };
 }

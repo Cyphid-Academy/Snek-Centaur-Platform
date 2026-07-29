@@ -1,10 +1,9 @@
+import { CellType, ItemType, cellIndex, isInner, parityOf, rngFromSeed } from "@cyphid/snek-engine";
 import { describe, expect, it } from "vitest";
-import { cellIndex, isInner, parityOf } from "./board.js";
 import { generateBoardAndInitialState, placeInitialFood } from "./boardgen.js";
-import { rngFromSeed } from "./rng.js";
+import type { GameConfig } from "./config.js";
+import { DEFAULT_GAME_CONFIG } from "./config.js";
 import { seed, tid } from "./testkit.js";
-import type { GameConfig } from "./types.js";
-import { CellType, DEFAULT_GAME_CONFIG, ItemType } from "./types.js";
 
 function cfg(overrides: {
   boardSize?: number;
@@ -15,7 +14,7 @@ function cfg(overrides: {
   maxHealth?: number;
 }): GameConfig {
   return {
-    orchestration: {
+    generation: {
       boardSize: overrides.boardSize ?? 15,
       snakesPerTeam: overrides.snakesPerTeam ?? 2,
       hazardPercentage: overrides.hazardPercentage ?? 0,

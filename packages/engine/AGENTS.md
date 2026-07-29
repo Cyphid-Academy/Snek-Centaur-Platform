@@ -11,7 +11,6 @@ This package is `@cyphid/snek-engine`: the shared game engine. It is the single 
 
 - Domain type vocabulary: `Direction`, `CellType`, `SnakeState`, `Board`, `ItemState`, `PotionEffect`, `TurnEvent`, etc.
 - `resolveTurn(state, stagedMoves, turnNumber, turnSeed, config)` — the authoritative staged turn resolver.
-- `generateBoardAndInitialState(config, teams, gameSeed)` — the board generation pipeline.
 - `isValidMove(state, snakeId, direction): boolean` — pre-validation helper.
 - Any pure game-logic utilities (spawning algorithms, collision math, seeded randomness, chess-timer arithmetic).
 
@@ -20,6 +19,7 @@ This package is `@cyphid/snek-engine`: the shared game engine. It is the single 
 - Any SpacetimeDB, Convex, or Svelte imports.
 - Any I/O or network code.
 - Any persistence layer references.
+- **Board generation, and any parameter that only feeds it.** The engine is handed a fully specified board and plays it: its dimensions state its size and its placed snakes state each team's count. A parameter no turn's resolution reads is a parameter the engine must not declare (`game-engine/configuration-parameters#no-parameter-the-engine-does-not-read`). Generation lives in `@cyphid/snek-game-configuration`.
 
 ## Implementation notes
 
@@ -48,11 +48,14 @@ Structural invariants to preserve (01 §2.8, resolved 01-REVIEW-022):
   - `commit.ts` — the sole writer; fixed-order combinator + event derivation
   - `spawn.ts`, `win.ts`, `events.ts`, `work.ts`, `index.ts` (orchestrator)
 - `src/resolve.ts` — stable re-export shim for the resolver
-- `src/boardgen.ts` — board generation as named stage functions with bounded retry
-- `src/rng.ts`, `src/perlin.ts` — randomness and fertile-tile noise
+- `src/rng.ts` — seeded randomness
 - `src/clock.ts` — chess-timer arithmetic
 - `src/effects.ts` — derived effect values + family helpers + EFFECT_DURATION_TURNS
 - `src/testkit.ts` — shared test builders and the doResolve harness (not exported)
+- `src/arbitraries.ts` — fast-check arbitraries, including the drawn initial
+  states that replaced generated boards as the fuzzer's input (deliberately
+  harsher than generation: interior walls, ringless boards, mixed head
+  parities, snakes on hazards, near-empty clocks)
 - `src/resolve-properties.test.ts` — rule-order-shuffle property test and the
   multi-turn invariant fuzzer; run these after ANY resolver change
 - `DECISIONS.md` — implementation decision log

@@ -9,7 +9,7 @@
 // scratch in place (debounced); a middle edit or the first edit of a loaded
 // fixture forks a new scratch (copying 0..k) and leaves the original on disk.
 // The only explicit save is promoting a snapshot to a git-tracked fixture.
-import { DEFAULT_GAME_CONFIG } from "@cyphid/snek-engine";
+import { DEFAULT_RUNTIME_CONFIG } from "@cyphid/snek-engine";
 import type {
   Cell,
   CentaurTeamId,
@@ -21,6 +21,7 @@ import type {
   StagedMove,
   UserId,
 } from "@cyphid/snek-engine";
+import { DEFAULT_GENERATION_CONFIG } from "@cyphid/snek-game-configuration";
 import { addSnake } from "./editor.js";
 import type { EditResult } from "./editor.js";
 import { blankState, boardgenState } from "./factory.js";
@@ -123,7 +124,7 @@ function seedTag(seed: Uint8Array): string {
 
 export class TesterStore {
   session = $state.raw<Session>(
-    createSession(blankState(11), DEFAULT_GAME_CONFIG.runtime, randomSeed()),
+    createSession(blankState(11), DEFAULT_RUNTIME_CONFIG, randomSeed()),
   );
   /** History position being displayed: 0 = initial state .. turns.length. */
   cursor = $state(0);
@@ -151,14 +152,14 @@ export class TesterStore {
   /** Id of the currently loaded/bound sequence, synced to the URL (null when
    *  the session is brand-new and not yet materialized). */
   selectedId = $state<string | null>(null);
-  /** Board-generation parameters for "New from boardgen" (orchestration
-   *  config; not part of a sequence — the generated board is the state). */
+  /** Board-generation parameters for "New from boardgen" (game-configuration's
+   *  half; not part of a sequence — the generated board is the state). */
   boardgen = $state<BoardgenSettings>({
-    boardSize: DEFAULT_GAME_CONFIG.orchestration.boardSize,
-    snakesPerTeam: DEFAULT_GAME_CONFIG.orchestration.snakesPerTeam,
-    hazardPercentage: DEFAULT_GAME_CONFIG.orchestration.hazardPercentage,
-    density: DEFAULT_GAME_CONFIG.orchestration.fertileGround.density,
-    clustering: DEFAULT_GAME_CONFIG.orchestration.fertileGround.clustering,
+    boardSize: DEFAULT_GENERATION_CONFIG.boardSize,
+    snakesPerTeam: DEFAULT_GENERATION_CONFIG.snakesPerTeam,
+    hazardPercentage: DEFAULT_GENERATION_CONFIG.hazardPercentage,
+    density: DEFAULT_GENERATION_CONFIG.fertileGround.density,
+    clustering: DEFAULT_GENERATION_CONFIG.fertileGround.clustering,
   });
   /** Configured teams (name + colour); the Add Snake tool assigns from here. */
   teams = $state<TeamConfig[]>(defaultTeams());
@@ -421,7 +422,7 @@ export class TesterStore {
   newBlank(boardSize = 11): void {
     this.#flushPending();
     const seed = randomSeed();
-    this.session = createSession(blankState(boardSize), DEFAULT_GAME_CONFIG.runtime, seed);
+    this.session = createSession(blankState(boardSize), DEFAULT_RUNTIME_CONFIG, seed);
     this.#resetBinding(`scratch ${seedTag(seed)}`);
     this.cursor = 0;
     this.staged = new Map();
@@ -434,13 +435,13 @@ export class TesterStore {
     const seed = randomSeed();
     const s = this.boardgen;
     const config = {
-      orchestration: {
+      generation: {
         boardSize: s.boardSize,
         snakesPerTeam: s.snakesPerTeam,
         hazardPercentage: s.hazardPercentage,
         fertileGround: { density: s.density, clustering: s.clustering },
       },
-      runtime: DEFAULT_GAME_CONFIG.runtime,
+      runtime: DEFAULT_RUNTIME_CONFIG,
     };
     const result = boardgenState(seed, config);
     if (!result.ok) {
@@ -450,7 +451,7 @@ export class TesterStore {
       return;
     }
     this.#flushPending();
-    this.session = createSession(result.state, DEFAULT_GAME_CONFIG.runtime, seed);
+    this.session = createSession(result.state, DEFAULT_RUNTIME_CONFIG, seed);
     this.#resetBinding(`boardgen ${seedTag(seed)}`);
     this.cursor = 0;
     this.staged = new Map();

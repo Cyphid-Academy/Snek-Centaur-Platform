@@ -18,7 +18,7 @@ import type {
   TurnNumber,
   UserId,
 } from "./types.js";
-import { CellType, DEFAULT_GAME_CONFIG, ItemType } from "./types.js";
+import { CellType, DEFAULT_RUNTIME_CONFIG, ItemType } from "./types.js";
 
 export const sid = (n: number): SnakeId => n as SnakeId;
 export const tid = (s: string): CentaurTeamId => s as CentaurTeamId;
@@ -103,7 +103,7 @@ export function effect(
 
 /** maxTurns 0 (no limit) and zero spawn rates so tests control every item. */
 export const QUIET_CONFIG: GameRuntimeConfig = {
-  ...DEFAULT_GAME_CONFIG.runtime,
+  ...DEFAULT_RUNTIME_CONFIG,
   maxTurns: 0,
   foodSpawnRate: 0,
   invulnPotionSpawnRate: 0,

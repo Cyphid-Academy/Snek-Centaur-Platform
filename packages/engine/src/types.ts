@@ -148,18 +148,10 @@ export interface CentaurTeamClockState {
   readonly declaredTurnOver: boolean;
 }
 
-// spec: game-engine/configuration-parameters..070 (ranges enforced by user-facing surfaces, not here)
-export interface GameOrchestrationConfig {
-  readonly boardSize: number; // positive integer, game-engine/board-geometry, game-engine/configuration-parameters
-  readonly snakesPerTeam: number; // 1-10, default 5, game-engine/initial-snakes, game-engine/configuration-parameters
-  readonly hazardPercentage: number; // 0-30, default 0, game-engine/hazards, game-engine/configuration-parameters
-  readonly fertileGround: {
-    readonly density: number; // 0-90, default 30, game-engine/configuration-parameters (0 = disabled)
-    readonly clustering: number; // 1-20, default 10, game-engine/configuration-parameters
-  };
-}
-
-// spec: game-engine/configuration-parameters..068, game-engine/configuration-parameters..077
+// The engine's own configuration vocabulary: exactly the parameters a turn's
+// resolution reads. The board-generation parameters are NOT here — no
+// resolution reads one, and they are game-configuration's own declaration.
+// spec: game-engine/configuration-parameters#no-parameter-the-engine-does-not-read
 export interface GameRuntimeConfig {
   readonly maxHealth: number; // 1-500, default 100, game-engine/configuration-parameters
   readonly maxTurns: number; // 0 (disabled) or 1-1000, default 100, game-engine/configuration-parameters
@@ -175,34 +167,21 @@ export interface GameRuntimeConfig {
   };
 }
 
-export interface GameConfig {
-  readonly orchestration: GameOrchestrationConfig;
-  readonly runtime: GameRuntimeConfig;
-}
-
-// Canonical defaults from game-engine/configuration-parameters..077. Exported as a convenience for
-// downstream configuration surfaces and tests; not part of the minimal
-// module-01 contract.
-export const DEFAULT_GAME_CONFIG: GameConfig = {
-  orchestration: {
-    boardSize: 21,
-    snakesPerTeam: 5,
-    hazardPercentage: 0,
-    fertileGround: { density: 30, clustering: 10 },
-  },
-  runtime: {
-    maxHealth: 100,
-    maxTurns: 100,
-    hazardDamage: 15,
-    foodSpawnRate: 0.5,
-    invulnPotionSpawnRate: 0.15,
-    invisPotionSpawnRate: 0.1,
-    clock: {
-      initialBudgetMs: 60000,
-      budgetIncrementMs: 500,
-      firstTurnTimeMs: 60000,
-      maxTurnTimeMs: 10000,
-    },
+// Canonical gameplay defaults. spec: game-engine/configuration-parameters.
+// The board-generation half's defaults are game-configuration's own
+// declaration and live with the generator they drive.
+export const DEFAULT_RUNTIME_CONFIG: GameRuntimeConfig = {
+  maxHealth: 100,
+  maxTurns: 100,
+  hazardDamage: 15,
+  foodSpawnRate: 0.5,
+  invulnPotionSpawnRate: 0.15,
+  invisPotionSpawnRate: 0.1,
+  clock: {
+    initialBudgetMs: 60000,
+    budgetIncrementMs: 500,
+    firstTurnTimeMs: 60000,
+    maxTurnTimeMs: 10000,
   },
 };
 
@@ -304,17 +283,6 @@ export type TurnEvent =
       readonly family: EffectFamily;
       readonly reason: "collector_disruption" | "expiry" | "replaced";
     };
-
-// spec: game-engine/board-generation-retry (Section 3.6)
-export interface BoardGenerationFailure {
-  readonly code: "HAZARD_CONNECTIVITY" | "TERRITORY_PARITY_SHORTAGE" | "INITIAL_FOOD_SHORTAGE";
-  readonly attemptsUsed: 4;
-  readonly details: {
-    readonly centaurTeamId?: CentaurTeamId;
-    readonly innerCellCount: number;
-    readonly eligibleCellCount?: number;
-  };
-}
 
 // spec: Section 3.8
 export interface StagedMove {

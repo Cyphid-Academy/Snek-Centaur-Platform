@@ -267,7 +267,7 @@ const eventSchema = z.discriminatedUnion("kind", [
 ]);
 
 const configSchema = z.strictObject({
-  orchestration: z.strictObject({
+  generation: z.strictObject({
     boardSize: z.number().int().positive(),
     snakesPerTeam: z.number().int().positive(),
     hazardPercentage: z.number(),

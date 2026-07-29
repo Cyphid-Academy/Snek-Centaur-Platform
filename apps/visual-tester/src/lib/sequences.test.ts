@@ -1,5 +1,6 @@
 // Session ⇄ Test Sequence bridge and run-mode presentation helpers.
-import { DEFAULT_GAME_CONFIG, Direction } from "@cyphid/snek-engine";
+import { Direction } from "@cyphid/snek-engine";
+import { DEFAULT_GAME_CONFIG } from "@cyphid/snek-game-configuration";
 import { describe, expect, it } from "vitest";
 import { groupDifferences, implicatedCellIndices, sectionOf } from "./run.js";
 import { sequenceToSession, sessionToSequence } from "./sequences.js";

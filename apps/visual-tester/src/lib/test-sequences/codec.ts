@@ -19,7 +19,6 @@ import type {
   Direction,
   EffectFamily,
   EffectState,
-  GameConfig,
   GameOutcome,
   GameState,
   Item,
@@ -34,6 +33,7 @@ import type {
   TurnNumber,
   UserId,
 } from "@cyphid/snek-engine";
+import type { GameConfig } from "@cyphid/snek-game-configuration";
 
 // ---------------------------------------------------------------------------
 // Document types (the JSON side of the codec)
@@ -326,13 +326,13 @@ function encodeClock(c: CentaurTeamClockState): ClockJson {
 // not mean "order-stable" — canonicalisation must own the key order.
 export function encodeGameConfig(config: GameConfig): GameConfig {
   return {
-    orchestration: {
-      boardSize: config.orchestration.boardSize,
-      snakesPerTeam: config.orchestration.snakesPerTeam,
-      hazardPercentage: config.orchestration.hazardPercentage,
+    generation: {
+      boardSize: config.generation.boardSize,
+      snakesPerTeam: config.generation.snakesPerTeam,
+      hazardPercentage: config.generation.hazardPercentage,
       fertileGround: {
-        density: config.orchestration.fertileGround.density,
-        clustering: config.orchestration.fertileGround.clustering,
+        density: config.generation.fertileGround.density,
+        clustering: config.generation.fertileGround.clustering,
       },
     },
     runtime: {

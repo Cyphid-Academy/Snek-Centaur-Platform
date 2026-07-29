@@ -6,9 +6,13 @@
 //
 // The export list mirrors the engine's exported-interface surface. Everything
 // else in this package is module-internal detail.
+//
+// The engine is handed a fully specified board and plays it: nothing here
+// builds one. Board generation and the parameters that drive it are
+// @cyphid/snek-game-configuration's (spec: game-configuration/generation-parameters).
 
 // 01 §3.1 — enums, branded ids, Agent, derived effect values
-export { CellType, DEFAULT_GAME_CONFIG, Direction, ItemType } from "./types.js";
+export { CellType, DEFAULT_RUNTIME_CONFIG, Direction, ItemType } from "./types.js";
 export type {
   Agent,
   Cell,
@@ -38,21 +42,23 @@ export type {
   PotionEffect,
   SnakeState,
 } from "./types.js";
-export { itemAt, itemsByCell } from "./items.js";
+// SETUP_SPAWN_TURN is the boundary at which an item placed before the first
+// turn exists — the engine's vocabulary, read by whoever places one.
+// spec: game-engine/item-identity
+export { SETUP_SPAWN_TURN, itemAt, itemsByCell } from "./items.js";
 
-// 01 §3.3 — game configuration
-export type { GameConfig, GameOrchestrationConfig, GameRuntimeConfig } from "./types.js";
+// 01 §3.3 — the engine's own configuration vocabulary
+export type { GameRuntimeConfig } from "./types.js";
 
-// 01 §3.4 / §3.5 / §3.6 — outcome, events, board-generation failure
-export type { BoardGenerationFailure, DeathCause, GameOutcome, TurnEvent } from "./types.js";
+// 01 §3.4 / §3.5 — outcome, events
+export type { DeathCause, GameOutcome, TurnEvent } from "./types.js";
 
 // 01 §3.7 — randomness primitives
 export { rngFromSeed, subSeed } from "./rng.js";
 export type { Rng } from "./rng.js";
 
-// 01 §3.8 — entry points
-export { generateBoardAndInitialState } from "./boardgen.js";
-export type { GeneratedInitialState, TeamRegistration } from "./boardgen.js";
+// 01 §3.8 — entry point. Board generation is NOT one: the engine is handed a
+// fully specified board and plays it (see @cyphid/snek-game-configuration).
 export { resolveTurn } from "./resolve.js";
 export type { TurnResolution } from "./resolve.js";
 export type { StagedMove } from "./types.js";

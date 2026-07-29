@@ -2,8 +2,9 @@
 // visual-tester/team-configuration — the store's rendering-support getters:
 // one-turn dead-snake ghosting and team-name resolution. Driven against a
 // no-op client so autosave never touches the network.
-import { DEFAULT_GAME_CONFIG, Direction } from "@cyphid/snek-engine";
+import { Direction } from "@cyphid/snek-engine";
 import type { CentaurTeamId, SnakeId } from "@cyphid/snek-engine";
+import { DEFAULT_GAME_CONFIG } from "@cyphid/snek-game-configuration";
 import { describe, expect, it } from "vitest";
 import { addSnake, appendBodyCell, removeSnake } from "./editor.js";
 import type { SequenceClient, SequenceListEntry, SequenceTier } from "./sequenceClient.js";

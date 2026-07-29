@@ -10,13 +10,13 @@ would leave the corpus describing a package layout that does not exist.
 
 ## 1. The capability's runtime-agnostic core
 
-- [ ] 1.1 Mint `packages/game-configuration/` (`@cyphid/snek-game-configuration`), depending on the engine — the direction the capability graph already runs. Join the root `typecheck` / `lint` / `test` projects
-- [ ] 1.2 Move the generator and its noise field out of `packages/engine/`, unchanged in behaviour: `boardgen.ts`, `perlin.ts` and their three suites, with every citation retargeted from `game-engine/*` to the `game-configuration/*` identifiers that now own them (`game-configuration/hazards`, `fertile-ground`, `starting-placement`, `initial-snakes`, `initial-food`, `board-generation-retry`, `generated-board-shape`)
-- [ ] 1.3 Declare the configuration vocabulary as **exactly two disjoint halves**: this capability's generation parameters (`BoardGenerationConfig`, named for what they are rather than "orchestration"), and the engine's gameplay half by reference — `DEFAULT_GAME_CONFIG` reads `DEFAULT_RUNTIME_CONFIG` rather than restating a single bound (`game-configuration/closed-parameter-vocabulary`, `parameter-bounds-sourcing`)
-- [ ] 1.4 `BoardGenerationFailure` moves with the generator: generation stays all-or-nothing, and an infeasible parameter set yields the failure rather than a board of the generator's own choosing (`game-configuration/board-generation-retry`, `infeasibility-surfaced`)
-- [ ] 1.5 Point every consumer at the one shared generator — the visual tester's session factory is the only caller today, and it calls rather than copies (`global-invariants/one-shared-generation`)
-- [ ] 1.6 Replace the engine property suite's dependency on generation with drawn initial states, deliberately harsher than a generated board, and record why in `packages/engine/src/arbitraries.ts` (a green run over a *narrower* generator is not evidence)
-- [ ] 1.7 An integration test that generates a board and plays it to a deterministic conclusion through the engine — the seam this package exists to hold
+- [x] 1.1 Mint `packages/game-configuration/` (`@cyphid/snek-game-configuration`), depending on the engine — the direction the capability graph already runs. Join the root `typecheck` / `lint` / `test` projects
+- [x] 1.2 Move the generator and its noise field out of `packages/engine/`, unchanged in behaviour: `boardgen.ts`, `perlin.ts` and their three suites, with every citation retargeted from `game-engine/*` to the `game-configuration/*` identifiers that now own them (`game-configuration/hazards`, `fertile-ground`, `starting-placement`, `initial-snakes`, `initial-food`, `board-generation-retry`, `generated-board-shape`)
+- [x] 1.3 Declare the configuration vocabulary as **exactly two disjoint halves**: this capability's generation parameters (`BoardGenerationConfig`, named for what they are rather than "orchestration"), and the engine's gameplay half by reference — `DEFAULT_GAME_CONFIG` reads `DEFAULT_RUNTIME_CONFIG` rather than restating a single bound (`game-configuration/closed-parameter-vocabulary`, `parameter-bounds-sourcing`)
+- [x] 1.4 `BoardGenerationFailure` moves with the generator: generation stays all-or-nothing, and an infeasible parameter set yields the failure rather than a board of the generator's own choosing (`game-configuration/board-generation-retry`, `infeasibility-surfaced`)
+- [x] 1.5 Point every consumer at the one shared generator — the visual tester's session factory is the only caller today, and it calls rather than copies (`global-invariants/one-shared-generation`)
+- [x] 1.6 Replace the engine property suite's dependency on generation with drawn initial states, deliberately harsher than a generated board, and record why in `packages/engine/src/arbitraries.ts` (a green run over a *narrower* generator is not evidence)
+- [x] 1.7 An integration test that generates a board and plays it to a deterministic conclusion through the engine — the seam this package exists to hold
 
 ## 2. The platform half
 

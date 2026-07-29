@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@cyphid/snek-engine": "workspace:*",
+    "@cyphid/snek-game-configuration": "workspace:*",
     "clipper2-ts": "2.0.1-18",
     "zod": "^4.4.3"
   },

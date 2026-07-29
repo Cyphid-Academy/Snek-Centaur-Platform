@@ -44,7 +44,8 @@ Full architectural detail is in `legacy-spec-archive/spec/02-platform-architectu
 
 | Path | npm name | What it is | Spec module(s) |
 |------|----------|------------|----------------|
-| `packages/engine/` | `@cyphid/snek-engine` | Shared game engine — domain types, `resolveTurn`, collision detection, move validation. Consumed by all runtimes. | 01, 02 |
+| `packages/engine/` | `@cyphid/snek-engine` | Shared game engine — domain types, the two turn-resolution entry points (`advanceTurn`, `imagineMoves`), collision detection, chess-timer arithmetic, move validation. Handed a board; never builds one. Consumed by all runtimes. | 01, 02 |
+| `packages/game-configuration/` | `@cyphid/snek-game-configuration` | The configuration vocabulary a game is shaped with, and the platform's one board generator. Depends on the engine. | 01, 05 |
 | `packages/stdb/` | `@cyphid/snek-stdb` | SpacetimeDB TypeScript module — reducers, RLS, schema, chess timer. | 04 |
 | `packages/convex-snek-platform/` | `@cyphid/convex-snek-platform` | Convex Component for platform-wide state (users, rooms, games, replays, webhooks). | 03, 05 |
 | `packages/convex-centaur-state/` | `@cyphid/convex-centaur-state` | Convex Component for Centaur subsystem (snake config, drives, action log). | 06 |
@@ -118,6 +119,7 @@ So: **tier 1 over every commit, tier 2 once at the tip.** For a ten-commit branc
 | `pnpm format` | `biome check --write .` |
 | `pnpm test` | Builds the packages, then `vitest run` across the workspace |
 | `pnpm smoke` | Boots each app and checks it serves — the only check that runs the app |
+| `pnpm coverage` | Branch coverage over the engine's resolver |
 | `pnpm build:packages` | `tsc -b` over the workspace packages (their gitignored `dist/`) |
 | `pnpm dev` | Starts the Centaur Server reference app |
 | `pnpm build` | Builds all packages |

@@ -50,7 +50,7 @@ board-generation *code* out of the engine package, landing the half of
 ## 6. Configuration and the generation boundary
 
 - [ ] 6.1 `maxGameDurationMs` joins the gameplay configuration subtree with its range, default and disable sentinel, declared once so every surface and every runtime reads one declaration (`game-engine/configuration-parameters`)
-- [ ] 6.2 Retarget the citations on board generation — `boardgen.ts`, `perlin.ts`, the generation configuration type, the generation-failure type and their suites — onto the `game-configuration/*` identifiers that now own them, and move the code with them (§12)
+- [x] 6.2 Retarget the citations on board generation — `boardgen.ts`, `perlin.ts`, the generation configuration type, the generation-failure type and their suites — onto the `game-configuration/*` identifiers that now own them, and move the code with them (§12)
 
 ## 7. The engine's suites
 
@@ -94,11 +94,11 @@ behind would have meant `boardgen.ts` citing `game-configuration/*` from inside
 the engine package — correct (a capability does not own a section of code), odd
 to read, and a standing invitation to "fix" the citations back.
 
-- [ ] 12.1 `boardgen.ts`, `perlin.ts` and their three suites move to
+- [x] 12.1 `boardgen.ts`, `perlin.ts` and their three suites move to
   `@cyphid/snek-game-configuration`, behaviour untouched, along with the
   generation configuration type and `BoardGenerationFailure`. Planned as
   §1 of that change, which this section discharges
-- [ ] 12.2 The blocker was `resolve-properties.test.ts`, which built every
+- [x] 12.2 The blocker was `resolve-properties.test.ts`, which built every
   initial state by *calling* generation across the full documented parameter
   ranges — impossible once generation lives downstream. It now draws states
   from arbitraries **deliberately harsher than generation**: interior walls,
@@ -106,11 +106,11 @@ to read, and a standing invitation to "fix" the citations back.
   stacked or walked, mixed head parities, snakes on hazards, clocks near
   exhaustion. A fuzzer for the rules of a turn should explore harder than the
   thing that produces the game's boards, not re-run it
-- [ ] 12.3 What the replacement deliberately keeps: contiguous, disjoint snake
+- [x] 12.3 What the replacement deliberately keeps: contiguous, disjoint snake
   bodies and items off alive bodies. Those are shapes the movement rules
   themselves can only produce, so a state violating them is not a harder case,
   it is a different game
-- [ ] 12.4 The risk being managed is that the loss would be **silent**: a
+- [x] 12.4 The risk being managed is that the loss would be **silent**: a
   narrower source of states passes the entire suite, and a green run is not
   evidence. So the branch coverage of `packages/engine/src/resolve/` was
   recorded on both sides of the swap alone, before the contract revision could

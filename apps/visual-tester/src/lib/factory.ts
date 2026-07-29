@@ -1,17 +1,9 @@
 // New-session factories: a blank hand-authoring canvas and the
 // boardgen-seeded convenience (design D9 — a UI affordance, not spec surface).
-import {
-  DEFAULT_GAME_CONFIG,
-  generateBoardAndInitialState,
-  initialClock,
-  itemsByCell,
-} from "@cyphid/snek-engine";
-import type {
-  BoardGenerationFailure,
-  CentaurTeamId,
-  GameConfig,
-  GameState,
-} from "@cyphid/snek-engine";
+import { initialClock, itemsByCell } from "@cyphid/snek-engine";
+import type { CentaurTeamId, GameState } from "@cyphid/snek-engine";
+import { DEFAULT_GAME_CONFIG, generateBoardAndInitialState } from "@cyphid/snek-game-configuration";
+import type { BoardGenerationFailure, GameConfig } from "@cyphid/snek-game-configuration";
 import { blankBoardCells } from "./editor.js";
 
 export function blankState(boardSize: number): GameState {
@@ -36,6 +28,10 @@ export function boardgenState(
   gameSeed: Uint8Array,
   config: GameConfig = DEFAULT_GAME_CONFIG,
 ): BoardgenResult {
+  // The platform's ONE shared generator, called rather than reimplemented: a
+  // second generator would agree on the day it was written and diverge
+  // silently afterwards, in the tool whose whole purpose is catching drift.
+  // spec: global-invariants/one-shared-generation
   const generated = generateBoardAndInitialState(config, DEFAULT_TEAMS, gameSeed);
   if ("code" in generated) return { ok: false, failure: generated };
   const state: GameState = {

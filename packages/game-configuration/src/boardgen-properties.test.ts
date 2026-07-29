@@ -1,3 +1,5 @@
+import type { Board, Cell } from "@cyphid/snek-engine";
+import { CellType, ItemType, cellIndex, isInner, parityOf } from "@cyphid/snek-engine";
 // Board-generation property tests: configurations drawn from the FULL
 // documented parameter ranges (see arbitraries.ts) with 2-6 teams and
 // arbitrary 32-byte seeds; every successful generation must hold the
@@ -11,10 +13,7 @@
 import * as fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { gameConfigArb, gameSeedArb, teamsArb } from "./arbitraries.js";
-import { cellIndex, isInner, parityOf } from "./board.js";
 import { generateBoardAndInitialState } from "./boardgen.js";
-import type { Board, Cell } from "./types.js";
-import { CellType, ItemType } from "./types.js";
 
 function innerCellsOf(board: Board): Cell[] {
   const cells: Cell[] = [];
@@ -58,7 +57,7 @@ describe("board generation properties", () => {
   it("every successful generation holds the structural guarantees", () => {
     fc.assert(
       fc.property(gameConfigArb, teamsArb, gameSeedArb, (config, teams, gameSeed) => {
-        const { boardSize, snakesPerTeam, hazardPercentage } = config.orchestration;
+        const { boardSize, snakesPerTeam, hazardPercentage } = config.generation;
         const generated = generateBoardAndInitialState(config, teams, gameSeed);
 
         if ("code" in generated) {

@@ -14,7 +14,7 @@ import type {
   StagedMove,
   TurnNumber,
 } from "@cyphid/snek-engine";
-import { DEFAULT_GAME_CONFIG } from "@cyphid/snek-engine";
+import { DEFAULT_GAME_CONFIG } from "@cyphid/snek-game-configuration";
 import { describe, expect, it } from "vitest";
 import {
   addSnake,
