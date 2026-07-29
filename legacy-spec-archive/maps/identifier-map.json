@@ -3706,7 +3706,7 @@
       ],
       "scenarios": [
         "game-configuration/closed-parameter-vocabulary#out-of-range-rejected-regardless-of-client",
-        "game-configuration/engine-schema-fidelity#drift-fails-the-build"
+        "global-invariants/engine-mirrors-are-guarded#drift-fails-the-build"
       ],
       "note": "parameter table itself lives in game-engine/configuration-parameters; this capability owns the surface's closed vocabulary and authoritative rejection"
     },
@@ -8628,13 +8628,18 @@
       "carriedBy": [
         {
           "change": "migrate-game-configuration"
+        },
+        {
+          "target": "global-invariants/one-shared-generation",
+          "change": "mint-platform-persistence"
         }
       ],
       "scenarios": [
         "game-configuration/board-preview#clients-render-never-generate",
-        "game-configuration/generation-parameter-boundary#the-runtime-never-generates"
+        "game-configuration/generation-parameter-boundary#the-runtime-never-generates",
+        "global-invariants/one-shared-generation#preview-and-launch-are-one-implementation"
       ],
-      "note": "single generation authority: platform-side shared engine only — no client-side and no runtime-side board generation"
+      "note": "single generation authority: platform-side shared engine only — no client-side and no runtime-side board generation. The two placement halves are game-configuration's; the single-authority half became a global invariant when board generation left the engine and one-shared-engine stopped covering it."
     },
     "08-REVIEW-015": {
       "carriedBy": [
