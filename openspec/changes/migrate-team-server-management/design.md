@@ -126,8 +126,11 @@ happens, and because the Server trust boundary leaves nothing else to scope
 it to: what a third party's server exposes is outside anything the platform
 observes or governs.
 
-Endpoint paths, request shapes and capability names stay in code, under the
-ordinary rule. Both ends of this contract are Cyphid's — a Cyphid system
+The administration API is deliberately *not* part of the fork-facing surface
+— the platform never calls it, so it falls under the "everything else on the
+domain belongs to the fork" half of that rule — and its endpoint paths,
+request shapes and capability names stay in code, under the ordinary rule.
+Both ends of this contract are Cyphid's — a Cyphid system
 administering a Cyphid-operated server — so they move together and there is
 no cross-implementation deadline to pin. One note for whoever implements it:
 the API is HTTP, because a Centaur Server runs no Convex deployment of its
@@ -219,18 +222,109 @@ than pretending it away, and what bounds it is that the worst a compromised
 server can do for a team it operates is play badly, since team
 administration is barred to it by principal kind.
 
-### Endpoint paths stay in code; their stability is spec'd
+### One well-known family: the three platform-facing paths, named in the spec
 
-The literal well-known paths are mechanism — but their *existence and
-stability* is exactly what a fork must be able to rely on. That is authored
-as the forkable-reference-app requirement's enumerated compatibility surface
-(the published key document, the healthcheck contract, the published library
-interfaces), with #surface-changes-are-platform-changes making drift a
-deliberate breaking change. Reversed — paths hard-coded in spec — every
-wire-level rename becomes a spec change; reversed the other way — no
-stability requirement — the fork story collapses, because "full source
-ownership" is only safe while the platform-facing surface underneath it
-holds still.
+The three paths the platform touches on a server's own domain are settled
+together and fixed platform-wide (author-delegated; the legacy corpus left
+the healthcheck undecided three ways — module 02's Design said `GET
+/healthcheck`, module 05's said `GET /.well-known/snek-healthcheck`, and the
+scaffold served `/healthcheck`):
+
+| Endpoint | Path |
+|---|---|
+| Game-start invitation | `POST /.well-known/snek-game-invite` |
+| Published verification material | `GET /.well-known/snek-server-keys` |
+| Healthcheck | `GET /.well-known/snek-healthcheck` |
+
+**The norms consulted.** RFC 8615 defines `/.well-known/` and states its
+purpose precisely: a fixed location is sometimes needed for data about an
+origin overall, and doing that in the ordinary path space "has the drawback of
+risking collisions, both with other such designated 'well-known locations' and
+with resources that the origin has created (or wishes to create)" (§1). Its
+one hard obligation is registration — "Applications that wish to mint new
+well-known URIs MUST register them" (§3.1), Expert Review, with a provisional
+tier — and vendor-prefixed suffixes are the registry's normal shape
+(`matrix`, `keybase.txt`, `assetlinks.json`, `acme-challenge`,
+`apple-app-site-association`). On the other side, health endpoints have a
+strong *root-path* convention — `/health`, `/healthz` (the trailing `z` a
+Google habit adopted to make collisions less likely), `/actuator/health` —
+and the expired Internet-Draft "Health Check Response Format for HTTP APIs"
+(`draft-inadarei-api-health-check`, never an RFC, defining
+`application/health+json`) recommends no path but notes that health "is best
+located at a memorable and commonly-used URI, such as 'health' because it will
+help self-discoverability by clients". There is no registered well-known
+suffix for health, liveness, or status.
+
+**Why the convention loses here.** Its stated rationale is
+self-discoverability by clients that must guess. Nothing guesses here: the
+only caller is the platform, which knows the domain because a captain typed
+it, and which reads a contract this capability fixes. What we get in exchange
+for spending the root path is nothing, and what we pay is the collision RFC
+8615 §1 names — a server's origin is a *fork's* origin, whose whole path space
+that fork owns and restructures at will, and `/healthcheck` is exactly the
+short obvious name a fork would want for its own operator-facing status page.
+The prefix converts an implicit claim on a third party's namespace into an
+explicit, conventional reservation, and lets the surface state the rule that
+makes the fork story legible: *everything the platform touches is under
+`/.well-known/snek-`, and nothing else on your domain is ours*.
+
+Consistency decides the rest. These three are one protocol between the
+platform and a server; splitting it across a prefixed family and a bare root
+path would be arbitrary, and the one-directory rule is what makes the
+drift check of #surface-changes-are-platform-changes mechanically simple.
+
+**Why the key document is renamed off `jwks.json`.** The scaffold served
+`/.well-known/jwks.json`. That name is unregistered squatting on a generic
+suffix by everyone who uses it — the standards-track path is a discovery
+document (`openid-configuration`, `oauth-authorization-server`) whose
+`jwks_uri` member may point anywhere — and a Centaur Server publishes no
+discovery document, so the name promises a surface that is not there. Worse,
+the *platform's* own OIDC surface publishes a `jwks.json` too: two documents
+at the same relative path on different domains with different trust
+semantics, which is a conflation waiting to happen in code, in docs, and in a
+fork author's head. `snek-server-keys` cannot collide with an operator's own
+identity provider and cannot be mistaken for the platform's. No tooling is
+lost: a JWK Set is fetched by URL, never by convention.
+
+**Why the literals are in the spec now.** The earlier decision here kept the
+paths as mechanism and spec'd only their stability. That does not survive
+contact with the requirement it was meant to serve: a fork's contract *is* the
+wire surface, and #surface-changes-are-platform-changes cannot make a path
+change "a deliberate breaking change, made and communicated as such" while the
+path is a value no reviewer ever sees in a word-diff. The strings are
+therefore named once, in the enumerated surface, and nowhere else in the
+corpus; the other three requirements say only that their path is fixed
+platform-wide. In code the same three live as one exported constant the
+library and the reference app both read.
+
+**What breaks if reversed.** Reversed to root paths — the platform holds an
+unstated claim on part of every fork's namespace, discovered as a collision by
+whichever forker first wants `/healthcheck`, and a fork author has no single
+place to look for what is ours. Reversed to leaving the healthcheck undecided
+— the surface is enumerated but not fixed, which is the one thing a
+fork-stable surface may not be, and deciding later is a breaking change to
+every fork already deployed. Reversed to keeping the paths out of the spec —
+the breaking-change gate has nothing to gate on.
+
+**Owed.** Provisional IANA registration of `snek-game-invite`,
+`snek-server-keys`, and `snek-healthcheck` under RFC 8615 §3.1, since the
+protocol requires third parties to serve them. Not a blocker for
+implementation; unregistered use is the deviation we are taking knowingly, and
+the `snek-` prefix is what bounds its cost.
+
+### Discovery document instead of three fixed paths — considered, rejected
+
+The RFC-8615-idiomatic shape for a multi-endpoint surface is one well-known
+metadata document that points at the rest (what `openid-configuration` does),
+which would spend a single name on a third party's domain instead of three and
+let a fork put the endpoints wherever it liked. Rejected on cost: the platform
+would have to resolve the descriptor before it could deliver an invitation,
+inside a ten-second window already budgeted for a cold start; the fork surface
+would become "a document plus whatever it points at", which is materially
+harder to conformance-test than three fixed strings; and the discoverability
+it buys has no consumer, because nobody discovers a Centaur Server — the
+platform is handed the domain by a captain. Reversed, the doorbell exchange
+acquires a round trip and a staleness question for no reader.
 
 ### Healthcheck: unauthenticated and minimal, on-demand recording
 
@@ -246,6 +340,11 @@ per the binding module-05 text. Start-time branching on health is excluded
 (lifecycle story). Reversed — an authenticated healthcheck — the platform
 would have to hold a credential for each server it checks, which is a
 credential nothing else in the design needs.
+
+Its path is settled with the other two above, and the two decisions support
+each other: an endpoint that answers anyone, reveals only liveness, and needs
+no discovery is exactly the kind that gains nothing from the memorable root
+name the convention exists to provide.
 
 ### gi-overlap handling
 
@@ -300,7 +399,7 @@ The routed leads, each judged:
 
 - **Key handling must be invisible.** Silently violable by the most natural
   implementation — read a key from an environment variable and document how
-  to generate one. Minted as team-server-management/server-key-publication
+  to generate one. Minted as centaur-server-runtime/server-key-publication
   with #first-boot-needs-no-operator and #ephemeral-storage-self-heals.
 - **The invitation confers nothing.** An endpoint that treats the message
   as authorization — starting a hosting session, or requesting credentials,
@@ -329,7 +428,7 @@ The routed leads, each judged:
 - **One session per tenant in the library we ship.** The natural
   implementation of a multi-tenant client is one ambient client, and it
   undoes the separation invisibly. Minted as
-  team-server-management/library-tenant-separation — bounded by
+  centaur-server-runtime/library-tenant-separation — bounded by
   #still-not-a-guarantee, since the property is the library's and not the
   platform's — with reference-heuristics-on-shared-hosting as the condition
   that keeps it true where we do control the code.
@@ -342,11 +441,18 @@ The routed leads, each judged:
 - **Fork-stable surface enumeration.** The fork model is safe only while the
   platform-facing surface is enumerated and stable — this is the requirement
   the whole forkable story hangs on. Minted as
-  team-server-management/forkable-reference-app
+  centaur-server-runtime/forkable-reference-app
   (#enumerated-surface-is-the-contract, #surface-changes-are-platform-changes).
+- **The platform must reserve nothing outside its prefix.** The natural
+  implementation adds "just one more" root path the next time the platform
+  needs something from a server, and each one silently narrows what a fork may
+  do with its own domain — a cost nobody pays at the moment it is incurred.
+  Minted as forkable-reference-app#the-rest-of-the-path-space-is-the-forks.
 
 Checked, plastic (stay in code with `// design:` references when the
-implementation lands): the literal well-known paths and HTTP verbs, the
-healthcheck call's five-second timeout and 200-is-healthy convention, how
-far ahead of expiry a session is renewed, the whitelist store's format, and
-the administration API's request shapes.
+implementation lands): the healthcheck call's five-second timeout and
+200-is-healthy convention, the healthcheck and key-document response bodies,
+how far ahead of expiry a session is renewed, the whitelist store's format,
+and the administration API's paths and request shapes. **No longer plastic:**
+the three well-known paths and their HTTP verbs, which the enumerated
+compatibility surface now fixes.
