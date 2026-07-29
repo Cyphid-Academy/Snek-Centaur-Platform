@@ -115,9 +115,11 @@ flowchart TD
   turn-pacing -->|5| game-engine
   turn-pacing -->|8| global-invariants
   turn-pacing -->|7| operator-control
+  visual-tester -->|2| game-configuration
   visual-tester -->|8| game-engine
+  visual-tester -->|1| global-invariants
   visual-tester -->|4| test-sequences
 
   class game-engine,global-invariants base;
-  linkStyle 0,4,5,7,10,11,14,17,18,20,21,25,26,27,29,30,34,36,38,40,47,49,51,54,56,61,62,64 stroke-opacity:0.25;
+  linkStyle 0,4,5,7,10,11,14,17,18,20,21,25,26,27,29,30,34,36,38,40,47,49,51,54,56,61,62,65,66 stroke-opacity:0.25;
 ```
