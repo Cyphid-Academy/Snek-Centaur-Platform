@@ -128,9 +128,14 @@ flowchart TD
   team-server-management -->|1| identity-and-authorization
   team-server-management -->|4| team-management
   test-sequences -->|4| game-engine
-  tournaments -->|7| game-lifecycle
-  tournaments -->|6| global-invariants
-  tournaments -->|2| rooms-and-matchmaking
+  tournaments -->|3| accounts-and-profiles
+  tournaments -->|3| game-engine
+  tournaments -->|10| game-lifecycle
+  tournaments -->|9| global-invariants
+  tournaments -->|1| live-game-observation
+  tournaments -->|2| replay-and-audit
+  tournaments -->|5| rooms-and-matchmaking
+  tournaments -->|1| team-management
   tournaments -->|3| team-server-management
   turn-pacing -->|2| bot-configuration
   turn-pacing -->|2| bot-framework
@@ -144,5 +149,5 @@ flowchart TD
   visual-tester -->|4| test-sequences
 
   class game-engine,global-invariants base;
-  linkStyle 0,2,7,8,11,14,16,19,21,24,25,27,28,31,33,37,39,41,43,46,50,52,55,58,65,67,71,74,76,81,83,86,87 stroke-opacity:0.25;
+  linkStyle 0,2,7,8,11,14,16,19,21,24,25,27,28,31,33,37,39,41,43,46,50,52,55,58,65,67,71,74,76,78,86,88,91,92 stroke-opacity:0.25;
 ```
