@@ -83,7 +83,9 @@ Code cites identifiers **inline**, as above. The rule that identifiers never app
 
 **Dev server**: `pnpm dev` starts the Centaur Server reference app on port 5000 via Vite; `pnpm dev:tester` starts the visual tester on 5001. The Replit preview iframe connects to port 5000.
 
-**Apps consume the packages' built `dist/`, not their source.** `packages/*/package.json` export `./dist/index.js`, and `dist/` is gitignored — so a package that has never been built is a *resolve failure* in every consumer, which surfaces as an HTTP 500 from a dev server rather than as a compile error. Every script that needs them (`dev`, `dev:tester`, `test`, `build`, and each app's own `dev`/`test`/`build` via a `pre*` hook) therefore runs `build:packages` first. That script is `tsc -b` over the root project references, so **a new package that typechecks is a new package this builds** — do not replace it with a hand-listed set, which is what silently broke when the second package arrived.
+**Apps consume the packages' built `dist/`, not their source.** `packages/*/package.json` export `./dist/index.js`, and `dist/` is gitignored — so a package that has never been built is a *resolve failure* in every consumer, which surfaces as an HTTP 500 from a dev server rather than as a compile error. Every script that needs them (`dev`, `dev:tester`, `test`, `build`, `smoke`, and each app's own `dev`/`test`/`build` via a `pre*` hook) therefore runs `build:packages` first. That script is `tsc -b` over the root project references, so **a new package that typechecks is a new package this builds** — do not replace it with a hand-listed set, which is what silently broke when the second package arrived.
+
+**Changes under `apps/` must be run, not only tested.** `lint`, `typecheck`, `test` and `spec:check` never start a server; `pnpm smoke` is what does, and it is deliberately shallow (boots, renders, answers its own API). Run it before pushing, and for anything a reviewer would click — a new panel, a changed flow, an edited persisted format — open the app as well.
 
 ## Root Scripts
 
@@ -93,6 +95,7 @@ Code cites identifiers **inline**, as above. The rule that identifiers never app
 | `pnpm lint` | `biome check .` |
 | `pnpm format` | `biome check --write .` |
 | `pnpm test` | Builds the packages, then `vitest run` across the workspace |
+| `pnpm smoke` | Boots each app and checks it serves — the only check that runs the app |
 | `pnpm build:packages` | `tsc -b` over the workspace packages (their gitignored `dist/`) |
 | `pnpm dev` | Starts the Centaur Server reference app |
 | `pnpm build` | Builds all packages |

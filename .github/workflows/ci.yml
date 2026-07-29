@@ -59,6 +59,24 @@ jobs:
       # package this builds.
       - run: pnpm test
 
+  # Boots each app and checks it serves. Nothing else in this workflow starts a
+  # server, which is how a branch reached `main`-adjacent review with every
+  # other job green and `pnpm dev:tester` answering 500 on its first request.
+  smoke:
+    name: smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm smoke
+
   spec-check:
     name: spec-check
     runs-on: ubuntu-latest
