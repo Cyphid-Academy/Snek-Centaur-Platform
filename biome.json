@@ -48,6 +48,8 @@
       "*.tsbuildinfo",
       ".git",
       ".local",
+      ".convex",
+      ".stdb",
       ".agents",
       ".cache",
       ".upm",

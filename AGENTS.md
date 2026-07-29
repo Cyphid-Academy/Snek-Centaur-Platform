@@ -114,7 +114,7 @@ The division follows from what discriminates. On the branch that motivated this,
 
 So: **tier 1 over every commit, tier 2 once at the tip.** For a ten-commit branch that is ~50s rather than ~6 minutes.
 
-**Backend runtimes**: `pnpm dev:stdb` runs a local SpacetimeDB host on port 3000 (natively — no Docker), `pnpm stdb:publish` builds and publishes the game module to it, and `pnpm dev:convex` pushes to your personal Convex dev deployment. Each is one command against a binary on `PATH`; nothing resolves binaries by path. Convex credentials come from your own cloud-environment variables — see `CLAUDE.md` → "Secrets and third-party resources", and `docs/external-setup.md` for the full procedure and the one flag worth knowing (`-p` takes the module project, not the package root).
+**Backend runtimes**: `pnpm dev:stdb` runs a local SpacetimeDB host on port 3000 (natively — no Docker), `pnpm stdb:publish` builds and publishes the game module to it, and `pnpm dev:convex:local` runs a Convex deployment on loopback — no account, no deploy key — while `pnpm dev:convex` pushes to a cloud dev deployment. **Prefer the local one while developing**: the platform can then reach a Centaur Server or a SpacetimeDB host running beside it, which a cloud deployment cannot do without a public tunnel, and `convex env set` against it needs no cloud permission. Each is one command against a binary on `PATH`; nothing resolves binaries by path. Convex credentials come from your own cloud-environment variables — see `CLAUDE.md` → "Secrets and third-party resources", and `docs/external-setup.md` for the full procedure and the one flag worth knowing (`-p` takes the module project, not the package root).
 
 ## Root Scripts
 
@@ -132,7 +132,9 @@ So: **tier 1 over every commit, tier 2 once at the tip.** For a ten-commit branc
 | `pnpm coverage` | Branch coverage over the engine's resolver |
 | `pnpm build:packages` | `tsc -b` over the workspace packages (their gitignored `dist/`) |
 | `pnpm dev` | Starts the Centaur Server reference app |
-| `pnpm dev:convex` | `convex dev` against your personal dev deployment |
+| `pnpm dev:convex` | `convex dev` against your personal cloud dev deployment |
+| `pnpm dev:convex:local` | `convex dev` against a loopback deployment — no Convex account required |
+| `pnpm codegen` | Regenerates the host's and both components' `_generated/` |
 | `pnpm dev:stdb` | Local SpacetimeDB host on 127.0.0.1:3000 |
 | `pnpm stdb:publish` | Builds and publishes the game module as `snek-local` |
 | `pnpm build` | Builds all packages |

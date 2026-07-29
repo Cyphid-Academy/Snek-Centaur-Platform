@@ -38,12 +38,22 @@ for app in centaur-server-reference visual-tester; do
   pnpm --filter "@cyphid/${app}" exec svelte-kit sync >/dev/null 2>&1 || true
 done
 
-# Report whether Convex is provisioned, without ever printing the value. Absence
-# is not an error here: only the code that reaches for a runtime fails on it.
+# Report whether a *cloud* Convex deployment is provisioned, without ever
+# printing the value. Absence is neither an error nor a blocker: `pnpm
+# dev:convex:local` runs a deployment on loopback with no account and no key,
+# and it is the better default anyway — the platform can then reach a Centaur
+# Server or a SpacetimeDB host running beside it, which a cloud deployment
+# cannot.
+#
+# The local backend is deliberately NOT downloaded here. It is a large binary
+# fetched into a fresh clone's working tree, so every session would pay for it
+# whether or not it touches Convex; the command below fetches it on demand.
 if [ -z "${CONVEX_DEPLOY_KEY:-}${CONVEX_DEPLOYMENT:-}${CONVEX_URL:-}" ]; then
-  echo "[session-start] NOTE: no Convex deployment configured — set CONVEX_DEPLOY_KEY" >&2
-  echo "[session-start]       in your personal cloud environment (CLAUDE.md → Secrets)." >&2
+  echo "[session-start] NOTE: no cloud Convex deployment configured. Either run" >&2
+  echo "[session-start]       'pnpm dev:convex:local' (no account needed), or set" >&2
+  echo "[session-start]       CONVEX_DEPLOY_KEY in your personal cloud environment" >&2
+  echo "[session-start]       (CLAUDE.md → Secrets). See docs/external-setup.md." >&2
 fi
 
-echo "[session-start] ready — pnpm lint | test | typecheck | spec:check | dev:convex | dev:stdb"
+echo "[session-start] ready — pnpm lint | test | typecheck | spec:check | dev:convex[:local] | dev:stdb"
 exit 0
