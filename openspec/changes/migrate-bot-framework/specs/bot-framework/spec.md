@@ -171,7 +171,7 @@ Every snake other than the one being evaluated SHALL be foreign — alive teamma
 - **THEN** that teammate has no directions in play for this evaluation and is frozen in place — a staged move outside the interest map adds no explored alternative
 
 ### Requirement: bot-framework/frozen-snake-timestamps
-Depends on: bot-framework/foreign-snake-treatment, global-invariants/one-shared-engine.
+Depends on: global-invariants/one-shared-engine.
 
 Every simulated board the framework produces SHALL carry a per-snake turn timestamp: snakes whose moves the simulation advanced carry the simulated turn; snakes held frozen carry the prior turn. Because every simulated turn is resolved by the one shared engine, which advances every snake, board analysis over simulated boards — whether the framework's own or written by heuristic authors — SHALL compensate for the frozen-in-place fiction by granting each snake a temporal head start proportional to its staleness.
 
@@ -201,7 +201,6 @@ For every owned snake the framework SHALL maintain a **stateMap** — a mapping 
 - **THEN** the entry becomes the minimum over the worlds now active — possibly improving — because the worst case is always relative to what is currently in play
 
 ### Requirement: bot-framework/score-composition
-Depends on: bot-framework/drive-satisfaction.
 
 The weighted score of a simulated world SHALL be the sum, over the snake's portfolio, of each heuristic's weight times its value in that world — a Drive contributing its motivation, or its terminal reward where satisfied; a Preference contributing its value. Whenever rescoring changes any of a snake's stateMap entries, that snake's **dirty flag** SHALL be set — the framework's signal that the snake's decision state has news.
 

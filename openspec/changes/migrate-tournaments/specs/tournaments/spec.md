@@ -69,7 +69,7 @@ A tournament SHALL begin as an ordinary start of its room's current game through
 - **THEN** no successor game is auto-created — the succession that follows ordinary games ends with the tournament
 
 ### Requirement: tournaments/scheduled-start-override
-Depends on: game-lifecycle/launch-gates, team-server-management/server-healthcheck, team-server-management/game-invitations, team-server-management/invitation-acceptance, tournaments/walkover-and-no-contest.
+Depends on: game-lifecycle/launch-gates, team-server-management/server-healthcheck, team-server-management/game-invitations, team-server-management/invitation-acceptance.
 
 Tournament rounds SHALL be schedule-bound starts, exercising the launch gates' override concretely: a round SHALL start at its scheduled moment regardless of any participating team's recorded server health, and a team whose home server declines the round's game invitation or fails to answer within the invitation window SHALL forfeit its seat in that round rather than delaying or aborting the start. Every round SHALL resolve within its own start orchestration — to play among the seated teams, or to a walkover or no-contest — never lingering unstarted awaiting a team's recovery.
 
@@ -103,7 +103,7 @@ A team that forfeits a tournament round SHALL be scored in that round's outcome 
 - **THEN** the forfeiting teams are presented as having forfeited, not merely as having scored 0
 
 ### Requirement: tournaments/walkover-and-no-contest
-Depends on: game-lifecycle/status-authority, global-invariants/one-shared-engine, tournaments/forfeit-scoring, tournaments/round-scheduling.
+Depends on: game-lifecycle/status-authority, global-invariants/one-shared-engine.
 
 When a tournament round's invitation resolution seats exactly one team, the round SHALL resolve as a walkover through the direct not-started-to-finished transition: the sole seated team SHALL be recorded as the round's winner with score 1.0 — par, the exact value the platform's one shared scoring implementation yields for a field of one — and every other team scored as a forfeiter. When zero teams are seated, the round SHALL resolve as a no-contest through the same transition: every participating team a forfeiter with score 0 and no winner recorded. No sentinel outcome value — "winner by default" or otherwise — SHALL exist: walkover and no-contest outcomes use the same numeric score shape as played rounds. Round chaining SHALL proceed from a walkover or no-contest round exactly as from a played one.
 

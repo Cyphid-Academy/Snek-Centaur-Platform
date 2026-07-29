@@ -33,7 +33,7 @@ Depends on: identity-and-authorization, team-management, global-invariants.
 ## ADDED Requirements
 
 ### Requirement: team-server-management/server-nomination
-Depends on: team-management/team-record, team-management/captain-authority, team-management/roster-freeze, team-server-management/nomination-required-to-play, team-server-management/two-sided-consent.
+Depends on: team-management/team-record, team-management/captain-authority, team-management/roster-freeze.
 
 A Centaur Team's captain SHALL name the team's home Snek Centaur Server by recording a server domain on the team record, and MAY change or clear it at any time — captain-only, and frozen while the team is playing. The platform SHALL record the naming as a homing record and SHALL, over an authenticated transport, read the domain's published verification material to confirm it exists and parses. That the domain controls its own key and that the captain associated the domain with the team are two separate facts and SHALL be recorded separately.
 
@@ -121,7 +121,7 @@ The platform SHALL expose a query, scoped to the authenticated server's own doma
 - **THEN** no team becomes operated by it and no state on the platform changes; admission remains the server's separate act
 
 ### Requirement: team-server-management/server-administration-api
-Depends on: global-invariants/issuer-anchored-trust, global-invariants/no-shared-secrets, team-server-management/whitelist-admission.
+Depends on: global-invariants/issuer-anchored-trust, global-invariants/no-shared-secrets.
 
 The reference implementation SHALL expose an administration API through which an external system admits a team to its whitelist and removes one, and SHALL maintain, as configuration local to the deployment, a set of administrative issuers it trusts, each recorded with the ceiling of capabilities it may confer. It SHALL accept an administrative request bearing a credential from one of those issuers carrying capabilities within that ceiling, enforcing exactly what the credential carries; its capability set SHALL be extensible without a protocol change; and both operations SHALL be idempotent so retries in an automation are safe. A Cyphid-operated Reference Centaur Server SHALL be administered this way.
 
@@ -218,7 +218,6 @@ The server library the platform distributes SHALL keep each operated team's cred
 - **THEN** the answer is unchanged by this requirement — the operator sees everything, a server that does not use the library owes nothing, and nothing here may be presented to a team as protection
 
 ### Requirement: team-server-management/reference-heuristics-on-shared-hosting
-Depends on: team-server-management/library-tenant-separation.
 
 The reference implementation SHALL run only the heuristic implementations distributed in the reference codebase whenever it operates more than one team, and any Cyphid-operated Reference Centaur Server SHALL operate on those terms. A team wanting its own Drive or Preference implementations SHALL run its own server, on which it is the only tenant.
 

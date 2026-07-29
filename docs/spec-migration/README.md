@@ -13,6 +13,32 @@
 > preserved as the migration's planning record and is no longer
 > operative.
 
+> **TRAJECTORY OF THE LEGACY SPEC (noted 2026-07-28).** A decision about
+> where the legacy artifact is *heading*, recorded here so it is not
+> rediscovered — **not** a task for this PR.
+>
+> - **What was meant to happen.** The legacy corpus under
+>   `legacy-spec-archive/` *and its identifier map* were to be fully archived
+>   once the migration closed: linting of the legacy↔current correspondence
+>   removed, and the correspondence then left to decay as the current spec
+>   evolves. The PR that was supposed to close the migration did not carry
+>   out that final archival — the map stayed live and linted.
+> - **What happens for the rest of this PR.** That omission is now
+>   deliberate. The legacy spec and its identifier map stay **live and
+>   linted**, because the correspondence is the best available check that the
+>   large refactors in this change train still hold integrity with respect to
+>   the original intent the legacy spec communicated. Accordingly, `carriedBy`
+>   entries may be **freely** adjusted — a home added, retargeted, or split
+>   across two — to keep the record accurate; the map is a live correspondence
+>   check, not a completion ledger to be protected from edits. The rule lives
+>   in `openspec/config.yaml` (`rules:` → `tasks:`), and `pnpm spec:audit`
+>   keeps the invariant that matters: every id keeps its entry and every
+>   target resolves.
+> - **The intended end state.** The legacy spec is to be **deleted in full in
+>   a future PR**, which retires both the burden of maintaining the
+>   correspondence and the entropy of a decaying one. Until that PR, treat the
+>   correspondence as a working instrument.
+
 # Spec Migration Staging
 
 Planning artifacts for the OpenSpec migration under **capability-at-a-time

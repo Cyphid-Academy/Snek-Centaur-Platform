@@ -1420,7 +1420,7 @@
           "change": "mint-global-invariants"
         }
       ],
-      "note": "bot-computed moves enter through the staged-move channel (operator-control/staged-move-log) on the per-team connection"
+      "note": "bot-computed moves enter through the staged-move channel (game-runtime/staged-move-log) on the per-team connection"
     },
     "02-REQ-027": {
       "disposition": "authored",
@@ -3161,7 +3161,7 @@
       "scenarios": [
         "live-game-observation/filtered-views-are-the-only-surface#raw-protocol-client-gets-filtered-data"
       ],
-      "note": "SPLIT, retired here as the matrix's owning row: the no-client-side-filtering / no-cooperating-client half is authored here; the staged-move read policy (own-team-only) is operator-control's substance; attribution-metadata blocking is identity-and-authorization/admission-records-private."
+      "note": "SPLIT, retired here as the matrix's owning row: the no-client-side-filtering / no-cooperating-client half is authored here; the staged-move read policy (own-team-only) is live-game-observation/staged-move-privacy; attribution-metadata blocking is identity-and-authorization/admission-records-private."
     },
     "04-REQ-053": {
       "disposition": "authored",
@@ -5527,7 +5527,7 @@
         "turn-pacing/scheduled-submission#no-news-no-reroll",
         "turn-pacing/scheduled-submission#ack-gates-the-clear"
       ],
-      "note": "The scheduled submission pass on the team's scheduled-submission interval: for each automatic-mode snake with a set dirty flag, sample (bot-framework/softmax-decision), stage (operator-control/staged-move-log), clear the flag — with clearing gated on the staging acknowledgement, constraint-mined from the legacy Design (the snapshot write never clears the flag). The interval's team-tunability is bot-configuration/team-bot-parameters; its live game-scoped value is turn-pacing/live-pacing-parameters."
+      "note": "The scheduled submission pass on the team's scheduled-submission interval: for each automatic-mode snake with a set dirty flag, sample (bot-framework/softmax-decision), stage (game-runtime/staged-move-log), clear the flag — with clearing gated on the staging acknowledgement, constraint-mined from the legacy Design (the snapshot write never clears the flag). The interval's team-tunability is bot-configuration/team-bot-parameters; its live game-scoped value is turn-pacing/live-pacing-parameters."
     },
     "07-REQ-045": {
       "disposition": "authored",
@@ -7015,7 +7015,7 @@
         }
       ],
       "scenarios": ["replay-and-audit/board-level-replay#per-turn-event-log"],
-      "note": "Per-turn event log listing the selected turn's events, matching the closed enumeration (replay-and-audit/turn-event-record)."
+      "note": "Per-turn event log listing the selected turn's events, matching the closed enumeration (game-runtime/turn-event-record)."
     },
     "08-REQ-071": {
       "disposition": "authored",

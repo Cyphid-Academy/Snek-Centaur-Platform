@@ -58,7 +58,7 @@ The platform SHALL give admins the means — through the first-party application
 - **THEN** its record persists with its revocation timestamp and still appears in the management listing — revocation ends the client's reach, never the audit trail of its existence
 
 ### Requirement: platform-integrations/client-capability-bounds
-Depends on: identity-and-authorization/peer-capability-ceiling, identity-and-authorization/principal-kind-gating, platform-integrations/functions-are-the-api, identity-and-authorization/platform-admin-role#no-write-path-into-live-games.
+Depends on: identity-and-authorization/peer-capability-ceiling, identity-and-authorization/principal-kind-gating, identity-and-authorization/platform-admin-role#no-write-path-into-live-games.
 
 No integration client's ceiling SHALL include: creating a human identity, any action that requires an interactive sign-in, changing any authentication configuration, issuing access tokens for a human or a team, or reading or writing Centaur-subsystem state. No client SHALL ever act inside a live game. Everything else the platform exposes is grantable, so a system that is the source of truth for its own teams may administer them.
 
@@ -75,7 +75,7 @@ No integration client's ceiling SHALL include: creating a human identity, any ac
 - **THEN** it is permitted on its recorded ceiling: the exclusions above bound what a compromised client could do irreversibly to the platform's own authority, and a system administering the teams it created is not that
 
 ### Requirement: platform-integrations/functions-are-the-api
-Depends on: game-lifecycle/launch-orchestration, identity-and-authorization/capability-registry, platform-integrations/client-management.
+Depends on: game-lifecycle/launch-orchestration, identity-and-authorization/capability-registry.
 
 The platform SHALL maintain no integration-specific request surface: a registered client calls the platform's own public functions directly, the very ones the first-party application calls, and its capabilities name those functions. The platform's documented programmatic surface — at minimum administering Centaur Teams, rooms, games, webhook subscriptions, and client registrations — SHALL be reachable this way by a client whose ceiling reaches it, with no family of behaviour inside that surface requiring a fallback to the application. Functions outside it accept human identities alone, and their being unreachable programmatically is a declared kind restriction rather than a gap in this surface: what a client may reach grows by a function declaring the service-principal kind, never by widening a ceiling.
 
