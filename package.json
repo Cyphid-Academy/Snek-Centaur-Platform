@@ -16,6 +16,8 @@
     "format": "biome check --write .",
     "test": "pnpm build:packages && vitest run && pnpm --filter @cyphid/visual-tester test",
     "smoke": "pnpm build:packages && node scripts/smoke-app.mjs",
+    "check:commit": "node scripts/check-commit.mjs",
+    "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm smoke && pnpm spec:check",
     "dev": "pnpm build:packages && pnpm --filter @cyphid/centaur-server-reference dev",
     "dev:tester": "pnpm build:packages && pnpm --filter @cyphid/visual-tester dev",
     "build": "pnpm -r build",

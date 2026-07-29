@@ -87,10 +87,32 @@ Code cites identifiers **inline**, as above. The rule that identifiers never app
 
 **Changes under `apps/` must be run, not only tested.** `lint`, `typecheck`, `test` and `spec:check` never start a server; `pnpm smoke` is what does, and it is deliberately shallow (boots, renders, answers its own API). Run it before pushing, and for anything a reviewer would click — a new panel, a changed flow, an edited persisted format — open the app as well.
 
+## Validation at Two Densities
+
+The battery is ~33s. Running all of it at every commit of a phase-structured branch costs minutes and answers the same question ten times, so validation is split by **what each density is for**.
+
+**Tier 1 — `pnpm check:commit`, ~2–7s.** Is *this commit* green standing alone? That is a narrow question with a narrow answer: a boundary defect is a commit referencing something that only exists in a later one, and every such defect is **static**. So tier 1 is `tsc -b`, `biome` over the commit's own files, `spec:citations`, the touched change's own validation and freshness, the graph when a declaration moved, and `vitest related` over the changed sources. It runs against **the commit**, not the working tree — it refuses a dirty tree rather than answering a question you did not ask, since the divergence between the two is the bug it exists to catch.
+
+Scope comes from the diff: any path under `openspec/changes/<name>/` names a change, so a commit carved at a change boundary scopes itself. `--change <name>` (repeatable) adds to that set for a commit that moves responsibilities between changes without touching both folders; a commit touching no change folder skips the four change-scoped gates entirely.
+
+```
+pnpm check:commit                       # the HEAD commit
+pnpm check:commit origin/main..HEAD     # every commit on the branch
+pnpm check:commit --no-tests            # static gates only, ~1.5s
+```
+
+**Tier 2 — `pnpm verify`, the full battery.** Is the *code* right? Lint, typecheck, both suites, `smoke`, `spec:check`. Run it at the tip before pushing. **CI runs the same named scripts** — its jobs are `pnpm verify` decomposed for wall-clock, never their own inlined steps. That is not a style preference: the `test` job once carried an inline build step local `pnpm test` did not have, and it was red for a week while every local check agreed the branch was fine.
+
+The division follows from what discriminates. On the branch that motivated this, four boundary defects were caught — a `tasks.md` citing a scenario renamed in a later commit (twice, one of which forced a commit reorder), a type field added without its construction sites, and a section renumbering. Every one fell to a static gate costing under 1.5s combined. The two test suites — half the battery's wall clock — caught none of them; they caught *semantic* errors, which is tier 2's job.
+
+So: **tier 1 over every commit, tier 2 once at the tip.** For a ten-commit branch that is ~50s rather than ~6 minutes.
+
 ## Root Scripts
 
 | Script | What it does |
 |--------|-------------|
+| `pnpm check:commit` | **Tier 1** — is each commit green standing alone (see above) |
+| `pnpm verify` | **Tier 2** — the full battery, what CI runs |
 | `pnpm typecheck` | `tsc -b` across the workspace |
 | `pnpm lint` | `biome check .` |
 | `pnpm format` | `biome check --write .` |
