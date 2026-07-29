@@ -319,6 +319,32 @@ rules:
       global-invariants/one-shared-engine and
       global-invariants/one-shared-generation, which sit together for this
       reason and not by analogy.'
+    - 'A GLOBAL-INVARIANTS CHANGE GETS ITS OWN CHANGE AND ARCHIVES IN THE PR
+      THAT OPENS IT. Never carry a gi requirement inside a change that has an
+      implementation phase. gi prescribes nothing to build itself, so its
+      change has nothing to wait on — and an UNFOLDED invariant binds only the
+      change carrying it. It never reaches specs/, so it constrains none of the
+      other open changes and nothing that opens while it waits, however
+      emphatically its prose says it binds everything. Precedents:
+      extend-global-invariants, adopt-federated-trust-invariants,
+      adopt-mirror-and-generation-invariants. Enforcement is each dependent''s
+      obligation, verified at THAT dependent''s archive — never a precondition
+      of archiving gi. (Worked example: one-shared-generation was drafted
+      inside a substrate mint that will not archive until a runtime bootstrap
+      is built. Board generation was then extracted into its own package while
+      the invariant forbidding a second generator existed nowhere in the
+      binding corpus, cited five times and enforced by nothing.)'
+    - 'ASK WHAT A PLACEMENT OBLIGES, NOT WHICH CHANGE MAY CARRY IT. A
+      permission test will confirm a placement a purpose test rejects, and it
+      is the easier question to answer, so it is the one you will drift into.
+      "Which open change is allowed to hold this?" has a crisp answer from the
+      rules above — one change per Purpose, this one already amends that
+      capability, the slot is taken. "What does holding this oblige?" is the
+      question that decides correctly. Whenever a placement argument''s load is
+      carried by a rule about what is PERMITTED, stop and re-derive it from
+      what the requirement is FOR. Both known instances of this error are
+      recorded: this one, and the false-cannot readings corrected across the
+      corpus.'
     - 'IDENTIFIERS IN A PLAN ARE LINTED: tasks.md cites the requirements each
       task discharges, and every identifier must resolve against specs/
       overlaid with the open changes (pnpm spec:citations). Cite them inline
