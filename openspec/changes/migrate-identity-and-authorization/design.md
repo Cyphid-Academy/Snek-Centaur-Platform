@@ -239,80 +239,48 @@ into game instances — the token's role is the whole in-game privilege story.
 
 ### Where sign-in happens: one Google client, at the platform's origin
 
-Module 09 was absorbed into module 08 before the migration, so the
-human-facing application *is* the Snek Centaur Server application — the
-artifact every team forks and runs on an origin the team controls. That
-makes one question load-bearing that the requirements never ask out loud:
-**which origin does Google talk to?**
+Module 09 was absorbed into module 08, so the human-facing application *is*
+the Snek Centaur Server application — the artifact every team forks and runs
+on an origin the team controls. That makes one question the requirements
+never ask out loud load-bearing: **which origin does Google talk to?** The
+platform's Convex deployment, and only ever that one. A single OAuth client
+is registered to Cyphid, its redirect URIs naming platform *environments* —
+never teams, never developers — and a Server holds no client, receives no
+authorization code, and never sees the platform's session cookie. It is a
+relying party exactly as a peer Cyphid system is: it obtains a human-scoped
+credential through the assertion exchange it already authenticates with
+under `service-principal-assertions` and `trusted-issuer-registry`, so no
+second protocol is introduced.
 
-The decision is that Google talks to exactly one origin, ever: **the
-platform's Convex deployment**. A single OAuth client is registered to
-Cyphid, its redirect URIs name platform *environments* — never teams, never
-developers — and a Snek Centaur Server holds no client, receives no
-authorization code, and never sees the platform's session cookie. A Server
-is a relying party of the platform in the same way a peer Cyphid system is,
-and the credential it gets for a human is the ordinary bounded, short-lived,
-audience-named one this capability already issues.
+Nothing is minted, because two requirements already forbid the alternative:
+`sole-credential-issuer` makes the platform's deployment the sole
+authorization server for the platform's own affordances, and
+`client-credential-custody` confines the session credential to a cookie sent
+only to the platform's own origin — which a Server-run sign-in could not
+produce. What was missing was the sentence naming the origin, and its
+absence is not benign: wiring Google directly into the human-facing
+application is the obvious implementation, so silence selects the violation
+by default. *If reversed*, every team's domain becomes a registered redirect
+URI on Cyphid's client — a list that grows with the cohort and never shrinks
+— and a student-modified fork is handed the Google authorization code of
+everyone who signs in through it, **including a platform admin who opens it
+to observe a game**, whose read breadth `platform-admin-role` deliberately
+makes wide. As decided, a hostile fork obtains only what its own players
+granted it, bounded by `peer-capability-ceiling` and dead inside the fifteen
+minutes of `token-lifetime-and-refresh`.
 
-**This is not a new rule; it is the naming of an origin the existing rules
-already constrain.** `sole-credential-issuer` makes the platform's
-deployment the sole authorization server for the platform's own affordances,
-and a credential another system issued evidence of who is calling and never
-authority. `client-credential-custody` puts the session credential in a
-cookie the browser "sends only to the platform's own origin". A Server
-running its own Google sign-in would produce a session credential on an
-origin that is not the platform's, which those two requirements jointly
-forbid — so nothing here is minted (see constraint-mining below). What was
-missing was the sentence saying so, and its absence is not benign: wiring
-Google directly into the human-facing application is the obvious
-implementation, so silence here selects the violation by default.
-
-*If reversed* — sign-in served from the Server application's own origin —
-two things follow immediately, and neither is a residual risk to accept.
-Every team's domain becomes a registered redirect URI on Cyphid's Google
-client, a list that grows with the cohort and never shrinks. And a
-student-modified fork is handed the Google authorization code of every human
-who signs in through it, **including a platform admin who opens it to
-observe a game** — a credential for an identity whose read breadth
-`platform-admin-role` deliberately makes wide. Under the decision as taken,
-the worst a hostile fork obtains is what the humans who chose to play on it
-granted it, bounded by `peer-capability-ceiling` and dead inside the
-fifteen minutes of `token-lifetime-and-refresh`.
-
-The flow this implies: an unauthenticated visitor to a Server application is
-redirected to the platform; Google and the platform complete sign-in between
-themselves; the platform's session cookie is set on the platform's origin;
-and the Server obtains a credential *for itself, naming that human*, through
-the assertion exchange it already authenticates with under
-`service-principal-assertions` and `trusted-issuer-registry`. No second
-protocol is introduced — the machinery the Server already needs to act as a
-service principal is the machinery that carries a human's identity to it.
-
-**Reload round-trips through the platform rather than establishing a second
-session.** A Server application holding no persistent credential means a
-page reload re-obtains one, which is `client-credential-custody`'s
-`#memory-only` and `#the-session-is-the-only-thing-a-reload-recovers` read
-literally rather than worked around; the round-trip is silent to the user
-while the platform session is live, so `google-sign-in#session-survives-reload`
-is satisfied by a redirect the user does not see rather than by a second
-cookie. The alternative — the Server application setting its own session
-cookie on its own origin — buys one fewer redirect and costs a persistent
-credential parked on a team-controlled origin, which is the property this
-whole decision exists to remove. *If reversed*, the blast radius of a
-hostile fork stops being bounded by a credential lifetime.
-
-Local development is what makes the redirect-URI list stay short in
-practice. Because the platform runs as a Convex **local deployment** on a
-fixed loopback port, the development redirect URI is one shared loopback
-address rather than one per developer's cloud deployment — Google permits
-loopback redirects for this reason. The registered list is therefore two or
-three entries in total, which is what keeps "registered to Cyphid alone"
-operationally true rather than aspirational.
-
-When module 08 migrates, its ids requiring the application to authenticate
-the human with Google are re-read as requiring an *authenticated platform
-identity, obtained from the platform* — the same guarantee, sourced where
-this decision puts it.
+Reload therefore round-trips through the platform rather than establishing a
+second session on a team-controlled origin. The round-trip is silent while
+the platform session is live, so `google-sign-in#session-survives-reload`
+holds without a second cookie and `client-credential-custody#memory-only` is
+read literally rather than worked around; the alternative buys one fewer
+redirect and costs the persistent credential this decision exists to remove.
+The registered URI list stays at two or three entries because the platform
+runs as a Convex **local deployment** on a fixed loopback port, so
+development shares one loopback redirect rather than one per developer. And
+when module 08 migrates, its ids requiring the application to authenticate
+the human with Google re-read as requiring an *authenticated platform
+identity, obtained from the platform*.
 
 ### One exchange, two registrations
 
@@ -605,17 +573,13 @@ invariant a future implementer could silently violate?
     every enforcement site, audit consumer and registered system at once —
     the most expensive shape of change in a federation.
 
-**Judged and deliberately not minted — the sign-in origin.** The decision
-that Google talks only to the platform's deployment is exactly the shape
-constraint-mining looks for: silently violable, and violated by the
-*natural* implementation. It is not minted because it is already implied
-twice over — `sole-credential-issuer` makes the platform the only
-authorization server for its own affordances, and `client-credential-custody`
-confines the session credential to a cookie sent only to the platform's own
-origin, which a Server-run sign-in could not produce. A third requirement
-saying it a third time is the duplication the corpus forbids, and the copy
-would carry no authority the originals lack. What the omission actually
-warranted was a design decision naming the origin, which is recorded above.
+**Judged and deliberately not minted — the sign-in origin.** That Google
+talks only to the platform's deployment is the shape constraint-mining looks
+for: silently violable, and violated by the *natural* implementation. It is
+not minted because `sole-credential-issuer` and `client-credential-custody`
+already imply it twice over, and a third statement would be the duplication
+the corpus forbids, carrying no authority the originals lack. What the
+omission warranted was a design decision naming the origin, recorded above.
 
 No further lead survived judgment: the remaining design content (wire
 parameter names, claim encodings, key formats, callback step orderings,

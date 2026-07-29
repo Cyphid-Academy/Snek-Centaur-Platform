@@ -148,29 +148,19 @@ synthesis, 2026-07-24):
 
 4. **Which origin serves human sign-in, given that the human-facing
    application is the forkable Snek Centaur Server application?**
-   - **Context**: module 09 was absorbed into module 08, so the application a
-     human signs into runs on an origin each team controls. No requirement
-     names the origin Google redirects to, and the obvious implementation —
-     the Server application running its own Google sign-in — hands a
-     team-modified fork the authorization code of everyone who signs in
-     through it, admins included, and makes every team domain a registered
-     redirect URI on Cyphid's Google client.
-   - **Question**: does each Snek Centaur Server perform Google sign-in
-     itself, or does sign-in happen only at the platform's deployment with
-     Servers as relying parties?
+   - **Context**: no requirement names the origin Google redirects to, and
+     the obvious implementation — the Server running its own Google sign-in
+     — hands a team-modified fork the authorization code of everyone who
+     signs in through it, admins included, and makes every team domain a
+     registered redirect URI on Cyphid's client.
    - **Options**: (A) one Google client registered to Cyphid, redirect URIs
      naming platform environments only, Servers obtaining human-scoped
      credentials through the assertion exchange they already use; (B) each
-     Server a Google client in its own right; (A′) as A, but the Server
-     application sets its own session cookie on its own origin so a reload
-     does not round-trip.
-   - **Decision (author, 2026-07-29)**: Option A, with reload round-tripping
-     through the platform rather than A′. B is refused outright — it is
-     foreclosed by `sole-credential-issuer` and `client-credential-custody`
-     already, and its blast radius is an admin's Google credential on a
-     student-run box. A′ is refused because a persistent credential on a
-     team-controlled origin is the property the decision exists to remove;
-     the round-trip is silent while the platform session is live, so
-     `google-sign-in#session-survives-reload` holds without it. Nothing is
-     minted — the constraint is doubly implied already — and the decision is
-     recorded in `design.md` under "Where sign-in happens".
+     Server a Google client in its own right; (A′) as A, but the Server sets
+     its own session cookie so a reload does not round-trip.
+   - **Decision (author, 2026-07-29)**: A, with the round-trip. B is already
+     foreclosed by `sole-credential-issuer` and `client-credential-custody`;
+     A′ leaves a persistent credential on a team-controlled origin, which is
+     the property the decision exists to remove, and the round-trip is
+     silent while the platform session is live. Nothing minted; recorded in
+     `design.md` under "Where sign-in happens".
