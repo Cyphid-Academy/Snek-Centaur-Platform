@@ -64,9 +64,10 @@ flowchart TD
   bot-configuration -->|5| global-invariants
   bot-configuration -->|1| identity-and-authorization
   bot-configuration -->|4| team-management
-  bot-framework -->|4| game-engine
+  bot-framework -->|9| game-engine
+  bot-framework -->|2| game-runtime
   bot-framework -->|10| global-invariants
-  bot-framework -->|6| operator-control
+  bot-framework -->|4| operator-control
   centaur-server-runtime -->|1| application-shell
   centaur-server-runtime -->|9| global-invariants
   decision-transparency -->|6| bot-framework
@@ -133,5 +134,5 @@ flowchart TD
   visual-tester -->|4| test-sequences
 
   class game-engine,global-invariants base;
-  linkStyle 0,4,5,8,11,12,15,17,20,21,23,24,27,29,33,34,35,37,38,42,44,46,48,55,57,61,64,66,71,72,75,76 stroke-opacity:0.25;
+  linkStyle 0,4,5,8,11,13,16,18,21,22,24,25,28,30,34,35,36,38,39,43,45,47,49,56,58,62,65,67,72,73,76,77 stroke-opacity:0.25;
 ```
