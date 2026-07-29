@@ -8684,7 +8684,7 @@
         },
         {
           "target": "global-invariants/one-shared-generation",
-          "change": "mint-platform-persistence"
+          "change": "adopt-mirror-and-generation-invariants"
         }
       ],
       "scenarios": [
