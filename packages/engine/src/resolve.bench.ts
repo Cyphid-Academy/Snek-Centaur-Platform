@@ -9,10 +9,10 @@
 // States are built here rather than generated: board generation is
 // game-configuration's, and a benchmark of the resolver must not depend on it.
 import { bench, describe } from "vitest";
-import { resolveTurn } from "./resolve.js";
+import { advanceTurn, imagineMoves } from "./resolve.js";
 import { subSeed } from "./rng.js";
-import { boardWith, makeSnake, makeState, seed, sid, tid, turn } from "./testkit.js";
-import type { GameRuntimeConfig, GameState } from "./types.js";
+import { boardWith, makeSnake, makeState, seed, sid, tid, timings } from "./testkit.js";
+import type { GameRuntimeConfig, GameState, SnakeId } from "./types.js";
 import { CellType, DEFAULT_RUNTIME_CONFIG, Direction } from "./types.js";
 
 const CONFIG: GameRuntimeConfig = { ...DEFAULT_RUNTIME_CONFIG, maxTurns: 0 };
@@ -55,16 +55,29 @@ function crowdedState(boardSize: number, teamCount: number, perTeam: number): Ga
   });
 }
 
-describe("resolveTurn throughput", () => {
+describe("advanceTurn throughput", () => {
   const standardState = crowdedState(21, 2, 5);
   const standardSeed = subSeed(seed(77), "turn:15");
   bench("standard board (21x21, 2 teams x 5 snakes)", () => {
-    resolveTurn(standardState, new Map(), turn(15), standardSeed, CONFIG);
+    advanceTurn(standardState, new Map(), standardSeed, timings(standardState, 500, 200), CONFIG);
   });
 
   const smallState = crowdedState(11, 2, 2);
   const smallSeed = subSeed(seed(78), "turn:10");
   bench("small board (11x11, 2 teams x 2 snakes)", () => {
-    resolveTurn(smallState, new Map(), turn(10), smallSeed, CONFIG);
+    advanceTurn(smallState, new Map(), smallSeed, timings(smallState, 500, 200), CONFIG);
+  });
+});
+
+// The hypothetical entry point is what a tree search actually calls, and it
+// skips spawning and the win check whenever anything is held — so its cost
+// profile is the one worth watching separately.
+describe("imagineMoves throughput", () => {
+  const state = crowdedState(21, 2, 5);
+  const owned = state.snakes.slice(0, 5).map((s) => s.snakeId);
+  const foreign = new Set<SnakeId>(state.snakes.slice(5).map((s) => s.snakeId));
+  const directions = new Map(owned.map((id) => [id, Direction.Right]));
+  bench("standard board, one team modelled and the rest held", () => {
+    imagineMoves(state, directions, foreign, timings(state, 500, 200), CONFIG);
   });
 });

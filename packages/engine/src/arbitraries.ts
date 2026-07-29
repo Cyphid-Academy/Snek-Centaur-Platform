@@ -13,8 +13,10 @@
 // into these arbitraries. Not part of the package's public API.
 import * as fc from "fast-check";
 import { advance } from "./board.js";
-import { SETUP_SPAWN_TURN, itemsByCell } from "./items.js";
+import { itemsByCell } from "./items.js";
+import { SETUP_SPAWN_TURN } from "./items.js";
 import { rngFromSeed } from "./rng.js";
+import { asGameState } from "./state.js";
 import { tid } from "./testkit.js";
 import type {
   Board,
@@ -26,6 +28,7 @@ import type {
   SnakeId,
   SnakeState,
   TurnNumber,
+  TurnTimings,
 } from "./types.js";
 import { ALL_DIRECTIONS, CellType, ItemType } from "./types.js";
 
@@ -49,6 +52,9 @@ const rate = (r: { min: number; max: number }) =>
 export const runtimeConfigArb: fc.Arbitrary<GameRuntimeConfig> = fc.record({
   maxHealth: int(CONFIG_RANGES.maxHealth),
   maxTurns: fc.oneof(fc.constant(0), int(CONFIG_RANGES.maxTurns)), // 0 = no turn limit
+  // 0 = no duration limit; the live range is drawn small enough that fuzzed
+  // games actually reach it, which is the point of generating it at all.
+  maxGameDurationMs: fc.oneof(fc.constant(0), int({ min: 1000, max: 60000 })),
   hazardDamage: int(CONFIG_RANGES.hazardDamage),
   foodSpawnRate: rate(CONFIG_RANGES.foodSpawnRate),
   invulnPotionSpawnRate: rate(CONFIG_RANGES.potionSpawnRate),
@@ -145,7 +151,8 @@ export function expiryFor(collectionTurn: TurnNumber): TurnNumber {
 //   - snake bodies of length 1-5, stacked or walked, at any health
 //   - heads on mixed parities, so heads can pass through each other's cells
 //   - snakes that start on Hazard or Fertile ground
-//   - clocks drawn low, so a near-empty budget is an ordinary case
+//   - clocks near exhaustion, so the burn commit is exercised rather than
+//     merely present
 //
 // What is NOT dropped: snake bodies stay contiguous and disjoint, and items
 // stay off alive bodies. Those are shapes the movement rules themselves can
@@ -244,6 +251,8 @@ export const stateDrawArb: fc.Arbitrary<StateDraw> = fc.record({
   snakesPerTeam: fc.integer({ min: 1, max: 4 }),
   plans: fc.array(snakePlanArb, { minLength: 24, maxLength: 24 }),
   itemCount: fc.integer({ min: 0, max: 8 }),
+  // Deliberately reaches 0: a team with no time at all is the case the clock
+  // commit exists for (game-engine/chess-timer#exhaustion-kills-the-teams-snakes).
   clockBudgetMs: fc.integer({ min: 0, max: 4000 }),
   placementSeed: gameSeedArb,
 });
@@ -289,6 +298,7 @@ export function initialStateFrom(draw: StateDraw, config: GameRuntimeConfig): Ga
         activeEffects: [],
         lastDirection: plan.lastDirection,
         alive: true,
+        turn: 0 as TurnNumber,
       });
     }
   }
@@ -299,9 +309,10 @@ export function initialStateFrom(draw: StateDraw, config: GameRuntimeConfig): Ga
     const itemType = rng.pick([ItemType.Food, ItemType.InvulnPotion, ItemType.InvisPotion]);
     items.push({ spawnTurn: SETUP_SPAWN_TURN, spawnIndex: i, itemType, cell } as Item);
   }
-  return {
+  return asGameState({
     board,
     snakes,
+    projections: [],
     items: itemsByCell(board, items),
     clocks: teams.map((t) => ({
       centaurTeamId: t.centaurTeamId,
@@ -309,5 +320,14 @@ export function initialStateFrom(draw: StateDraw, config: GameRuntimeConfig): Ga
       perTurnMs: draw.clockBudgetMs,
       declaredTurnOver: false,
     })),
+    consumedDurationMs: 0,
+  });
+}
+
+/** Per-turn timings for a fuzzed game: every clocked team declares a burn. */
+export function timingsFor(state: GameState, durationMs: number, burnMs: number): TurnTimings {
+  return {
+    durationMs,
+    burnMs: new Map(state.clocks.map((c) => [c.centaurTeamId, burnMs])),
   };
 }

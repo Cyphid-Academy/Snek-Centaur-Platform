@@ -19,6 +19,7 @@ import type {
   Rng,
   SnakeId,
   SnakeState,
+  TurnNumber,
 } from "@cyphid/snek-engine";
 import {
   CellType,
@@ -295,6 +296,9 @@ function initializeSnakes(
         activeEffects: [],
         lastDirection: null,
         alive: true,
+        // Every snake starts at turn 0: a freshly generated board is in
+        // lockstep by construction (spec: game-engine/domain-vocabulary).
+        turn: 0 as TurnNumber,
       });
     });
   });

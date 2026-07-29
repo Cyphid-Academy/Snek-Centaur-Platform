@@ -1,11 +1,5 @@
-import type {
-  CentaurTeamId,
-  GameOutcome,
-  GameState,
-  TurnEvent,
-  TurnNumber,
-} from "@cyphid/snek-engine";
-import { initialClock, itemsByCell, resolveTurn, subSeed } from "@cyphid/snek-engine";
+import type { CentaurTeamId, GameOutcome, GameState, TurnEvent } from "@cyphid/snek-engine";
+import { advanceTurn, asGameState, initialClock, itemsByCell, subSeed } from "@cyphid/snek-engine";
 import { describe, expect, it } from "vitest";
 import { DEFAULT_GAME_CONFIG } from "./config.js";
 import * as gameConfiguration from "./index.js";
@@ -49,20 +43,22 @@ describe("@cyphid/snek-game-configuration public API", () => {
       ];
       const generated = gameConfiguration.generateBoardAndInitialState(config, teams, gameSeed);
       if ("code" in generated) throw new Error(`board generation failed: ${generated.code}`);
-      let state: GameState = {
+      let state: GameState = asGameState({
         board: generated.board,
         snakes: generated.snakes,
+        projections: [],
         items: itemsByCell(generated.board, generated.items),
         clocks: teams.map((t) => initialClock(t.centaurTeamId, config.runtime.clock)),
-      };
+        consumedDurationMs: 0,
+      });
       const allEvents: TurnEvent[] = [];
       let outcome: GameOutcome = { kind: "in_progress" };
       for (let t = 0; t < 60 && outcome.kind === "in_progress"; t++) {
-        const result = resolveTurn(
+        const result = advanceTurn(
           state,
           new Map(),
-          t as TurnNumber,
           subSeed(gameSeed, `turn:${t}`),
+          { durationMs: 250, burnMs: new Map(teams.map((x) => [x.centaurTeamId, 100])) },
           config.runtime,
         );
         state = result.nextState;

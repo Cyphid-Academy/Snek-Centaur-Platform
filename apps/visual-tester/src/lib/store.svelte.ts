@@ -19,6 +19,7 @@ import type {
   SnakeId,
   SnakeState,
   StagedMove,
+  TurnTimings,
   UserId,
 } from "@cyphid/snek-engine";
 import { DEFAULT_GENERATION_CONFIG } from "@cyphid/snek-game-configuration";
@@ -37,9 +38,11 @@ import { sequenceToSession, sessionToSequence } from "./sequences.js";
 import type { Session, TurnRecord } from "./session.js";
 import {
   createSession,
+  defaultTimings,
   editConfigAt,
   editSeedAt,
   editStateAt,
+  recordedTimings,
   simulateNext,
   stateAt,
   truncateAfter,
@@ -161,6 +164,21 @@ export class TesterStore {
     density: DEFAULT_GENERATION_CONFIG.fertileGround.density,
     clustering: DEFAULT_GENERATION_CONFIG.fertileGround.clustering,
   });
+  /**
+   * The turn duration the tool supplies when the tester expresses no
+   * preference — used as the turn's length AND as every team's burn. 500 ms
+   * is a shipped default and deliberately not a spec'd constant: nothing
+   * depends on the value, only on there being one, so a tester who does not
+   * care about time never performs a step.
+   */
+  // spec: visual-tester/turn-simulation#a-default-that-needs-no-attention
+  defaultTurnDurationMs = $state(500);
+  /** This advance's turn duration, when the tester chose one. */
+  turnDurationOverrideMs = $state<number | null>(null);
+  /** This advance's per-team burns, when the tester chose any. Overrides are
+   *  what make the timed endings reachable without a clock-editing surface. */
+  // spec: visual-tester/turn-simulation#per-advance-values-reach-the-timed-endings
+  burnOverrides = $state.raw<ReadonlyMap<CentaurTeamId, number>>(new Map());
   /** Configured teams (name + colour); the Add Snake tool assigns from here. */
   teams = $state<TeamConfig[]>(defaultTeams());
   /** Team the Add Snake tool assigns new snakes to. */
@@ -542,16 +560,61 @@ export class TesterStore {
     if (wasMiddle) this.#autosave(this.cursor, true);
   }
 
+  /**
+   * The timings the next simulated turn resolves with: the ones that turn
+   * already recorded when it is being re-simulated untouched, otherwise the
+   * tool's default duration used as both the turn's length and every team's
+   * burn, with any per-advance override applied on top.
+   */
+  // spec: visual-tester/turn-simulation#a-default-that-needs-no-attention,
+  // visual-tester/session-history#a-re-simulated-turn-reuses-its-timings
+  #timingsForNextTurn(): TurnTimings {
+    const base = stateAt(this.session, this.cursor);
+    if (this.turnDurationOverrideMs === null && this.burnOverrides.size === 0) {
+      const recorded = recordedTimings(this.session, this.cursor);
+      if (recorded !== null) return recorded;
+    }
+    return defaultTimings(
+      base,
+      this.turnDurationOverrideMs ?? this.defaultTurnDurationMs,
+      this.burnOverrides,
+    );
+  }
+
   // spec: visual-tester/turn-simulation#repeatable
   simulate(): void {
     const wasMiddle = this.cursor < this.turnCount;
+    const timings = this.#timingsForNextTurn();
     this.session = truncateAfter(this.session, this.cursor);
-    this.session = simulateNext(this.session, this.staged);
+    this.session = simulateNext(this.session, this.staged, timings);
     this.cursor = this.turnCount;
     this.staged = new Map();
+    this.turnDurationOverrideMs = null;
+    this.burnOverrides = new Map();
     this.error = null;
     this.clearRun();
     this.#autosave(this.cursor, wasMiddle);
+  }
+
+  /** Set (or clear, with null) this advance's turn duration. */
+  // spec: visual-tester/turn-simulation#per-advance-values-reach-the-timed-endings
+  setTurnDurationOverride(ms: number | null): void {
+    this.turnDurationOverrideMs = ms;
+  }
+
+  /** Set (or clear, with null) one team's burn for this advance. */
+  // spec: visual-tester/turn-simulation#per-advance-values-reach-the-timed-endings
+  setBurnOverride(centaurTeamId: CentaurTeamId, ms: number | null): void {
+    const next = new Map(this.burnOverrides);
+    if (ms === null) next.delete(centaurTeamId);
+    else next.set(centaurTeamId, ms);
+    this.burnOverrides = next;
+  }
+
+  /** Set the session-wide default turn duration. */
+  // spec: visual-tester/turn-simulation
+  setDefaultTurnDuration(ms: number): void {
+    this.defaultTurnDurationMs = Math.max(0, ms);
   }
 
   /** Rename the working session; persists like an edit but keeps the typed

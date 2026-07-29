@@ -3,7 +3,14 @@
 // does NOT draw that snake as a continuous silhouette; a valid snake in the
 // same state still renders its path. Runs in the "components" vitest project
 // (client build + jsdom).
-import type { Cell, CentaurTeamId, GameState, SnakeId, SnakeState } from "@cyphid/snek-engine";
+import type {
+  Cell,
+  CentaurTeamId,
+  GameState,
+  SnakeId,
+  SnakeState,
+  TurnNumber,
+} from "@cyphid/snek-engine";
 import { CellType, itemsByCell } from "@cyphid/snek-engine";
 import { mount, unmount } from "svelte";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -19,6 +26,7 @@ function snake(letter: string, body: Cell[], id: number): SnakeState {
     activeEffects: [],
     lastDirection: null,
     alive: true,
+    turn: 0 as TurnNumber,
   };
 }
 
@@ -30,7 +38,13 @@ function state(snakes: SnakeState[]): GameState {
     return x === 0 || y === 0 || x === n - 1 || y === n - 1 ? CellType.Wall : CellType.Normal;
   });
   const board = { boardSize: n, cells } as unknown as GameState["board"];
-  return { board, snakes, items: itemsByCell(board, []), clocks: [] };
+  return {
+    board,
+    snakes,
+    items: itemsByCell(board, []),
+    clocks: [],
+    consumedDurationMs: 0,
+  } as unknown as GameState;
 }
 
 let target: HTMLElement;

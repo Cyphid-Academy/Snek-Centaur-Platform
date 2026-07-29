@@ -25,11 +25,12 @@ import {
 } from "./arbitraries.js";
 import { familyOfPotion } from "./effects.js";
 import { itemIdOf } from "./items.js";
-import { resolveTurnWithRules } from "./resolve/index.js";
+import { advanceTurnWithRules } from "./resolve/index.js";
 import { INTERACTION_RULES } from "./resolve/rules.js";
 import { rngFromSeed } from "./rng.js";
 import {
   QUIET_CONFIG,
+  atTurn,
   boardWith,
   doResolve,
   effect,
@@ -38,6 +39,7 @@ import {
   makeItem,
   makeSnake,
   makeState,
+  quietTimings,
   seed,
   sid,
   snakeById,
@@ -137,7 +139,14 @@ describe("team potion collection (game-engine/team-potion-effects#rebuild-shape)
         // order (game-engine/turn-resolution-model#order-independence).
         const rules = [...INTERACTION_RULES];
         rngFromSeed(seed(shuffleSeedN)).shuffle(rules);
-        const shuffled = resolveTurnWithRules(rules, state, moves, turn(1), seed(50), QUIET_CONFIG);
+        const shuffled = advanceTurnWithRules(
+          rules,
+          atTurn(state, 1),
+          moves,
+          seed(50),
+          quietTimings(state),
+          QUIET_CONFIG,
+        );
         expect(shuffled.events).toEqual(result.events);
         expect(shuffled.nextState).toEqual(result.nextState);
       }),

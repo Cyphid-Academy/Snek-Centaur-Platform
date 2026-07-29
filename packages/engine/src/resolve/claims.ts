@@ -26,7 +26,11 @@ export type DisruptionCause =
   | "health_depletion";
 
 export interface CertainDeathClaim {
-  readonly cause: Exclude<DeathCause, "health_depletion">;
+  // Board causes only. `health_depletion` is the derived stage's own outcome,
+  // and `clock_exhaustion` is applied directly by the clock commit — neither
+  // is a claim an interaction rule can raise, which is what keeps the
+  // cause-precedence list in events.ts exhaustive.
+  readonly cause: Exclude<DeathCause, "health_depletion" | "clock_exhaustion">;
   readonly killer: SnakeId | null;
 }
 
@@ -200,6 +204,14 @@ export class ClaimSet {
 
   totalDamage(id: SnakeId): number {
     return (this.damageMap.get(id) ?? []).reduce((sum, d) => sum + d.amount, 0);
+  }
+
+  /** Damage claimed from one source — what the hazard-damage event reports. */
+  // spec: game-engine/turn-events#hazard-damage-is-announced
+  damageFrom(id: SnakeId, source: DamageSource): number {
+    return (this.damageMap.get(id) ?? [])
+      .filter((d) => d.source === source)
+      .reduce((sum, d) => sum + d.amount, 0);
   }
 
   // Canonical source order: claims form a set, so reported source lists must

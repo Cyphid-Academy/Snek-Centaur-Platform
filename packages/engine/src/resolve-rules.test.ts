@@ -6,6 +6,7 @@ import { itemIdOf } from "./items.js";
 import { ClaimSet } from "./resolve/claims.js";
 import { buildTurnContext } from "./resolve/context.js";
 import type { TurnContext } from "./resolve/context.js";
+import { planAdvancedTurn, planImaginedMoves } from "./resolve/plan.js";
 import {
   bodyCollisionRule,
   foodRule,
@@ -18,26 +19,32 @@ import {
 } from "./resolve/rules.js";
 import {
   QUIET_CONFIG,
+  atTurn,
   effect,
   emptyBoard,
   makeItem,
   makeSnake,
   makeState,
+  quietTimings,
   seed,
   sid,
   stagedMoves,
   tid,
-  turn,
 } from "./testkit.js";
 import type { GameState, SnakeId, StagedMove } from "./types.js";
 import { CellType, Direction, ItemType } from "./types.js";
 
+/** Build the turn context for a lockstep state at turn 1, nothing held. */
 function build(
   state: GameState,
   moves: Map<SnakeId, StagedMove>,
 ): { ctx: TurnContext; claims: ClaimSet } {
   const claims = new ClaimSet();
-  const ctx = buildTurnContext(state, moves, turn(1), seed(50), QUIET_CONFIG, claims);
+  const at = atTurn(state, 1);
+  const directions = planAdvancedTurn(at, moves, seed(50));
+  const planned = planImaginedMoves(at, directions, new Set(), quietTimings(at), seed(50));
+  if (!planned.ok) throw new Error(`unexpected refusal: ${planned.failure.reason}`);
+  const ctx = buildTurnContext(at, planned.plan, moves, QUIET_CONFIG, claims);
   return { ctx, claims };
 }
 

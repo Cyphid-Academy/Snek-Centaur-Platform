@@ -17,16 +17,22 @@
 import * as fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import type { StateDraw } from "./arbitraries.js";
-import { gameSeedArb, initialStateFrom, runtimeConfigArb, stateDrawArb } from "./arbitraries.js";
+import {
+  gameSeedArb,
+  initialStateFrom,
+  runtimeConfigArb,
+  stateDrawArb,
+  timingsFor,
+} from "./arbitraries.js";
 import { cellIndex } from "./board.js";
 import { EFFECT_DURATION_TURNS } from "./effects.js";
 import { itemIdOf } from "./items.js";
-import { resolveTurn, resolveTurnWithRules } from "./resolve/index.js";
+import { advanceTurn, advanceTurnWithRules } from "./resolve/index.js";
 import type { InteractionRule } from "./resolve/rules.js";
 import { INTERACTION_RULES } from "./resolve/rules.js";
 import { rngFromSeed, subSeed } from "./rng.js";
 import { seed } from "./testkit.js";
-import type { GameRuntimeConfig, GameState, TurnEvent, TurnNumber } from "./types.js";
+import type { GameRuntimeConfig, GameState, TurnEvent } from "./types.js";
 
 // Harness bound, NOT a spec range: maxTurns is generated from its full
 // documented range, but each fuzzed game simulates at most this many turns
@@ -44,17 +50,26 @@ const EVENT_CLASS_ORDER: ReadonlyArray<TurnEvent["kind"]> = [
   "potion_spawned",
   "effect_applied",
   "effect_cancelled",
+  "hazard_damage_taken",
 ];
 
 const fuzzArb = fc.record({
   config: runtimeConfigArb,
   state: stateDrawArb,
   gameSeed: gameSeedArb,
+  // The turn's declared timings, drawn rather than fixed: a burn that outruns
+  // a small clock is how a fuzzed game reaches clock exhaustion, and a
+  // duration that outruns maxGameDurationMs is how it reaches the timed
+  // ending. spec: game-engine/chess-timer, game-engine/game-end-conditions
+  durationMs: fc.integer({ min: 0, max: 5000 }),
+  burnMs: fc.integer({ min: 0, max: 5000 }),
 });
 interface FuzzDraw {
   config: GameRuntimeConfig;
   state: StateDraw;
   gameSeed: Uint8Array;
+  durationMs: number;
+  burnMs: number;
 }
 
 function initialState(draw: FuzzDraw): GameState | null {
@@ -85,10 +100,11 @@ function playFuzzGame(
   const budget = turnsToSimulate(draw.config);
   for (let t = 0; t < budget; t++) {
     const turnSeed = subSeed(draw.gameSeed, `turn:${t}`);
+    const timings = timingsFor(state, draw.durationMs, draw.burnMs);
     const result =
       rules === null
-        ? resolveTurn(state, new Map(), t as TurnNumber, turnSeed, draw.config)
-        : resolveTurnWithRules(rules, state, new Map(), t as TurnNumber, turnSeed, draw.config);
+        ? advanceTurn(state, new Map(), turnSeed, timings, draw.config)
+        : advanceTurnWithRules(rules, state, new Map(), turnSeed, timings, draw.config);
     state = result.nextState;
     events.push([...result.events]);
     check?.(state, result.events, t);
@@ -191,8 +207,9 @@ describe("multi-turn structural invariants", () => {
         const budget = Math.min(turnsToSimulate(draw.config), 10);
         for (let t = 0; t < budget && state !== null; t++) {
           const turnSeed = subSeed(draw.gameSeed, `turn:${t}`);
-          const once = resolveTurn(state, new Map(), t as TurnNumber, turnSeed, draw.config);
-          const twice = resolveTurn(state, new Map(), t as TurnNumber, turnSeed, draw.config);
+          const timings = timingsFor(state, draw.durationMs, draw.burnMs);
+          const once = advanceTurn(state, new Map(), turnSeed, timings, draw.config);
+          const twice = advanceTurn(state, new Map(), turnSeed, timings, draw.config);
           expect(twice.events).toEqual(once.events);
           expect(twice.nextState).toEqual(once.nextState);
           state = once.outcome.kind === "in_progress" ? once.nextState : null;

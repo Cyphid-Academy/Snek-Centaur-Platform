@@ -33,7 +33,7 @@ export function removeFamily(
 }
 
 // spec: game-engine/collisions-and-severing
-export function invulnerabilityLevel(snake: SnakeState): -1 | 0 | 1 {
+export function invulnerabilityLevel(snake: Pick<SnakeState, "activeEffects">): -1 | 0 | 1 {
   for (const e of snake.activeEffects) {
     if (e.family === "invulnerability") {
       return e.state === "buff" ? 1 : -1;

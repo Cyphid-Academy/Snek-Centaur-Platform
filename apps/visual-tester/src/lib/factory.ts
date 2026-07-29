@@ -1,6 +1,6 @@
 // New-session factories: a blank hand-authoring canvas and the
 // boardgen-seeded convenience (design D9 — a UI affordance, not spec surface).
-import { initialClock, itemsByCell } from "@cyphid/snek-engine";
+import { asGameState, initialClock, itemsByCell } from "@cyphid/snek-engine";
 import type { CentaurTeamId, GameState } from "@cyphid/snek-engine";
 import { DEFAULT_GAME_CONFIG, generateBoardAndInitialState } from "@cyphid/snek-game-configuration";
 import type { BoardGenerationFailure, GameConfig } from "@cyphid/snek-game-configuration";
@@ -9,7 +9,14 @@ import { blankBoardCells } from "./editor.js";
 export function blankState(boardSize: number): GameState {
   const cells = blankBoardCells(boardSize);
   const board = { boardSize, cells };
-  return { board, snakes: [], items: itemsByCell(board, []), clocks: [] };
+  return asGameState({
+    board,
+    snakes: [],
+    projections: [],
+    items: itemsByCell(board, []),
+    clocks: [],
+    consumedDurationMs: 0,
+  });
 }
 
 // Numeric team ids match the store's default teams (team-0, team-1) so a
@@ -34,11 +41,13 @@ export function boardgenState(
   // spec: global-invariants/one-shared-generation
   const generated = generateBoardAndInitialState(config, DEFAULT_TEAMS, gameSeed);
   if ("code" in generated) return { ok: false, failure: generated };
-  const state: GameState = {
+  const state: GameState = asGameState({
     board: generated.board,
     snakes: generated.snakes,
+    projections: [],
     items: itemsByCell(generated.board, generated.items),
     clocks: DEFAULT_TEAMS.map((t) => initialClock(t.centaurTeamId, config.runtime.clock)),
-  };
+    consumedDurationMs: 0,
+  });
   return { ok: true, state };
 }

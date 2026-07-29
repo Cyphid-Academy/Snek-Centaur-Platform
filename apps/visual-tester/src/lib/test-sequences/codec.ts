@@ -31,8 +31,10 @@ import type {
   StagedMove,
   TurnEvent,
   TurnNumber,
+  TurnTimings,
   UserId,
 } from "@cyphid/snek-engine";
+import { asGameState } from "@cyphid/snek-engine";
 import type { GameConfig } from "@cyphid/snek-game-configuration";
 
 // ---------------------------------------------------------------------------
@@ -40,7 +42,13 @@ import type { GameConfig } from "@cyphid/snek-game-configuration";
 // ---------------------------------------------------------------------------
 
 // spec: test-sequences/schema-version — integer version carried by every doc.
-export const SCHEMA_VERSION = 1;
+//
+// 2: each turn records the TIMINGS declared for it, the state carries the
+// per-snake turn and the game's consumed duration, and the configuration's
+// generation half is named `generation`. A version-1 document cannot be
+// replayed — it is missing inputs its turns were resolved from — so it is
+// rejected rather than migrated (test-sequences/sequence-format#self-contained).
+export const SCHEMA_VERSION = 2;
 
 export interface CellJson {
   readonly x: number;
@@ -62,6 +70,7 @@ export interface SnakeJson {
   readonly activeEffects: ReadonlyArray<PotionEffectJson>;
   readonly lastDirection: number | null; // explicit domain null, not absence
   readonly alive: boolean;
+  readonly turn: number; // the turn this snake has advanced to
 }
 
 export interface BoardJson {
@@ -90,6 +99,17 @@ export interface GameStateJson {
   readonly items: Readonly<Record<string, ItemJson>>;
   readonly snakes: ReadonlyArray<SnakeJson>;
   readonly clocks: ReadonlyArray<ClockJson>;
+  readonly consumedDurationMs: number;
+}
+
+// spec: test-sequences/sequence-format#timings-are-inputs-not-metadata — the
+// turn's declared duration and each team's burn, sitting with the staged moves
+// as INPUTS of the resolution rather than beside its outputs as a note about
+// when the recording was made.
+export interface TurnTimingsJson {
+  readonly durationMs: number;
+  // Per-team burn, lexicographically sorted keys (see sortedStringRecord).
+  readonly burnMs: Readonly<Record<string, number>>;
 }
 
 export type AgentJson =
@@ -181,6 +201,12 @@ export type TurnEventJson =
       readonly snakeId: number;
       readonly family: EffectFamily;
       readonly reason: string;
+    }
+  | {
+      readonly kind: "hazard_damage_taken";
+      readonly snakeId: number;
+      readonly damage: number;
+      readonly cell: CellJson;
     };
 
 export interface TurnOutputJson {
@@ -194,6 +220,7 @@ export interface TurnRecordJson {
   // Map → plain object keyed by snake id; absent snake = absent key
   // (spec: test-sequences/sequence-format#optional-moves).
   readonly stagedMoves: Readonly<Record<string, StagedMoveJson>>;
+  readonly timings: TurnTimingsJson;
   readonly expected: TurnOutputJson;
 }
 
@@ -220,6 +247,7 @@ export interface TurnOutput {
 export interface TurnRecord {
   readonly turnNumber: TurnNumber;
   readonly stagedMoves: ReadonlyMap<SnakeId, StagedMove>;
+  readonly timings: TurnTimings;
   readonly expected: TurnOutput;
 }
 
@@ -299,6 +327,7 @@ function encodeSnake(s: SnakeState): SnakeJson {
     activeEffects: s.activeEffects.map(encodeEffect),
     lastDirection: s.lastDirection,
     alive: s.alive,
+    turn: s.turn,
   };
 }
 
@@ -338,6 +367,7 @@ export function encodeGameConfig(config: GameConfig): GameConfig {
     runtime: {
       maxHealth: config.runtime.maxHealth,
       maxTurns: config.runtime.maxTurns,
+      maxGameDurationMs: config.runtime.maxGameDurationMs,
       hazardDamage: config.runtime.hazardDamage,
       foodSpawnRate: config.runtime.foodSpawnRate,
       invulnPotionSpawnRate: config.runtime.invulnPotionSpawnRate,
@@ -360,6 +390,21 @@ export function encodeGameState(state: GameState): GameStateJson {
     ),
     snakes: state.snakes.map(encodeSnake),
     clocks: state.clocks.map(encodeClock),
+    consumedDurationMs: state.consumedDurationMs,
+  };
+}
+
+export function encodeTimings(timings: TurnTimings): TurnTimingsJson {
+  return {
+    durationMs: timings.durationMs,
+    burnMs: sortedStringRecord([...timings.burnMs.entries()]),
+  };
+}
+
+export function decodeTimings(json: TurnTimingsJson): TurnTimings {
+  return {
+    durationMs: json.durationMs,
+    burnMs: new Map(Object.entries(json.burnMs).map(([k, v]) => [k as CentaurTeamId, v])),
   };
 }
 
@@ -457,6 +502,13 @@ export function encodeEvent(event: TurnEvent): TurnEventJson {
         family: event.family,
         reason: event.reason,
       };
+    case "hazard_damage_taken":
+      return {
+        kind: "hazard_damage_taken",
+        snakeId: event.snakeId,
+        damage: event.damage,
+        cell: encodeCell(event.cell),
+      };
   }
 }
 
@@ -499,6 +551,7 @@ export function encodeTestSequence(seq: TestSequence): TestSequenceDoc {
     turns: seq.turns.map((t) => ({
       turnNumber: t.turnNumber,
       stagedMoves: encodeStagedMoves(t.stagedMoves),
+      timings: encodeTimings(t.timings),
       expected: encodeTurnOutput(t.expected),
     })),
   };
@@ -522,6 +575,7 @@ function decodeSnake(s: SnakeJson): SnakeState {
     })),
     lastDirection: s.lastDirection as Direction | null,
     alive: s.alive,
+    turn: s.turn as TurnNumber,
   };
 }
 
@@ -547,17 +601,29 @@ export function decodeGameState(json: GameStateJson): GameState {
   )) {
     items.set(Number(key) as CellIndex, decodeItem(item));
   }
-  return {
+  // Recorded states are always in lockstep — a Test Sequence records the
+  // mainline, which never leaves a snake behind — so the narrowing is an
+  // assertion here rather than a branch. Validation catches a malformed
+  // document first, with a path-addressed error.
+  // spec: game-engine/domain-vocabulary#lockstep-is-the-game-state-invariant
+  return asGameState({
     board,
     items: items as ItemsByCell,
     snakes: json.snakes.map(decodeSnake),
+    // Never encoded, always empty. A projection is what holding a snake leaves
+    // behind, holding happens only while moves are imagined, and a Test
+    // Sequence records the mainline — so a recorded state cannot carry one, and
+    // a field that cannot vary in a document this format describes is a field
+    // the format should not carry. spec: game-engine/held-snakes
+    projections: [],
     clocks: json.clocks.map((c) => ({
       centaurTeamId: c.centaurTeamId as CentaurTeamId,
       budgetMs: c.budgetMs,
       perTurnMs: c.perTurnMs,
       declaredTurnOver: c.declaredTurnOver,
     })),
-  };
+    consumedDurationMs: json.consumedDurationMs,
+  });
 }
 
 function decodeAgent(agent: AgentJson): Agent {
@@ -628,6 +694,7 @@ export function decodeTestSequence(doc: TestSequenceDoc): TestSequence {
     turns: doc.turns.map((t) => ({
       turnNumber: t.turnNumber as TurnNumber,
       stagedMoves: decodeStagedMoves(t.stagedMoves),
+      timings: decodeTimings(t.timings),
       expected: decodeTurnOutput(t.expected),
     })),
   };

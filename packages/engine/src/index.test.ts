@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as engine from "./index.js";
-import { emptyBoard, makeSnake, makeState, sid, tid } from "./testkit.js";
+import { emptyBoard, makeSnake, makeState, seed, sid, tid, timings } from "./testkit.js";
 
 // Contract smoke test: the public surface exists — and does NOT offer what
 // left it. Board generation is game-configuration's, and the clock has one
@@ -15,12 +15,15 @@ describe("@cyphid/snek-engine public API", () => {
     expect(typeof engine.fertileGroundEnabled).toBe("function");
     expect(typeof engine.rngFromSeed).toBe("function");
     expect(typeof engine.subSeed).toBe("function");
-    expect(typeof engine.resolveTurn).toBe("function");
+    expect(typeof engine.advanceTurn).toBe("function");
+    expect(typeof engine.imagineMoves).toBe("function");
     expect(typeof engine.initialClock).toBe("function");
-    expect(typeof engine.applyTurnStart).toBe("function");
-    expect(typeof engine.declareTurnOver).toBe("function");
+    expect(typeof engine.currentTurn).toBe("function");
+    expect(typeof engine.narrowToGameState).toBe("function");
+    expect(typeof engine.standingScores).toBe("function");
     expect(typeof engine.isValidMove).toBe("function");
     expect(engine.DEFAULT_RUNTIME_CONFIG.maxHealth).toBe(100);
+    expect(engine.DEFAULT_RUNTIME_CONFIG.maxGameDurationMs).toBe(0);
   });
 
   // spec: game-engine/configuration-parameters#no-parameter-the-engine-does-not-read
@@ -31,7 +34,8 @@ describe("@cyphid/snek-engine public API", () => {
     expect("generateBoardAndInitialState" in engine).toBe(false);
   });
 
-  // spec: game-engine/determinism#reproducibility
+  // spec: game-engine/determinism#reproducibility — same state, staged moves,
+  // seed AND declared timings give the same outcome, every turn.
   it("plays a full seeded game end to end deterministically", () => {
     const run = () => {
       const gameSeed = new Uint8Array(32).fill(21);
@@ -63,23 +67,50 @@ describe("@cyphid/snek-engine public API", () => {
       const allEvents: engine.TurnEvent[] = [];
       let outcome: engine.GameOutcome = { kind: "in_progress" };
       for (let t = 0; t < 60 && outcome.kind === "in_progress"; t++) {
-        const result = engine.resolveTurn(
+        const result = engine.advanceTurn(
           state,
           new Map(),
-          t as engine.TurnNumber,
           engine.subSeed(gameSeed, `turn:${t}`),
+          timings(state, 250, 100),
           config,
         );
         state = result.nextState;
         outcome = result.outcome;
         allEvents.push(...result.events);
       }
-      return { outcome, allEvents };
+      return { outcome, allEvents, consumed: state.consumedDurationMs };
     };
     const a = run();
     const b = run();
     expect(a.outcome.kind).not.toBe("in_progress"); // the game concluded
     expect(a.allEvents.length).toBeGreaterThan(0);
+    expect(a.consumed).toBeGreaterThan(0);
     expect(a).toEqual(b);
+  });
+
+  // spec: game-engine/determinism#time-is-an-input-not-a-reading — the same
+  // turn resolved twice from identical inputs agrees in every respect, and a
+  // different declared duration is a different input rather than noise.
+  it("treats time as an input, not a reading", () => {
+    const config = { ...engine.DEFAULT_RUNTIME_CONFIG, maxGameDurationMs: 1000 };
+    const clock = (team: string) => ({
+      centaurTeamId: tid(team),
+      budgetMs: 5000,
+      perTurnMs: 5000,
+      declaredTurnOver: false,
+    });
+    const state = makeState(
+      [
+        makeSnake({ snakeId: sid(0), centaurTeamId: tid("red"), body: [{ x: 3, y: 3 }] }),
+        makeSnake({ snakeId: sid(1), centaurTeamId: tid("blue"), body: [{ x: 7, y: 7 }] }),
+      ],
+      { clocks: [clock("red"), clock("blue")] },
+    );
+    const short = engine.advanceTurn(state, new Map(), seed(3), timings(state, 100, 100), config);
+    const long = engine.advanceTurn(state, new Map(), seed(3), timings(state, 1000, 100), config);
+    expect(short.nextState.consumedDurationMs).toBe(100);
+    expect(long.nextState.consumedDurationMs).toBe(1000);
+    expect(short.outcome.kind).toBe("in_progress");
+    expect(long.outcome.kind).not.toBe("in_progress"); // reached the duration limit
   });
 });

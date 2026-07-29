@@ -4,8 +4,9 @@
 // The session is a pure value; every operation returns a new Session and
 // deep-copies inbound/outbound state so no caller can mutate a recorded
 // snapshot through a retained reference.
-import { resolveTurn } from "@cyphid/snek-engine";
+import { advanceTurn, asGameState } from "@cyphid/snek-engine";
 import type {
+  CentaurTeamId,
   GameOutcome,
   GameRuntimeConfig,
   GameState,
@@ -13,6 +14,7 @@ import type {
   StagedMove,
   TurnEvent,
   TurnNumber,
+  TurnTimings,
 } from "@cyphid/snek-engine";
 import { turnSeedFor } from "./seed.js";
 
@@ -21,6 +23,10 @@ export interface TurnRecord {
   readonly turnNumber: TurnNumber;
   /** Exactly the staged moves submitted to the resolver (unstaged = absent). */
   readonly stagedMoves: ReadonlyMap<SnakeId, StagedMove>;
+  // spec: visual-tester/session-history — the timings supplied for this turn,
+  // kept so re-simulating a scrubbed-to turn cannot silently change its
+  // outcome by substituting the current default.
+  readonly timings: TurnTimings;
   // spec: visual-tester/turn-simulation#full-output-recorded — the resolver's
   // complete output is recorded per turn.
   readonly nextState: GameState;
@@ -38,6 +44,32 @@ export interface Session {
 /** Deep copy of a GameState (handles the ReadonlyMap items component). */
 export function cloneState(state: GameState): GameState {
   return structuredClone(state) as GameState;
+}
+
+function cloneTimings(timings: TurnTimings): TurnTimings {
+  return { durationMs: timings.durationMs, burnMs: new Map(timings.burnMs) };
+}
+
+/**
+ * The timings the tool supplies when the tester has expressed no preference:
+ * one duration used as the turn's length AND as every team's burn.
+ *
+ * The resolver requires timings; a tool for vetting rules should answer a
+ * mandatory input it can answer sensibly by itself rather than making it a
+ * step the tester performs.
+ */
+// spec: visual-tester/turn-simulation#a-default-that-needs-no-attention
+export function defaultTimings(
+  state: GameState,
+  durationMs: number,
+  burnOverrides?: ReadonlyMap<CentaurTeamId, number>,
+): TurnTimings {
+  return {
+    durationMs,
+    burnMs: new Map(
+      state.clocks.map((c) => [c.centaurTeamId, burnOverrides?.get(c.centaurTeamId) ?? durationMs]),
+    ),
+  };
 }
 
 export function createSession(
@@ -80,22 +112,31 @@ export function stateAt(session: Session, k: number): GameState {
 export function simulateNext(
   session: Session,
   stagedMoves: ReadonlyMap<SnakeId, StagedMove>,
+  timings: TurnTimings,
 ): Session {
   const turnNumber = session.turns.length as TurnNumber;
-  const base = stateAt(session, session.turns.length);
+  // The turn being resolved is the state's own, so the state is stamped at it
+  // rather than the number being passed alongside. An edited state authored in
+  // the board editor carries whatever turn it was authored at.
+  // spec: game-engine/domain-vocabulary
+  const base = asGameState({
+    ...stateAt(session, session.turns.length),
+    snakes: stateAt(session, session.turns.length).snakes.map((s) => ({ ...s, turn: turnNumber })),
+  });
   // spec: visual-tester/move-staging — staged moves pass through unchanged;
   // unstaged snakes are simply absent from the map.
   const moves = new Map(structuredClone(new Map(stagedMoves)));
-  const resolution = resolveTurn(
+  const resolution = advanceTurn(
     base,
     moves,
-    turnNumber,
     turnSeedFor(session.gameSeed, turnNumber),
+    timings,
     session.config,
   );
   const record: TurnRecord = {
     turnNumber,
     stagedMoves: moves,
+    timings: cloneTimings(timings),
     // Deep-copied so no later edit of a live reference can reach into the
     // recorded snapshot (immutable per-turn snapshots).
     nextState: cloneState(resolution.nextState),
@@ -103,6 +144,18 @@ export function simulateNext(
     outcome: structuredClone(resolution.outcome) as GameOutcome,
   };
   return { ...session, turns: [...session.turns, record] };
+}
+
+/**
+ * The timings turn `k` was resolved with, when it has already been simulated.
+ * Re-simulating an untouched turn against the CURRENT default would silently
+ * produce a different outcome for a turn nobody edited — exactly the class of
+ * phantom discrepancy the tool exists to expose.
+ */
+// spec: visual-tester/session-history#a-re-simulated-turn-reuses-its-timings
+export function recordedTimings(session: Session, k: number): TurnTimings | null {
+  const record = session.turns[k];
+  return record === undefined ? null : cloneTimings(record.timings);
 }
 
 /**

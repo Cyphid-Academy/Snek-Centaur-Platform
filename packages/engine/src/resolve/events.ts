@@ -16,6 +16,9 @@ const EVENT_CLASS: Record<TurnEvent["kind"], number> = {
   potion_spawned: 7,
   effect_applied: 8,
   effect_cancelled: 9,
+  // spec: game-engine/turn-events — last in the requirement's own enumeration
+  // of the closed set, and last here.
+  hazard_damage_taken: 10,
 };
 
 // spec: 01 §2.11 — death-cause precedence when multiple claims target one snake.
