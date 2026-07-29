@@ -75,9 +75,19 @@
       "disposition": "authored",
       "carriedBy": [
         {
+          "target": "game-configuration/generated-board-shape",
+          "change": "migrate-game-configuration",
+          "part": "the complete Wall ring board generation produces"
+        },
+        {
           "target": "game-engine/board-geometry",
-          "change": "migrate-module-01-game-rules"
+          "change": "migrate-module-01-game-rules",
+          "part": "the square grid and its inner cells, as the engine addresses a board it is handed"
         }
+      ],
+      "scenarios": [
+        "game-configuration/generated-board-shape#complete-wall-ring",
+        "game-engine/board-geometry#playable-interior"
       ]
     },
     "01-REQ-009": {
@@ -93,59 +103,68 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "game-engine/hazards",
-          "change": "migrate-module-01-game-rules"
+          "target": "game-configuration/hazards",
+          "change": "migrate-game-configuration"
         }
       ],
-      "scenarios": ["game-engine/hazards#connectivity-guarantee"]
+      "scenarios": ["game-configuration/hazards#connectivity-guarantee"]
     },
     "01-REQ-011": {
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "game-engine/hazards",
+          "target": "game-engine/board-geometry",
           "change": "migrate-module-01-game-rules"
         }
       ],
-      "scenarios": ["game-engine/hazards#permanence"],
-      "note": "the legacy item/hazard-coexistence clause was vacuous (spawn eligibility excludes hazard cells) and was removed by the 2026-07-19-game-rules-vetting-corrections change"
+      "scenarios": ["game-engine/board-geometry#terrain-is-fixed"],
+      "note": "hazard permanence is a property of the board the engine is handed, so it stayed in game-engine when hazard placement moved to game-configuration"
     },
     "01-REQ-012": {
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "game-engine/fertile-ground",
-          "change": "migrate-module-01-game-rules"
+          "target": "game-configuration/fertile-ground",
+          "change": "migrate-game-configuration",
+          "part": "the designation of Fertile cells before the first turn"
+        },
+        {
+          "target": "game-engine/board-geometry",
+          "change": "migrate-module-01-game-rules",
+          "part": "that a designation never changes once the board is in play"
         }
       ],
-      "scenarios": ["game-engine/fertile-ground#stable-designation"]
+      "scenarios": [
+        "game-configuration/fertile-ground#designated-before-the-first-turn",
+        "game-engine/board-geometry#terrain-is-fixed"
+      ]
     },
     "01-REQ-013": {
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "game-engine/fertile-ground",
-          "change": "migrate-module-01-game-rules"
+          "target": "game-configuration/fertile-ground",
+          "change": "migrate-game-configuration"
         }
       ],
-      "scenarios": ["game-engine/fertile-ground#knob-semantics"]
+      "scenarios": ["game-configuration/fertile-ground#knob-semantics"]
     },
     "01-REQ-014": {
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "game-engine/starting-placement",
-          "change": "migrate-module-01-game-rules"
+          "target": "game-configuration/starting-placement",
+          "change": "migrate-game-configuration"
         }
       ],
-      "scenarios": ["game-engine/starting-placement#territory-assignment"]
+      "scenarios": ["game-configuration/starting-placement#territory-assignment"]
     },
     "01-REQ-015": {
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "game-engine/starting-placement",
-          "change": "migrate-module-01-game-rules"
+          "target": "game-configuration/starting-placement",
+          "change": "migrate-game-configuration"
         }
       ]
     },
@@ -153,39 +172,39 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "game-engine/starting-placement",
-          "change": "migrate-module-01-game-rules"
+          "target": "game-configuration/starting-placement",
+          "change": "migrate-game-configuration"
         }
       ],
-      "scenarios": ["game-engine/starting-placement#shared-parity"]
+      "scenarios": ["game-configuration/starting-placement#shared-parity"]
     },
     "01-REQ-017": {
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "game-engine/initial-food",
-          "change": "migrate-module-01-game-rules"
+          "target": "game-configuration/initial-food",
+          "change": "migrate-game-configuration"
         }
       ],
-      "scenarios": ["game-engine/initial-food#food-count-per-territory"],
+      "scenarios": ["game-configuration/initial-food#food-count-per-territory"],
       "note": "behaviour amended by the 2026-07-19-game-rules-vetting-corrections change: snakesPerTeam items per starting territory, fertile-unrestricted (legacy: one per snake, globally placed, fertile-restricted)"
     },
     "01-REQ-018": {
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "game-engine/initial-snakes",
-          "change": "migrate-module-01-game-rules"
+          "target": "game-configuration/initial-snakes",
+          "change": "migrate-game-configuration"
         }
       ],
-      "scenarios": ["game-engine/initial-snakes#naming"]
+      "scenarios": ["game-configuration/initial-snakes#naming"]
     },
     "01-REQ-019": {
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "game-engine/initial-snakes",
-          "change": "migrate-module-01-game-rules"
+          "target": "game-configuration/initial-snakes",
+          "change": "migrate-game-configuration"
         }
       ]
     },
@@ -193,8 +212,8 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "game-engine/initial-snakes",
-          "change": "migrate-module-01-game-rules"
+          "target": "game-configuration/initial-snakes",
+          "change": "migrate-game-configuration"
         }
       ]
     },
@@ -202,11 +221,11 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "game-engine/initial-snakes",
-          "change": "migrate-module-01-game-rules"
+          "target": "game-configuration/initial-snakes",
+          "change": "migrate-game-configuration"
         }
       ],
-      "scenarios": ["game-engine/initial-snakes#initial-state"]
+      "scenarios": ["game-configuration/initial-snakes#initial-state"]
     },
     "01-REQ-022": {
       "disposition": "authored",
@@ -671,11 +690,20 @@
       "disposition": "authored",
       "carriedBy": [
         {
+          "target": "game-configuration/board-generation-retry",
+          "change": "migrate-game-configuration",
+          "part": "setup randomness drawn from the per-game seed"
+        },
+        {
           "target": "game-engine/determinism",
-          "change": "migrate-module-01-game-rules"
+          "change": "migrate-module-01-game-rules",
+          "part": "that no seed is accessible to any game client"
         }
       ],
-      "scenarios": ["game-engine/determinism#reproducibility", "game-engine/determinism#secrecy"]
+      "scenarios": [
+        "game-configuration/board-generation-retry#reproducible-retries",
+        "game-engine/determinism#secrecy"
+      ]
     },
     "01-REQ-060": {
       "disposition": "authored",
@@ -691,8 +719,8 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "game-engine/board-generation-retry",
-          "change": "migrate-module-01-game-rules"
+          "target": "game-configuration/board-generation-retry",
+          "change": "migrate-game-configuration"
         }
       ]
     },
@@ -713,8 +741,8 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "game-engine/configuration-parameters",
-          "change": "migrate-module-01-game-rules"
+          "target": "game-configuration/generation-parameters",
+          "change": "migrate-game-configuration"
         }
       ]
     },
@@ -722,8 +750,8 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "game-engine/configuration-parameters",
-          "change": "migrate-module-01-game-rules"
+          "target": "game-configuration/generation-parameters",
+          "change": "migrate-game-configuration"
         }
       ]
     },
@@ -749,8 +777,8 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "game-engine/configuration-parameters",
-          "change": "migrate-module-01-game-rules"
+          "target": "game-configuration/generation-parameters",
+          "change": "migrate-game-configuration"
         }
       ]
     },
@@ -767,8 +795,8 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "game-engine/configuration-parameters",
-          "change": "migrate-module-01-game-rules"
+          "target": "game-configuration/generation-parameters",
+          "change": "migrate-game-configuration"
         }
       ]
     },
@@ -776,8 +804,8 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "game-engine/configuration-parameters",
-          "change": "migrate-module-01-game-rules"
+          "target": "game-configuration/generation-parameters",
+          "change": "migrate-game-configuration"
         }
       ]
     },
@@ -882,8 +910,8 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "game-engine/hazards",
-          "change": "migrate-module-01-game-rules"
+          "target": "game-configuration/hazards",
+          "change": "migrate-game-configuration"
         }
       ],
       "note": "interim intent-grain id used during migration drafting; superseded by named identifiers before merge"
@@ -892,8 +920,8 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "game-engine/fertile-ground",
-          "change": "migrate-module-01-game-rules"
+          "target": "game-configuration/fertile-ground",
+          "change": "migrate-game-configuration"
         }
       ],
       "note": "interim intent-grain id used during migration drafting; superseded by named identifiers before merge"
@@ -902,8 +930,8 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "game-engine/starting-placement",
-          "change": "migrate-module-01-game-rules"
+          "target": "game-configuration/starting-placement",
+          "change": "migrate-game-configuration"
         }
       ],
       "note": "interim intent-grain id used during migration drafting; superseded by named identifiers before merge"
@@ -912,8 +940,8 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "game-engine/initial-snakes",
-          "change": "migrate-module-01-game-rules"
+          "target": "game-configuration/initial-snakes",
+          "change": "migrate-game-configuration"
         }
       ],
       "note": "interim intent-grain id used during migration drafting; superseded by named identifiers before merge"
@@ -922,8 +950,8 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "game-engine/initial-food",
-          "change": "migrate-module-01-game-rules"
+          "target": "game-configuration/initial-food",
+          "change": "migrate-game-configuration"
         }
       ],
       "note": "interim intent-grain id used during migration drafting; superseded by named identifiers before merge"
@@ -932,8 +960,8 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "game-engine/board-generation-retry",
-          "change": "migrate-module-01-game-rules"
+          "target": "game-configuration/board-generation-retry",
+          "change": "migrate-game-configuration"
         }
       ],
       "note": "interim intent-grain id used during migration drafting; superseded by named identifiers before merge"
@@ -7882,7 +7910,7 @@
         }
       ],
       "scenarios": [
-        "game-engine/board-geometry#construction",
+        "game-engine/board-geometry#playable-interior",
         "game-engine/scoring#proportional-par",
         "game-engine/configuration-parameters#bounds-live-at-the-surfaces"
       ]
@@ -7898,12 +7926,12 @@
     "01-REVIEW-020": {
       "carriedBy": [
         {
-          "change": "migrate-module-01-game-rules"
+          "change": "migrate-game-configuration"
         }
       ],
       "scenarios": [
-        "game-engine/board-generation-retry#failure-conditions",
-        "game-engine/board-generation-retry#infeasible-configuration"
+        "game-configuration/board-generation-retry#failure-conditions",
+        "game-configuration/board-generation-retry#infeasible-configuration"
       ]
     },
     "01-REVIEW-021": {
