@@ -1259,33 +1259,33 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "operator-control/staged-move-log",
-          "change": "migrate-operator-control"
+          "target": "game-runtime/staged-move-log",
+          "change": "mint-game-runtime"
         }
       ],
-      "scenarios": ["operator-control/staged-move-log#supersession-is-not-deletion"],
+      "scenarios": ["game-runtime/staged-move-log#supersession-is-not-deletion"],
       "note": "Last-write-wins per snake within a turn — re-authored as effective-move semantics over the append-only log (latest current-turn entry wins), never destructive overwrite, per the author-resolved staged-moves model (assignment-matrix Q4). Graduated from the module-02 parked ledger; its reconciliation flag is discharged."
     },
     "02-REQ-012": {
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "operator-control/staged-move-log",
-          "change": "migrate-operator-control"
+          "target": "game-runtime/staged-move-log",
+          "change": "mint-game-runtime"
         }
       ],
-      "scenarios": ["operator-control/staged-move-log#revocation-is-supersession"],
+      "scenarios": ["game-runtime/staged-move-log#revocation-is-supersession"],
       "note": "SUPERSEDED: the legacy 'consume and clear staged moves in the resolving transaction' wording was overridden by the later append-only model (retained for the game's lifetime, nothing cleared at resolution, no cancel operation) — author-resolved contradiction, assignment-matrix Q4. The id retires onto the append-only requirement that replaced it; the consumed-at-resolution residue survives only as 'resolution consumes what the log holds at declaration' (#accepted-until-declaration). Graduated from the module-02 parked ledger."
     },
     "02-REQ-013": {
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "replay-and-audit/turn-keyed-game-record",
-          "change": "migrate-replay-and-audit"
+          "target": "game-runtime/turn-keyed-game-record",
+          "change": "mint-game-runtime"
         }
       ],
-      "scenarios": ["replay-and-audit/replay-sufficiency#nothing-else-consulted"],
+      "scenarios": ["game-runtime/replay-sufficiency#nothing-else-consulted"],
       "note": "Complete per-turn record retained in-instance for the game's lifetime, self-sufficient for reconstructing any prior turn without consulting any external system; authored with 04-REQ-004's contents enumeration (dedupe cluster with 04-REQ-004..012)."
     },
     "02-REQ-014": {
@@ -2113,12 +2113,12 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "operator-control/team-scoped-staging",
-          "change": "migrate-operator-control"
+          "target": "game-runtime/team-scoped-staging",
+          "change": "mint-game-runtime"
         }
       ],
-      "scenarios": ["operator-control/team-scoped-staging#any-team-snake-regardless-of-selection"],
-      "note": "A team's admitted human or bot connection may stage for any team snake; the 'staging discipline is last-write-wins within the instance' clause re-authors as effective-move semantics over the append-only log (operator-control/staged-move-log)."
+      "scenarios": ["game-runtime/team-scoped-staging#any-team-snake-regardless-of-coordination"],
+      "note": "A team's admitted human or bot connection may stage for any team snake; the 'staging discipline is last-write-wins within the instance' clause re-authors as effective-move semantics over the append-only log (game-runtime/staged-move-log)."
     },
     "03-REQ-029": {
       "disposition": "authored",
@@ -2163,11 +2163,11 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "replay-and-audit/connect-time-attribution",
-          "change": "migrate-replay-and-audit"
+          "target": "game-runtime/connect-time-attribution",
+          "change": "mint-game-runtime"
         }
       ],
-      "scenarios": ["replay-and-audit/connect-time-attribution#resolved-at-connect-never-later"],
+      "scenarios": ["game-runtime/connect-time-attribution#resolved-at-connect-never-later"],
       "note": "stagedBy holds an Agent value resolved from the connection's credential at connect time; the game runtime never interprets or branches on it (dedupe with 04-REQ-020/039; connect-time model per superseding 04-REVIEW-011)."
     },
     "03-REQ-033": {
@@ -2293,11 +2293,11 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "replay-and-audit/connect-time-attribution",
-          "change": "migrate-replay-and-audit"
+          "target": "game-runtime/connect-time-attribution",
+          "change": "mint-game-runtime"
         }
       ],
-      "scenarios": ["replay-and-audit/connect-time-attribution#reconnect-appends-fresh"],
+      "scenarios": ["game-runtime/connect-time-attribution#reconnect-appends-fresh"],
       "note": "Agent resolved at each client_connected; attribution record retained for the full game including closed/replaced connections so historical stagedBy values stay consistent (dedupe with 04-REQ-020/021)."
     },
     "03-REQ-045": {
@@ -2615,8 +2615,8 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "replay-and-audit/turn-keyed-game-record",
-          "change": "migrate-replay-and-audit"
+          "target": "game-runtime/turn-keyed-game-record",
+          "change": "mint-game-runtime"
         }
       ],
       "note": "Historical record with every completed turn's full observable state directly queryable, no re-execution, no other runtime (satisfied 02-REQ-013)."
@@ -2625,19 +2625,19 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "replay-and-audit/append-only-history",
-          "change": "migrate-replay-and-audit"
+          "target": "game-runtime/append-only-record",
+          "change": "mint-game-runtime"
         }
       ],
-      "scenarios": ["replay-and-audit/append-only-history#the-single-stamp"],
+      "scenarios": ["game-runtime/append-only-record#the-single-stamp"],
       "note": "Historical record append-only once committed; sole exception the one-time destroyedTurn stamp (dedupe cluster with 04-REQ-059/066 and 06-REQ-039)."
     },
     "04-REQ-006": {
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "replay-and-audit/turn-keyed-game-record",
-          "change": "migrate-replay-and-audit"
+          "target": "game-runtime/turn-keyed-game-record",
+          "change": "mint-game-runtime"
         }
       ],
       "note": "Per-turn snapshot of each snake's full state at each turn boundary — part of the record-contents enumeration."
@@ -2646,19 +2646,19 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "replay-and-audit/turn-keyed-game-record",
-          "change": "migrate-replay-and-audit"
+          "target": "game-runtime/turn-keyed-game-record",
+          "change": "mint-game-runtime"
         }
       ],
-      "scenarios": ["replay-and-audit/turn-keyed-game-record#items-derivable-at-any-turn"],
+      "scenarios": ["game-runtime/turn-keyed-game-record#items-derivable-at-any-turn"],
       "note": "Item lifetimes tracked by spawn/destroyed turn; any turn's item set directly derivable; game-start items spawn turn 0."
     },
     "04-REQ-008": {
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "replay-and-audit/turn-keyed-game-record",
-          "change": "migrate-replay-and-audit"
+          "target": "game-runtime/turn-keyed-game-record",
+          "change": "mint-game-runtime"
         }
       ],
       "note": "Board layout written once at initialization, never modified after — part of the record-contents enumeration."
@@ -2667,46 +2667,46 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "replay-and-audit/turn-keyed-game-record",
-          "change": "migrate-replay-and-audit"
+          "target": "game-runtime/turn-keyed-game-record",
+          "change": "mint-game-runtime"
         }
       ],
-      "note": "Per-turn record of each team's post-turn budget and declaration kind (explicit with timestamp vs clock expiry; turn-pacing/turn-declaration owns the declaration semantics)."
+      "note": "Per-turn record of each team's post-turn budget and declaration kind (explicit with timestamp vs clock expiry; game-runtime/turn-declaration owns the declaration semantics)."
     },
     "04-REQ-010": {
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "replay-and-audit/turn-keyed-game-record",
-          "change": "migrate-replay-and-audit"
+          "target": "game-runtime/turn-keyed-game-record",
+          "change": "mint-game-runtime"
         }
       ],
-      "scenarios": ["replay-and-audit/turn-keyed-game-record#resolution-takes-time"],
+      "scenarios": ["game-runtime/turn-keyed-game-record#resolution-takes-time"],
       "note": "Per-turn wall-clock start and resolution-start moments recorded; resolution never assumed instantaneous."
     },
     "04-REQ-011": {
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "replay-and-audit/turn-keyed-game-record",
-          "change": "migrate-replay-and-audit"
+          "target": "game-runtime/turn-keyed-game-record",
+          "change": "mint-game-runtime"
         },
         {
-          "target": "replay-and-audit/canonical-event-order",
-          "change": "migrate-replay-and-audit"
+          "target": "game-runtime/canonical-event-order",
+          "change": "mint-game-runtime"
         }
       ],
-      "note": "All turn events retained, attributed to their producing turn; within-turn ordering carried by the canonical representation order (replay-and-audit/canonical-event-order)."
+      "note": "All turn events retained, attributed to their producing turn; within-turn ordering carried by the canonical representation order (game-runtime/canonical-event-order)."
     },
     "04-REQ-012": {
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "replay-and-audit/replay-sufficiency",
-          "change": "migrate-replay-and-audit"
+          "target": "game-runtime/replay-sufficiency",
+          "change": "mint-game-runtime"
         }
       ],
-      "scenarios": ["replay-and-audit/replay-sufficiency#nothing-else-consulted"],
+      "scenarios": ["game-runtime/replay-sufficiency#nothing-else-consulted"],
       "note": "Record sufficient for a complete replay — every board state, item lifetime, turn event, stagedBy attribution — without any other runtime (dedupe with 02-REQ-013/014)."
     },
     "04-REQ-013": {
@@ -2798,8 +2798,8 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "replay-and-audit/connect-time-attribution",
-          "change": "migrate-replay-and-audit"
+          "target": "game-runtime/connect-time-attribution",
+          "change": "mint-game-runtime"
         }
       ],
       "note": "Participant attribution record: one Agent-mapped entry per admitted connection, retained for the instance's whole life (dedupe with 03-REQ-044; connect-time model per 04-REVIEW-011)."
@@ -2808,13 +2808,13 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "replay-and-audit/connect-time-attribution",
-          "change": "migrate-replay-and-audit"
+          "target": "game-runtime/connect-time-attribution",
+          "change": "mint-game-runtime"
         }
       ],
       "scenarios": [
-        "replay-and-audit/connect-time-attribution#disconnect-erases-nothing",
-        "replay-and-audit/connect-time-attribution#reconnect-appends-fresh"
+        "game-runtime/connect-time-attribution#disconnect-erases-nothing",
+        "game-runtime/connect-time-attribution#reconnect-appends-fresh"
       ],
       "note": "Attribution entries never mutated/deleted on connection close; reconnect yields a fresh entry; historical references remain resolvable without the original connection."
     },
@@ -2844,25 +2844,25 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "operator-control/team-scoped-staging",
-          "change": "migrate-operator-control"
+          "target": "game-runtime/team-scoped-staging",
+          "change": "mint-game-runtime"
         }
       ],
-      "scenarios": ["operator-control/team-scoped-staging#any-team-snake-regardless-of-selection"],
+      "scenarios": ["game-runtime/team-scoped-staging#any-team-snake-regardless-of-coordination"],
       "note": "The move-staging operation accepts (snake, direction) only from operator/bot connections of the owning team; all other callers rejected. Dedupe with 03-REQ-028 into one team-scoped-staging requirement; role-level refusal of spectators/coaches is identity-and-authorization/role-bound-privileges."
     },
     "04-REQ-025": {
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "operator-control/staged-move-log",
-          "change": "migrate-operator-control"
+          "target": "game-runtime/staged-move-log",
+          "change": "mint-game-runtime"
         }
       ],
       "scenarios": [
-        "operator-control/staged-move-log#supersession-is-not-deletion",
-        "operator-control/staged-move-log#revocation-is-supersession",
-        "operator-control/staged-move-log#nothing-carries-over"
+        "game-runtime/staged-move-log#supersession-is-not-deletion",
+        "game-runtime/staged-move-log#revocation-is-supersession",
+        "game-runtime/staged-move-log#nothing-carries-over"
       ],
       "note": "The append-only staged-move log: new entries never overwrite, effective move = latest entry, no cancel operation, retained for the game's lifetime, not cleared at resolution. The authoritative model that supersedes 02-REQ-011/012's wording (assignment-matrix Q4). Current-turn scoping of the effective move constraint-mined from the legacy Design's resolution read. Per-entry attribution/timestamps (04-REQ-026/027) are replay-and-audit's story."
     },
@@ -2870,8 +2870,8 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "replay-and-audit/staged-move-attribution",
-          "change": "migrate-replay-and-audit"
+          "target": "game-runtime/staged-move-attribution",
+          "change": "mint-game-runtime"
         }
       ],
       "note": "Each accepted staged move permanently records writer Agent, wall-clock acceptance time, and staging turn."
@@ -2880,46 +2880,46 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "replay-and-audit/staged-move-attribution",
-          "change": "migrate-replay-and-audit"
+          "target": "game-runtime/staged-move-attribution",
+          "change": "mint-game-runtime"
         }
       ],
-      "scenarios": ["replay-and-audit/staged-move-attribution#sub-turn-staging-history"],
-      "note": "Staged-move storage is append-only, historical, part of the permanent record; enables sub-turn reconstruction of who staged what (log structure itself owned by operator-control/staged-move-log)."
+      "scenarios": ["game-runtime/staged-move-attribution#sub-turn-staging-history"],
+      "note": "Staged-move storage is append-only, historical, part of the permanent record; enables sub-turn reconstruction of who staged what (log structure itself owned by game-runtime/staged-move-log)."
     },
     "04-REQ-028": {
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "operator-control/staging-is-unvalidated",
-          "change": "migrate-operator-control"
+          "target": "game-runtime/staging-is-unvalidated",
+          "change": "mint-game-runtime"
         }
       ],
-      "scenarios": ["operator-control/staging-is-unvalidated#lethal-direction-accepted"],
+      "scenarios": ["game-runtime/staging-is-unvalidated#lethal-direction-accepted"],
       "note": "No legality validation at staging; consequences only at resolution via the collision rules. Preserves the explore-a-direction affordance (see operator-control/board-and-move-interface#exploration-is-staging)."
     },
     "04-REQ-029": {
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "operator-control/team-scoped-staging",
-          "change": "migrate-operator-control"
+          "target": "game-runtime/team-scoped-staging",
+          "change": "mint-game-runtime"
         }
       ],
-      "scenarios": ["operator-control/team-scoped-staging#spoofed-parameters-rejected"],
+      "scenarios": ["game-runtime/team-scoped-staging#spoofed-parameters-rejected"],
       "note": "No cross-team staging even with spoofed parameters; team membership is the connection-level association from admission and cannot be asserted per call. The general team-granularity principle stays with global-invariants; this entry pins the staging-specific behaviour."
     },
     "04-REQ-030": {
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "turn-pacing/in-game-clock",
-          "change": "migrate-turn-pacing"
+          "target": "game-runtime/in-game-clock",
+          "change": "mint-game-runtime"
         }
       ],
       "scenarios": [
-        "turn-pacing/in-game-clock#no-external-timekeeper",
-        "turn-pacing/in-game-clock#invariant-at-every-instant"
+        "game-runtime/in-game-clock#no-external-timekeeper",
+        "game-runtime/in-game-clock#invariant-at-every-instant"
       ],
       "note": "The chess-timer semantics implemented within the game instance's own state, no external runtime mediating clock timing. The arithmetic RULES it bound to stay in game-engine/chess-timer (cited, not restated); the carve-out-deduction correction (04-REVIEW-023 cascade) survives as the every-instant budget+clock invariant. Turn-0 clock start at playability constraint-mined from the legacy Design's init sequence."
     },
@@ -2927,13 +2927,13 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "turn-pacing/turn-declaration",
-          "change": "migrate-turn-pacing"
+          "target": "game-runtime/turn-declaration",
+          "change": "mint-game-runtime"
         }
       ],
       "scenarios": [
-        "turn-pacing/turn-declaration#second-declaration-is-a-no-op",
-        "turn-pacing/turn-declaration#only-the-team-declares"
+        "game-runtime/turn-declaration#second-declaration-is-a-no-op",
+        "game-runtime/turn-declaration#only-the-team-declares"
       ],
       "note": "The declare-turn-over operation: team-only, stops the clock and banks the remainder (game-engine/chess-timer#declaration-banks-the-remainder), idempotent within the turn, spectators rejected. The declaration-timestamp persistence clause rides the per-turn record, which is replay-and-audit's story (04-REQ-009); the kind-distinction behaviour is authored here."
     },
@@ -2941,24 +2941,24 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "turn-pacing/turn-declaration",
-          "change": "migrate-turn-pacing"
+          "target": "game-runtime/turn-declaration",
+          "change": "mint-game-runtime"
         }
       ],
-      "scenarios": ["turn-pacing/turn-declaration#expiry-detected-autonomously"],
+      "scenarios": ["game-runtime/turn-declaration#expiry-detected-autonomously"],
       "note": "Autonomous clock-expiry detection treated as implicit declaration, marked distinctly from explicit declaration. The record that persists the distinction is replay-and-audit's (04-REQ-009); the distinguishable-kinds behaviour is authored here."
     },
     "04-REQ-033": {
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "turn-pacing/exactly-once-resolution",
-          "change": "migrate-turn-pacing"
+          "target": "game-runtime/exactly-once-resolution",
+          "change": "mint-game-runtime"
         }
       ],
       "scenarios": [
-        "turn-pacing/exactly-once-resolution#any-mix-one-trigger",
-        "turn-pacing/exactly-once-resolution#nothing-else-resolves"
+        "game-runtime/exactly-once-resolution#any-mix-one-trigger",
+        "game-runtime/exactly-once-resolution#nothing-else-resolves"
       ],
       "note": "Resolution triggered exactly once per turn at the moment all participating teams have declared (any mix of kinds), and by no other condition — not wall-clock time, administrative action, or connection changes."
     },
@@ -2966,26 +2966,26 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "turn-pacing/turn-declaration",
-          "change": "migrate-turn-pacing"
+          "target": "game-runtime/turn-declaration",
+          "change": "mint-game-runtime"
         }
       ],
-      "scenarios": ["turn-pacing/turn-declaration#snakeless-team-never-blocks"],
+      "scenarios": ["game-runtime/turn-declaration#snakeless-team-never-blocks"],
       "note": "Teams with no alive snakes treated as declared at the start of every subsequent turn — resolution never waits out an eliminated team's clock. Folded into the declaration requirement as the third declaration kind (snakeless)."
     },
     "04-REQ-035": {
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "turn-pacing/in-game-clock",
-          "change": "migrate-turn-pacing"
+          "target": "game-runtime/in-game-clock",
+          "change": "mint-game-runtime"
         },
         {
           "target": "game-engine/chess-timer",
           "change": "migrate-module-01-game-rules"
         }
       ],
-      "scenarios": ["turn-pacing/in-game-clock#invariant-at-every-instant"],
+      "scenarios": ["game-runtime/in-game-clock#invariant-at-every-instant"],
       "note": "Budget bookkeeping conforming to the engine's initial-budget/increment/carve-out rules — authored as the realization citing game-engine/chess-timer, with the deduction (04-REVIEW-023) carried by the every-instant invariant. The post-turn-budget recording clause rides the per-turn record, replay-and-audit's story (04-REQ-009)."
     },
     "04-REQ-036": {
@@ -3020,8 +3020,8 @@
       "disposition": "mechanism",
       "carriedBy": [
         {
-          "target": "turn-pacing/exactly-once-resolution",
-          "change": "migrate-turn-pacing",
+          "target": "game-runtime/exactly-once-resolution",
+          "change": "mint-game-runtime",
           "part": "the observable exactly-once trigger"
         }
       ],
@@ -3031,80 +3031,80 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "replay-and-audit/connect-time-attribution",
-          "change": "migrate-replay-and-audit"
+          "target": "game-runtime/connect-time-attribution",
+          "change": "mint-game-runtime"
         }
       ],
-      "scenarios": ["replay-and-audit/connect-time-attribution#resolved-at-connect-never-later"],
+      "scenarios": ["game-runtime/connect-time-attribution#resolved-at-connect-never-later"],
       "note": "stagedBy in movement events is the connect-time Agent carried untouched — no interpretation, mapping, or substitution during resolution or export (satisfied 03-REQ-032; resolves 04-REVIEW-011)."
     },
     "04-REQ-040": {
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "replay-and-audit/staged-move-attribution",
-          "change": "migrate-replay-and-audit"
+          "target": "game-runtime/staged-move-attribution",
+          "change": "mint-game-runtime"
         }
       ],
-      "scenarios": ["replay-and-audit/staged-move-attribution#fallback-moves-attributed-to-no-one"],
+      "scenarios": ["game-runtime/staged-move-attribution#fallback-moves-attributed-to-no-one"],
       "note": "Movement-event attribution nullable; null exactly means fallback-determined move (both fallback branches), per resolved 04-REVIEW-002."
     },
     "04-REQ-041": {
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "turn-pacing/next-turn-bracket",
-          "change": "migrate-turn-pacing"
+          "target": "game-runtime/next-turn-bracket",
+          "change": "mint-game-runtime"
         }
       ],
-      "scenarios": ["turn-pacing/next-turn-bracket#no-silent-reordering"],
+      "scenarios": ["game-runtime/next-turn-bracket#no-silent-reordering"],
       "note": "No staged move or declaration accepted for a committed turn; late operations land in the new turn or are rejected, never silently reordered into committed state."
     },
     "04-REQ-042": {
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "turn-pacing/next-turn-bracket",
-          "change": "migrate-turn-pacing"
+          "target": "game-runtime/next-turn-bracket",
+          "change": "mint-game-runtime"
         }
       ],
-      "scenarios": ["turn-pacing/next-turn-bracket#next-turn-opens-with-the-commit"],
+      "scenarios": ["game-runtime/next-turn-bracket#next-turn-opens-with-the-commit"],
       "note": "After a resolution commit the next turn begins: budget increment, fresh clock carve-out (game-engine/chess-timer), staging and declarations accepted — no dead interval between turns."
     },
     "04-REQ-043": {
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "replay-and-audit/turn-event-record",
-          "change": "migrate-replay-and-audit"
+          "target": "game-runtime/turn-event-record",
+          "change": "mint-game-runtime"
         }
       ],
-      "scenarios": ["replay-and-audit/turn-event-record#no-new-kinds-by-extension"],
+      "scenarios": ["game-runtime/turn-event-record#no-new-kinds-by-extension"],
       "note": "Closed turn-event enumeration — the engine's vocabulary (game-engine/turn-events) plus hazard damage for survivors — no extensibility mechanism. Per-kind payload detail is carried by the engine's event vocabulary plus code-level types."
     },
     "04-REQ-044": {
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "replay-and-audit/turn-event-record",
-          "change": "migrate-replay-and-audit"
+          "target": "game-runtime/turn-event-record",
+          "change": "mint-game-runtime"
         }
       ],
-      "scenarios": ["replay-and-audit/turn-event-record#death-carries-its-cause"],
+      "scenarios": ["game-runtime/turn-event-record#death-carries-its-cause"],
       "note": "Events self-sufficient for visualisation: no re-execution, no snapshot diffing to recover what an event describes."
     },
     "04-REQ-045": {
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "replay-and-audit/canonical-event-order",
-          "change": "migrate-replay-and-audit"
+          "target": "game-runtime/canonical-event-order",
+          "change": "mint-game-runtime"
         }
       ],
       "scenarios": [
-        "replay-and-audit/canonical-event-order#derived-not-stored",
-        "replay-and-audit/canonical-event-order#stable-across-replays",
-        "replay-and-audit/canonical-event-order#order-implies-no-causality"
+        "game-runtime/canonical-event-order#derived-not-stored",
+        "game-runtime/canonical-event-order#stable-across-replays",
+        "game-runtime/canonical-event-order#order-implies-no-causality"
       ],
       "note": "A turn's events are a set with a canonical representation order (type class, then subject id) derived from event data, stable across replays, asserting no causality and no delivery-order obligation (resolves 04-REVIEW-004; live delivery posture in live-game-observation/observation-use-cases)."
     },
@@ -3112,8 +3112,8 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "replay-and-audit/turn-event-record",
-          "change": "migrate-replay-and-audit",
+          "target": "game-runtime/turn-event-record",
+          "change": "mint-game-runtime",
           "part": "the closed event enumeration, which forbids outside-ruleset mechanics by construction"
         }
       ],
@@ -3264,24 +3264,24 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "replay-and-audit/append-only-history",
-          "change": "migrate-replay-and-audit"
+          "target": "game-runtime/append-only-record",
+          "change": "mint-game-runtime"
         }
       ],
-      "scenarios": ["replay-and-audit/append-only-history#past-reads-stable"],
+      "scenarios": ["game-runtime/append-only-record#past-reads-stable"],
       "note": "Past queries stable as turns progress; no append-only record retroactively altered (dedupe with 04-REQ-005)."
     },
     "04-REQ-060": {
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "game-lifecycle/game-end-boundary",
-          "change": "migrate-game-lifecycle"
+          "target": "game-runtime/game-over-freeze",
+          "change": "mint-game-runtime"
         }
       ],
       "scenarios": [
-        "game-lifecycle/game-end-boundary#zero-grace-window",
-        "game-lifecycle/game-end-boundary#no-turns-after-end"
+        "game-runtime/game-over-freeze#zero-grace-window",
+        "game-runtime/game-over-freeze#no-turns-after-end"
       ],
       "note": "Game ends at the commit of the end-detecting turn; all later gameplay operations rejected as game-over with zero grace window (commit-boundary language from 04-REVIEW-006)."
     },
@@ -3357,11 +3357,11 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "replay-and-audit/append-only-history",
-          "change": "migrate-replay-and-audit"
+          "target": "game-runtime/append-only-record",
+          "change": "mint-game-runtime"
         }
       ],
-      "scenarios": ["replay-and-audit/append-only-history#no-retroactive-correction"],
+      "scenarios": ["game-runtime/append-only-record#no-retroactive-correction"],
       "note": "No committed historical record ever modified; correctness is the resolving transaction's responsibility at commit (dedupe with 04-REQ-005)."
     },
     "04-REQ-067": {
@@ -3392,11 +3392,11 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "replay-and-audit/replay-sufficiency",
-          "change": "migrate-replay-and-audit"
+          "target": "game-runtime/replay-sufficiency",
+          "change": "mint-game-runtime"
         }
       ],
-      "scenarios": ["replay-and-audit/replay-sufficiency#bit-identical-reproduction"],
+      "scenarios": ["game-runtime/replay-sufficiency#bit-identical-reproduction"],
       "note": "Identical seeds/config/staged sequence yield an identical record. Engine-level reproducibility is game-engine/determinism; what is minted here is the record-level identity that makes it externally verifiable."
     },
     "04-REQ-070": {
@@ -3418,12 +3418,18 @@
       "carriedBy": [
         {
           "target": "live-game-observation/scoreboard-sole-aggregate-authority",
-          "change": "migrate-live-game-observation"
+          "change": "migrate-live-game-observation",
+          "part": "the delivery side — rows identical for every connection, and aggregates read only from this channel"
+        },
+        {
+          "target": "game-runtime/per-turn-scoreboard",
+          "change": "mint-game-runtime",
+          "part": "the write side — one zero-filled row per rostered team per completed turn, over the true alive set, written in the resolving transaction"
         }
       ],
       "scenarios": [
         "live-game-observation/scoreboard-sole-aggregate-authority#invisible-snakes-counted-not-revealed",
-        "live-game-observation/scoreboard-sole-aggregate-authority#eliminated-teams-zero-filled",
+        "game-runtime/per-turn-scoreboard#eliminated-teams-zero-filled",
         "live-game-observation/scoreboard-sole-aggregate-authority#client-aggregation-is-a-defect"
       ],
       "note": "Per-turn scoreboard rows for every rostered team, zero-filled, computed over the true alive set including invisible snakes, identical for all connections, the sole aggregate channel. Same-transaction write constraint-mined into #never-lags-the-snapshot."
@@ -5603,11 +5609,11 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "replay-and-audit/staged-move-attribution",
-          "change": "migrate-replay-and-audit"
+          "target": "game-runtime/staged-move-attribution",
+          "change": "mint-game-runtime"
         }
       ],
-      "scenarios": ["replay-and-audit/staged-move-attribution#bot-and-operator-distinguishable"],
+      "scenarios": ["game-runtime/staged-move-attribution#bot-and-operator-distinguishable"],
       "note": "Framework-staged moves attributed to the team's bot identity, never an individual human, so bot- and operator-originated moves are distinguishable in the record."
     },
     "07-REQ-048": {
@@ -8065,7 +8071,7 @@
         }
       ],
       "scenarios": [
-        "replay-and-audit/connect-time-attribution#resolved-at-connect-never-later",
+        "game-runtime/connect-time-attribution#resolved-at-connect-never-later",
         "replay-and-audit/agent-form-persistence#defensive-check-at-persistence"
       ],
       "note": "stagedBy attribution granularity: originally resolved as opaque in-instance Identity with export-time resolution; superseded (with 04-REVIEW-011) by connect-time Agent resolution — stagedBy carries Agent | null from the start, the runtime never interprets it, and persisted records contain no raw Identities."
@@ -8130,7 +8136,7 @@
           "change": "migrate-replay-and-audit"
         }
       ],
-      "scenarios": ["replay-and-audit/staged-move-attribution#fallback-moves-attributed-to-no-one"],
+      "scenarios": ["game-runtime/staged-move-attribution#fallback-moves-attributed-to-no-one"],
       "note": "Fallback representation: stagedBy is nullable and null denotes exactly a fallback-determined move — no sentinel value, no split event kinds."
     },
     "04-REVIEW-003": {
@@ -8139,7 +8145,7 @@
           "change": "migrate-replay-and-audit"
         }
       ],
-      "scenarios": ["replay-and-audit/turn-event-record#hazard-damage-never-double-counted"],
+      "scenarios": ["game-runtime/turn-event-record#hazard-damage-never-double-counted"],
       "note": "Hazard-damage event dedup: survivors emit hazard-damage events; snakes that die with hazard contributing emit only the death event with hazard among its sources — no double counting."
     },
     "04-REVIEW-004": {
@@ -8149,18 +8155,18 @@
         }
       ],
       "scenarios": [
-        "replay-and-audit/canonical-event-order#order-implies-no-causality",
-        "replay-and-audit/canonical-event-order#derived-not-stored"
+        "game-runtime/canonical-event-order#order-implies-no-causality",
+        "game-runtime/canonical-event-order#derived-not-stored"
       ],
       "note": "Intra-turn ordering: events are a set; the canonical representation order (type class, then subject id) is deterministic, derived from event data, and expresses no causal/temporal relation."
     },
     "04-REVIEW-006": {
       "carriedBy": [
         {
-          "change": "migrate-game-lifecycle"
+          "change": "mint-game-runtime"
         }
       ],
-      "scenarios": ["game-lifecycle/game-end-boundary#zero-grace-window"],
+      "scenarios": ["game-runtime/game-over-freeze#zero-grace-window"],
       "note": "Option A: game-end rejection begins at the commit of the end-detecting turn; in-flight operations arriving after the commit are rejected as game-over — no grace window between commit and enforcement."
     },
     "04-REVIEW-007": {
@@ -8169,7 +8175,7 @@
           "change": "migrate-replay-and-audit"
         }
       ],
-      "scenarios": ["replay-and-audit/turn-keyed-game-record#unbounded-retention"],
+      "scenarios": ["game-runtime/turn-keyed-game-record#unbounded-retention"],
       "note": "Unbounded in-instance retention for the instance's life (Option A): the one-pass end-of-game persistence contract forbids any runtime-side retention cap; post-teardown retention is the platform's concern."
     },
     "04-REVIEW-009": {
@@ -8190,8 +8196,8 @@
         }
       ],
       "scenarios": [
-        "replay-and-audit/connect-time-attribution#resolved-at-connect-never-later",
-        "replay-and-audit/connect-time-attribution#reconnect-appends-fresh"
+        "game-runtime/connect-time-attribution#resolved-at-connect-never-later",
+        "game-runtime/connect-time-attribution#reconnect-appends-fresh"
       ],
       "note": "Connect-time Agent resolution: connection identity resolved to an Agent at admission (not at export); attribution entries append-only across reconnections so historical stagedBy references resolve without the original connection."
     },
@@ -8219,30 +8225,31 @@
           "change": "migrate-operator-control"
         }
       ],
-      "scenarios": ["operator-control/staged-move-log#accepted-until-declaration"],
+      "scenarios": ["game-runtime/staged-move-log#accepted-until-declaration"],
       "note": "No final-submission barrier: a pre-declaration burst of staged moves is ordinary appends, and resolution consumes exactly what the log holds at the instant of declaration; submission-pass coordination is entirely a team-side concern."
     },
     "04-REVIEW-020": {
       "carriedBy": [
         {
           "change": "migrate-live-game-observation"
+        },
+        {
+          "change": "mint-game-runtime"
         }
       ],
       "scenarios": [
         "live-game-observation/scoreboard-sole-aggregate-authority#invisible-snakes-counted-not-revealed",
-        "live-game-observation/scoreboard-sole-aggregate-authority#eliminated-teams-zero-filled"
+        "game-runtime/per-turn-scoreboard#eliminated-teams-zero-filled"
       ],
       "note": "Scoreboard computed over the true alive set including invisible snakes; eliminated teams zero-filled, never omitted."
     },
     "04-REVIEW-021": {
       "carriedBy": [
         {
-          "change": "migrate-live-game-observation"
+          "change": "mint-game-runtime"
         }
       ],
-      "scenarios": [
-        "live-game-observation/scoreboard-sole-aggregate-authority#live-score-reads-as-if-ended"
-      ],
+      "scenarios": ["game-runtime/per-turn-scoreboard#live-score-reads-as-if-ended"],
       "note": "Live team score is the normalised as-if-ended score (par 1.0) per game-engine/scoring, decoupled from aggregate length."
     },
     "04-REVIEW-023": {
@@ -8252,7 +8259,7 @@
           "change": "migrate-module-01-game-rules"
         }
       ],
-      "scenarios": ["turn-pacing/in-game-clock#invariant-at-every-instant"],
+      "scenarios": ["game-runtime/in-game-clock#invariant-at-every-instant"],
       "note": "The budget carve-out correction cascade: the per-turn clock is deducted from the budget the moment it is carved out, so budget + clock = total remaining time at every instant and depletion is reachable. Promoted from boundary arithmetic to the every-instant invariant in the realization requirement; the arithmetic rule itself lives in game-engine/chess-timer#carve-out-arithmetic."
     },
     "05-REVIEW-002": {
@@ -8546,7 +8553,7 @@
         }
       ],
       "scenarios": [
-        "operator-control/staged-move-log#single-home",
+        "game-runtime/staged-move-log#single-home",
         "operator-control/operator-dual-connection#direct-not-proxied"
       ],
       "note": "Staged moves are mediated exclusively by the game's SpacetimeDB instance — operators stage directly under their own tokens, and every consumer (including the team's automated player) observes staged moves from that single log; no secondary staging store or brokered path exists."

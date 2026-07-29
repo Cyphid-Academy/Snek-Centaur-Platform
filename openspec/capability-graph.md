@@ -37,6 +37,7 @@ flowchart TD
   game-configuration["game-configuration"]:::open
   game-engine["game-engine"]
   game-lifecycle["game-lifecycle"]:::open
+  game-runtime["game-runtime"]:::open
   global-invariants["global-invariants"]
   identity-and-authorization["identity-and-authorization"]:::open
   live-game-observation["live-game-observation"]:::open
@@ -78,6 +79,11 @@ flowchart TD
   game-lifecycle -->|24| global-invariants
   game-lifecycle -->|2| identity-and-authorization
   game-lifecycle -->|3| team-server-management
+  game-runtime -->|17| game-engine
+  game-runtime -->|3| game-lifecycle
+  game-runtime -->|26| global-invariants
+  game-runtime -->|1| identity-and-authorization
+  game-runtime -->|3| test-sequences
   global-invariants -->|4| game-engine
   identity-and-authorization -->|35| global-invariants
   live-game-observation -->|5| game-engine
@@ -126,5 +132,5 @@ flowchart TD
   visual-tester -->|4| test-sequences
 
   class game-engine,global-invariants base;
-  linkStyle 0,4,5,7,10,11,14,16,19,20,22,23,27,28,29,31,32,36,38,40,42,49,51,55,58,60,65,66,69,70 stroke-opacity:0.25;
+  linkStyle 0,4,5,7,10,11,14,16,19,20,22,23,26,28,32,33,34,36,37,41,43,45,47,54,56,60,63,65,70,71,74,75 stroke-opacity:0.25;
 ```
