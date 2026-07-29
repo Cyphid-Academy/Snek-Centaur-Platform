@@ -29,6 +29,7 @@ flowchart TD
   classDef base stroke-width:2px;
 
   accounts-and-profiles["accounts-and-profiles"]:::open
+  application-shell["application-shell"]:::open
   bot-configuration["bot-configuration"]:::open
   bot-framework["bot-framework"]:::open
   decision-transparency["decision-transparency"]:::open
@@ -53,6 +54,8 @@ flowchart TD
   accounts-and-profiles -->|2| identity-and-authorization
   accounts-and-profiles -->|2| replay-and-audit
   accounts-and-profiles -->|5| team-management
+  application-shell -->|1| game-engine
+  application-shell -->|5| global-invariants
   bot-configuration -->|8| bot-framework
   bot-configuration -->|5| global-invariants
   bot-configuration -->|1| identity-and-authorization
@@ -113,5 +116,5 @@ flowchart TD
   visual-tester -->|4| test-sequences
 
   class game-engine,global-invariants base;
-  linkStyle 0,5,8,9,12,14,15,17,18,22,23,24,26,27,31,34,36,43,45,47,50,52,57,58,60 stroke-opacity:0.25;
+  linkStyle 0,4,5,7,10,11,14,16,17,19,20,24,25,26,28,29,33,36,38,45,47,49,52,54,59,60,62 stroke-opacity:0.25;
 ```
