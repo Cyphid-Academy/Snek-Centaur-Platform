@@ -10,12 +10,13 @@
     "onlyBuiltDependencies": ["@biomejs/biome", "@fission-ai/openspec", "esbuild"]
   },
   "scripts": {
+    "build:packages": "tsc -b",
     "typecheck": "tsc -b && pnpm --filter @cyphid/centaur-server-reference typecheck && pnpm --filter @cyphid/visual-tester typecheck",
     "lint": "biome check .",
     "format": "biome check --write .",
-    "test": "vitest run && pnpm --filter @cyphid/visual-tester test",
-    "dev": "pnpm --filter @cyphid/centaur-server-reference dev",
-    "dev:tester": "pnpm --filter @cyphid/visual-tester dev",
+    "test": "pnpm build:packages && vitest run && pnpm --filter @cyphid/visual-tester test",
+    "dev": "pnpm build:packages && pnpm --filter @cyphid/centaur-server-reference dev",
+    "dev:tester": "pnpm build:packages && pnpm --filter @cyphid/visual-tester dev",
     "build": "pnpm -r build",
     "spec:validate": "openspec validate --specs --strict",
     "spec:validate:changes": "node scripts/validate-open-changes.mjs",

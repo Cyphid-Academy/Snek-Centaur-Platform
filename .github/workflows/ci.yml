@@ -50,9 +50,13 @@ jobs:
           node-version: "20"
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # Workspace consumers resolve @cyphid/snek-engine through its published
-      # exports (dist/), so build it before running tests that import it.
-      - run: pnpm --filter @cyphid/snek-engine build
+      # `pnpm test` builds the workspace packages first (`build:packages`).
+      # Consumers resolve them through their published exports (dist/), which
+      # is gitignored, so an unbuilt package is a resolve failure rather than a
+      # test failure — and it was a hand-listed single package here until
+      # adding a second one broke this job. `build:packages` is `tsc -b` over
+      # the root project references, so a new package that typechecks is a new
+      # package this builds.
       - run: pnpm test
 
   spec-check:

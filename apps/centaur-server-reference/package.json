@@ -4,10 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "pnpm -w run build:packages",
     "dev": "vite dev --port 5000 --host",
+    "prebuild": "pnpm -w run build:packages",
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "svelte-kit sync && tsc --noEmit",
+    "pretest": "pnpm -w run build:packages",
     "test": "vitest run"
   },
   "dependencies": {
