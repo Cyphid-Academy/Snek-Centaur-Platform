@@ -1,94 +1,33 @@
 ## Purpose
 
-The team decides when its turn resolves. This capability owns the runtime
-realization of the game's chess clock inside the live game instance and the
-declaration workflow built on it — explicit declaration, implicit
-declaration by clock expiry, automatic declaration for snakeless teams, and
-the exactly-once trigger of turn resolution — plus the team-side pacing
-above it: each operator's durable tempo, the unanimous-flow precondition
-under which the team's automated player submits the turn, the Captain's
-immediate override, the automated player's submission passes — the
-scheduled cadence and the deadline-driven final flush, timed by the team's
-live pacing parameters — and the pacing surface of the live interface. The
-clock's arithmetic rules belong to the engine; who holds which snake, how
-moves are staged, and the Captain's boot belong to the operator story; how
-the automated player decides a move belongs to the framework story; where
-the timing parameters are stored, edited, and captured belongs to the
-configuration story.
+The team decides when its turn resolves. This capability owns the team-side
+pacing that arrives at that decision: each operator's durable tempo, the
+unanimous-flow precondition under which the team's automated player submits
+the turn, the Captain's immediate override, the automated player's
+submission passes — the scheduled cadence and the deadline-driven final
+flush, timed by the team's live, game-scoped pacing parameters — and the
+pacing surface of the live interface. The clock's arithmetic rules belong to
+the engine; its realization inside the game's own runtime, the
+declare-turn-over operation the team's decision invokes, and the
+exactly-once trigger of resolution belong to the game-runtime story; who
+holds which snake, how moves are staged, and the Captain's boot belong to
+the operator story; how the automated player decides a move belongs to the
+framework story; where the timing parameters are stored, edited, and
+captured belongs to the configuration story.
 
-Depends on: game-engine, global-invariants, operator-control, bot-framework,
-bot-configuration.
+Depends on: game-engine, game-runtime, global-invariants, operator-control,
+bot-framework, bot-configuration.
 
 ## ADDED Requirements
 
-### Requirement: turn-pacing/in-game-clock
-Depends on: game-engine/chess-timer, global-invariants/game-instance-hermeticity.
-
-The game's SpacetimeDB instance SHALL realise the engine's chess-timer rules entirely within its own state — tracking each team's time budget, carving each turn's clock out of the budget, banking declared remainders, and detecting expiry — with no external runtime mediating clock timing, a guarantee the instance's hermeticity makes reachable. At every observable instant a team's budget and per-turn clock SHALL sum exactly to its total remaining time, and the first turn's clocks SHALL start running the moment the game becomes playable.
-
-#### Scenario: #no-external-timekeeper
-- **WHEN** every system outside the game instance is slow, disconnected, or down
-- **THEN** clocks still tick, expire, and declare on time — per-turn timing waits on nothing outside the instance
-
-#### Scenario: #invariant-at-every-instant
-- **WHEN** a team's timing state is read at any moment — mid-turn, at carve-out, at declaration
-- **THEN** budget plus clock equals total remaining time exactly — no observable instant double-counts or drops the carved-out clock
-
-#### Scenario: #clocks-run-from-playability
-- **WHEN** the game becomes playable
-- **THEN** the first turn's clocks are already running from that moment — with no grace period, a team whose operators arrive late has genuinely spent that time
-
-### Requirement: turn-pacing/turn-declaration
-Depends on: global-invariants/team-granularity-authorization, game-engine/chess-timer#declaration-banks-the-remainder, global-invariants/transactional-invariant-enforcement#both-stores-guard-their-own-invariants, game-engine/chess-timer#expiry-declares-automatically.
-
-The game instance SHALL expose a declare-turn-over operation invocable only by the owning team's admitted operator and bot connections, with no finer check of which member or bot is acting: a declaration stops the team's clock and banks the remainder into its budget, and repeated declarations within a turn are idempotent. The instance SHALL itself detect a clock reaching zero and treat it as an implicit declaration, and SHALL treat a team with no alive snakes as having declared at each turn's start; every declaration SHALL carry its kind — explicit, clock-expiry, or snakeless — distinguishably.
-
-#### Scenario: #second-declaration-is-a-no-op
-- **WHEN** a team's connections declare turn over twice in one turn
-- **THEN** the second declaration changes nothing — no double credit, no error, no new record of a distinct declaration
-
-#### Scenario: #expiry-detected-autonomously
-- **WHEN** a team's clock reaches zero while none of its clients is even connected
-- **THEN** the instance itself declares the team's turn over, marked as a clock-expiry declaration distinct from an explicit one
-
-#### Scenario: #snakeless-team-never-blocks
-- **WHEN** a team has no alive snakes while the game continues
-- **THEN** it counts as having declared at the start of every subsequent turn, marked as such — resolution never waits out an eliminated team's clock
-
-#### Scenario: #only-the-team-declares
-- **WHEN** a spectator, coach, or opposing connection invokes the declaration for a team
-- **THEN** it is rejected — only the owning team's own admitted operator and bot connections can end its turn
-
-### Requirement: turn-pacing/exactly-once-resolution
-Depends on: global-invariants/authoritative-turn-resolution, game-engine/turn-resolution-model, global-invariants/transactional-invariant-enforcement#both-stores-guard-their-own-invariants.
-
-The game instance — resolution's sole authoritative executor — SHALL trigger turn resolution exactly once per turn, at the moment the last participating team's declaration lands — under any mix of explicit, clock-expiry, and snakeless declarations — and under no other condition: not elapsed wall-clock time alone, not administrative action, not connection changes.
-
-#### Scenario: #any-mix-one-trigger
-- **WHEN** one team declares explicitly, another expires, and a third is snakeless
-- **THEN** resolution runs exactly once, at the instant the last outstanding declaration lands — two final declarations landing concurrently cannot both fire it
-
-#### Scenario: #nothing-else-resolves
-- **WHEN** wall-clock time passes, connections churn, or an administrator intervenes while any team remains undeclared
-- **THEN** no resolution occurs — the all-declared condition is the sole trigger
-
-### Requirement: turn-pacing/next-turn-bracket
-Depends on: game-engine/chess-timer, operator-control/staged-move-log, global-invariants/authoritative-turn-resolution#turn-resolution-is-atomic.
-
-Once a turn's resolution has committed, the game instance SHALL never attribute a late staged move or declaration to the committed turn — a late-arriving operation is treated as the new turn's or rejected, never silently reordered into committed history — and SHALL open the next turn with the commit: budget increment applied and the new clock carved out, staging and declarations accepted.
-
-#### Scenario: #no-silent-reordering
-- **WHEN** a staged move or declaration arrives after the turn it aimed at has committed
-- **THEN** it lands in the new turn or is rejected outright — the committed turn's record is exactly what resolution consumed, never retroactively edited
-
-#### Scenario: #next-turn-opens-with-the-commit
-- **WHEN** a turn's resolution commits
-- **THEN** the next turn is immediately live — incremented budgets, freshly carved clocks already running, and staging and declaration accepted — with no dead interval in which the game is between turns
-
 ### Requirement: turn-pacing/live-pacing-parameters
-Depends on: bot-configuration/team-bot-parameters, bot-configuration/game-start-snapshot.
+Depends on: bot-configuration/team-bot-parameters, bot-configuration/game-start-snapshot, game-engine/chess-timer.
 
-For each game, each team SHALL have game-scoped live values of its submission-timing parameters — the automatic submission time allocation, the scheduled-submission interval, and the imminent-deadline threshold — initialised from the team's captured defaults at game start and independently adjustable during play. This live record SHALL be the operative source that every consumer reads directly; the current values are never derived by scanning recorded activity.
+For each game, each team SHALL have game-scoped live values of its submission-timing parameters — the automatic submission time allocation, the scheduled-submission interval, and the imminent-deadline threshold — initialised from the team's captured defaults at game start and independently adjustable during play. This live record SHALL be the operative source that every consumer reads directly; the current values are never derived by scanning recorded activity. Where the team has captured no default for the automatic submission time allocation, that game-scoped value SHALL initialise to exactly the clock time the game accrues to the team each turn — the time it adds to the team's budget per turn, so a team that never tunes the parameter takes as long as the game gives it and no longer, spending its accrual each turn and neither draining nor banking its budget.
+
+#### Scenario: #unset-allocation-defaults-to-the-turns-accrual
+- **WHEN** a game starts for a team whose captured defaults set no automatic submission time allocation
+- **THEN** its game-scoped allocation is exactly the clock time the game accrues to it each turn — a principled default rather than a platform-chosen constant, and one the team may retune during play like any other pacing value
 
 #### Scenario: #live-record-not-derivation
 - **WHEN** any consumer needs a team's current pacing values
@@ -141,9 +80,9 @@ A team's **active operators** SHALL be exactly its currently connected member op
 - **THEN** the booted operator leaves the active set exactly as a network disconnect would — their tempo no longer counted — and on reconnecting they rejoin the active set in flow like any other joiner
 
 ### Requirement: turn-pacing/scheduled-submission
-Depends on: bot-framework/score-composition, bot-framework/softmax-decision, operator-control/staged-move-log, operator-control/manual-mode.
+Depends on: bot-framework/score-composition, bot-framework/softmax-decision, game-runtime/staged-move-log, operator-control/manual-mode.
 
-During each turn the team's automated player SHALL run a scheduled submission pass at the team's scheduled-submission interval: for each automatic-mode snake whose decision state has news, it samples a direction and stages it, and SHALL mark the news consumed only upon the staging acknowledgement — never at sampling or send. A snake without news since it was last staged SHALL not be re-rolled, and manual-mode snakes are never swept.
+During each turn the team's automated player SHALL run a scheduled submission pass at the team's scheduled-submission interval: for each automatic-mode snake whose decision state has news, it samples a direction and stages it. A snake without news since it was last staged SHALL not be re-rolled, and manual-mode snakes are never swept. Staging the decided move SHALL be the act that consumes the snake's news, and it SHALL consume it only once the staging is acknowledged — never at sampling, never at send, and never as a side effect of publishing the snake's decision state to its observers, which the same pass may also do.
 
 #### Scenario: #no-news-no-reroll
 - **WHEN** a pass reaches a snake whose decision state is unchanged since its move was last staged
@@ -153,8 +92,12 @@ During each turn the team's automated player SHALL run a scheduled submission pa
 - **WHEN** a staging call fails or its acknowledgement never arrives
 - **THEN** the snake still counts as having news and the next pass retries — a decision can be lost by the network, never forgotten by the player
 
-### Requirement: turn-pacing/final-flush
+#### Scenario: #publishing-is-not-staging
+- **WHEN** a pass publishes a snake's decision state to its observers but its staging is still outstanding
+- **THEN** the snake still counts as having news — only the acknowledged staging consumes it, so telling the team what the snake is thinking never stands in for telling the game what it decided
 
+### Requirement: turn-pacing/final-flush
+Depends on: game-engine/chess-timer, game-runtime/turn-declaration.
 Each turn the automated player SHALL arm a final-submission deadline from live state — the smaller of the team's automatic submission time allocation and its observed remaining time, brought forward by the imminent-deadline threshold — re-arming it earlier whenever the observed remaining time falls below what the armed deadline assumed. At the deadline it SHALL flush every automatic-mode snake with pending news, however recently staged; it SHALL then declare the team's turn over once the flow quorum permits — immediately when the quorum holds at the deadline, otherwise on its own schedule if the quorum is satisfied later in the turn. The scheduled cadence SHALL continue until the turn is actually declared over.
 
 #### Scenario: #deadline-tracks-the-clock
@@ -170,9 +113,9 @@ Each turn the automated player SHALL arm a final-submission deadline from live s
 - **THEN** the flush still stages everything pending but no declaration is issued — the team spends its remaining time thinking, and the turn ends by a later flow unanimity, the Captain's submit, or expiry
 
 ### Requirement: turn-pacing/captain-submit
-Depends on: operator-control/captain-boot, global-invariants/centaur-state-boundary#bot-to-game-flow-never-routes-through-convex, global-invariants/security-enforced-outside-the-library#customised-app-changes-no-invariant.
+Depends on: operator-control/captain-boot, global-invariants/centaur-state-boundary#bot-to-game-flow-never-routes-through-convex, game-runtime/turn-declaration.
 
-The live interface SHALL expose the Captain's controls — an immediate **turn-submit**, additionally bindable to a keyboard shortcut, alongside the operator boot — to the team's current Captain alone: invoking turn-submit declares the team's turn over at once with exactly the moves currently staged, regardless of every operator's tempo. A Captain submission SHALL suppress the automated final flush — no fresh decision is sampled or staged after the human judgement that the current staged set stands — and the automated player SHALL learn of any declaration solely by observing the game instance's declared state on its subscription: no interface-to-player channel mediates pacing, and the submission act itself is intent, distinct from the game's declared state. Any invocation of a Captain control by a non-Captain — keyboard shortcut included — SHALL be rejected server-side; the tempo toggle is expressly not Captain-gated.
+The reference application SHALL offer the Captain's controls — an immediate **turn-submit**, additionally bindable to a keyboard shortcut, alongside the operator boot — to the team's current Captain alone: invoking turn-submit declares the team's turn over at once with exactly the moves currently staged, regardless of every operator's tempo. Offering turn-submit to the Captain alone is how the reference application allocates the control and is expressly **not** an access control: nothing rejects a turn-over declaration because the human behind it is not the Captain, and a Centaur Server is free to decide for itself which of its own operators are offered the affordance. A Captain submission SHALL suppress the automated final flush — no fresh decision is sampled or staged after the human judgement that the current staged set stands — and the automated player SHALL learn of any declaration solely by observing the game instance's declared state on its subscription: no interface-to-player channel mediates pacing, and the submission act itself is intent, distinct from the game's declared state.
 
 #### Scenario: #immediate-and-tempo-blind
 - **WHEN** the Captain fires turn-submit while operators are thinking
@@ -190,12 +133,12 @@ The live interface SHALL expose the Captain's controls — an immediate **turn-s
 - **WHEN** the Captain operates without pointer input
 - **THEN** turn-submit is available on a keyboard binding — the override is usable at the speed the pacing story exists to serve
 
-#### Scenario: #non-captain-rejected-server-side
-- **WHEN** a non-Captain invokes a Captain control by any means, interface or direct call
-- **THEN** it is rejected server-side — while every member operator still owns their own tempo toggle
+#### Scenario: #captain-only-is-allocation-not-enforcement
+- **WHEN** a team runs a Centaur Server that offers turn-submit to every member operator, or a non-Captain member reaches the submission path directly
+- **THEN** the resulting declaration stands — no rule anywhere rejects it for coming from a non-Captain, because who is offered the control is a choice each application makes, not a constraint on who may end the turn
 
 ### Requirement: turn-pacing/pacing-header
-Depends on: operator-control/operator-presence-and-identity.
+Depends on: operator-control/operator-presence-and-identity, game-runtime/in-game-clock.
 
 The live interface header SHALL present the team's pacing state: the current turn number, the team's clock countdown and remaining budget, and each active operator's current tempo on the presence display — the tempo read from the durable tempo record, never inferred from presence, which proves connectedness only. The countdown SHALL run at sub-second precision with a distinct warning state as expiry nears, and once the team has declared it SHALL be replaced by a stable turn-submitted indicator that never flickers back to a countdown while the remaining teams finish declaring.
 

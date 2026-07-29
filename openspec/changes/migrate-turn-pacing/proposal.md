@@ -91,19 +91,25 @@ requirements whose behaviour they mirror.
   final flush (re-arming on shrinking time, flush-before-expiry,
   quorum-withheld defers declaration only); the Captain's immediate
   turn-submit (flush suppression, observation-only coordination,
-  keyboard-bindable, non-Captains rejected server-side); and the pacing
-  header discipline (sub-second countdown with warning, flicker-free
-  submitted indicator, tempo from the durable record).
+  keyboard-bindable, offered to the Captain alone as the reference
+  application's affordance allocation and expressly not an access
+  control); and the pacing header discipline (sub-second countdown with
+  warning, flicker-free submitted indicator, tempo from the durable
+  record).
 - **The superseded operator-mode model is buried**: every requirement is
   authored on the per-operator tempo model; the mode-era fossils retire
   through the review-item map entries recording the supersession chain.
 - **Constraint-mined invariants promoted to spec text**: budget+clock
   invariant at every instant; turn-0 clocks start at playability; dirty
-  news cleared only on staging acknowledgement; the final-flush deadline
+  news cleared only on staging acknowledgement and never by the same
+  pass's decision-state publication; the final-flush deadline
   re-arms when observed time shrinks; declaration coordination happens
   exclusively by observing the game instance's declared state; a
   restated tempo write is accepted as an operator act; presence proves
-  connectedness only, tempo is read from the durable record.
+  connectedness only, tempo is read from the durable record; and
+  team-granular authorization never produces an anonymous act — the
+  instance records the authenticated identity behind every command it
+  accepts.
 - **Retirements**: this change's legacy absorptions are recorded in the
   identifier map (completed with the corpus retirement in this PR); the
   migration planning artifacts are archived under
@@ -118,7 +124,7 @@ requirements whose behaviour they mirror.
 - Cross-change citations: this delta cites `global-invariants/
   game-instance-hermeticity`, `transactional-invariant-enforcement`,
   `authoritative-turn-resolution`, `team-granularity-authorization`,
-  `centaur-state-boundary`, and `security-enforced-outside-the-library` —
+  `authenticated-unambiguous-identity`, and `centaur-state-boundary` —
   some of them requirements the open `extend-global-invariants` change adds
   or amends, so that change archives before this one; `operator-control/
   staged-move-log`, `manual-mode`, `captain-boot`, and
@@ -139,8 +145,9 @@ requirements whose behaviour they mirror.
 
 ## Open Questions
 
-None. The candidate ambiguities were all resolved before authoring and are
-recorded in design.md: the tempo model supersedes the operator-mode model
+None open. The candidate ambiguities present at authoring were all resolved
+before the deltas were written and are recorded in design.md: the tempo
+model supersedes the operator-mode model
 (resolved twice over in the legacy reviews, author-confirmed); the
 deadline formula and the flush-versus-suppress split between the expiry
 and Captain paths (resolved legacy review, carried at intent grain); the
@@ -150,3 +157,87 @@ where the legacy "proceeds on its own schedule once permitted" wording is
 authored as declaration deferred to the player's own schedule within the
 turn, which is the minimally constraining reading of the passive
 precondition.
+
+Three questions were raised in review after authoring and are now closed:
+
+1. **Is a non-Captain turn submission rejected server-side?**
+   - **Context**: `captain-submit` demanded server-side rejection of a
+     non-Captain turn-submit, but the declaration is a game-instance
+     operation and the instance authorizes at team granularity with no
+     notion of an individual operator, so a member operator holding a game
+     connection can declare directly and the instance must accept it.
+   - **Decision (author, 2026-07-28)**: the requirement is unimplementable
+     and is withdrawn. The `#non-captain-rejected-server-side` scenario is
+     removed and `captain-submit` is reworded: the reference application
+     offers turn-submit to the Captain alone, that is an allocation of an
+     affordance and expressly **not** an access control, and a custom
+     Centaur Server may implement its own rules about who may submit. The
+     requirement says so in as many words, because "Captain-only" reads as
+     a security control to every reader who has not been told otherwise.
+     `#captain-only-is-allocation-not-enforcement` carries the point, and
+     the `security-enforced-outside-the-library` declaration goes with the
+     withdrawn claim.
+2. **Does the instance record who acted, given it does not check who
+   acted?**
+   - **Context**: `turn-declaration` stated the missing within-team check
+     and left attribution implied, which reads as licence to accept
+     commands anonymously within a team.
+   - **Decision (author, 2026-07-28)**: both halves are kept and both are
+     now stated. The instance does not care which operator issues an
+     instruction, **and** it always records the specific authenticated
+     identity that sent the command
+     (`turn-declaration#team-granular-but-never-anonymous`, with a new
+     `global-invariants/authenticated-unambiguous-identity` declaration).
+3. **Who clears the automated player's dirty flag?**
+   - **Context**: `bot-framework` mints the setting side of the flag; the
+     clearing side sat implied in this capability's ack-gating sentence,
+     leaving the lifecycle stated in neither capability end to end.
+   - **Decision (author, pre-authored, recorded 2026-07-28)**: this
+     capability authors the clearing — the workflow that stages the decided
+     move clears the flag, and only on the staging acknowledgement. It
+     explicitly does **not** clear on a decision-state publication, even
+     though the same pass performs one
+     (`scheduled-submission#publishing-is-not-staging`).
+
+A fourth review item — the `flow-quorum` ↔ `final-flush` requirement-grain
+dependency cycle — is dissolved by the author's corpus-wide rule that no
+requirement declares a dependency on a requirement in its own capability.
+All nine of this delta's intra-capability entries are removed; see
+design.md.
+
+Two author corrections landed on 2026-07-28, both about the **automatic
+submission time allocation** this capability already carries:
+
+- **Decision — its default is the turn's own clock accrual.**
+  `live-pacing-parameters` initialised the live values from the team's
+  captured defaults but nothing said what a team's default *default* was.
+  Absent a team setting, the automatic submission time allocation is exactly
+  the clock time the game accrues to the team each turn — "as long as the
+  game gives you, and no longer", so a team at the default spends its accrual
+  and its remaining time neither drains nor banks
+  (`live-pacing-parameters#unset-allocation-defaults-to-the-turns-accrual`).
+  **It is authored here, not on `bot-configuration/team-bot-parameters`**,
+  for two reasons: that requirement deliberately holds the timing parameters
+  as opaque scalars "whose consumption semantics are owned elsewhere", and
+  this rule *is* consumption semantics; and it is stated in game-clock
+  vocabulary, which this capability declares and `bot-configuration` does
+  not. This requirement now declares `game-engine/chess-timer` to match. The
+  configuration story's only change is its own: its record must be able to
+  hold a timing parameter as unset rather than storing a placeholder.
+- **Decision — the allocation is the value the bot framework's simulations
+  declare** as the turn's duration and every team's burn, replacing what had
+  been framed as a private framework constant. Nothing in this capability
+  changes for it: `live-pacing-parameters` already says the live record is
+  "the operative source that every consumer reads directly", and the
+  framework is one more consumer. The declared dependency runs from the
+  framework's side of the graph — except that it cannot, since
+  `bot-framework` is upstream of this capability, so that requirement names
+  the concept in prose and declares nothing.
+- **No narrowing to captain-only.** The author's phrasing has the captain
+  able to modify the allocation in real time during games; "independently
+  adjustable during play" already delivers that, and the settled decision
+  that game-scoped bot parameters are adjustable by *any* current member
+  (the captain gate's axis being durability, not breadth —
+  `bot-configuration/any-member-live-editing#game-scoped-parameters-need-no-captain`)
+  satisfies it, the captain being a member. Nothing is narrowed, and no
+  contradiction with that decision was found anywhere in this capability.

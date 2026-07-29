@@ -127,14 +127,15 @@ flowchart TD
   tournaments -->|3| team-server-management
   turn-pacing -->|2| bot-configuration
   turn-pacing -->|2| bot-framework
-  turn-pacing -->|5| game-engine
-  turn-pacing -->|8| global-invariants
-  turn-pacing -->|7| operator-control
+  turn-pacing -->|2| game-engine
+  turn-pacing -->|4| game-runtime
+  turn-pacing -->|1| global-invariants
+  turn-pacing -->|5| operator-control
   visual-tester -->|2| game-configuration
   visual-tester -->|8| game-engine
   visual-tester -->|1| global-invariants
   visual-tester -->|4| test-sequences
 
   class game-engine,global-invariants base;
-  linkStyle 0,4,5,8,11,13,16,18,21,22,24,25,28,30,34,35,36,38,39,43,45,48,51,58,60,64,67,69,74,75,78,79 stroke-opacity:0.25;
+  linkStyle 0,4,5,8,11,13,16,18,21,22,24,25,28,30,34,35,36,38,39,43,45,48,51,58,60,64,67,69,74,76,79,80 stroke-opacity:0.25;
 ```

@@ -6986,8 +6986,8 @@
           "change": "migrate-turn-pacing"
         }
       ],
-      "scenarios": ["turn-pacing/captain-submit#non-captain-rejected-server-side"],
-      "note": "UI-mirror plus enforcement: non-Captains see neither Captain control, and any invocation — keyboard included — is rejected server-side at the function contract; the tempo toggle is expressly not Captain-gated (every member operator owns their own)."
+      "scenarios": ["turn-pacing/captain-submit#captain-only-is-allocation-not-enforcement"],
+      "note": "Carried as an affordance allocation, not as enforcement: the reference application offers turn-submit to the Captain alone, but the legacy clause's server-side rejection of a non-Captain invocation is deliberately not carried — a Centaur Server chooses which of its own operators are offered the control, and no rule rejects a turn-over declaration for coming from a non-Captain. The tempo toggle remains expressly not Captain-gated (every member operator owns their own)."
     },
     "08-REQ-068": {
       "disposition": "authored",
