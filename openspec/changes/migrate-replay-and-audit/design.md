@@ -43,6 +43,61 @@ duplicating staged moves into the action log reintroduces the exact
 divergence the review resolution eliminated — a log claiming a move that
 was never authoritatively staged.
 
+### Connection events are a log category, and Convex writes the departures
+
+`experience-reconstruction` promises the active-operator set with each
+operator's tempo at any wall-clock moment, and
+`team-perspective-replay#shadows-in-original-colours` needs to know who was
+connected then. Nothing in the corpus produced that fact. Connects were
+inferable — `turn-pacing/operator-tempo#flow-on-every-rejoin` writes a tempo
+entry on every join, and `connect-time-attribution` stamps an attribution
+entry at each admission — but a plain network disconnect wrote nothing
+anywhere: `connect-time-attribution` says outright that disconnection writes
+nothing (deliberately: deleting or amending an attribution entry would orphan
+every action attributed through it), and
+`operator-control/operator-presence-and-identity` is live presence with no
+server-held state at all. The decision is to add a **connection-event
+category to `team-action-log`** — arrivals and departures, the departure
+carrying its cause — rather than mint a presence record somewhere else. The
+action log is already the reconstruction source, already clock-stamped at
+sub-turn resolution, already append-only, and already carries a category
+vocabulary; a second durable presence store would be a parallel history of
+the same team-experience timeline, with all the divergence that implies.
+
+**Convex is the writer, not the game instance.** The log is Centaur state,
+and the instance may not egress before game end
+(`global-invariants/game-instance-hermeticity#no-egress-before-game-end`), so
+the instance physically cannot append to it while the game runs — it could
+only report disconnects inside the once-at-end export, which is far too late
+for a log whose whole value is sub-turn wall-clock resolution, and would put
+a team-experience fact inside the board-truth record. Convex, by contrast,
+already holds the operator's own coordination connection
+(`operator-control/operator-dual-connection`) and can observe it end. That
+observation is also why the arrival half stays an ordinary self-written
+entry — the joining client is present and credentialed — while the departure
+half becomes the **one** exemption to `actors-write-own-entries`: a departing
+client cannot be relied on to announce its own departure, least of all the
+network-drop case the category exists for. The exemption is stated as
+exactly one category, at the log's own runtime, so it cannot grow into a
+general back-fill licence; `#server-never-ghost-writes` still forbids the
+team's server supplying anything an operator's own write did not.
+
+A Captain boot consequently produces two entries — the Captain's boot entry
+(theirs, an act they performed) and the booted operator's departure entry
+(Convex's, observing the severed connection). That is not duplication: the
+first records a decision, the second records a presence transition, and the
+reconstruction folds only the second.
+
+What breaks if reversed: without the category, the active-operator set is
+recoverable only by guessing from silence — an operator who stages nothing
+for two minutes is indistinguishable from one who dropped — so
+`experience-reconstruction` would promise something no data supports, and
+the shadow rule would render shadows for operators who had gone. Putting the
+producer in the instance instead breaks hermeticity or delays the fact past
+usefulness; putting it in a new presence store recreates the two-histories
+problem the two-log model exists to avoid; requiring the actor to write its
+own departure loses precisely the disconnects that matter.
+
 ### The dead operator-mode bullet is not carried
 
 Legacy 06-REQ-035 enumerated "the current operator mode (Centaur or
@@ -89,6 +144,26 @@ order starts looking load-bearing again (the posture live-game-observation
 already pins for the live channel). Minted as
 `canonical-event-order#derived-not-stored`.
 
+### The record's event vocabulary is the engine's, with nothing added
+
+`turn-event-record` originally closed over "the engine's event vocabulary
+plus a hazard-damage event for each snake that took hazard damage and
+survived the turn", because the engine's vocabulary did not carry hazard
+damage and the record needed it to avoid making clients diff snapshots. The
+open `revise-game-engine-contract` change adds it to `game-engine/turn-events`
+(`#hazard-damage-is-announced`) — correctly, since the engine already applies
+the damage and deriving it instance-side would be a second implementation of
+that rule. The addendum is therefore redundant and is removed: the record's
+enumeration is now *exactly* the shared engine's vocabulary, neither
+narrowed nor extended. The dedup semantics stay pinned at the engine (one
+act never produces two events); the scenario kept here states only the
+record-side consequence — a consumer totalling hazard damage from the record
+counts each application once, because the record stores the engine's events
+as emitted and synthesises none. What breaks if reversed: keeping the
+addendum leaves two places that decide when a hazard event exists, and the
+first divergence between them is a replay that shows damage the game never
+emitted (or hides damage it did).
+
 ### The export is single, privileged, unfiltered, and seeded
 
 Four legacy ids collapse into `once-at-end-export`, authored as the
@@ -117,6 +192,63 @@ bakes one team's perspective
 into the permanent record and makes every other perspective
 unreconstructable forever; a secret-forever seed makes
 `replay-sufficiency#bit-identical-reproduction` untestable.
+
+### One canonical encoding: the record reuses the recorded-run contract
+
+`test-sequences` was folded into `specs/` before this train and already
+defines everything `replay-sufficiency` was reaching for: exactly one JSON
+encoding per engine value with equality defined over it
+(`test-sequences/canonical-encoding`), production-identical turn-seed
+derivation (`test-sequences/determinism#production-seed-derivation`), and a
+replay-check that resolves recorded turns in order and halts at the first
+divergence reporting every value-level difference
+(`test-sequences/replay-check`). That last one *is* the harness
+`replay-sufficiency#bit-identical-reproduction` describes. This change
+therefore declares `test-sequences` in its Purpose and reuses the contract
+rather than defining a second one; the requirement now says the record's
+engine-valued content carries that canonical encoding and that record-to-record
+comparison is defined over it, and `#one-canonical-encoding` names the
+alternative as a defect rather than an option.
+
+The alternative considered was divergence — keeping the legacy replay shape,
+which was row-oriented with JSON-string bodies. It was rejected because it
+would leave two canonical encodings of the same engine values in one repo,
+which `test-sequences/canonical-encoding` arguably forbids in spirit (its
+whole content is that there is exactly one) and which certainly defeats its
+purpose: two encodings means two notions of "equal", and the moment a replay
+and a Test Sequence disagree about the same turn nobody can say which
+encoding was wrong. What breaks if reversed: `#bit-identical-reproduction`
+becomes untestable against recorded sequences, the visual tester and the
+production replay drift into separate value semantics, and every future
+consumer must be told which of two encodings it is holding.
+
+The codec, seed derivation and replay-check live app-locally today, in
+`apps/visual-tester/src/lib/test-sequences/`. Extracting them into a package
+both the instance's record path and the tester consume is implementation, so
+it is a task, not a requirement — but it is a precondition for this
+capability's record work, and `test-sequences`'s own Purpose already
+anticipates a headless consumer.
+
+### Scoreboard rows are part of the record, not a live-only channel
+
+`board-level-replay` must render the per-team scoreboard "from the persisted
+replay alone", yet the rows appeared in neither `turn-keyed-game-record`'s
+enumeration nor `once-at-end-export`'s list, and their only producer —
+`live-game-observation/scoreboard-sole-aggregate-authority` — carried no
+obligation for them to outlive the live subscription. Both enumerations now
+name them, and the producing requirement gains the durability clause and
+`#rows-outlive-the-live-audience`, so the row is a per-turn fact of the
+record rather than a projection assembled for whoever is watching.
+
+The alternative — recomputing aggregates from the persisted snapshots at
+replay time — was rejected for the same reason the live rule exists: the
+score is a normalised as-if-ended figure over the *true* alive set including
+invisible snakes, so a recomputation is a second implementation of
+`game-engine/scoring` sitting in the viewer, and any drift between it and
+the published figure would silently rewrite history. What breaks if
+reversed: a replay's scoreboard could disagree with what the teams saw
+during the game, and the disagreement would be invisible because nothing
+would hold the original figures to compare against.
 
 ### Retention is unbounded, and permanence changes owner at teardown
 
@@ -152,12 +284,37 @@ invisible-at-the-time snakes inside an experience-fidelity mode);
 dropping the participants-only scoping erases a deliberate product
 boundary the author reconfirmed for this change.
 
+### Team-perspective replay reads no live portfolio configuration
+
+Team-perspective mode renders the decision displays from the published
+decision snapshot alone: each contributing heuristic's weight *and* its
+display label are recorded inside the snapshot at scoring time
+(`decision-transparency/computed-display-state`, pinned by
+`#weights-and-labels-are-recorded-not-joined`), so the viewer joins nothing
+against the team's live portfolio configuration and never has to reach for
+a record that may have moved since the game. What that buys is a conflict
+that now cannot arise: a breakdown assembled by joining current
+configuration would make this mode *structurally* require reading a team's
+private configuration for a finished game — the one thing
+`global-invariants/team-private-centaur-state#finished-games-release-only-what-is-published`
+says finishing does not release, since what opens is the published record
+and replay, not the losing team's configuration. Everything this mode
+displays is therefore published deliberation, released on exactly the same
+terms as the rest of the record, and no part of the replay path depends on
+that invariant being relaxed. What breaks if reversed (rendering the
+breakdown from a live configuration join): team-perspective replay becomes
+unimplementable without weakening that invariant; the same snapshot
+decomposes differently on different days as weights are tuned, so two
+audits of one game disagree; and this capability acquires a dependency on
+the team's configuration story that its Purpose deliberately does not
+declare.
+
 ### Timeline semantics kept; exact speeds and key bindings demoted
 
 The unified timeline's load-bearing behaviour is authored: one control
 for both modes; Per-Turn snapping to end-of-turn states (what the team
 saw while declaring); Timeline mode on the real wall-clock axis with
-markers at actual declaration times and proportional spacing; per-mode
+proportional spacing; per-mode
 speed units; client-local mode/speed; keyboard scrubbing matching the
 mode's granularity. The legacy-pinned literal speed sets ({0.25…8}
 turns/s and ×) and the exact key/modifier table (08-REQ-072b–d) are
@@ -168,6 +325,37 @@ speed step becomes a spec revision; dropping the *semantics* instead
 (snap-to-boundary, real-time axis) would let an implementer flatten the
 two modes into one scrubber and lose the "what the team actually saw /
 when it actually happened" distinction both modes exist to preserve.
+
+The marker's clock source needed deciding, because "at their actual
+declaration times" was not implementable. A declaration timestamp is
+recorded only for **explicit** declarations
+(`game-runtime/turn-declaration`): a clock-expiry declaration is detected by
+the instance itself and a snakeless team is treated as having declared at
+each turn's start, and neither carries a stamp. Worse, declaration is
+per-team, not per-turn, so even a fully-stamped turn has several candidate
+moments. The only per-turn boundary clock the record guarantees is the
+recorded resolution start (`turn-keyed-game-record`, already enumerated and
+scenario-pinned by `#resolution-takes-time`). The rule authored is therefore:
+the marker is the latest declaration timestamp the record holds for the turn
+**when every team's declaration for that turn was stamped** — then the last
+of them is the moment the turn actually ended — and the turn's recorded
+resolution start otherwise. The all-stamped condition matters: if any of a
+turn's declarations is unstamped, the stamped ones cannot be known to be the
+last, so taking the maximum of them would place the marker *before* the real
+boundary. Falling back to the resolution start in that case is a hair late
+rather than arbitrarily early, and it is available for every turn without
+exception. What breaks if reversed: leaving "actual declaration times" as
+written, Timeline mode is unimplementable for any turn a clock expiry ended
+— the implementer either drops those turns from the axis, collapses them
+onto a neighbour, or quietly invents equidistant spacing, which is
+Per-Turn mode wearing Timeline mode's label.
+
+The cleaner fix is upstream and is not this change's to make: if
+`turn-pacing` stamped **every** declaration — the instance knows the
+wall-clock moment it detects an expiry, and the moment it treats a snakeless
+team as declared — the fallback would be unnecessary and every marker exact.
+That is recorded here as the recommendation; the fallback is authored so
+Timeline mode is implementable either way.
 
 ### Which store guards append-only, who writes an entry, and what the replay binding is not
 
@@ -224,6 +412,18 @@ first two simultaneous auditors of a popular game would fight over a
 lock that means nothing, and replay viewing would write state into a
 finished game's records, violating append-only history.
 
+That *general* property — a client-local, never-persisted examination
+lens, independent of who holds a snake, that stages nothing — is now
+owned once, by `decision-transparency/examined-subject`, the primitive
+both the live coach displays and this viewer key off. `replay-inspection`
+therefore declares it and states only the two increments replay adds: the
+subject is free of the game's history (a snake someone else held then is
+examinable now), and the reconstructed shadows keep rendering beside it.
+Reversed — restating the generic clause here — the corpus would carry two
+authorities for one idea, and the copy (which no consumer is obliged to
+honour) would drift out of step with the owner the moment either is
+revised.
+
 ### Mechanism demotions: 08-REQ-013, 08-REQ-076, 08-REQ-077
 
 - **08-REQ-013** (replay viewer reached from the history page or direct
@@ -278,8 +478,47 @@ The leads routed to this change, each now a requirement or scenario:
 - **Transactional log pairing (06-REQ-037)** →
   `actors-write-own-entries#dropped-entry-means-no-mutation`.
 
-Swept once more over this change's own decisions: the derived-order,
-absence-not-guard, unbounded-retention, and single-stamp
-(`append-only-history#the-single-stamp`) invariants are the ones whose
-quality depends on future implementers not "improving" them; each carries
-a scenario above. No further unminted invariants found.
+- **Departure entries are the log's one non-self-written category, and no
+  more than that** → `actors-write-own-entries#the-one-entry-its-actor-cannot-write`
+  (an exemption stated as a single category at a single runtime, so it
+  cannot be read as licence for the reconciliation job
+  `#server-never-ghost-writes` exists to forbid).
+- **Presence is folded from recorded events, never inferred from silence**
+  → `experience-reconstruction#presence-is-read-not-guessed` (inferring
+  from activity gaps is the obvious shortcut and it is wrong in exactly the
+  case that matters — a connected operator who is thinking).
+- **Scoreboard rows are recorded, not recomputed at read time** →
+  `turn-keyed-game-record#aggregates-are-recorded-not-recomputed` and, on
+  the producing side,
+  `live-game-observation/scoreboard-sole-aggregate-authority#rows-outlive-the-live-audience`
+  (a viewer-side recomputation is a second implementation of the scoring
+  rule, and its drift would rewrite history invisibly).
+- **Exactly one canonical encoding of engine values exists in the repo** →
+  `replay-sufficiency#one-canonical-encoding` (the record adopting the
+  recorded-run contract's encoding is precisely the invariant a future
+  implementer would break by adding a convenient record-local shape).
+- **Every turn is placeable on the real-time axis** →
+  `unified-timeline#a-turn-nobody-declared-is-still-placed` (the failure
+  mode is silent: an unplaceable turn gets dropped or collapsed rather than
+  reported).
+
+Swept once more over this change's own decisions: the absence-not-guard
+invariant is the one whose quality depends on future implementers not
+"improving" it, and it carries a scenario above. The derived-order,
+unbounded-retention and single-stamp invariants this change mined were
+re-homed to `game-runtime` by `mint-game-runtime`, which now carries them
+and their scenarios; the mining that produced them is recorded here. No
+further unminted invariants found.
+
+## Requirement-grain dependencies are cross-capability only
+
+Per the corpus-wide rule adopted while this change was open, a requirement
+declares no dependency on a requirement in its own capability —
+requirements inside a capability are one integrated cohort, reviewed
+together, so an intra-capability edge carries no information and is the
+only place a requirement-grain cycle could form. Two such entries were
+removed from this delta: `team-perspective-replay`'s on
+`experience-reconstruction`, and `replay-visibility-bound`'s on
+`finished-games-public`. Nothing about either requirement's meaning
+changes; the relationships they recorded are exactly the intra-capability
+cohesion the rule assumes.

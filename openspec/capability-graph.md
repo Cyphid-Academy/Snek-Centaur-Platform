@@ -99,14 +99,16 @@ flowchart TD
   platform-integrations -->|3| global-invariants
   platform-integrations -->|10| identity-and-authorization
   platform-persistence -->|4| global-invariants
-  replay-and-audit -->|4| decision-transparency
-  replay-and-audit -->|5| game-engine
+  replay-and-audit -->|2| application-shell
+  replay-and-audit -->|5| decision-transparency
+  replay-and-audit -->|2| game-engine
   replay-and-audit -->|3| game-lifecycle
-  replay-and-audit -->|19| global-invariants
+  replay-and-audit -->|7| game-runtime
+  replay-and-audit -->|13| global-invariants
   replay-and-audit -->|1| identity-and-authorization
-  replay-and-audit -->|5| live-game-observation
+  replay-and-audit -->|4| live-game-observation
   replay-and-audit -->|4| operator-control
-  replay-and-audit -->|2| turn-pacing
+  replay-and-audit -->|1| turn-pacing
   rooms-and-matchmaking -->|6| game-configuration
   rooms-and-matchmaking -->|11| game-lifecycle
   rooms-and-matchmaking -->|9| global-invariants
@@ -134,5 +136,5 @@ flowchart TD
   visual-tester -->|4| test-sequences
 
   class game-engine,global-invariants base;
-  linkStyle 0,4,5,8,11,13,16,18,21,22,24,25,28,30,34,35,36,38,39,43,45,47,49,56,58,62,65,67,72,73,76,77 stroke-opacity:0.25;
+  linkStyle 0,4,5,8,11,13,16,18,21,22,24,25,28,30,34,35,36,38,39,43,45,48,51,58,60,64,67,69,74,75,78,79 stroke-opacity:0.25;
 ```
