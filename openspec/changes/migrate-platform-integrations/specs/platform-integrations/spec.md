@@ -12,7 +12,7 @@ owned by the capabilities that own those workflows; this capability
 guarantees external callers meet exactly those rules, because they call
 exactly those functions.
 
-Depends on: identity-and-authorization, game-lifecycle, global-invariants.
+Depends on: identity-and-authorization, game-lifecycle, global-invariants, platform-persistence.
 
 ## ADDED Requirements
 
@@ -75,9 +75,9 @@ No integration client's ceiling SHALL include: creating a human identity, any ac
 - **THEN** it is permitted on its recorded ceiling: the exclusions above bound what a compromised client could do irreversibly to the platform's own authority, and a system administering the teams it created is not that
 
 ### Requirement: platform-integrations/functions-are-the-api
-Depends on: game-lifecycle/launch-orchestration, identity-and-authorization/capability-registry.
+Depends on: game-lifecycle/launch-orchestration, identity-and-authorization/capability-registry, platform-persistence/component-boundaries#the-host-adds-authority-not-storage.
 
-The platform SHALL maintain no integration-specific request surface: a registered client calls the platform's own public functions directly, the very ones the first-party application calls, and its capabilities name those functions. The platform's documented programmatic surface — at minimum administering Centaur Teams, rooms, games, webhook subscriptions, and client registrations — SHALL be reachable this way by a client whose ceiling reaches it, with no family of behaviour inside that surface requiring a fallback to the application. Functions outside it accept human identities alone, and their being unreachable programmatically is a declared kind restriction rather than a gap in this surface: what a client may reach grows by a function declaring the service-principal kind, never by widening a ceiling.
+The platform SHALL maintain no integration-specific request surface: a registered client calls the platform's own public functions directly, the very ones the first-party application calls, and its capabilities name those functions. The platform's documented programmatic surface — at minimum administering Centaur Teams, rooms, games including setting a not-yet-launched game's configuration, webhook subscriptions, and client registrations — SHALL be reachable this way by a client whose ceiling reaches it, with no family of behaviour inside that surface requiring a fallback to the application. Functions outside it accept human identities alone, and their being unreachable programmatically is a declared kind restriction rather than a gap in this surface: what a client may reach grows by a function declaring the service-principal kind, never by widening a ceiling.
 
 #### Scenario: #no-second-surface-to-keep-in-step
 - **WHEN** a new platform behaviour is added and should be automatable
@@ -90,6 +90,10 @@ The platform SHALL maintain no integration-specific request surface: a registere
 #### Scenario: #the-families-are-a-floor
 - **WHEN** an external integrator administers teams, rooms, games, webhooks, or client registrations
 - **THEN** each of these families is reachable programmatically with the client's own credential alone; none requires falling back to the first-party application
+
+#### Scenario: #configuring-a-game-is-inside-the-surface
+- **WHEN** a client whose ceiling reaches it sets the parameters of a game that has not yet launched, and then starts it
+- **THEN** both calls succeed programmatically: starting a game presupposes deciding what game is to be played, so the configuration edit is inside the promised surface rather than the one step that sends an integrator back to the first-party application
 
 #### Scenario: #outside-the-surface-is-not-a-fallback
 - **WHEN** a client calls a function outside the documented surface, which accepts human identities alone
@@ -118,6 +122,21 @@ The platform SHALL let authenticated integration clients register webhook subscr
 #### Scenario: #revoked-with-owning-client
 - **WHEN** a subscription's owning client registration is revoked
 - **THEN** the subscription dies with it: events occurring after the revocation produce no delivery to that URL, and the revoked registration cannot be used to resurrect it
+
+### Requirement: platform-integrations/delivery-destination-admission
+A delivery destination SHALL be admitted only if it is an HTTPS URL whose host resolves to a publicly routable address: loopback, link-local, private, and otherwise non-publicly-routable addresses SHALL be refused, as SHALL the deployment's own origin and the hosts of the platform's own operational control planes. The platform SHALL apply this admission twice — when the subscription is registered, and again against the address each delivery attempt is about to connect to — and SHALL abandon a delivery whose destination fails it outright, never counting it as a failed attempt to be retried.
+
+#### Scenario: #inward-aimed-destination-refused
+- **WHEN** a client registers a subscription pointed at loopback, a private-range address, the deployment's own endpoints, or the host game instances are provisioned on
+- **THEN** it is refused: without the bound, registering a subscription is a way to have the platform issue requests from inside its own network boundary, carrying bodies the client chose to addresses no external caller can reach
+
+#### Scenario: #plaintext-destination-refused
+- **WHEN** a delivery URL is not HTTPS
+- **THEN** it is refused and no delivery is ever attempted to it — a notification carries the game's configuration and its final scores, so it leaves the platform encrypted or not at all
+
+#### Scenario: #rechecked-against-the-address-actually-reached
+- **WHEN** a destination admitted at registration later resolves to an inadmissible address, the name having been re-pointed since
+- **THEN** the attempt is refused at the moment of delivery and abandoned rather than retried; admission is a property of the address actually being connected to, so a registration-time check alone would establish only that the name once looked acceptable
 
 ### Requirement: platform-integrations/lifecycle-event-notifications
 Depends on: game-lifecycle/status-authority.

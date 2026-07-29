@@ -16,21 +16,32 @@ reconciliations performed.
 ### Leaf of the DAG: peer stories cited sparingly, the meta layer where soundness needs it
 
 The capability declares **Depends on: identity-and-authorization,
-game-lifecycle, global-invariants**. It cites six requirements of the two
-story capabilities: `platform-admin-role` (the role registration is gated
+game-lifecycle, global-invariants**. It cites, of the two story
+capabilities: `platform-admin-role` (the role registration is gated
 on and the observational bound a client must respect),
 `service-principal-assertions` and `trusted-issuer-registry` (how a client
 proves who it is and where its ceiling is recorded),
 `peer-capability-ceiling` and `principal-kind-gating` (what no client's
-ceiling may reach), `mutation-authorization` (parity is enforced at the
+ceiling may reach), `capability-registry` (a capability names functions,
+and naming one is not permission to have called it),
+`mutation-authorization` (parity is enforced at the
 same server-side contracts), `launch-orchestration` (the API's game-start
 is the same launch), `status-authority` (the transitions webhooks fire
 on), and `teardown-after-persistence` (what delivery must never delay).
-`global-invariants` joined the declaration when the four invariant
+`global-invariants` joined the declaration when the invariant
 citations recorded below proved warranted: the declaration is an
 affordance, extended whenever a citation is genuinely warranted, never a
 budget that would force this capability to restate a rule it cannot
 reach.
+
+**No requirement declares a dependency inside this capability.** The
+requirements here are one integrated cohort — a reviewer changing any of
+them reads all of them — so the two intra-capability entries the first
+draft carried (`client-capability-bounds` → `functions-are-the-api`,
+`functions-are-the-api` → `client-management`) were dropped. They bought
+no information the cohort does not already give, and requirement-grain
+cycles can only arise inside a capability, so forbidding the edge is what
+makes the capability-grain cycle check sufficient.
 
 The teams and rooms the API administers are named as vocabulary only:
 their rules live in team-management and rooms-and-matchmaking, peer
@@ -60,25 +71,27 @@ stories would not.
   only what is local to this surface: a client's ceiling widens *who* may
   act, never *what* the rules permit, and the API
   dispatches against the one contract rather than a copy of it. Both
-  scenarios stay: `#no-privileged-bypass` and `#two-doors-one-rulebook`
-  pin the two drift directions on this surface concretely, which gi's
-  general scenario does not.
-- **`integration-clients` → `global-invariants/authenticated-unambiguous-identity`.**
-  A client is a principal of its own kind, and platform code must be able
-  to tell that kind from a human's without guesswork — which is exactly
-  what the closed enumeration guarantees. Relax the closure and the
-  principal-kind checks that bar a client from authentication
-  configuration lose the thing they test against.
-- **`client-capability-bounds` → `global-invariants/credential-confinement`.**
-  The bound "no client issues access tokens for a human or a team" depends
-  on an issued credential reaching only the party whose own authentication
-  earned it: an API able to mint one for someone else is precisely the
-  second channel that rule forecloses. The requirement's other exclusion —
-  Centaur state — holds `global-invariants/team-private-centaur-state` at
-  this surface: a client reading a team's configuration or recorded
-  deliberation would be a surface widening a team-private read scope,
-  which is why the exclusion is absolute here rather than deferred to the
-  admin role's read breadth.
+  scenarios stay: `#no-privileged-bypass` and
+  `#broad-ceiling-is-not-a-superuser` pin the two drift directions on this
+  surface concretely, which gi's general scenario does not.
+- **`integration-clients` → `global-invariants/no-shared-secrets`.**
+  The whole registration model — the client publishes its own public
+  material, the platform records where to read it, and nothing secret is
+  created, disclosed, or stored — is that invariant applied to an external
+  system. Relax it and the natural implementation is a bearer key minted
+  at registration, which is the arrangement `#nothing-secret-is-created-to-register`
+  exists to foreclose. The related property that a client's *kind* is
+  unambiguous to platform code is the identity capability's
+  principal-kind machinery, cited there rather than restated here.
+- **`client-capability-bounds`: absolute exclusions, no gi citation.**
+  "No client issues access tokens for a human or a team" and "no client
+  reads or writes Centaur state" are stated as ceiling exclusions rather
+  than as this surface's rendering of a credential-custody or
+  team-privacy invariant: the requirement's soundness rests on the
+  identity capability's ceiling and principal-kind rules, which are what
+  it declares. Citing the invariants those exclusions happen to align
+  with would be a defensive note that gi forbids the same thing anyway —
+  conformance is universal and implicit.
 - **`non-blocking-delivery` → `global-invariants/game-instance-hermeticity`.**
   Webhook delivery is Convex's act, never a game instance's: the
   instance's only sanctioned egress is its game-end notification with the
@@ -156,6 +169,82 @@ from structurally true to a discipline someone has to maintain.
 must be reachable (teams, rooms, game read and start, webhooks, client
 registrations) and says nothing about shapes: there are no wire shapes of
 this capability's own left to specify.
+
+### Configuring a game is inside the promised surface
+
+The floor originally named "games" without saying whether *configuring*
+one counted. It does, and the delta now says so
+(`#configuring-a-game-is-inside-the-surface`). The promise this
+capability makes is that no family of behaviour inside the documented
+surface requires a fallback to the first-party application; an integrator
+cannot start a game without deciding what game is to be played, so a
+surface that affords the start but not the parameter edit fails that
+promise at the very first step of the workflow it exists to automate.
+*If reversed* — configuration excluded — the academy system that motivates
+this capability can create its teams, enrol them in a room, and then must
+send a human to click through the configuration before every start, which
+is precisely the friction the surface exists to remove; and the exclusion
+would be invisible, since the client's ceiling would look complete.
+
+The reach itself is not this capability's to grant. Configuration is
+owned by the game-configuration capability, which carries no permission
+gating of its own — it is a component whose host supplies the access
+rules and chooses which affordances render. So the programmatic surface
+reaches the configuration functions the same way it reaches any other:
+the function declares the service-principal kind, and a client's ceiling
+either names it or does not. What this delta needs from that capability
+is therefore nothing at the requirement level and one thing at the
+function level — the not-yet-launched configuration edit must be a public
+platform function that declares the service-principal kind — which is
+recorded as a seam in `tasks.md` rather than as a dependency here.
+
+### Delivery destinations are admitted, not merely recorded
+
+`webhook-subscriptions` constrains the subscription's *fields*; it says
+nothing about which destinations are acceptable, and as first drafted a
+registered client could aim a subscription at the deployment's own
+endpoints or at the host game instances are provisioned on and have the
+platform post game payloads there, with retries. Nothing else in the
+corpus closes that: `global-invariants/credential-confinement` governs
+where credentials may travel and a webhook payload carries none, and no
+capability owns outbound egress policy. It belongs here, because this is
+the only capability that lets an outside party choose an address the
+platform will connect to — the admission rule and the affordance that
+needs it are one workflow.
+
+`delivery-destination-admission` therefore states two bounds: HTTPS only,
+and publicly routable only, with the deployment's own origin and the
+platform's operational control planes excluded by name. Both are checked
+**twice**, at registration and again against the address each attempt is
+about to connect to. The second check is the load-bearing one and is easy
+to omit: a hostname admitted at registration can be re-pointed at a
+private address afterwards, so a registration-time check alone
+establishes only that the name once looked acceptable. A failed admission
+abandons the delivery outright rather than consuming the retry budget —
+an inadmissible destination is not a transient failure, and retrying it
+would turn one rejected registration into a stream of internal requests.
+
+*If reversed* (no admission policy, or registration-time only): a
+registered client — a party that by design is not trusted with anything
+its ceiling does not name — gains a general-purpose way to make the
+platform issue requests from inside its own network boundary, carrying
+attacker-chosen bodies to addresses no external caller can reach, and
+`instance-provisioning-authority`'s narrowing of the provisioning
+creation route by network origin, explicitly held as defence in depth
+there, is hollowed out from within. The plaintext half matters
+independently: a `game_start` payload carries the launch-frozen
+configuration and a `game_end` payload the final scores, so an
+unencrypted destination publishes a game's substance to the network path.
+
+*No dependency is declared.* The candidates were weighed and declined:
+`credential-confinement` has nothing to bear on a payload with no
+credential in it; `one-contract-many-surfaces` would be a defensive note
+that the platform's own endpoints refuse an unauthenticated caller
+anyway, not a soundness dependency; and
+`game-lifecycle/instance-provisioning-authority` explicitly declines to
+rely on network origin for its guarantee, so a delivery aimed at the
+provisioning host erodes defence in depth rather than falsifying that
+requirement. This rule stands on its own.
 
 ### Parity as the API's one rulebook clause
 
@@ -237,6 +326,18 @@ an invariant a future implementer could silently violate?
    duplicate events. What breaks: every retry after a
    processed-but-timed-out delivery fires the subscriber's automation
    twice.
+
+4. **Delivery-destination admission, re-checked at delivery time** —
+   *minted*: `delivery-destination-admission` and its three scenarios.
+   The natural implementation validates the URL once, when the
+   subscription row is written, because that is where the user-visible
+   error belongs; the address a connection actually reaches is then
+   whatever DNS says at the moment of the attempt. What breaks if
+   violated: a registered client re-points an admitted hostname at a
+   private address and the platform delivers game payloads into its own
+   network on the client's behalf, indefinitely, under the retry budget.
+   The HTTPS half is minted with it because an implementer reading
+   "a delivery URL" has no reason to reject `http://`.
 
 No further lead survived judgment: retry schedules, registration shapes,
 algorithms, scheduler decoupling, and endpoint/payload shapes are

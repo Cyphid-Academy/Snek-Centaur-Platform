@@ -54,7 +54,7 @@ synthesis, 2026-07-24; open question Q2 resolved **yes, mint**):
 
 ## What Changes
 
-- **New capability: `platform-integrations`** — 10 requirements,
+- **New capability: `platform-integrations`** — 11 requirements,
   ADDED-only mint delta with a `## Purpose` preamble declaring "Depends
   on: identity-and-authorization, game-lifecycle, global-invariants."
 - **Retirements**: this change's legacy absorptions are recorded in the
@@ -72,15 +72,18 @@ synthesis, 2026-07-24; open question Q2 resolved **yes, mint**):
   (`integration-clients#a-client-is-not-its-registrar`); revocation
   stopping issuance at once with revoked records retained for audit
   (`client-management#revocation-immediate`, `#revoked-records-retained`);
-  team administration reachable only by explicit grant
-  (`client-capability-bounds#team-administration-is-opt-in`); and
+  team administration granted on the recorded ceiling
+  (`client-capability-bounds#a-roster-system-may-run-its-rosters`);
   deduplication-identifier stability across redeliveries
-  (`at-least-once-delivery#same-id-on-every-redelivery`).
+  (`at-least-once-delivery#same-id-on-every-redelivery`); and the
+  delivery destination admitted at registration *and* re-checked against
+  the address each attempt reaches
+  (`delivery-destination-admission#rechecked-against-the-address-actually-reached`).
 
 ## Impact
 
 - New: `openspec/specs/platform-integrations/spec.md` (folded at archive;
-  10 requirements).
+  11 requirements).
 - `openspec/config.yaml` context capability list gains
   `platform-integrations` at archive.
 - No code citation sweep: no code currently cites any id this change
@@ -97,3 +100,26 @@ platform's own public functions, and capabilities are defined in terms of
 them — and team administration is in the grantable set, because the
 integration this surface exists for is a roster system that owns its own
 classes.
+
+Two questions raised during review are now resolved:
+
+- **Decision — this capability owns delivery-destination admission.** A
+  subscription's only stated field constraint was "a delivery URL", so a
+  registered client could aim the platform's own outbound deliveries at
+  the deployment's endpoints or at the instance-provisioning host. No
+  invariant covers it (`global-invariants/credential-confinement` governs
+  credentials, and a webhook payload carries none) and no capability owns
+  egress policy, so the capability that lets an outside party choose the
+  address takes it: `delivery-destination-admission` requires HTTPS and a
+  publicly routable destination, checked **at registration and again at
+  each delivery attempt** because a name can be re-pointed afterwards.
+  Rationale and the declined dependency candidates are in `design.md`.
+- **Decision — configuring a game is inside the documented programmatic
+  surface.** Administering games is already in the floor, and an
+  integrator cannot start a game without deciding what game is played, so
+  the not-yet-launched configuration edit is inside the promise
+  (`functions-are-the-api#configuring-a-game-is-inside-the-surface`).
+  The reach is granted on the *function's* principal-kind declaration,
+  not by anything this capability or `game-configuration` says about
+  permissions — that capability carries no permission gating of its own.
+  What it must expose is recorded as a seam in `tasks.md` §3.6.
