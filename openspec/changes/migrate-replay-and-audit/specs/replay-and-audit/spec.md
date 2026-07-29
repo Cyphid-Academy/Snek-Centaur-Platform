@@ -1,143 +1,37 @@
 ## Purpose
 
-Reliving and auditing a finished game: the turn-keyed record a game's
-instance accumulates while the game runs, the once-at-game-end export and
-its persistence as a replay, the permanent attribution of every recorded
-action to the agent that performed it, the team's sub-turn action log, the
-reconstruction guarantee that ties the two logs together, the unified
-replay viewer with its board-level and team-perspective modes, and the
-public readability of finished games. This capability owns what the
-platform can prove about a game after it ends — what is recorded, who may
-read it, and how it is relived. Watching a game while it runs belongs to
-the live-observation story; acting in one to the operator, pacing, and
-bot stories; the lifecycle bracket that provisions and tears down the
-instance to the lifecycle story.
+Reliving and auditing a finished game: the once-at-game-end export of the
+record a game's own runtime accumulated and its persistence as a replay, the
+team's sub-turn action log and the discipline that every actor writes its
+own entries, the reconstruction guarantee that ties the two logs together,
+the unified replay viewer with its board-level and team-perspective modes,
+and the public readability of finished games. This capability owns what the
+platform can prove about a game after it ends — what leaves the instance,
+who may read it, and how it is relived. What the record contains and how the
+resolving transaction accumulates it belong to the game-runtime story;
+watching a game while it runs to the live-observation story; acting in one
+to the operator, pacing, and bot stories; the lifecycle bracket that
+provisions and tears down the instance to the lifecycle story.
 
-Depends on: game-engine, global-invariants, identity-and-authorization, game-lifecycle, live-game-observation, operator-control, turn-pacing, decision-transparency.
+Depends on: game-engine, game-runtime, global-invariants, identity-and-authorization, game-lifecycle, live-game-observation, operator-control, turn-pacing, decision-transparency, application-shell.
 
 ## ADDED Requirements
 
-### Requirement: replay-and-audit/turn-keyed-game-record
-Depends on: global-invariants/game-instance-hermeticity, turn-pacing/turn-declaration.
-
-A game's instance SHALL accumulate, for the whole life of the game, a turn-keyed historical record from which every completed turn's full observable state is directly queryable — without re-executing any rule and without consulting any other runtime. The record SHALL comprise at minimum: a snapshot of every snake's full state at each turn boundary; every item's lifetime as its spawn turn and its consumed-or-destroyed turn; the board layout, written once at initialization and never after; each team's post-turn time budget together with how its turn was declared over — the declaration kind, with the timestamp for explicit declarations; each turn's wall-clock start and the wall-clock moment its resolution began; and every turn event, attributed to the turn that produced it. Retention SHALL be unbounded for the instance's life: no cap, eviction, or windowing ever drops a completed turn from the record.
-
-#### Scenario: #items-derivable-at-any-turn
-- **WHEN** the set of items on the board at some past turn is needed
-- **THEN** it is directly derivable from the spawn/destroyed turn pairs alone — items present from the start carry spawn turn 0, and nothing requires replaying spawns
-
-#### Scenario: #resolution-takes-time
-- **WHEN** per-turn timing is read from the record
-- **THEN** both the turn's start and its resolution's start are present, so the time resolution itself took is measurable — nothing in the record assumes resolution is instantaneous
-
-#### Scenario: #unbounded-retention
-- **WHEN** a game runs to a very high turn count
-- **THEN** every early turn remains directly queryable in-instance for the instance's whole life — memory pressure is an implementation concern, never a licence to evict history
-
 ### Requirement: replay-and-audit/append-only-history
-Depends on: global-invariants/authoritative-turn-resolution#turn-resolution-is-atomic, global-invariants/transactional-invariant-enforcement#both-stores-guard-their-own-invariants.
+Depends on: global-invariants/transactional-invariant-enforcement#both-stores-guard-their-own-invariants, global-invariants/state-confined-to-owning-runtime#convex-never-mirrors-a-live-game.
 
-Every historical record of a game SHALL be append-only: once the instance's resolving transaction commits a game-record row or event, and once a team action-log entry is written, no committed record is ever mutated or deleted — not for later discoveries, corrections, or any other reason — and previously readable historical state SHALL keep reading identically as new records append. Sole exception: an item's destroyed-turn field is stamped exactly once, from empty, by the later turn that consumes or destroys the item.
-
-#### Scenario: #no-retroactive-correction
-- **WHEN** a defect is discovered in an already-committed turn's records
-- **THEN** the committed records stand unchanged — historical correctness is the resolving transaction's responsibility at commit time, never a later rewrite's
-
-#### Scenario: #past-reads-stable
-- **WHEN** the same past turn is read before and after further turns commit
-- **THEN** the results are identical — appending new history never perturbs what was already readable
-
-#### Scenario: #the-single-stamp
-- **WHEN** an item is consumed or destroyed
-- **THEN** its lifetime record's destroyed-turn is written once, from empty — the one permitted touch of a previously written row, and it is never re-stamped
+Every persistent historical record the platform keeps of a game SHALL be append-only: once a team action-log entry is written, and once a game's exported record is persisted, neither is ever mutated or deleted — not for later discoveries, corrections, or any other reason — and previously readable historical state SHALL keep reading identically as new records append. The append-only discipline over the rows a game's own runtime commits is that runtime's own, on the same terms.
 
 #### Scenario: #action-log-entries-never-corrected
 - **WHEN** a team action-log entry turns out to be mistaken
 - **THEN** it can be neither edited nor deleted — corrections are not supported, and every reader treats the log as append-only fact
 
-### Requirement: replay-and-audit/replay-sufficiency
-Depends on: global-invariants/authoritative-turn-resolution, game-engine/determinism.
-
-The game record SHALL be sufficient to reconstruct a complete replay of the game — every board state, every item lifetime, every turn event, and every staged-move attribution — without consulting any runtime other than the instance that produced it. Given identical seeds, configuration, and staged-move sequence with identical timing, the accumulated record SHALL be identical.
-
-#### Scenario: #nothing-else-consulted
-- **WHEN** a complete replay is reconstructed from the record
-- **THEN** no other runtime, live subscription, or side channel is needed — the record alone carries everything a replay requires
-
-#### Scenario: #bit-identical-reproduction
-- **WHEN** a game is re-run from the same seeds, configuration, and staged-move sequence
-- **THEN** the resulting record is identical to the original — determinism is a property of the record, externally verifiable record-to-record
-
-### Requirement: replay-and-audit/turn-event-record
-Depends on: game-engine/turn-events, global-invariants/one-shared-engine.
-
-The record's turn events SHALL form a closed enumeration — the engine's event vocabulary plus a hazard-damage event for each snake that took hazard damage and survived the turn — with no extensibility mechanism: a new event kind exists only by deliberate revision of this requirement, and of the one shared engine's vocabulary it closes over. Each stored event SHALL carry enough information for a replay or animation client to visualise its outcome without re-executing resolution and without diffing successive snapshots.
-
-#### Scenario: #death-carries-its-cause
-- **WHEN** a snake dies
-- **THEN** its death event states the cause explicitly — with contributing damage sources and the responsible snake where applicable — so no client infers the cause from an alive-to-dead transition between snapshots
-
-#### Scenario: #hazard-damage-never-double-counted
-- **WHEN** a snake dies with hazard damage contributing
-- **THEN** only the death event is recorded, carrying hazard among its sources — hazard-damage events exist for survivors only, so no consumer counts the same damage twice
-
-#### Scenario: #no-new-kinds-by-extension
-- **WHEN** a new observable outcome is proposed for the record
-- **THEN** it enters only by revising the closed set — never through a generic, custom, or extensible event kind
-
-### Requirement: replay-and-audit/canonical-event-order
-Depends on: live-game-observation/observation-use-cases, global-invariants/authoritative-turn-resolution#turn-resolution-is-atomic.
-
-A turn's events SHALL be a set carrying a canonical representation order that is derived entirely from the events' own data — event-type class, then the subject's identifier — never stored as a separate ordering datum, and stable across independent replays of the same game. The order is representational only: it asserts no causal or temporal relation within the turn, and it imposes no delivery-order obligation on any live channel.
-
-#### Scenario: #derived-not-stored
-- **WHEN** a consumer needs a turn's events in canonical order
-- **THEN** it derives the order from the event data alone — no stored sequence column exists, so nothing can drift out of step with the derivation rule
-
-#### Scenario: #stable-across-replays
-- **WHEN** the same game is reproduced independently
-- **THEN** every turn's canonical order is identical, so two records of the same game compare bit-exactly
-
-#### Scenario: #order-implies-no-causality
-- **WHEN** one event precedes another in canonical order
-- **THEN** nothing about within-turn timing or causation follows — the turn's outcomes were committed atomically as one set
-
-### Requirement: replay-and-audit/connect-time-attribution
-Depends on: global-invariants/authenticated-unambiguous-identity, global-invariants/team-granularity-authorization.
-
-The game instance SHALL resolve every admitted connection to an agent value — the team identity for a bot connection, the operator's identity for an operator connection — at the moment of admission, and SHALL retain an attribution entry per admitted connection for the instance's whole life. That agent value SHALL be carried untouched wherever the connection's actions are recorded: the runtime never interprets, maps, or substitutes it — during play or during export. Attribution entries SHALL never be mutated or deleted: disconnection writes nothing, and a reconnecting client is admitted as a fresh entry, so every historical attribution remains resolvable forever.
-
-#### Scenario: #resolved-at-connect-never-later
-- **WHEN** any recorded action must be attributed
-- **THEN** the agent value resolved at that connection's admission is used as-is — no later step re-derives, translates, or reinterprets attribution, and no raw connection identifier ever stands in for it
-
-#### Scenario: #disconnect-erases-nothing
-- **WHEN** a connection ends mid-game — network cut, client shutdown, or boot
-- **THEN** its attribution entry and every action already attributed through it remain intact and resolvable
-
-#### Scenario: #reconnect-appends-fresh
-- **WHEN** a client reconnects
-- **THEN** it is admitted under a fresh attribution entry while prior entries persist — actions from before and after the drop each resolve through their own admission
-
-### Requirement: replay-and-audit/staged-move-attribution
-Depends on: operator-control/staged-move-log, game-engine/movement.
-
-Every entry in the staged-move log SHALL permanently record the agent that wrote it, the wall-clock time it was accepted, and the turn it was staged in — so who staged what, and when, is reconstructible at any sub-turn moment of the game. A movement event SHALL carry the agent whose staged move was consumed — distinguishing bot-originated from operator-originated moves — and SHALL carry no agent when the move was determined by the engine's fallback; a missing agent has exactly that one meaning.
-
-#### Scenario: #sub-turn-staging-history
-- **WHEN** a team's within-turn deliberation is audited
-- **THEN** the log yields the full sequence of staged moves with writer and time — including superseded entries — not merely the moves that resolution consumed
-
-#### Scenario: #bot-and-operator-distinguishable
-- **WHEN** the team's automated player staged the consumed move
-- **THEN** the attribution is the team's identity — never any individual human — while an operator-staged move names that operator, so bot and human play are distinguishable everywhere the record is read
-
-#### Scenario: #fallback-moves-attributed-to-no-one
-- **WHEN** a snake moves by fallback because nothing was staged for it that turn
-- **THEN** the movement event's attribution is empty — fallback is the sole case with no staging writer
+#### Scenario: #persisted-replay-is-final
+- **WHEN** a defect is discovered in an already-persisted replay
+- **THEN** the persisted record stands unchanged — its correctness was the resolving transaction's responsibility at commit time, never a later rewrite's, and the platform has no path to amend it
 
 ### Requirement: replay-and-audit/agent-form-persistence
-Depends on: identity-and-authorization/roster-snapshot-binding, global-invariants/authenticated-unambiguous-identity#instance-team-ids-resolve-uniquely.
+Depends on: identity-and-authorization/roster-snapshot-binding, global-invariants/authenticated-unambiguous-identity#instance-team-ids-resolve-uniquely, game-runtime/connect-time-attribution.
 
 The persisted game record SHALL carry attribution exclusively as agent values — never raw connection identities — and the platform SHALL verify this as a defensive check while persisting. Persisted attribution is append-only historical fact bound to the game's roster snapshot: no later change — roster edits, team archival, account changes — ever erases or rewrites who did what in a finished game.
 
@@ -150,9 +44,9 @@ The persisted game record SHALL carry attribution exclusively as agent values �
 - **THEN** that game's record still attributes their actions to them — historical attribution derives from the game's snapshot, never from current membership
 
 ### Requirement: replay-and-audit/once-at-end-export
-Depends on: game-lifecycle/finish-notification, global-invariants/game-instance-hermeticity#no-egress-before-game-end, global-invariants/team-granularity-authorization, game-engine/determinism.
+Depends on: game-lifecycle/finish-notification, global-invariants/game-instance-hermeticity#no-egress-before-game-end, global-invariants/team-granularity-authorization, game-engine/determinism, game-runtime/turn-keyed-game-record, game-runtime/replay-sufficiency.
 
-The complete game record SHALL leave the game instance exactly once, at game end, bundled into the terminal notification — the instance's one sanctioned egress. The export SHALL be retrievable only under the platform's own authority — a privilege distinct from every gameplay admission — and SHALL be complete: visibility filtering is bypassed for it, so invisible snakes' states, the full staged-move log, and the attribution records are all included regardless of any team's perspective. The export SHALL include the per-game seed. A game that ends in an error outcome SHALL export no replay data.
+The complete game record SHALL leave the game instance exactly once, at game end, bundled into the terminal notification — the instance's one sanctioned egress. The export SHALL be retrievable only under the platform's own authority — a privilege distinct from every gameplay admission — and SHALL be complete: every accumulated part travels, including each completed turn's per-team aggregate rows, the full staged-move log, and the attribution records; and visibility filtering is bypassed for it, so invisible snakes' states are included regardless of any team's perspective. The export SHALL include the per-game seed. A game that ends in an error outcome SHALL export no replay data.
 
 #### Scenario: #nothing-leaves-per-turn
 - **WHEN** the accumulated record crosses out of the instance
@@ -165,6 +59,10 @@ The complete game record SHALL leave the game instance exactly once, at game end
 #### Scenario: #filter-bypassed-for-export
 - **WHEN** the export is produced for a game in which snakes were invisible
 - **THEN** it contains their full state at every turn — the export is the whole truth, because downstream replay serves every perspective a viewer later chooses
+
+#### Scenario: #aggregates-travel-with-the-record
+- **WHEN** the export is assembled
+- **THEN** every completed turn's per-team aggregate rows travel inside it — a game's scoreboard history is part of the exported record, not a live-only channel that ends with the instance and leaves the replay to recompute it
 
 #### Scenario: #seed-secret-live-exported-post
 - **WHEN** the game runs
@@ -192,9 +90,9 @@ The platform SHALL persist the exported record as the game's replay, bound to th
 - **THEN** the game's action log, display-state snapshots, and other game-scoped team records are untouched — teardown removes the instance, never the audit trail
 
 ### Requirement: replay-and-audit/team-action-log
-Depends on: turn-pacing/operator-tempo, operator-control/captain-boot, decision-transparency/computed-display-state, operator-control/staged-move-log, global-invariants/state-confined-to-owning-runtime#convex-never-mirrors-a-live-game.
+Depends on: turn-pacing/operator-tempo, operator-control/captain-boot, operator-control/operator-dual-connection, decision-transparency/computed-display-state, game-runtime/staged-move-log, global-invariants/state-confined-to-owning-runtime#convex-never-mirrors-a-live-game.
 
-The platform SHALL keep, per game, a team action log recording state-changing team-experience events at wall-clock resolution finer than turn granularity. Each entry SHALL carry at minimum: the game, the turn, the acting identity and its kind (operator, or the team's server acting as its bot), and a wall-clock timestamp. The recorded categories SHALL include at minimum: snake selection and deselection; manual-mode toggles; Drive addition and removal; heuristic weight and activation changes, carrying both old and new values; temperature-override changes; per-operator tempo changes and Captain boots; team-side turn submissions; and computed-display-state snapshots. Move staging is not among them — staged moves live solely in the game instance's staged-move log.
+The platform SHALL keep, per game, a team action log recording state-changing team-experience events at wall-clock resolution finer than turn granularity. Each entry SHALL carry at minimum: the game, the turn, the acting identity and its kind (operator, or the team's server acting as its bot), and a wall-clock timestamp. The recorded categories SHALL include at minimum: each operator's arrival in and departure from the team's game session, the departure carrying its cause — a deliberate leave, a lost connection, or a Captain's boot; snake selection and deselection; manual-mode toggles; Drive addition and removal; heuristic weight and activation changes, carrying both old and new values; temperature-override changes; per-operator tempo changes and Captain boots; team-side turn submissions; and computed-display-state snapshots. Move staging is not among them — staged moves live solely in the game instance's staged-move log.
 
 #### Scenario: #sub-turn-resolution
 - **WHEN** several team actions occur within one turn
@@ -203,6 +101,10 @@ The platform SHALL keep, per game, a team action log recording state-changing te
 #### Scenario: #tempo-and-boot-are-clock-anchored
 - **WHEN** tempo changes, boots, and turn submissions are recorded
 - **THEN** their entries are anchored to wall-clock time, not turn keys — so the active-operator set and each operator's tempo are reconstructible at any moment, regardless of turn boundaries
+
+#### Scenario: #every-departure-is-logged-however-it-happened
+- **WHEN** an operator leaves the team's game session — closing the interface, dropping off the network, or being booted
+- **THEN** a departure entry is recorded either way, carrying which of those it was — an unannounced drop leaves as durable a mark as a deliberate exit, so no reader has to tell "left" from "went quiet"
 
 #### Scenario: #weight-change-carries-before-and-after
 - **WHEN** a heuristic's weight or activation changes
@@ -215,7 +117,7 @@ The platform SHALL keep, per game, a team action log recording state-changing te
 ### Requirement: replay-and-audit/actors-write-own-entries
 Depends on: global-invariants/one-contract-many-surfaces#operators-never-proxy-through-the-server, decision-transparency/hosting-server-sole-writer, global-invariants/transactional-invariant-enforcement.
 
-Every action-log entry SHALL be written by the actor it describes, under that actor's own credential: operators write their own entries, and the team's hosting server writes its own — computed-display-state snapshots exclusively so, with every published snapshot producing its snapshot-category entry. Every mutation of the team's recorded state SHALL write its action-log entry in the same transaction as the mutation itself, so the log is a faithful record of exactly the mutations that succeeded.
+Every action-log entry SHALL be written by the actor it describes, under that actor's own credential: operators write their own entries, and the team's hosting server writes its own — computed-display-state snapshots exclusively so, with every published snapshot producing its snapshot-category entry. Every mutation of the team's recorded state SHALL write its action-log entry in the same transaction as the mutation itself, so the log is a faithful record of exactly the mutations that succeeded. Exactly one category SHALL be exempt: an operator's departure, which no departing client can be relied on to write for itself, is written by the runtime that holds the log at the moment it observes that operator's coordination connection end.
 
 #### Scenario: #dropped-entry-means-no-mutation
 - **WHEN** an action's log write fails
@@ -229,10 +131,14 @@ Every action-log entry SHALL be written by the actor it describes, under that ac
 - **WHEN** the team's server publishes a computed-display-state snapshot
 - **THEN** a corresponding snapshot-category entry exists — the display record and the log never disagree about what was published when
 
-### Requirement: replay-and-audit/experience-reconstruction
-Depends on: global-invariants/centaur-state-boundary#centaur-state-cannot-decide-a-game, operator-control/exclusive-selection#cleared-at-finish.
+#### Scenario: #the-one-entry-its-actor-cannot-write
+- **WHEN** an operator's connection ends without warning
+- **THEN** the departure entry is written by the log's own runtime as it observes the connection end — never back-filled afterwards by the team's server, and never inferred later from a gap in that operator's activity
 
-The persisted replay and the team action log together SHALL suffice to reconstruct a participating team's full experience at any wall-clock moment of the game: which snake each operator had selected, each snake's manual-mode flag, its active Drives with targets and weights, its heuristic activations and weight overrides, its temperature override, its display state as last written before that moment, the staged moves and who staged them, and the active-operator set with each operator's tempo. The action log SHALL never be a source of authoritative game state: board contents, snake bodies, and outcomes reconstruct from the game record alone.
+### Requirement: replay-and-audit/experience-reconstruction
+Depends on: global-invariants/centaur-state-boundary#centaur-state-cannot-decide-a-game, operator-control/exclusive-selection#cleared-at-finish, game-runtime/staged-move-attribution.
+
+The persisted replay and the team action log together SHALL suffice to reconstruct a participating team's full experience at any wall-clock moment of the game: which snake each operator had selected, each snake's manual-mode flag, its active Drives with targets and weights, its heuristic activations and weight overrides, its temperature override, its display state as last written before that moment, the staged moves and who staged them, and the active-operator set — who was then connected to the team's game session — with each operator's tempo, folded from the log's recorded arrivals and departures. The action log SHALL never be a source of authoritative game state: board contents, snake bodies, and outcomes reconstruct from the game record alone.
 
 #### Scenario: #any-moment-not-just-boundaries
 - **WHEN** a moment strictly inside a turn is reconstructed
@@ -241,6 +147,10 @@ The persisted replay and the team action log together SHALL suffice to reconstru
 #### Scenario: #selection-history-from-the-log-alone
 - **WHEN** a finished game's selection history is reconstructed
 - **THEN** it comes entirely from the log's selection events — live selection state was cleared at game end, and nothing depends on it having survived
+
+#### Scenario: #presence-is-read-not-guessed
+- **WHEN** the active-operator set at some past instant is needed
+- **THEN** it is the fold of the recorded arrivals and departures up to that instant — never inferred from a lull in an operator's activity, and never taken from live presence, which the platform holds no durable record of
 
 #### Scenario: #board-truth-from-the-game-record-only
 - **WHEN** any consumer needs board contents, snake bodies, collisions, or spawns
@@ -298,7 +208,7 @@ The application SHALL present replays through one unified viewer — never separ
 - **THEN** the viewer does not open it; the replay surface serves exactly the games that have a replay to serve
 
 ### Requirement: replay-and-audit/board-level-replay
-Depends on: live-game-observation/scoreboard-sole-aggregate-authority, live-game-observation/spectator-live-experience.
+Depends on: live-game-observation/scoreboard-sole-aggregate-authority, live-game-observation/spectator-live-experience, game-runtime/per-turn-scoreboard.
 
 Board-level mode SHALL source everything it displays from the persisted replay alone — never a game instance — rendering, at the selected turn: the board terrain, snakes, items, hazards, and fertile tiles; the per-team scoreboard with the normalised score as headline at par 1.0 and aggregate length secondary (the rows recorded from the game's sole aggregate authority); and a per-turn event log listing the turn's events from the closed set, visually consistent with live spectating. Board-level mode SHALL NOT display anything derived from the team action log: no operator selections or shadows, and no display-state, worst-case, or heuristic data — for any team, the viewer's own included.
 
@@ -315,7 +225,7 @@ Board-level mode SHALL source everything it displays from the persisted replay a
 - **THEN** nothing sourced from the action log appears — a viewer wanting the team experience must be in team-perspective mode, where its participant scoping applies
 
 ### Requirement: replay-and-audit/team-perspective-replay
-Depends on: replay-and-audit/experience-reconstruction, decision-transparency/worst-case-preview, decision-transparency/decision-breakdown.
+Depends on: decision-transparency/worst-case-preview, decision-transparency/decision-breakdown, operator-control/operator-presence-and-identity#same-colour-on-every-client, application-shell/surface-mounting-contract.
 
 Team-perspective mode SHALL present the live operator interface, read-only, over reconstructed state at the scrubbed moment: every mutating affordance — staging, Drive edits, manual-mode and tempo toggles, boots, submission — disabled or absent, while the state-inspection affordances — direction preview, worst-case world preview, decision breakdown — remain fully functional. Historical operator selections SHALL render as coloured shadows in the same per-operator colours used in live play; an operator not connected at the scrubbed moment produces no shadow.
 
@@ -328,7 +238,7 @@ Team-perspective mode SHALL present the live operator interface, read-only, over
 - **THEN** each snake selected at that moment carries its holder's shadow in that operator's live-play colour, and operators who were not connected then cast no shadow
 
 ### Requirement: replay-and-audit/replay-visibility-bound
-Depends on: live-game-observation/invisibility-filtering, replay-and-audit/finished-games-public.
+Depends on: live-game-observation/invisibility-filtering.
 
 Team-perspective replay SHALL reveal nothing about opposing teams beyond what the viewed team's filtered live view showed at that original moment: an opposing snake invisible to the team at a historical moment stays invisible at that moment in the team-perspective replay, even though the persisted replay behind the viewer holds the full record.
 
@@ -341,7 +251,9 @@ Team-perspective replay SHALL reveal nothing about opposing teams beyond what th
 - **THEN** the snake is shown — a finished game's full record is open; the team-perspective bound is fidelity to the lived view, not continued secrecy
 
 ### Requirement: replay-and-audit/unified-timeline
-One timeline control SHALL govern scrubbing for both viewer modes, providing play, pause, a scrubber, a playback-speed control labelled with the active mode's unit, and a toggle between two scrub modes, defaulting to Per-Turn; the chosen mode and speed SHALL be client-local viewer state, never persisted to the platform. In **Per-Turn** mode, turns are equidistant ticks, scrubbing snaps to end-of-turn states — the state of the world the team saw while declaring — and playback advances in turns per second. In **Timeline** mode, the axis is the game's real wall-clock span with turn boundaries marked at their actual declaration times, scrubbing is continuous in clock time, and playback runs at multiples of real time. Keyboard scrubbing SHALL match the active mode's granularity: whole turns in Per-Turn mode; fine time steps and turn-marker jumps in Timeline mode.
+Depends on: game-runtime/turn-declaration.
+
+One timeline control SHALL govern scrubbing for both viewer modes, providing play, pause, a scrubber, a playback-speed control labelled with the active mode's unit, and a toggle between two scrub modes, defaulting to Per-Turn; the chosen mode and speed SHALL be client-local viewer state, never persisted to the platform. In **Per-Turn** mode, turns are equidistant ticks, scrubbing snaps to end-of-turn states — the state of the world the team saw while declaring — and playback advances in turns per second. In **Timeline** mode, the axis is the game's real wall-clock span, scrubbing is continuous in clock time, and playback runs at multiples of real time; every turn SHALL carry a boundary marker, placed at the latest declaration timestamp the record holds for that turn when every team's declaration for it was stamped, and otherwise at the turn's recorded resolution start. Keyboard scrubbing SHALL match the active mode's granularity: whole turns in Per-Turn mode; fine time steps and turn-marker jumps in Timeline mode.
 
 #### Scenario: #snap-to-what-the-team-saw
 - **WHEN** the scrubber moves in Per-Turn mode
@@ -351,12 +263,18 @@ One timeline control SHALL govern scrubbing for both viewer modes, providing pla
 - **WHEN** turns took very different real durations under the clock
 - **THEN** Timeline mode spaces their markers proportionally to real time — the game's actual rhythm is visible, never flattened to equidistant turns
 
+#### Scenario: #a-turn-nobody-declared-is-still-placed
+- **WHEN** a turn ended because a team's clock ran out, or because a team had no snakes left to play — declarations that carry no timestamp
+- **THEN** that turn's marker sits at the moment its resolution began, which the record holds for every turn; no turn is left unplaceable, dropped from the axis, or collapsed onto its neighbour
+
 #### Scenario: #mode-and-speed-are-local
 - **WHEN** a viewer picks a scrub mode and speed
 - **THEN** the choice lives in their client alone — restored within their session, invisible to other viewers, and never written to the platform
 
 ### Requirement: replay-and-audit/replay-inspection
-Inspection in the replay viewer SHALL be purely client-local: the viewer may inspect any snake on the viewed team at any scrubbed moment — regardless of which operator, if any, held it then — with at most one inspected snake per client. Inspection SHALL write nothing to any store, produce no selection shadow, never displace or alter any reconstructed selection, and be invisible to every other client.
+Depends on: decision-transparency/examined-subject.
+
+The replay viewer SHALL let the viewer inspect any snake on the viewed team at any scrubbed moment, regardless of which operator, if any, held it at that moment. Inspection SHALL be purely additive over the reconstructed view: it never displaces, clears, or otherwise alters the selections the record holds for that moment.
 
 #### Scenario: #concurrent-inspectors-never-conflict
 - **WHEN** several users replay the same game simultaneously, each inspecting different snakes
@@ -371,6 +289,8 @@ Inspection in the replay viewer SHALL be purely client-local: the viewer may ins
 - **THEN** the reconstructed selection shadows keep rendering exactly as recorded, alongside the inspection — inspection adds a local lens and removes nothing
 
 ### Requirement: replay-and-audit/replay-binding-mutation-free
+Depends on: application-shell/one-state-binding.
+
 The data path by which replayed state reaches the interface SHALL offer no mutation surface at all: mutation is structurally absent from the replay binding — not present but refused — so nothing invocable exists for a replay client to write through, and no runtime guard is ever what stands between a replay viewer and a write.
 
 #### Scenario: #absence-not-guard

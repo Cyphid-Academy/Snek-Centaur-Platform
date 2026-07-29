@@ -2,21 +2,27 @@
 
 Watching a live game: the real-time delivery of committed turns to every
 observing connection, the invisibility filter that decides who may observe
-which snakes, the reconstruction of any past turn while the game runs, the
+which snakes, the team-privacy of a team's staged moves, the
+reconstruction of any past turn while the game runs, the
 server-published scoreboard, spectating by any authenticated user, and the
 coach's read-only window into a team's live play. This capability owns the
 observation surface of a running game — what each admitted connection may
 see and how it arrives. Who may obtain access to a game is owned by its
-identity dependency; acting in a game — staging moves, pacing turns,
-running a team — belongs to the capabilities that own those workflows, and
-reliving a finished game belongs to the replay story.
+identity dependency; the per-turn record, the staged-move log and the
+aggregate rows these surfaces read, and the transaction that writes them,
+belong to the game-runtime story; acting in a game — staging a move,
+pacing turns, running a team — belongs to the capabilities that own those
+workflows, though what any connection may then read of a staged move is
+this capability's; and reliving a finished game belongs to the replay
+story.
 
-Depends on: game-engine, global-invariants, identity-and-authorization.
+Depends on: game-engine, game-runtime, global-invariants,
+identity-and-authorization, application-shell.
 
 ## ADDED Requirements
 
 ### Requirement: live-game-observation/real-time-committed-delivery
-Depends on: game-engine/turn-resolution-model, global-invariants/authoritative-turn-resolution#turn-resolution-is-atomic.
+Depends on: game-engine/turn-resolution-model, global-invariants/authoritative-turn-resolution#turn-resolution-is-atomic, game-runtime/resolving-transaction.
 
 A game's runtime SHALL deliver committed state to subscribed connections in real time: a subscribed client observes each turn's outcome as it commits, without polling on a timer. Everything a turn's resolution produces SHALL become observable as one atomic logical update — either the whole committed turn is observable or none of it, which rests on resolution committing all-or-nothing in one transaction — and no state of a turn SHALL reach any subscriber before that turn's resolution has fully committed.
 
@@ -33,6 +39,7 @@ A game's runtime SHALL deliver committed state to subscribed connections in real
 - **THEN** no intermediate state from within the resolution pipeline is observable to any subscriber; observers see the prior turn's state until the commit lands whole
 
 ### Requirement: live-game-observation/observation-use-cases
+Depends on: game-runtime/canonical-event-order, game-runtime/turn-keyed-game-record.
 The observation surface SHALL support, for every admitted connection within its authorized visibility: a live current-turn view that updates automatically as turns commit; point-in-time observation of any completed turn; observation of a turn transition — the new turn's state together with the events that produced it — sufficient to animate it; and mid-game catch-up, where a connection joining mid-game obtains the complete history so far as an initial delivery followed by incremental updates.
 
 #### Scenario: #mid-game-join
@@ -88,8 +95,21 @@ A snake's observability SHALL be evaluated against its visibility state at the o
 - **WHEN** a snake's invisibility has since ended — by expiry, cancellation, or death — and a non-allied observer scrubs back to a turn in which it was invisible
 - **THEN** the snake is still absent from that turn's reconstruction; later visibility never unlocks past hidden state
 
+### Requirement: live-game-observation/staged-move-privacy
+Depends on: game-runtime/staged-move-log, global-invariants/team-granularity-authorization#spectators-hold-no-private-state.
+
+The observation surface SHALL deliver a team's staged-move entries to connections bound to that team and to no others: its own connections observe the complete history the game's log holds for it — every entry, superseded ones included, across all turns — while a connection bound to another team or to none observes none of it, live or historical. Staging intent is filtered at the same team granularity as snake state, so what other observers obtain of a team's play is its committed movement outcomes.
+
+#### Scenario: #own-history-complete
+- **WHEN** a team connection reads its staged moves
+- **THEN** the full multi-turn history is delivered, including entries that were superseded before ever resolving
+
+#### Scenario: #cross-team-never-even-after-resolution
+- **WHEN** a turn has long since resolved
+- **THEN** opposing and spectator connections still obtain no staged entry of the team for it — other teams learn only committed movement outcomes, never staging intent, timing, or changes of mind
+
 ### Requirement: live-game-observation/historical-reconstruction
-Depends on: game-engine/chess-timer.
+Depends on: game-engine/chess-timer, game-runtime/turn-keyed-game-record.
 
 For any completed turn of a running game, an admitted connection SHALL be able to reconstruct from the observation surface alone, within its authorized visibility: every observable snake's full state at that turn's boundary, the items then on the board, each team's remaining time budget, and the turn's full event list. Reconstruction SHALL require no re-execution of game rules — per-turn state is directly readable as committed.
 
@@ -102,32 +122,24 @@ For any completed turn of a running game, an admitted connection SHALL be able t
 - **THEN** snakes invisible to them at that turn are absent, while the turn's events and per-team budgets are complete
 
 ### Requirement: live-game-observation/scoreboard-sole-aggregate-authority
-Depends on: game-engine/scoring, global-invariants/transactional-invariant-enforcement#both-stores-guard-their-own-invariants.
+Depends on: game-runtime/per-turn-scoreboard, global-invariants/team-granularity-authorization#spectators-hold-no-private-state.
 
-For every completed turn the runtime SHALL publish exactly one scoreboard row per rostered team — zero-filled, never omitted, for teams with no living snakes — carrying that team's aggregates at the turn boundary: the normalised score the game would have if it ended at that turn, the alive-snake count, and the aggregate body length, computed server-side over the true alive set including invisible snakes and written with the turn it summarises. Scoreboard rows SHALL be identical for every connection — they expose per-team aggregates only, never per-snake state — and clients SHALL obtain every team-level aggregate exclusively from this channel.
+The observation surface SHALL deliver each completed turn's per-team aggregate rows identically to every admitted connection — the rows expose per-team aggregates only, never per-snake state, so no visibility filter applies to them — and a turn's rows SHALL be observable whenever that turn's state is. Clients SHALL obtain every team-level aggregate exclusively from this channel: this surface is the sole authority a consumer may read an aggregate from, and the rows are read as recorded, never recomputed.
 
 #### Scenario: #invisible-snakes-counted-not-revealed
 - **WHEN** a team has an invisible snake
-- **THEN** the scoreboard's aggregates include it while the snake's own state stays filtered — the aggregate totals are the deliberate, bounded disclosure of invisible contributions
-
-#### Scenario: #eliminated-teams-zero-filled
-- **WHEN** a team has no living snakes at a turn
-- **THEN** its scoreboard row is present with zeroed aggregates, never omitted — every rostered team appears every turn
-
-#### Scenario: #live-score-reads-as-if-ended
-- **WHEN** the scoreboard shows a team's score mid-game
-- **THEN** it is the normalised score the game would produce if it ended at that boundary — par 1.0 for a proportional share — not a raw segment count
+- **THEN** the delivered aggregates include it while the snake's own state stays filtered — the aggregate totals are the deliberate, bounded disclosure of invisible contributions
 
 #### Scenario: #never-lags-the-snapshot
 - **WHEN** a turn's snake states are observable
-- **THEN** that turn's scoreboard rows are observable too — no observer can catch a committed turn whose scoreboard is missing or stale
+- **THEN** that turn's aggregate rows are observable too — no observer can catch a committed turn whose scoreboard is missing or stale
 
 #### Scenario: #client-aggregation-is-a-defect
 - **WHEN** a client needs any team-level aggregate — score, total length, alive count, win-condition state
 - **THEN** it renders the delivered aggregate; computing it by aggregating per-snake subscription data is a violation even when the values happen to match, because it silently under-counts whenever an opponent snake is invisible
 
 ### Requirement: live-game-observation/ui-honours-the-filter
-Depends on: global-invariants/client-truthfulness.
+Depends on: global-invariants/client-truthfulness, application-shell/one-board-rendering.
 
 Presenting only what the owning runtime asserts, the application UI SHALL never attempt to infer, reconstruct, or approximate hidden snake state from any channel — events, aggregates, or gaps in deliveries — and SHALL render invisibility indication only for own-team snakes, from the delivered visibility state, never revealing or guessing at other teams' invisibility.
 
@@ -202,7 +214,9 @@ While a game is being played, a team's private observation context is its filter
 - **THEN** coach standing adds no read access beyond what every authenticated user has for finished games — the role is meaningful only at the live-game boundary
 
 ### Requirement: live-game-observation/coach-mode-interface
-The application SHALL offer a coach mode into a team's live interface for that team's designated coaches (and admins as implicit coaches), reachable from wherever the team's live game is surfaced, including its spectating view: the full interface a member would see, with every mutating affordance disabled or absent and the mode visibly read-only. Coach inspection of a snake SHALL be client-local — it writes nothing, produces no selection shadow, and never displaces any operator's selection — and SHALL be visually distinct from operator selection.
+Depends on: application-shell/surface-mounting-contract.
+
+The application SHALL offer a coach mode into a team's live interface for that team's designated coaches (and admins as implicit coaches), reachable from wherever the team's live game is surfaced, including its spectating view: the full interface a member would see, with every mutating affordance disabled or absent and the mode visibly read-only. A coach's own inspection of a snake SHALL render alongside the operators' real selection shadows rather than in place of them, and SHALL be gesturally and visually distinct from operator selection.
 
 #### Scenario: #every-mutating-affordance-inert
 - **WHEN** a coach opens the live interface
@@ -210,7 +224,7 @@ The application SHALL offer a coach mode into a team's live interface for that t
 
 #### Scenario: #inspection-is-client-local
 - **WHEN** a coach inspects a snake while the team's operators hold selections
-- **THEN** the coach sees the operators' real selection shadows alongside their own inspection, which appears in no other client and touches no shared state
+- **THEN** the operators' real selection shadows keep rendering alongside the coach's own inspection, and no operator's hold is displaced or disturbed by it
 
 #### Scenario: #inspection-never-reads-as-selection
 - **WHEN** a coach inspects a snake

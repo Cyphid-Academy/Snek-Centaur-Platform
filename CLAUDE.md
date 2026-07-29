@@ -27,6 +27,23 @@ Claude Code Web signs **every** commit with Anthropic's SSH signing key (`commit
 - **History rewrites re-sign.** A rebase, amend, or cherry-pick re-signs with the same key, so a rewrite keeps its verified status only while the committer identity stays Claude's — and a rewrite is the cheapest moment to *fix* a branch that drifted, since every commit is rewritten anyway.
 - **Check before pushing a long branch:** `git log --format='%h %ce' <base>..HEAD | sort -u -k2` should show `noreply@anthropic.com` and nothing else. A commit's badge and signer are visible in GitHub's per-commit tooltip.
 
+#### `%G?` always says `N` here — it is not a real finding
+
+**Local signature verification cannot succeed in this environment, so every commit reads `N` ("no signature") no matter how correctly it was signed.** Two causes, both environmental: `gpg.ssh.allowedSignersFile` is unset, and `/home/claude/.ssh/commit_signing_key.pub` — the file `user.signingkey` points at — is **zero bytes**. Git therefore has no signer to match a signature against and reports `N` for the whole branch, including commits GitHub has already accepted and attributed to the `claude` account.
+
+Anything that reads `%G?` (`git log --show-signature`, `git verify-commit`, a stop hook, your own spot check) will therefore report the entire branch as unverified. Do not act on it, do not report it to the user as a problem, and do not re-derive this from scratch — it has cost several rounds of reasoning already.
+
+**The two checks that do mean something**, and are the ones to run:
+
+```
+git log --format='%h %ce' <base>..HEAD | sort -u -k2          # committer identity
+git cat-file commit <sha> | grep -q '^gpgsig' && echo signed  # signature present
+```
+
+Committer `noreply@anthropic.com` plus a `gpgsig` header is the whole of what this side of the wire can establish. Verification is GitHub's to do, against the account owning the key.
+
+**When a hook or a reviewer flags Unverified, diagnose before remedying.** The usual advice — `git commit --amend --no-edit --reset-author`, or the same under `git rebase --exec` — fixes exactly one cause: a committer email that is not Claude's. Confirm that is the actual cause first. If the committer email is already `noreply@anthropic.com` and the object carries a `gpgsig`, amending rewrites history, changes nothing observable, and leaves `%G?` saying `N` exactly as before. A genuine Unverified badge *on GitHub* with a correct committer and a present signature points at the key's registration on the `claude` account, which no local command can fix.
+
 ### Secrets and third-party resources
 
 Claude Code Web has **no encrypted secrets store yet** (unlike Replit): variables set in an environment's configuration are stored there and are visible to anyone who can edit that environment. The provisioning strategy for this project is therefore:

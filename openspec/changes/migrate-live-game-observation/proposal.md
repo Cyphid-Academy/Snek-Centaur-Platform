@@ -16,9 +16,12 @@ Mint **`live-game-observation`** exactly as drawn in the capability map and
 assignment matrix (author-approved capability set and DAG). The legacy
 requirements and review items this change absorbs are recorded in the
 identifier map under this change's name. Declared dependencies:
-**game-engine, global-invariants, and identity-and-authorization**. The
+**game-engine, game-runtime, global-invariants, and
+identity-and-authorization**. The
 engine owns invisibility's game semantics, the turn-resolution commit, the
-chess timer, and scoring; global-invariants owns the cross-cutting rules
+chess timer, and scoring; the runtime capability owns the records these
+surfaces read — the turn-keyed game record, the aggregate rows, and the
+staged-move log; global-invariants owns the cross-cutting rules
 this capability's soundness rests on (atomic turn resolution, enforcement
 outside any client library, live game state confined to the game's own
 instance, team-granular authorization, in-transaction invariant guards, a
@@ -28,14 +31,16 @@ what terms (spectator tokens, coach tokens, role-bound privileges). This
 capability owns what an admitted connection may then *see* and how it
 arrives.
 
-Deliberate boundaries: acting in a game (selection, staging, own-team
-staged-move reads) belongs to the operator story; turn pacing to its own
+Deliberate boundaries: acting in a game (selection, staging a move)
+belongs to the operator story, while what any connection may *read* of a
+staged move is authored here; turn pacing to its own
 story; replay of finished games and record retention to the replay story;
 coach *designation* to the team story; token issuance mechanics to the
 identity dependency. Three ids are split or abstracted as directed by the
 matrix: 04-REQ-052 (its invisibility/server-side-filtering half is authored
-here; its staged-move read policy and attribution-metadata blocking are
-other capabilities' substance), 06-REQ-032 (live read-scoping here; the
+here, as — since the staged-move privacy rule moved in from the operator
+story — is its staged-move read policy; only its attribution-metadata
+blocking is another capability's substance), 06-REQ-032 (live read-scoping here; the
 finished-game/replay half and team-configuration-access half live
 elsewhere), and 05-REQ-067 (authored abstractly as "team-private live
 state" so the requirement never reaches for bot-side vocabulary this
@@ -44,13 +49,15 @@ vocabulary, so the fix is abstraction here, not a wider dependency list).
 
 ## What Changes
 
-- **New capability `live-game-observation`** (mint delta, ADDED-only, 13
+- **New capability `live-game-observation`** (mint delta, ADDED-only, 14
   requirements): real-time committed delivery with atomic turn updates,
   the supported observation use cases (live view, scrubbing, animation,
   mid-game catch-up), filtered views as the sole client read surface
   (constraint-mined), invisibility filtering with
   spectators-as-opponents-of-every-team intersection semantics, filter
-  behaviour across time (boundary transitions, scrub-safety), historical
+  behaviour across time (boundary transitions, scrub-safety), staged-move
+  privacy at team granularity (own-team history complete, cross-team never
+  — moved in from the operator story), historical
   reconstruction without rule re-execution, the scoreboard as the sole
   aggregate authority (true alive set, zero-filled rows, as-if-ended
   normalised score, same-transaction write), the UI honouring the filter
@@ -104,10 +111,13 @@ vocabulary, so the fix is abstraction here, not a wider dependency list).
   `transactional-invariant-enforcement`, `team-private-centaur-state`,
   `client-truthfulness`, and
   `team-granularity-authorization#spectators-hold-no-private-state` from the
-  open `extend-global-invariants` change; the reference lint resolves them
+  open `extend-global-invariants` change, and `game-runtime/staged-move-log`,
+  `resolving-transaction`, `turn-keyed-game-record`, `canonical-event-order`
+  and `per-turn-scoreboard` from the open `mint-game-runtime` change; the
+  reference lint resolves them
   via the open-change overlay, and the train's archive order
-  (extend-global-invariants and identity-and-authorization before this
-  change) keeps them resolving at fold time.
+  (extend-global-invariants, identity-and-authorization and game-runtime
+  before this change) keeps them resolving at fold time.
 - Code citations: view definitions, scoreboard materialisation, the
   spectating and coach-mode UI, and the read-scoping checks gain
   `// spec: live-game-observation/...` citations when the implementation
@@ -115,7 +125,52 @@ vocabulary, so the fix is abstraction here, not a wider dependency list).
 
 ## Open Questions
 
-None. The candidate ambiguities were all pre-resolved by binding sources
+- **Decision — the staged-move privacy rule is authored here, moved in from
+  `operator-control`.** It is a read rule over runtime state — what one
+  team's connections may see of another team's staging — and every other
+  read boundary of a running game is enforced by this capability's filtered
+  views. It sat in the operator story only because it arrived with the
+  staged-move log, and the runtime carve has since taken that log to
+  `game-runtime`, leaving a privacy rule describing state its own capability
+  no longer owned. It is now `staged-move-privacy`, sitting with the
+  filtering cluster, declaring `game-runtime/staged-move-log` for the log
+  whose contents it governs; the citation of this capability's own
+  filtered-views rule that it carried as an import is dropped, because a
+  requirement never declares a dependency inside its own capability and
+  because that rule already covers every read here. Both scenario slugs are
+  preserved unchanged. The Purpose now names the responsibility, and the
+  operator capability's Purpose defers it explicitly. Rationale and the
+  "what breaks if reversed" note are in design.md.
+- **Decision — scoreboard rows are durable record rows, not a live-only
+  channel.** `scoreboard-sole-aggregate-authority` is the rows' only
+  producer, yet the sibling replay story must render "the rows recorded from
+  the game's sole aggregate authority" from a persisted replay long after
+  the instance is gone, and this requirement obliged nothing beyond
+  publishing them for subscribers. The requirement now states that a
+  published row is a durable per-turn fact of the game's own record rather
+  than a projection assembled for a live subscription, with
+  `#rows-outlive-the-live-audience` carrying the case; the replay capability
+  correspondingly enumerates the rows among the game record's contents and
+  among what the game-end export carries. The alternative — letting the
+  replay recompute aggregates from persisted snapshots — was rejected as a
+  second implementation of the scoring rule inside a viewer. Rationale and
+  the "what breaks if reversed" note are in design.md.
+- **Decision — coach mode keeps only its coach-specific inspection
+  increment.** The general inspection primitive — a client-local,
+  never-persisted examination lens, independent of who holds a snake, that
+  stages nothing — is now owned by `decision-transparency/examined-subject`,
+  and `coach-mode-interface` restated it. The restatement is removed; what
+  the requirement keeps is coach-shaped: the read-only member interface, a
+  coach's inspection rendering alongside the operators' real selection
+  shadows rather than in place of them, and its gestural/visual
+  distinctness from operator selection. No dependency is declared on the
+  owning requirement, because this capability cannot depend on
+  `decision-transparency` without closing the cycle
+  `live-game-observation → decision-transparency → operator-control →
+  live-game-observation`; the reuse is code-level and is pinned in tasks.md
+  §6.8. Rationale and the "what breaks if reversed" note are in design.md.
+
+Otherwise none. The candidate ambiguities were all pre-resolved by binding sources
 and are recorded in design.md: spectator intersection semantics, turn-0
 publicity, the scoreboard's aggregate authority and as-if-ended score, the
 no-delivery-order-guarantee posture, and the up-front history subscription

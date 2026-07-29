@@ -29,17 +29,21 @@ flowchart TD
   classDef base stroke-width:2px;
 
   accounts-and-profiles["accounts-and-profiles"]:::open
+  application-shell["application-shell"]:::open
   bot-configuration["bot-configuration"]:::open
   bot-framework["bot-framework"]:::open
+  centaur-server-runtime["centaur-server-runtime"]:::open
   decision-transparency["decision-transparency"]:::open
   game-configuration["game-configuration"]:::open
   game-engine["game-engine"]
   game-lifecycle["game-lifecycle"]:::open
+  game-runtime["game-runtime"]:::open
   global-invariants["global-invariants"]
   identity-and-authorization["identity-and-authorization"]:::open
   live-game-observation["live-game-observation"]:::open
   operator-control["operator-control"]:::open
   platform-integrations["platform-integrations"]:::open
+  platform-persistence["platform-persistence"]:::open
   replay-and-audit["replay-and-audit"]:::open
   rooms-and-matchmaking["rooms-and-matchmaking"]:::open
   team-management["team-management"]:::open
@@ -49,69 +53,102 @@ flowchart TD
   turn-pacing["turn-pacing"]:::open
   visual-tester["visual-tester"]
 
+  accounts-and-profiles -->|2| game-engine
+  accounts-and-profiles -->|8| game-lifecycle
   accounts-and-profiles -->|9| global-invariants
   accounts-and-profiles -->|2| identity-and-authorization
   accounts-and-profiles -->|2| replay-and-audit
+  accounts-and-profiles -->|3| rooms-and-matchmaking
   accounts-and-profiles -->|5| team-management
-  bot-configuration -->|8| bot-framework
+  application-shell -->|1| game-engine
+  application-shell -->|5| global-invariants
+  bot-configuration -->|9| bot-framework
+  bot-configuration -->|1| game-lifecycle
   bot-configuration -->|5| global-invariants
   bot-configuration -->|1| identity-and-authorization
   bot-configuration -->|4| team-management
-  bot-framework -->|4| game-engine
+  bot-framework -->|9| game-engine
+  bot-framework -->|2| game-runtime
   bot-framework -->|10| global-invariants
-  bot-framework -->|6| operator-control
-  decision-transparency -->|6| bot-framework
-  decision-transparency -->|7| global-invariants
-  decision-transparency -->|3| operator-control
-  game-configuration -->|3| game-engine
-  game-configuration -->|10| global-invariants
+  bot-framework -->|4| operator-control
+  centaur-server-runtime -->|1| application-shell
+  centaur-server-runtime -->|9| global-invariants
+  decision-transparency -->|11| bot-framework
+  decision-transparency -->|8| global-invariants
+  decision-transparency -->|4| operator-control
+  game-configuration -->|1| application-shell
+  game-configuration -->|12| game-engine
+  game-configuration -->|17| global-invariants
   game-lifecycle -->|7| game-configuration
-  game-lifecycle -->|2| game-engine
-  game-lifecycle -->|24| global-invariants
+  game-lifecycle -->|4| game-engine
+  game-lifecycle -->|29| global-invariants
   game-lifecycle -->|2| identity-and-authorization
   game-lifecycle -->|3| team-server-management
-  global-invariants -->|2| game-engine
+  game-runtime -->|17| game-engine
+  game-runtime -->|3| game-lifecycle
+  game-runtime -->|26| global-invariants
+  game-runtime -->|1| identity-and-authorization
+  game-runtime -->|3| test-sequences
+  global-invariants -->|4| game-engine
   identity-and-authorization -->|35| global-invariants
-  live-game-observation -->|5| game-engine
-  live-game-observation -->|7| global-invariants
+  live-game-observation -->|2| application-shell
+  live-game-observation -->|4| game-engine
+  live-game-observation -->|6| game-runtime
+  live-game-observation -->|8| global-invariants
   live-game-observation -->|4| identity-and-authorization
-  operator-control -->|4| game-engine
-  operator-control -->|14| global-invariants
-  operator-control -->|1| identity-and-authorization
-  operator-control -->|2| live-game-observation
+  operator-control -->|1| game-engine
+  operator-control -->|2| game-lifecycle
+  operator-control -->|3| game-runtime
+  operator-control -->|9| global-invariants
+  operator-control -->|2| identity-and-authorization
+  operator-control -->|1| live-game-observation
   platform-integrations -->|3| game-lifecycle
   platform-integrations -->|3| global-invariants
   platform-integrations -->|10| identity-and-authorization
-  replay-and-audit -->|4| decision-transparency
-  replay-and-audit -->|5| game-engine
+  platform-integrations -->|1| platform-persistence
+  platform-persistence -->|4| global-invariants
+  replay-and-audit -->|2| application-shell
+  replay-and-audit -->|5| decision-transparency
+  replay-and-audit -->|2| game-engine
   replay-and-audit -->|3| game-lifecycle
-  replay-and-audit -->|19| global-invariants
+  replay-and-audit -->|7| game-runtime
+  replay-and-audit -->|13| global-invariants
   replay-and-audit -->|1| identity-and-authorization
-  replay-and-audit -->|5| live-game-observation
+  replay-and-audit -->|4| live-game-observation
   replay-and-audit -->|4| operator-control
-  replay-and-audit -->|2| turn-pacing
-  rooms-and-matchmaking -->|3| game-configuration
-  rooms-and-matchmaking -->|7| game-lifecycle
-  rooms-and-matchmaking -->|8| global-invariants
+  replay-and-audit -->|1| turn-pacing
+  rooms-and-matchmaking -->|6| game-configuration
+  rooms-and-matchmaking -->|11| game-lifecycle
+  rooms-and-matchmaking -->|9| global-invariants
   rooms-and-matchmaking -->|2| team-management
   team-management -->|7| global-invariants
   team-management -->|3| identity-and-authorization
-  team-server-management -->|13| global-invariants
+  team-server-management -->|1| application-shell
+  team-server-management -->|3| centaur-server-runtime
+  team-server-management -->|3| global-invariants
   team-server-management -->|1| identity-and-authorization
   team-server-management -->|4| team-management
   test-sequences -->|4| game-engine
-  tournaments -->|7| game-lifecycle
-  tournaments -->|6| global-invariants
-  tournaments -->|2| rooms-and-matchmaking
+  tournaments -->|3| accounts-and-profiles
+  tournaments -->|3| game-engine
+  tournaments -->|10| game-lifecycle
+  tournaments -->|9| global-invariants
+  tournaments -->|1| live-game-observation
+  tournaments -->|2| replay-and-audit
+  tournaments -->|5| rooms-and-matchmaking
+  tournaments -->|1| team-management
   tournaments -->|3| team-server-management
   turn-pacing -->|2| bot-configuration
   turn-pacing -->|2| bot-framework
-  turn-pacing -->|5| game-engine
-  turn-pacing -->|8| global-invariants
-  turn-pacing -->|7| operator-control
+  turn-pacing -->|2| game-engine
+  turn-pacing -->|4| game-runtime
+  turn-pacing -->|1| global-invariants
+  turn-pacing -->|5| operator-control
+  visual-tester -->|2| game-configuration
   visual-tester -->|8| game-engine
+  visual-tester -->|1| global-invariants
   visual-tester -->|4| test-sequences
 
   class game-engine,global-invariants base;
-  linkStyle 0,5,8,9,12,14,15,17,18,22,23,24,26,27,31,34,36,43,45,47,50,52,57,58,60 stroke-opacity:0.25;
+  linkStyle 0,2,7,8,11,14,16,19,21,24,25,27,28,31,33,37,39,41,43,46,50,53,56,59,66,68,72,75,77,79,87,89,92,93 stroke-opacity:0.25;
 ```

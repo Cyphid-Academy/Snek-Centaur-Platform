@@ -19,11 +19,15 @@ Mint **`replay-and-audit`** exactly as drawn in the author-approved
 capability map and assignment matrix. The legacy requirements and review
 items this change absorbs are recorded in the identifier map under this
 change's name. Declared dependencies: **game-engine, global-invariants,
-identity-and-authorization, game-lifecycle, live-game-observation,
-operator-control, turn-pacing, decision-transparency** — each declared
+test-sequences, identity-and-authorization, game-lifecycle,
+live-game-observation, operator-control, turn-pacing,
+decision-transparency** — each declared
 because the delta genuinely cites it, and the list stays extensible if a
 later citation warrants another: the engine
 owns event vocabulary, determinism, movement fallback, and scoring;
+`test-sequences` the one canonical encoding of engine values, the
+production-identical seed derivation, and the halt-at-first-divergence
+replay-check the record's determinism claim is verified by;
 global-invariants the cross-runtime rules this capability's guarantees rest
 on — instance hermeticity and its single sanctioned egress, atomic turn
 resolution, each store's in-transaction guard, identity resolution and
@@ -76,8 +80,8 @@ Deliberate boundaries and author-resolved directions honoured here:
   null-fallback rule; agent-form-only persistence outliving membership;
   the once-at-end privileged unfiltered export (seed included, nothing
   for error outcomes); replay persistence and post-teardown permanence;
-  the team action log (fields and categories, with staged moves pointedly
-  not among them);
+  the team action log (fields and categories — including operator arrivals
+  and departures, with staged moves pointedly not among them);
   actors writing their own entries transactionally; the two-log
   experience-reconstruction guarantee; finished-games public readability
   with direct links; the per-team game-history listing; the unified
@@ -103,14 +107,22 @@ Deliberate boundaries and author-resolved directions honoured here:
   (folded to `openspec/specs/replay-and-audit/spec.md` at archive).
 - `openspec/config.yaml` context capability list gains `replay-and-audit`
   (at archive).
+- The Purpose's `Depends on:` line gains `test-sequences`, so
+  `openspec/capability-graph.md` must be regenerated (`pnpm spec:graph`) in
+  the commit carrying that edit — the only already-folded capability this
+  change depends on, and the one edge here that is not to an open sibling.
+- Implementation precondition, not a spec change: the recorded-run codec,
+  seed derivation, and replay-check move out of
+  `apps/visual-tester/src/lib/test-sequences/` into a package the instance's
+  record path can consume.
 - Cross-change citations: this delta cites open siblings
   `identity-and-authorization/roster-snapshot-binding`;
   `game-lifecycle/finish-notification`, `teardown-after-persistence`,
   `game-record`; `live-game-observation/observation-use-cases`,
   `invisibility-filtering`, `scoreboard-sole-aggregate-authority`,
   `spectator-live-experience`, `team-private-live-state`;
-  `operator-control/staged-move-log`, `exclusive-selection`,
-  `captain-boot`; `turn-pacing/turn-declaration`, `operator-tempo`;
+  `game-runtime/staged-move-log`, `exclusive-selection`,
+  `captain-boot`; `game-runtime/turn-declaration`, `operator-tempo`;
   `decision-transparency/computed-display-state`,
   `hosting-server-sole-writer`, `worst-case-preview`,
   `decision-breakdown` — resolved by the open-change overlay while the
@@ -131,7 +143,7 @@ Deliberate boundaries and author-resolved directions honoured here:
 
 ## Open Questions
 
-None. The candidate ambiguities were pre-resolved by binding sources and
+None open. The candidate ambiguities were pre-resolved by binding sources and
 are recorded in design.md: the connect-time attribution model, null
 stagedBy, hazard-damage dedup, derived canonical order, unbounded
 retention, seed export, transactional log pairing, the move-staging
@@ -140,4 +152,64 @@ and concurrent inspection were each settled by resolved legacy review
 items; the two-log model, the dead operator-mode bullet, the 04-REQ-052
 split, the 08-REQ-013/076/077 demotions, and the participants-only
 team-perspective were directed by the author-resolved decisions binding
-this change.
+this change. Five gaps found during review of this change's artifacts were
+resolved by author direction and are recorded below (rationale and the
+"what breaks if reversed" notes in design.md).
+
+- **Decision — the active-operator set gains a producer.** No capability
+  recorded operator disconnects: connects were inferable from the tempo
+  write and the attribution entry, Captain boots are a logged category, but
+  a plain network drop wrote nothing anywhere. A **connection-event
+  category is added to `team-action-log`** (arrivals, and departures
+  carrying their cause) rather than a new presence store, because the
+  action log is already the reconstruction source, already clock-stamped
+  below turn granularity, and already carries a category vocabulary.
+  **Convex writes the departures**, not the game instance: the log is
+  Centaur state and the instance may not egress before game end, while
+  Convex already holds the operator's own coordination connection and can
+  observe it end. That makes the departure the single exemption to
+  `actors-write-own-entries` — the one entry its actor cannot write —
+  and `experience-reconstruction` now says the active-operator set is
+  folded from those entries.
+- **Decision — reuse the recorded-run encoding; do not ship a second one.**
+  `replay-and-audit` declares **`test-sequences`** in its Purpose and
+  `replay-sufficiency` adopts its canonical encoding, production-identical
+  seed derivation, and halt-at-first-divergence replay-check, which is
+  exactly the harness `#bit-identical-reproduction` describes. The
+  requirement no longer implies a record-local encoding; the legacy
+  row-oriented shape with JSON-string bodies would have left two canonical
+  encodings of the same engine values in one repo. Extracting the codec and
+  replay-check out of `apps/visual-tester/src/lib/test-sequences/` into a
+  shared package is implementation and sits in `tasks.md`, not in a
+  requirement.
+- **Decision — scoreboard rows are enumerated where they are consumed.**
+  `board-level-replay` renders the recorded rows from the persisted replay
+  alone, but they appeared in neither `turn-keyed-game-record`'s
+  enumeration nor `once-at-end-export`'s list. Both now name them, and the
+  producing requirement in the sibling `migrate-live-game-observation`
+  change gains the matching durability obligation.
+- **Decision — every turn gets a timeline marker.** `unified-timeline`
+  marked turn boundaries "at their actual declaration times", but only
+  explicit declarations are stamped and declaration is per team, not per
+  turn. The marker is now the latest declaration timestamp the record holds
+  for the turn when every team's declaration for it was stamped, and the
+  turn's recorded resolution start otherwise — which the record already
+  guarantees per turn — so Timeline mode is implementable for clock-expiry
+  and snakeless turns. Recommended upstream follow-up (not this change's to
+  make): have `turn-pacing` stamp every declaration kind, after which the
+  fallback becomes unnecessary.
+- **Decision — the inspection lens has one owner, and this capability
+  depends on it.** `replay-inspection` restated the general primitive
+  (purely client-local, writes nothing, no selection shadow, at most one per
+  client) that `decision-transparency/examined-subject` now owns. The
+  restatement is removed and the requirement declares that identifier —
+  legitimate here because `decision-transparency` is already in this
+  capability's Purpose — keeping only what replay adds: the subject is free
+  of the game's history (a snake someone else held at the scrubbed moment is
+  still inspectable) and the reconstructed shadows keep rendering beside it.
+  Relatedly, team-perspective replay is confirmed to need no read of a
+  team's live portfolio configuration, since the contributing heuristics'
+  weights and labels travel inside the published snapshot — which is what
+  keeps this mode clear of
+  `global-invariants/team-private-centaur-state#finished-games-release-only-what-is-published`.
+  Both are recorded in design.md with their "what breaks if reversed" notes.

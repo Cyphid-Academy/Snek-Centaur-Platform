@@ -17,8 +17,15 @@
 //     under its header, once each, and requirement PROSE carries no
 //     identifiers at all — in a spec or delta file an identifier may appear
 //     only in a requirement header or in such a declaration. Each declared
-//     identifier must resolve, must not be the requirement itself, and its
-//     capability must be a declared dependency of the owning capability.
+//     identifier must resolve, and its capability must be a declared
+//     dependency of the owning capability.
+//     Declarations are CROSS-CAPABILITY ONLY: a requirement may not declare a
+//     dependency on a requirement in its own capability. Requirements inside a
+//     capability are one integrated cohort — changing any is reviewed against
+//     all, a tractable local analysis — so an intra-capability edge buys no
+//     information. It also costs: requirement-grain cycles can only arise
+//     inside a capability, and forbidding the edges is what makes the graph's
+//     capability-grain cycle check sufficient rather than merely convenient.
 //   - Capability specs — and open-change delta specs, which will fold into
 //     them — must not reference the legacy archive or any implementation
 //     location (spec purity).
@@ -55,11 +62,13 @@ import {
   buildSpecIndex,
   makeResolver,
   openChangeDeltaFiles,
+  openChangeTaskFiles,
   parseDeltaOps,
   parseDependsOn,
   parseRequirementDeps,
   purposeSection,
   splitRequirementBlocks,
+  taskNumberingProblems,
 } from "./spec-index.mjs";
 
 const root = new URL("..", import.meta.url).pathname;
@@ -287,6 +296,20 @@ const checkLegacyRefs = (file, i, line) => {
   }
 };
 
+// Every named identifier on a line must resolve against specs/ overlaid with
+// the open changes. Shared by code comments and by tasks.md, which are the two
+// places an identifier is a *reference* rather than structural data.
+const checkNamedRefs = (file, i, line) => {
+  if (!namedRe) return;
+  for (const m of line.matchAll(namedRe)) {
+    const [, cap, req, scen] = m;
+    const reqs = resolved.get(cap);
+    if (!reqs.has(req)) errors.push(`${file}:${i + 1} unknown requirement "${cap}/${req}"`);
+    else if (scen && !reqs.get(req).has(scen))
+      errors.push(`${file}:${i + 1} unknown scenario "${cap}/${req}#${scen}"`);
+  }
+};
+
 // Code: named identifiers in comments and strings must resolve.
 for (const f of codeFiles)
   readFileSync(f, "utf8")
@@ -296,15 +319,29 @@ for (const f of codeFiles)
       const t = line.trimStart();
       const inComment = t.startsWith("//") || t.startsWith("*") || t.startsWith("<!--");
       if (!inComment && !/["'`]/.test(line)) return;
-      if (namedRe)
-        for (const m of line.matchAll(namedRe)) {
-          const [, cap, req, scen] = m;
-          const reqs = resolved.get(cap);
-          if (!reqs.has(req)) errors.push(`${f}:${i + 1} unknown requirement "${cap}/${req}"`);
-          else if (scen && !reqs.get(req).has(scen))
-            errors.push(`${f}:${i + 1} unknown scenario "${cap}/${req}#${scen}"`);
-        }
+      checkNamedRefs(f, i, line);
     });
+
+// --- Open changes' tasks.md -------------------------------------------------
+// A task plan cites the requirements each task discharges, so its identifiers
+// are references and must resolve like code's. Without this they rot silently:
+// a delta that renames or drops a requirement leaves its own plan pointing at
+// nothing, and nothing else reads tasks.md. The prose rule deliberately does
+// NOT apply — a task names its identifiers inline, which is the convention.
+// Archived changes are exempt: their plans are history, and the corpus has
+// moved on beneath them by design.
+const taskFiles = openChangeTaskFiles(root);
+let taskRefCount = 0;
+for (const { file } of taskFiles) {
+  const lines = readFileSync(file, "utf8").replace(/\r\n?/g, "\n").split("\n");
+  lines.forEach((line, i) => {
+    checkLegacyRefs(file, i, line);
+    if (namedRe) taskRefCount += [...line.matchAll(namedRe)].length;
+    checkNamedRefs(file, i, line);
+  });
+  for (const { line, message } of taskNumberingProblems(lines))
+    errors.push(`${file}:${line} ${message}`);
+}
 
 // --- Structural per-requirement dependencies -------------------------------
 // A requirement's soundness dependencies are structural data, not prose: the
@@ -328,13 +365,23 @@ for (const { file, cap } of specFiles) {
     for (const id of ids) {
       depEdges++;
       const depCap = id.split("/")[0];
-      if (id === block.name || id.startsWith(`${block.name}#`))
-        errors.push(`${file}:${block.line + 1} ${block.name} declares a dependency on itself`);
+      // Declarations are CROSS-CAPABILITY ONLY. Requirements inside one
+      // capability are a single integrated cohort: changing any of them is
+      // reviewed against all of them, which is a tractable local analysis and
+      // needs no per-requirement graph. Declaring inside the capability buys
+      // nothing and costs something — it is where requirement-grain cycles
+      // come from, and the graph's own cycle check runs at capability grain,
+      // where it is sufficient precisely because every declared edge crosses a
+      // capability boundary.
+      if (depCap === cap)
+        errors.push(
+          `${file}:${block.line + 1} ${block.name} declares a dependency on "${id}" in its own capability — requirements within a capability are one cohort; drop the entry (delete the line if it empties)`,
+        );
       else if (!resolves(id))
         errors.push(
           `${file}:${block.line + 1} ${block.name} depends on unknown requirement "${id}"`,
         );
-      if (depCap !== cap && !declaredDeps.get(cap)?.has(depCap))
+      else if (!declaredDeps.get(cap)?.has(depCap))
         errors.push(
           `${file}:${block.line + 1} ${block.name} depends on "${id}" but "${cap}" does not declare a dependency on "${depCap}"`,
         );
@@ -373,5 +420,5 @@ const scenCount = [...binding.values()].reduce(
   0,
 );
 console.log(
-  `Spec-reference lint passed (${binding.size} capabilities, ${reqCount} requirements, ${scenCount} scenarios, ${depEdges} declared requirement dependencies, ${legacyDefined.size} legacy IDs, ${tombstones.size} tombstones${openDeltas.length ? `, ${openDeltas.length} open-change delta file(s) overlaid` : ""}).`,
+  `Spec-reference lint passed (${binding.size} capabilities, ${reqCount} requirements, ${scenCount} scenarios, ${depEdges} declared requirement dependencies, ${legacyDefined.size} legacy IDs, ${tombstones.size} tombstones${openDeltas.length ? `, ${openDeltas.length} open-change delta file(s) overlaid` : ""}${taskFiles.length ? `, ${taskRefCount} task citation(s) across ${taskFiles.length} open plan(s)` : ""}).`,
 );

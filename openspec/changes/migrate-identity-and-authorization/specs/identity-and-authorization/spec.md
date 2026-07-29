@@ -183,7 +183,7 @@ Every public function SHALL declare which kinds of principal it accepts, and SHA
 - **THEN** the call is refused on kind: breadth of capability never implies acceptance of kind, so widening what a system can reach means a function declaring the additional kind, never a wider ceiling
 
 ### Requirement: identity-and-authorization/peer-capability-ceiling
-Depends on: global-invariants/issuer-anchored-trust#ceiling-is-checked-at-the-resource, identity-and-authorization/capability-claim-structure#acting-principal-is-recorded.
+Depends on: global-invariants/issuer-anchored-trust#ceiling-is-checked-at-the-resource.
 
 No external system's ceiling SHALL include operations that destroy platform state, issue credentials for a human, or change authentication configuration, regardless of what a user that system acts for could do directly. The platform SHALL additionally bound each registered system's call rate, and SHALL be able to show a user which actions on their behalf were taken through which system.
 

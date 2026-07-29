@@ -57,11 +57,46 @@ game-engine/team-potion-effects#sacrificial-collection   # one of its scenarios
   (that's the DRY problem below), a defensive note that gi permits
   something, or a pointer filling a gap the requirement should have
   specified itself.
+- **Declarations are cross-capability only.** A requirement never declares a
+  dependency on a requirement in its **own** capability. The requirements
+  inside a capability are one integrated cohort: changing any of them is
+  reviewed against all of them, which is a tractable local analysis and needs
+  no per-requirement graph to prompt it. An intra-capability edge therefore
+  buys no information, and it costs — a requirement-grain cycle can only arise
+  inside a capability, so forbidding the edges is exactly what makes the
+  capability-grain cycle check *sufficient* rather than merely convenient. A
+  dependency on another capability's requirement additionally obliges the
+  owning capability to declare that capability in its Purpose, so every
+  declared edge is visible at both grains. Lint-enforced.
 - **Declared dependencies are an affordance, not a fixed budget.** A
   capability's `Depends on:` list is extended whenever a dependency is
   genuinely warranted — via `## MODIFIED Purpose` for an existing
   capability. It is never a permanent budget that forces a capability to
   restate a rule it cannot reach.
+- **A capability does not own a section of code, and may impose
+  requirements on surfaces another capability builds.** Where the carving
+  lines up with the code that is a convenience, not the contract. A
+  downstream capability may require that a fact *it* understands appears in
+  a UI context another capability is primarily responsible for — a forfeit
+  reported as a forfeit on a leaderboard, a tournament's standing shown in
+  a room — and the natural implementation order follows: the owning
+  capability builds the context first, and the imposing capability's
+  implementation lands as a diff to it, citing the requirement that
+  demanded it. **The owning capability must not restate the obligation**;
+  duplicating it is the DRY failure above, and it puts the rule where the
+  capability that knows what a forfeit *is* cannot state it. Declare the
+  dependency in the imposing direction (it depends on that surface
+  existing) and keep the requirement's prose naming the concept.
+- **"There is only one of these" belongs in `global-invariants`, not in the
+  capability that provides the one.** A rule forbidding a second
+  implementation of a shared thing is a negative constraint on what must not
+  be done *anywhere* — it binds every potential duplicator and no single
+  capability owns it, so both of gi's first two admission prongs hold, and
+  the providing capability is the one place the rule is not about. The
+  provider states what the thing is and how it behaves; gi states that
+  there is exactly one of it. `one-shared-engine` and
+  `one-shared-generation` sit together for that reason, not because the
+  second was modelled on the first.
 - **Don't restate what another requirement implies.** A constraint gi or a
   peer already cleanly implies must not be repeated in a second requirement:
   duplicates drift into conflict and the copy carries no authority. Depend
@@ -87,6 +122,15 @@ game-engine/team-potion-effects#sacrificial-collection   # one of its scenarios
   seed freshness (`scripts/check-change-freshness.mjs`), and the
   identifier map's completeness against the legacy corpus
   (`scripts/audit-all-modules.mjs`, `pnpm spec:audit`).
+- **An open change's `tasks.md` is linted like code.** A task plan cites the
+  requirements each task discharges, so its identifiers must resolve against
+  `specs/` overlaid with the open changes. Without that, a plan rots
+  silently: editing a delta to rename or drop a requirement leaves the
+  change's own plan pointing at nothing, and nothing else reads `tasks.md`.
+  The no-identifiers-in-prose rule deliberately does **not** apply — a task
+  names its identifiers inline, which is the convention, not a violation of
+  it. Archived changes are exempt: their plans record what was true when the
+  change shipped, and the corpus moves on beneath them by design.
 
 ## The legacy corpus and the identifier map
 
@@ -167,6 +211,15 @@ together, otherwise in a later PR) → `openspec archive` at the tail of the
 PR that completes the implementation (the archive-due gate enforces this)
 → merge. Five conventions bind agents:
 
+- **A plan's task numbers are a contiguous sequence, not labels.** Sections
+  run 1..K in order, each task's major number is its section's, a section's
+  minors run 1..J in order, and the final `## Archive` section is unnumbered
+  in its heading and continues the sequence. Deleting a task means
+  renumbering what follows and sweeping any prose that named it — a gap is
+  the fingerprint of a task removed without anyone checking whether its
+  substance was rehomed, and a repeat is two tasks answering to one number.
+  Both had gone undetected here. Emptying a section deliberately is fine:
+  keep the heading and say where the work went. Lint-enforced.
 - **Two-commit delta authoring.** A delta that modifies existing
   requirements is introduced across exactly two commits: the first seeds
   the delta file with the affected requirement blocks copied verbatim from

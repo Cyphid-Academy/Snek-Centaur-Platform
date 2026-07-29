@@ -11,11 +11,13 @@ import { buildGraph, renderMarkdown } from "./spec-graph.mjs";
 import {
   buildSpecIndex,
   makeResolver,
+  openChangeTaskFiles,
   parseDeltaOps,
   parseDependsOn,
   parseRequirementDeps,
   purposeSection,
   splitRequirementBlocks,
+  taskNumberingProblems,
 } from "./spec-index.mjs";
 
 const write = (root, path, content) => {
@@ -781,5 +783,142 @@ The system SHALL two.
       readFileSync(f, "utf8").replace("Depends on: (none — root).", "Depends on: user."),
     );
     expect(() => buildGraph(root)).toThrow(/cycle/);
+  });
+});
+
+// A task plan's identifiers are references, like code's — the corpus can move
+// beneath a plan and nothing else reads tasks.md, so an unresolvable citation
+// there is silent rot. Archived plans are deliberately exempt: they document
+// what was true when the change shipped.
+describe("open-change task plans (identifier validation)", () => {
+  const fixture = () => {
+    const root = mkdtempSync(join(tmpdir(), "task-refs-"));
+    write(
+      root,
+      "openspec/specs/alpha/spec.md",
+      [
+        "# alpha Specification",
+        "",
+        "## Purpose",
+        "",
+        "Alpha. Depends on: nothing.",
+        "",
+        "## Requirements",
+        "",
+        "### Requirement: alpha/kept",
+        "",
+        "Alpha SHALL keep this.",
+        "",
+        "#### Scenario: #still-here",
+        "- **WHEN** asked",
+        "- **THEN** kept",
+        "",
+      ].join("\n"),
+    );
+    write(root, "openspec/changes/live-change/tasks.md", "# t\n\n## 1. Work\n\n- [ ] 1.1 x\n");
+    write(
+      root,
+      "openspec/changes/archive/2026-01-01-old-change/tasks.md",
+      "# t\n\n## 1. Work\n\n- [x] 1.1 done (alpha/long-gone)\n",
+    );
+    return root;
+  };
+
+  it("collects tasks.md of open changes and skips the archive", () => {
+    const root = fixture();
+    const found = openChangeTaskFiles(root);
+    expect(found.map((f) => f.change)).toEqual(["live-change"]);
+    expect(found[0].file).toContain(join("live-change", "tasks.md"));
+  });
+
+  it("omits an open change that has no tasks.md at all", () => {
+    const root = fixture();
+    mkdirSync(join(root, "openspec/changes/planless"), { recursive: true });
+    expect(openChangeTaskFiles(root).map((f) => f.change)).toEqual(["live-change"]);
+  });
+
+  it("resolves live citations and rejects stale ones at both grains", () => {
+    const root = fixture();
+    const index = buildSpecIndex(root);
+    const resolves = makeResolver(index);
+    expect(resolves("alpha/kept")).toBe(true);
+    expect(resolves("alpha/kept#still-here")).toBe(true);
+    // The two shapes a delta edit leaves behind in a plan.
+    expect(resolves("alpha/renamed-away")).toBe(false);
+    expect(resolves("alpha/kept#scenario-that-was-dropped")).toBe(false);
+  });
+
+  it("returns nothing when there are no changes at all", () => {
+    const root = mkdtempSync(join(tmpdir(), "task-refs-empty-"));
+    expect(openChangeTaskFiles(root)).toEqual([]);
+  });
+});
+
+describe("task numbering", () => {
+  const plan = (...lines) => lines.join("\n").split("\n");
+
+  it("accepts a contiguous plan whose Archive continues the sequence", () => {
+    expect(
+      taskNumberingProblems(
+        plan(
+          "## 1. Spec",
+          "- [ ] 1.1 a",
+          "- [ ] 1.2 b",
+          "## 2. Code",
+          "- [ ] 2.1 c",
+          "## Archive",
+          "- [ ] 3.1 d",
+        ),
+      ),
+    ).toEqual([]);
+  });
+
+  it("flags the hole a deleted task leaves", () => {
+    const [p] = taskNumberingProblems(plan("## 1. Spec", "- [ ] 1.1 a", "- [ ] 1.3 c"));
+    expect(p.line).toBe(3);
+    expect(p.message).toMatch(/task 1\.3 is task 2 of its section/);
+  });
+
+  it("flags a task whose major is not its section's", () => {
+    const [p] = taskNumberingProblems(
+      plan("## 1. Spec", "- [ ] 1.1 a", "## Archive", "- [ ] 9.1 z"),
+    );
+    expect(p.message).toMatch(/task 9\.1 sits in section 2/);
+  });
+
+  it("flags a repeated number, which reads as an ordinary task", () => {
+    const msgs = taskNumberingProblems(plan("## 1. Spec", "- [ ] 1.1 a", "- [ ] 1.1 b")).map(
+      (p) => p.message,
+    );
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0]).toMatch(/task 1\.1 is task 2 of its section/);
+  });
+
+  it("flags an out-of-order section heading", () => {
+    const [p] = taskNumberingProblems(
+      plan("## 1. Spec", "- [ ] 1.1 a", "## 3. Code", "- [ ] 3.1 b"),
+    );
+    expect(p.message).toMatch(/section is numbered 3 but is section 2 of the plan/);
+  });
+
+  it("takes an unnumbered heading's number from its position", () => {
+    expect(
+      taskNumberingProblems(plan("## Implementation", "- [ ] 1.1 a", "## Archive", "- [ ] 2.1 b")),
+    ).toEqual([]);
+  });
+
+  it("allows a section emptied on purpose", () => {
+    expect(
+      taskNumberingProblems(
+        plan(
+          "## 1. Spec",
+          "- [ ] 1.1 a",
+          "## 2. Moved out",
+          "Its work is elsewhere.",
+          "## 3. Code",
+          "- [ ] 3.1 b",
+        ),
+      ),
+    ).toEqual([]);
   });
 });

@@ -19,7 +19,7 @@ When the mirror workflow runs, it rewrites the `@cyphid/snek-centaur-server-lib`
 ## What goes here
 
 - The full SvelteKit app as specified in `legacy-spec-archive/spec/08-centaur-server-app.md`.
-- `/.well-known/snek-game-invite` (game-start wake ping), `/.well-known/jwks.json` (published signing keys) and `/healthcheck` endpoints.
+- `/.well-known/snek-game-invite`, `/.well-known/snek-server-keys` and `/.well-known/snek-healthcheck` — the three endpoints of the enumerated fork compatibility surface. Nothing outside the `/.well-known/snek-` prefix is platform-facing; the rest of the path space belongs to the fork.
 - All platform-level and team-internal pages from the spec.
 - Uses `defineBot` from `@cyphid/snek-centaur-server-lib` for bot computation.
 
@@ -32,7 +32,8 @@ When the mirror workflow runs, it rewrites the `@cyphid/snek-centaur-server-lib`
 
 - `src/routes/+page.svelte` — landing page skeleton
 - `src/routes/.well-known/snek-game-invite/+server.ts` — game-start invitation endpoint
-- `src/routes/.well-known/jwks.json/+server.ts` — published signing keys
+- `src/routes/.well-known/snek-server-keys/+server.ts` — published signing keys
+- `src/routes/.well-known/snek-healthcheck/+server.ts` — unauthenticated liveness
 - `vite.config.ts` — Vite config with allowedHosts
 - `svelte.config.js` — SvelteKit config with Node adapter
 - `legacy-spec-archive/spec/08-centaur-server-app.md` — binding source of truth

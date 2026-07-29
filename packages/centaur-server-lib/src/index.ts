@@ -28,6 +28,50 @@ export type {
 } from "@cyphid/convex-centaur-state";
 
 // ---------------------------------------------------------------------------
+// The enumerated fork compatibility surface: the three — and only three —
+// HTTP endpoints the platform touches on a Snek Centaur Server's own domain.
+// These are spec'd values, not mechanism: they are fixed platform-wide, and
+// altering one is a deliberate breaking change to every fork. Read them from
+// here rather than re-typing the strings, so the conformance suite and the
+// drift check test what the platform actually calls.
+//
+// The converse matters as much and is part of the same contract: the platform
+// reserves NOTHING outside the `/.well-known/snek-` prefix. Everything else
+// on a server's domain belongs to its fork — including the short obvious
+// names (`/healthcheck`, `/admin`) a fork will want for its own pages.
+// spec: centaur-server-runtime/forkable-reference-app#enumerated-surface-is-the-contract
+// spec: centaur-server-runtime/forkable-reference-app#the-rest-of-the-path-space-is-the-forks
+// ---------------------------------------------------------------------------
+
+export const WELL_KNOWN_PATHS = {
+  /**
+   * Game-start invitation: a bare notification the platform POSTs to wake the
+   * server. Carries no credential and confers nothing.
+   * spec: team-server-management/game-invitations
+   */
+  gameInvite: "/.well-known/snek-game-invite",
+  /**
+   * Published verification material for the server's own signing key (a JWK
+   * Set). Deliberately not `jwks.json`: that suffix is unregistered, implies
+   * an OIDC discovery surface a Centaur Server does not publish, and collides
+   * in meaning with the platform's own OIDC document at the same relative
+   * path.
+   * spec: centaur-server-runtime/server-key-publication
+   */
+  serverKeys: "/.well-known/snek-server-keys",
+  /**
+   * Unauthenticated liveness. Under the well-known prefix rather than at the
+   * conventional `/health` root because the convention exists for clients
+   * that must guess the path, and the only caller here is the platform,
+   * which is handed the domain by a captain and holds a fixed contract.
+   * spec: team-server-management/server-healthcheck
+   */
+  healthcheck: "/.well-known/snek-healthcheck",
+} as const;
+
+export type WellKnownPath = (typeof WELL_KNOWN_PATHS)[keyof typeof WELL_KNOWN_PATHS];
+
+// ---------------------------------------------------------------------------
 // Healthcheck contract
 // spec: team-server-management/server-healthcheck
 // ---------------------------------------------------------------------------
@@ -35,7 +79,7 @@ export type {
 // Liveness only. Team-scoped state (how many teams this server hosts, which
 // ones, whether any are playing) is deliberately absent: the endpoint answers
 // anyone without a credential, so enriching it would change the threat model.
-// spec: team-server-management/server-healthcheck#unauthenticated-and-minimal
+// spec: centaur-server-runtime/healthcheck-endpoint#unauthenticated-and-minimal
 export interface HealthcheckResponse {
   readonly status: "ok";
   readonly version: string;
@@ -73,7 +117,7 @@ export interface TeamWhitelist {
   /**
    * Admit a team. Idempotent: admitting an already-admitted team succeeds
    * unchanged, so an automation may retry freely.
-   * spec: team-server-management/server-administration-api#adding-an-already-whitelisted-team-succeeds
+   * spec: centaur-server-runtime/server-administration-api#adding-an-already-whitelisted-team-succeeds
    * @throws Error("not implemented")
    */
   add(teamId: string): Promise<void>;

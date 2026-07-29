@@ -74,6 +74,23 @@ export function openChangeDeltaFiles(root) {
 }
 
 /**
+ * tasks.md of open (non-archived) changes. Archived plans are history and are
+ * deliberately excluded: the corpus advances beneath them by design, so
+ * holding them to the current identifier set would fail on the past.
+ */
+export function openChangeTaskFiles(root) {
+  const changesDir = join(root, "openspec", "changes");
+  const out = [];
+  if (!existsSync(changesDir)) return out;
+  for (const change of readdirSync(changesDir)) {
+    if (change === "archive" || change.startsWith(".")) continue;
+    const f = join(changesDir, change, "tasks.md");
+    if (existsSync(f)) out.push({ change, file: f });
+  }
+  return out;
+}
+
+/**
  * Build the index. `overlayOpenChanges` adds open-change delta slugs on top
  * of the binding specs/ content (both remain resolvable while the change is
  * open — specs/ is still binding, the deltas are already citable).
@@ -413,4 +430,57 @@ export function extractRequirementBlock(content, cap, slug) {
     }
   }
   return lines.slice(start, end).join("\n").trimEnd();
+}
+
+// A plan's task numbers are a contiguous sequence, not labels: sections run
+// 1..K in order, each task's major number is its section's, and a section's
+// minors run 1..J in order. The final `## Archive` section is unnumbered in its
+// heading and continues the sequence.
+//
+// The point is not tidiness. A gap is the fingerprint of a task deleted without
+// anyone checking whether its substance was rehomed, and a repeat is two tasks
+// answering to one number — this corpus had both and nothing saw them: a
+// substrate carve left four holes in one plan, four plans numbered their
+// Archive section 9 regardless of what preceded it, and one section ran 13.1,
+// 14.2, 14.3, 14.4, 14.5, 13.6. Task numbers are also how a plan and its
+// design.md refer to each other, so a wrong one silently repoints prose at a
+// different task. An emptied section is allowed (keep the heading, say where
+// the work went); a hole inside one is not.
+export function taskNumberingProblems(lines) {
+  const problems = [];
+  const sections = [];
+  for (const [i, line] of lines.entries()) {
+    // Any `##`-or-deeper heading opens a section. A heading MAY declare its
+    // number ("## 3. Cutover"); one that does must agree with its position,
+    // and one that does not ("## Archive", "## Implementation") simply takes
+    // it. Declaring is the convention for worked plans and is what makes a
+    // task's own major number checkable.
+    const heading = /^#{2,} (?:(\d+)\. )?\S/.exec(line);
+    const task = /^\s*- \[.\] (\d+)\.(\d+) /.exec(line);
+    if (heading)
+      sections.push({ line: i + 1, declared: heading[1] ? Number(heading[1]) : null, tasks: [] });
+    else if (task && sections.length)
+      sections.at(-1).tasks.push({ line: i + 1, major: Number(task[1]), minor: Number(task[2]) });
+  }
+  sections.forEach((section, s) => {
+    const n = s + 1;
+    if (section.declared !== null && section.declared !== n)
+      problems.push({
+        line: section.line,
+        message: `section is numbered ${section.declared} but is section ${n} of the plan — section numbers run 1..K with no gaps or repeats`,
+      });
+    section.tasks.forEach(({ line, major, minor }, k) => {
+      if (major !== n)
+        problems.push({
+          line,
+          message: `task ${major}.${minor} sits in section ${n} — a task's major number is its section's`,
+        });
+      else if (minor !== k + 1)
+        problems.push({
+          line,
+          message: `task ${major}.${minor} is task ${k + 1} of its section — minors run 1..J in order; renumber rather than leaving the hole a deleted task left`,
+        });
+    });
+  });
+  return problems;
 }

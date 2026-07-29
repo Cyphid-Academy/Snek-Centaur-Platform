@@ -9,10 +9,14 @@ and aggregate statistics, the team leaderboard, and the discovery views —
 home and teams browser — that link them together. Identity itself (who
 counts as the same human) belongs to identity-and-authorization; running a
 team to team-management; the finished-game records these views present to
-replay-and-audit. This capability owns the account record and the
-authenticated presentation layer over competitive history.
+replay-and-audit; the per-game roster snapshot, recorded outcome and final
+scores to game-lifecycle; the room a game was played in to
+rooms-and-matchmaking; and how a score is arrived at, forfeits included, to
+game-engine. This capability owns the account record and the authenticated
+presentation layer over competitive history — it reads those records and
+presents them, and owns none of them.
 
-Depends on: global-invariants, identity-and-authorization, team-management, replay-and-audit.
+Depends on: game-engine, game-lifecycle, global-invariants, identity-and-authorization, replay-and-audit, rooms-and-matchmaking, team-management.
 
 ## ADDED Requirements
 
@@ -97,9 +101,9 @@ The application SHALL provide a teams browser listing the platform's Centaur Tea
 - **THEN** it leaves the default browser listing, yet its profile — and every history that references it — remains reachable; hiding from discovery removes nothing
 
 ### Requirement: accounts-and-profiles/player-profile
-Depends on: replay-and-audit/team-game-history.
+Depends on: replay-and-audit/team-game-history, game-lifecycle/roster-snapshot, game-lifecycle/game-record, rooms-and-matchmaking/room-record.
 
-The application SHALL provide a Player Profile view for every user record: the user reaches their own profile through the application's global navigation, and other users' profiles are linked at minimum from team member listings and game histories. The profile SHALL display at minimum the user's display name, their current and historical Centaur Team memberships, and a chronological game history — each game's room, date, participating teams, result, and final scores — listing every game in which the user was a member of a participating team at the time of the game (per its participating-team snapshot) or is a current member of such a team: the same historical-or-current rule that scopes a team's own history listing.
+The application SHALL provide a Player Profile view for every user record: the user reaches their own profile through the application's global navigation, and other users' profiles are linked at minimum from team member listings and game histories. The profile SHALL display at minimum the user's display name, the Centaur Teams they are currently a member of, the teams they are recorded as having played for, and a chronological game history — each game's room, date, participating teams, result, and final scores — listing every game in which the user was a member of a participating team at the time of the game (per its participating-team snapshot) or is a current member of such a team: the same historical-or-current rule that scopes a team's own history listing. The teams they are recorded as having played for SHALL be exactly those the game history attributes to them: the platform keeps no separate record of past membership, and none is invented for this view.
 
 #### Scenario: #every-user-has-one
 - **WHEN** any user record exists — freshly created, long inactive, or holding no active credential at all
@@ -109,8 +113,12 @@ The application SHALL provide a Player Profile view for every user record: the u
 - **WHEN** a user has left a team they once played for
 - **THEN** the games in whose participating-team snapshots they appear remain listed on their profile — playing history follows the player, not their current roster status
 
+#### Scenario: #past-teams-are-teams-played-for
+- **WHEN** a user joined a team and left it again without a single game being played while they were on its roster
+- **THEN** that team appears nowhere on their profile once they have left: past teams are read off the games the user was snapshotted into, so a membership that produced no game leaves no trace — the accepted cost of holding no membership history
+
 ### Requirement: accounts-and-profiles/team-profile
-Depends on: team-management/team-record, team-management/team-management-view.
+Depends on: team-management/team-record, team-management/team-management-view, game-lifecycle/game-record, rooms-and-matchmaking/room-record.
 
 The application SHALL provide a Team Profile view for every Centaur Team — archived teams included — displaying at minimum the team's name, display colour, current captain, current member roster, the server domain it is homed on with the latest recorded health status, and a chronological game history of every game the team has participated in, with each game's room, date, opposing teams, result, and final scores. The view SHALL expose no mutating affordance over team state: mutation belongs solely to the management surface.
 
@@ -127,9 +135,9 @@ The application SHALL provide a Team Profile view for every Centaur Team — arc
 - **THEN** it renders in full — identity, roster, history, statistics — under the team's archived identity
 
 ### Requirement: accounts-and-profiles/aggregate-statistics
-Depends on: global-invariants/single-convex-deployment, replay-and-audit/team-game-history.
+Depends on: global-invariants/single-convex-deployment, replay-and-audit/team-game-history, game-engine/scoring, game-lifecycle/game-record.
 
-Profile views SHALL display aggregate statistics computed from exactly the data that populates the accompanying game-history listing, and therefore consistent with it: for a player, at minimum games played, win rate, and average team score; for a team, at minimum games played, win rate, average score, and a head-to-head record against every team it has ever played. Score aggregates SHALL use the normalised score — the cross-game comparable form that history listings present as their headline.
+Profile views SHALL display aggregate statistics computed from exactly the data that populates the accompanying game-history listing, and therefore consistent with it: for a player, at minimum games played, win rate, and average team score; for a team, at minimum games played, win rate, average score, and a head-to-head record against every team it has ever played. Where a game had more than two competing teams, it SHALL contribute one pairwise entry against each other participant, decided by comparing the two teams' own final scores in that game and independent of which team won the game overall. Score aggregates SHALL use the normalised score — the cross-game comparable form that history listings present as their headline.
 
 #### Scenario: #consistent-with-the-listing
 - **WHEN** a profile's aggregate statistics and its game-history listing are compared
@@ -139,8 +147,25 @@ Profile views SHALL display aggregate statistics computed from exactly the data 
 - **WHEN** a team's profile statistics are viewed
 - **THEN** a head-to-head record appears for each distinct team it has ever played, with no opponent omitted
 
+#### Scenario: #pairwise-inside-a-multi-team-game
+- **WHEN** two teams have only ever met in games with a third and fourth team also competing
+- **THEN** each of those games still contributes one result to their head-to-head record, settled on their two final scores alone — so a team placing second holds a win over the team placing third, and a multi-team game is never dropped for having no single opponent to record it against
+
+### Requirement: accounts-and-profiles/recorded-outcomes-only
+Depends on: game-lifecycle/game-record, game-lifecycle/finish-notification#error-outcome-still-finishes.
+
+Every historical surface this capability presents — profile game histories, aggregate statistics, head-to-head records, and leaderboard rankings — SHALL be drawn from exactly those finished games that carry a recorded outcome. A game that reached its end without one, terminated by failure rather than decided, SHALL appear in no listing and contribute to no statistic or ranking: there is no result to show and none to count.
+
+#### Scenario: #a-failed-game-counts-nowhere
+- **WHEN** a game is finished and torn down after a failure, with no scores recorded for it
+- **THEN** it appears on no player's or team's history and enters no games-played total, win rate, average score, head-to-head record or ranking — on every side at once, so a team is neither credited nor charged for a game whose result the platform cannot state
+
+#### Scenario: #decided-without-play-still-counts
+- **WHEN** a game was decided without being played out — a team forfeited, or the game finished with no turn ever played — and an outcome was recorded for it
+- **THEN** it is listed and counted like any other game: what is excluded is the absence of a recorded result, never the absence of play
+
 ### Requirement: accounts-and-profiles/snapshot-attribution
-Depends on: global-invariants/authenticated-unambiguous-identity#instance-team-ids-resolve-uniquely, team-management/archive-not-delete.
+Depends on: global-invariants/authenticated-unambiguous-identity#instance-team-ids-resolve-uniquely, team-management/archive-not-delete, game-lifecycle/roster-snapshot.
 
 Everywhere this capability presents historical participation — profile game histories, aggregate statistics, head-to-head records, and leaderboard rankings — attribution SHALL resolve through the game's participating-team snapshots, never through current team or membership records; and archiving a team SHALL never change any presented history, statistic, or ranking input.
 
@@ -157,11 +182,17 @@ Everywhere this capability presents historical participation — profile game hi
 - **THEN** that game's presented participants are still those of its snapshot; no current-state read leaks into historical presentation
 
 ### Requirement: accounts-and-profiles/leaderboard
-The application SHALL provide a global leaderboard ranking Centaur Teams by exactly one criterion at a time from a closed set — at minimum win rate (subject to a minimum-games qualifying threshold), total wins, and average normalised score — switchable by the viewer, filtered by a time window from a closed set including at minimum all time, the last 30 days, and the last 7 days, and optionally restricted to games played within a single room. Each ranked entry SHALL link to that team's profile. Archived teams SHALL remain in the default leaderboard view under their archived identity: archiving is a live-state action, never a rewrite of competitive history.
+Depends on: game-engine/scoring, game-lifecycle/game-record, rooms-and-matchmaking/room-record.
+
+The application SHALL provide a global leaderboard ranking Centaur Teams by exactly one criterion at a time from a closed set — at minimum win rate (subject to a minimum-games qualifying threshold), total wins, and average normalised score — switchable by the viewer, filtered by a time window from a closed set including at minimum all time, the last 30 days, and the last 7 days, and optionally restricted to games played within a single room. A game a team forfeited SHALL enter every criterion as a game that team played, at the score the platform's one scoring rule gives a forfeiting team — never dropped from the ranked set, and never given a value of the leaderboard's own. Each ranked entry SHALL link to that team's profile. Archived teams SHALL remain in the default leaderboard view under their archived identity: archiving is a live-state action, never a rewrite of competitive history.
+
+#### Scenario: #forfeits-rank-rather-than-vanish
+- **WHEN** a team forfeits a game and every ranking criterion is recomputed
+- **THEN** the game counts towards its games played, its qualifying threshold, its win rate and its average score, at the score the scoring rule assigns a forfeiting team — a team never improves its standing by failing to turn up, and no criterion carries a forfeit rule of its own to drift from that one
 
 #### Scenario: #closed-sets-only
 - **WHEN** the leaderboard's ranking criteria and time windows are enumerated
-- **THEN** both are closed sets — ranking a new criterion or window means revising this requirement, never an open-ended ranking surface drifting in
+- **THEN** both are closed sets — ranking a new criterion or window means revising this requirement, never an open-ended ranking surface drifting in. The closure is over what the ranking is computed *by* and *over*, and over nothing else: it does not close what a ranked entry may display, so another capability may require an entry to carry an annotation about the games behind it without any criterion or window being added here
 
 #### Scenario: #room-scoped-ranking
 - **WHEN** a room restriction is applied

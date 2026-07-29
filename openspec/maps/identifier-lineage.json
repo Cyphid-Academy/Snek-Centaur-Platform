@@ -1,5 +1,5 @@
 {
-  "$schema": "Named-identifier lineage map for the openspec/specs corpus. Records STRUCTURAL REFACTORS of named identifiers — capability and requirement renames, merges, and splits — so that an identifier appearing in an archived change folder (which is frozen and never rewritten) can be computationally traced to its present semantic target. This is DISTINCT from legacy-spec-archive/maps/identifier-map.json, which bridges the numeric MM-REQ-NNN era to named identifiers. Here both sides are named identifiers. A tracer resolves an archived identifier by applying, in commit order, every refactor whose 'from' matches. Renames are 1:1; splits map one 'from' to several 'to' (with a note disambiguating which target carries which behaviour); merges map several 'from' to one 'to'.",
+  "$schema": "Named-identifier lineage map for the openspec/specs corpus. Records STRUCTURAL REFACTORS of named identifiers \u2014 capability and requirement renames, merges, and splits \u2014 so that an identifier appearing in an archived change folder (which is frozen and never rewritten) can be computationally traced to its present semantic target. This is DISTINCT from legacy-spec-archive/maps/identifier-map.json, which bridges the numeric MM-REQ-NNN era to named identifiers. Here both sides are named identifiers. A tracer resolves an archived identifier by applying, in commit order, every refactor whose 'from' matches. Renames are 1:1; splits map one 'from' to several 'to' (with a note disambiguating which target carries which behaviour); merges map several 'from' to one 'to'.",
   "capabilities": {
     "renames": [
       {
@@ -13,8 +13,220 @@
     "splits": []
   },
   "requirements": {
-    "renames": [],
+    "renames": [
+      {
+        "from": "operator-control/staged-move-log",
+        "to": "game-runtime/staged-move-log",
+        "change": "mint-game-runtime",
+        "note": "The append-only per-turn staged-move log is state a game's own runtime is authoritative for and the resolving transaction reads; it was carved into the operator-interface story. Every scenario slug is unchanged."
+      },
+      {
+        "from": "operator-control/team-scoped-staging",
+        "to": "game-runtime/team-scoped-staging",
+        "change": "mint-game-runtime",
+        "note": "The staging reducer's own team-granular authorization check. Scenario `#any-team-snake-regardless-of-selection` was renamed to `#any-team-snake-regardless-of-coordination` in the same move, since selection is a concept the owning capability no longer holds; `#spoofed-parameters-rejected` is unchanged."
+      },
+      {
+        "from": "operator-control/staging-is-unvalidated",
+        "to": "game-runtime/staging-is-unvalidated",
+        "change": "mint-game-runtime",
+        "note": "What the staged-move log accepts, and that consequences attach only at resolution. Scenario slug unchanged."
+      },
+      {
+        "from": "turn-pacing/in-game-clock",
+        "to": "game-runtime/in-game-clock",
+        "change": "mint-game-runtime",
+        "note": "The in-runtime realization of the engine's chess timer \u2014 instance-resident budget and clock state the resolving transaction mutates. Scenario slugs unchanged."
+      },
+      {
+        "from": "turn-pacing/turn-declaration",
+        "to": "game-runtime/turn-declaration",
+        "change": "mint-game-runtime",
+        "note": "The declare-turn-over operation, its idempotency guard, autonomous expiry detection and snakeless auto-declaration. Scenario slugs unchanged."
+      },
+      {
+        "from": "turn-pacing/exactly-once-resolution",
+        "to": "game-runtime/exactly-once-resolution",
+        "change": "mint-game-runtime",
+        "note": "The resolving transaction's trigger condition. Scenario slugs unchanged."
+      },
+      {
+        "from": "turn-pacing/next-turn-bracket",
+        "to": "game-runtime/next-turn-bracket",
+        "change": "mint-game-runtime",
+        "note": "The commit boundary and the opening of the next turn within it. Scenario slugs unchanged."
+      },
+      {
+        "from": "replay-and-audit/turn-keyed-game-record",
+        "to": "game-runtime/turn-keyed-game-record",
+        "change": "mint-game-runtime",
+        "note": "The enumeration of what the resolving transaction accumulates in the instance. Everything from the game-end export onward stayed in the replay story. Scenario slugs unchanged."
+      },
+      {
+        "from": "replay-and-audit/replay-sufficiency",
+        "to": "game-runtime/replay-sufficiency",
+        "change": "mint-game-runtime",
+        "note": "A completeness constraint on the record the instance accumulates \u2014 the reason the transaction writes what it writes. Scenario slugs unchanged."
+      },
+      {
+        "from": "replay-and-audit/turn-event-record",
+        "to": "game-runtime/turn-event-record",
+        "change": "mint-game-runtime",
+        "note": "The closed turn-event enumeration the transaction writes, closing over the engine's vocabulary. Scenario slugs unchanged."
+      },
+      {
+        "from": "replay-and-audit/canonical-event-order",
+        "to": "game-runtime/canonical-event-order",
+        "change": "mint-game-runtime",
+        "note": "A representation property of the stored events. Its declared dependency on the observation surface was dropped in the same move: the observation surface is the consumer of the order rule, so the edge had been pointing the wrong way. Scenario slugs unchanged."
+      },
+      {
+        "from": "replay-and-audit/connect-time-attribution",
+        "to": "game-runtime/connect-time-attribution",
+        "change": "mint-game-runtime",
+        "note": "Instance-resident admission state the transaction's recorded writes reference. Scenario slugs unchanged."
+      },
+      {
+        "from": "replay-and-audit/staged-move-attribution",
+        "to": "game-runtime/staged-move-attribution",
+        "change": "mint-game-runtime",
+        "note": "The stamp on every staged-move log entry and the agent on every movement event \u2014 both instance writes. Scenario slugs unchanged."
+      },
+      {
+        "from": "game-engine/hazards",
+        "to": "game-configuration/hazards",
+        "change": "revise-game-engine-contract",
+        "note": "Hazard placement is a rule about how a board is built, not about how a turn resolves: the engine reads no hazard proportion and never designates terrain. Scenario `#connectivity-guarantee` moved unchanged; `#permanence` did not move \u2014 the fact that terrain never changes once play starts is a property of the board the engine is handed and is now `game-engine/board-geometry#terrain-is-fixed`. Removed from game-engine by `revise-game-engine-contract`, re-authored by `migrate-game-configuration`'s mint delta in the same change train."
+      },
+      {
+        "from": "game-engine/fertile-ground",
+        "to": "game-configuration/fertile-ground",
+        "change": "revise-game-engine-contract",
+        "note": "Fertile designation, its density and its clustering are generation-time choices the engine never reads \u2014 whether fertile ground is in play is derived from the board's cells. Scenario `#knob-semantics` moved unchanged; `#stable-designation` was absorbed by `game-engine/board-geometry#terrain-is-fixed` and its replacement here is `#designated-before-the-first-turn`. Removed from game-engine by `revise-game-engine-contract`, re-authored by `migrate-game-configuration`'s mint delta."
+      },
+      {
+        "from": "game-engine/starting-placement",
+        "to": "game-configuration/starting-placement",
+        "change": "revise-game-engine-contract",
+        "note": "Territory sectors, head placement and the shared head parity are all fixed before the first turn; resolution reads none of them, and the visual tester's parity rule rests on movement preserving parity rather than on how it was first chosen. Scenarios `#territory-assignment` and `#shared-parity` are unchanged. Removed from game-engine by `revise-game-engine-contract`, re-authored by `migrate-game-configuration`'s mint delta."
+      },
+      {
+        "from": "game-engine/initial-snakes",
+        "to": "game-configuration/initial-snakes",
+        "change": "revise-game-engine-contract",
+        "note": "How many snakes a team fields, and their starting shape, health and lettering, describe the initial state generation produces; the engine reads the count off the placed snakes instead. Scenarios `#initial-state` and `#naming` are unchanged, and `#the-count-travels-in-the-snakes` was added on arrival. Removed from game-engine by `revise-game-engine-contract`, re-authored by `migrate-game-configuration`'s mint delta."
+      },
+      {
+        "from": "game-engine/initial-food",
+        "to": "game-configuration/initial-food",
+        "change": "revise-game-engine-contract",
+        "note": "Initial food placement is part of building the starting state, not of resolving a turn. Scenario `#food-count-per-territory` is unchanged. Removed from game-engine by `revise-game-engine-contract`, re-authored by `migrate-game-configuration`'s mint delta."
+      },
+      {
+        "from": "game-engine/board-generation-retry",
+        "to": "game-configuration/board-generation-retry",
+        "change": "revise-game-engine-contract",
+        "note": "The all-or-nothing attempt, its bounded retry and its machine-readable infeasibility error belong with generation. Every scenario slug is unchanged. `game-configuration/infeasibility-surfaced` dropped its declared dependency on this requirement in the same move, the edge having become intra-capability. Removed from game-engine by `revise-game-engine-contract`, re-authored by `migrate-game-configuration`'s mint delta."
+      },
+      {
+        "from": "team-server-management/server-key-publication",
+        "to": "centaur-server-runtime/server-key-publication",
+        "change": "mint-centaur-server-runtime",
+        "note": "A server generates, persists and publishes its own signing key on first start, before any team has named it \u2014 a promise the artifact makes rather than a step in a team's acquisition of one. Moved unchanged."
+      },
+      {
+        "from": "team-server-management/server-administration-api",
+        "to": "centaur-server-runtime/server-administration-api",
+        "change": "mint-centaur-server-runtime",
+        "note": "The reference implementation's own whitelist API and the administrative issuers it trusts. Its subject is the deployment, and its own scenario `#the-platform-is-not-in-this-path` says the platform is not party to the exchange. Moved unchanged."
+      },
+      {
+        "from": "team-server-management/library-tenant-separation",
+        "to": "centaur-server-runtime/library-tenant-separation",
+        "change": "mint-centaur-server-runtime",
+        "note": "A property of the distributed server library's shape, stated whether or not two teams are hosted. Moved unchanged."
+      },
+      {
+        "from": "team-server-management/reference-heuristics-on-shared-hosting",
+        "to": "centaur-server-runtime/reference-heuristics-on-shared-hosting",
+        "change": "mint-centaur-server-runtime",
+        "note": "A deployment policy of the reference implementation and of Cyphid-operated servers. Moved unchanged."
+      },
+      {
+        "from": "team-server-management/no-operator-state",
+        "to": "centaur-server-runtime/no-operator-state",
+        "change": "mint-centaur-server-runtime",
+        "note": "The negative that defines the artifact: no user records, no sessions, authenticates nobody. It is also the seam this carve cuts along \u2014 the server serves the application and does not mediate its data access. Moved unchanged."
+      },
+      {
+        "from": "team-server-management/forkable-reference-app",
+        "to": "centaur-server-runtime/forkable-reference-app",
+        "change": "mint-centaur-server-runtime",
+        "note": "The forkable repository and the enumerated compatibility surface a fork must preserve \u2014 a fact about the deployment, consumed by fork authors and by the platform. Moved unchanged except for gaining a declaration on `application-shell/unified-web-application`, the application it delivers."
+      },
+      {
+        "from": "team-server-management/unified-web-application",
+        "to": "application-shell/unified-web-application",
+        "change": "mint-application-shell",
+        "note": "That there is exactly one application spanning platform-wide and team-internal concerns is a fact about the application, consumed by every capability that puts a surface in it. It sat in the server-acquisition story only because the sentence that follows it names servers. Moved unchanged."
+      }
+    ],
     "merges": [],
-    "splits": []
+    "splits": [
+      {
+        "from": "replay-and-audit/append-only-history",
+        "to": ["replay-and-audit/append-only-history", "game-runtime/append-only-record"],
+        "change": "mint-game-runtime",
+        "note": "One requirement had bound two stores. The surviving `replay-and-audit/append-only-history` carries the platform-persistent half \u2014 the team action log and the persisted replay. `game-runtime/append-only-record` carries the half over rows a game's own runtime commits, and with it the scenarios `#no-retroactive-correction`, `#past-reads-stable` and `#the-single-stamp`; `#action-log-entries-never-corrected` stayed."
+      },
+      {
+        "from": "live-game-observation/scoreboard-sole-aggregate-authority",
+        "to": [
+          "live-game-observation/scoreboard-sole-aggregate-authority",
+          "game-runtime/per-turn-scoreboard"
+        ],
+        "change": "mint-game-runtime",
+        "note": "The write obligation split from the read discipline. `game-runtime/per-turn-scoreboard` carries the write \u2014 one zero-filled row per rostered team per completed turn, over the true alive set, in the resolving transaction \u2014 with the scenarios `#eliminated-teams-zero-filled` and `#live-score-reads-as-if-ended`. The surviving requirement carries the delivery discipline with `#invisible-snakes-counted-not-revealed`, `#never-lags-the-snapshot` and `#client-aggregation-is-a-defect`."
+      },
+      {
+        "from": "game-lifecycle/game-end-boundary",
+        "to": ["game-lifecycle/game-end-boundary", "game-runtime/game-over-freeze"],
+        "change": "mint-game-runtime",
+        "note": "The definitional half stayed: a game ends at the commit of the turn whose resolution detects an end condition, and terminal handling proceeds from it. `game-runtime/game-over-freeze` carries the enforcement half \u2014 every gameplay operation refused from that commit, zero grace window \u2014 and with it the scenarios `#zero-grace-window` and `#no-turns-after-end`. The split is what keeps the dependency edge pointing from the runtime to the lifecycle."
+      },
+      {
+        "from": "game-engine/board-geometry",
+        "to": ["game-engine/board-geometry", "game-configuration/generated-board-shape"],
+        "change": "revise-game-engine-contract",
+        "note": "The board's construction and the board's validity separated. `game-engine/board-geometry` keeps its name and carries what the engine actually applies to a board it is handed \u2014 the flat row-major encoding, the inner playable area, off-board resolving as a Wall does, and terrain being fixed for the whole game (absorbing the former `game-engine/hazards#permanence` and `game-engine/fertile-ground#stable-designation`) \u2014 with scenarios `#dimensions-state-the-size`, `#row-major-addressing`, `#playable-interior`, `#off-board-is-wall` and `#terrain-is-fixed` replacing the single `#construction`. `game-configuration/generated-board-shape` carries the construction half: generation emits the complete Wall ring and the (N-2)^2 interior. The wall ring is a convention of the boards handed in rather than a precondition of resolution, which is why it left."
+      },
+      {
+        "from": "team-server-management/server-healthcheck",
+        "to": [
+          "centaur-server-runtime/healthcheck-endpoint",
+          "team-server-management/server-healthcheck"
+        ],
+        "change": "mint-centaur-server-runtime",
+        "note": "One requirement had bound two runtimes: the server exposes an endpoint and the platform records and displays a status, which is what `global-invariants/runtime-ownership` exists to prevent. `centaur-server-runtime/healthcheck-endpoint` carries the server's half and with it `#unauthenticated-and-minimal`, gaining `#liveness-is-not-readiness-to-play`. The surviving `team-server-management/server-healthcheck` keeps its slug and the platform's half \u2014 the recorded status, its timestamp, on-demand checking \u2014 with `#on-demand-not-polled` and `#member-triggered-check`, so existing citations of the platform-side behaviour resolve unchanged."
+      },
+      {
+        "from": "game-configuration/engine-schema-fidelity",
+        "to": [
+          "global-invariants/engine-mirrors-are-guarded",
+          "game-configuration/engine-schema-fidelity"
+        ],
+        "change": "mint-platform-persistence",
+        "note": "The build-time guard and the mirror it guards separated. `global-invariants/engine-mirrors-are-guarded` carries the guard, because the corpus has four mirror sites across three runtimes \u2014 the Convex configuration validator, the Zod schema and encoder in the visual tester, and the SpacetimeDB type \u2014 and two of them sit in capabilities that cannot declare `game-configuration`. It takes `#drift-fails-the-build` and adds `#modifier-only-divergence-is-divergence` and `#one-assertion-every-site`. The surviving `game-configuration/engine-schema-fidelity` carries what must correspond \u2014 the gameplay half mirrors the engine's configuration types field-for-field, the generation half mirrors nothing \u2014 with `#no-translation-at-handoff` and `#a-generation-field-is-not-a-mirror-failure`."
+      },
+      {
+        "from": "game-configuration/host-selected-affordances",
+        "to": [
+          "application-shell/surface-mounting-contract",
+          "game-configuration/host-selected-affordances"
+        ],
+        "change": "mint-application-shell",
+        "note": "The general mounting contract and one surface's application of it separated. `application-shell/surface-mounting-contract` carries the clause that a surface derives no actor, holds no access rule and consults no notion of who is present, and with it `#hiding-is-not-enforcing`; it generalises to the mode a surface is mounted in, which five capabilities had each asserted the consequence of. The surviving `game-configuration/host-selected-affordances` carries the three named affordance kinds and their independent selectability, with `#inspection-only-mounting` and `#editing-without-designation`."
+      }
+    ]
   }
 }

@@ -51,7 +51,24 @@ connecting late.
 ### Declaration: team-only, idempotent, kinds distinguishable, snakeless auto
 
 One requirement (`turn-declaration`) carries the declaration operation and
-both implicit paths. Idempotency is load-bearing, not hygiene: several
+both implicit paths. It also carries, since 2026-07-28, the *other* half of
+team-granular authorization: the instance does not care **which** operator
+issued an instruction, and it nevertheless always records **which specific
+authenticated identity** sent the command
+(`#team-granular-but-never-anonymous`). The two halves were previously only
+one — the requirement stated the missing check and left the recording
+implied — and a reader can plausibly slide from "no finer check" to "the
+instance cannot say who did it", which is false and would license reducers
+that discard the caller identity. Authorization coarseness and attribution
+completeness are independent axes and the requirement now says both. The
+recording is sound only while every mutating action arrives under an
+authenticated identity of decidable kind
+(global-invariants/authenticated-unambiguous-identity), which the
+requirement therefore declares. What breaks if reversed: an operator's
+declaration becomes an act of "the team" with no answerable author, and the
+audit story that carries the attribution
+(game-runtime/connect-time-attribution) has nothing upstream
+guaranteeing the instance kept the value it is supposed to carry untouched. Idempotency is load-bearing, not hygiene: several
 actors can legitimately declare for the same team in the same turn (an
 operator, the automated player at its deadline, the Captain), and the
 banking step must not double-credit. Expiry detection is the instance's
@@ -97,6 +114,50 @@ capability deliberately stored as opaque scalars. What breaks if reversed
 deadline arming, which runs on a per-turn timer — re-scans an unbounded
 log on every read, and two consumers with different scan logic can
 disagree about the current value mid-turn.
+
+### The automatic submission time allocation defaults to the turn's own accrual
+### (author-decided 2026-07-28)
+
+`live-pacing-parameters` said the live values are "initialised from the
+team's captured defaults", and nothing anywhere said what a team's default
+*default* is. The author has now fixed it: absent a team setting, the
+automatic submission time allocation is **exactly the clock time the game
+accrues to the team each turn** — the increment the engine's chess timer
+adds to the team's budget per turn. The principle is "as long as the game
+gives you, and no longer": a team left at the default spends its accrual
+every turn, so its total remaining time neither drains nor banks, and it
+uses the whole of what the format budgets for a turn without ever eating
+into the reserve it will need later. Any platform-chosen constant is worse
+by construction — too small and the default wastes time the game granted;
+too large and the default quietly bankrupts every team that never touches
+it, in a format-dependent way nobody tuned for.
+
+**Why here and not on `bot-configuration/team-bot-parameters`.** The captured
+default belongs to that capability, which was the tempting home. Two reasons
+it is wrong. First, that requirement deliberately holds the three timing
+parameters as *"opaque team-tunable scalars whose consumption semantics are
+owned elsewhere"* — a rule saying what one of them **means** in terms of the
+game clock is exactly the consumption semantics it declines to own, and this
+capability is the "elsewhere". Second, and decisively, the rule is stated in
+game-engine vocabulary (per-turn clock accrual) and `bot-configuration` does
+**not** declare `game-engine` among its dependencies, while this capability
+does — so the requirement is unstateable there without dragging a new
+capability-grain dependency into a capability that has no other use for it.
+`live-pacing-parameters` additionally already owns the *initialisation* step
+the default participates in, so the rule lands in the sentence it modifies.
+The one thing `bot-configuration` does have to change is small and squarely
+its own: its record must be able to hold a timing parameter as **unset**
+rather than storing a placeholder, which is what gives the default something
+to be the default of.
+
+**What breaks if reversed** (default living in the configuration record, or as
+a platform constant): the record has to name a number, so either
+`bot-configuration` acquires a `game-engine` dependency and starts stating
+clock semantics it declared out of scope, or the platform picks a constant
+that is wrong for every game format whose per-turn budget differs from the one
+it was picked against — and the failure is invisible, showing up as teams
+mysteriously running short in long-budget games and idling in short-budget
+ones, with no surface anywhere saying why.
 
 ### Tempo: durable, self-owned, flow-on-rejoin as the only automatic write
 
@@ -157,7 +218,28 @@ grain: on each interval pass, only snakes whose decision state has news
 (the framework's dirty flag) are re-rolled and re-staged; the news is
 marked consumed only on the staging acknowledgement (constraint-mined
 from the legacy design, where the snapshot write explicitly does *not*
-clear the flag). What breaks if the news gate is dropped: every pass
+clear the flag).
+
+**The dirty flag's lifecycle spans two capabilities, and each owns exactly
+one end of it.** `bot-framework/score-composition` mints the setting side —
+rescoring that moves a stateMap entry sets the flag, and neither publishing
+the snake's decision state nor the passage of time clears it. This
+capability owns the clearing side, because the flag is cleared by the
+workflow that stages the decided move and that workflow lives here:
+`scheduled-submission` states that staging is what consumes the news, that
+it consumes it only on acknowledgement, and — explicitly, because the same
+pass also publishes the snake's decision state to its observers — that the
+publication is never what clears it (`#publishing-is-not-staging`). Naming
+the publication here is deliberate duplication of emphasis rather than of
+authority: bot-framework says publication does not clear the flag, this
+capability says its own pass's clear is bound to the staging
+acknowledgement alone, and a lifecycle whose two ends are stated in two
+capabilities is only legible if both ends name the same trap. What breaks
+if either half is dropped: with no owner for the clear, the flag is set
+forever and every pass re-rolls every snake; with the clear attached to the
+publication instead, a snake whose display update succeeded and whose
+staging failed resolves on a stale move while the player believes it was
+replaced. What breaks if the news gate is dropped: every pass
 re-rolls every snake, so a snake's staged move churns randomly at the
 cadence frequency with no new information — softmax noise, not decisions —
 and the staged-move log fills with meaningless supersessions. What breaks
@@ -187,11 +269,50 @@ already expired — the concrete failure the re-arm exists to prevent. What
 breaks if the flush waits on the quorum: expiry during thinking submits
 a stale staged set, silently discarding computed decisions.
 
+### Captain submit is an allocation of an affordance, not an access control
+
+The requirement originally demanded that any non-Captain invocation of a
+Captain control be "rejected server-side". That is unimplementable in this
+architecture and was withdrawn by the author on 2026-07-28. It was
+unimplementable for a structural reason, not an effort reason: turn-over
+declaration is a game-instance operation, the instance authorizes at team
+granularity and holds no notion of an individual operator
+(global-invariants/team-granularity-authorization), and every member
+operator already holds an admitted game connection. There is therefore no
+place the rejection could live — the instance cannot tell Captain from
+member, and gating the Convex-mediated control path would leave the
+instance path wide open while pretending otherwise. A gate that can be
+walked around by using the connection you already legitimately hold is
+worse than no gate: it reads as a guarantee in the spec and is none in the
+running system.
+
+What replaces it is the honest statement: the reference application offers
+turn-submit to the Captain alone, that is an *allocation of an affordance*,
+and a Centaur Server may allocate it differently
+(`#captain-only-is-allocation-not-enforcement`). The requirement says so in
+as many words because every reader arrives expecting a security control —
+"Captain-only" is security-shaped language — and a reader who assumes one
+exists will either rely on it or waste a review cycle looking for where it
+is enforced. What breaks if reversed (re-adding the server-side gate): the
+spec asserts a property no runtime can hold, and the first implementer
+either ships a gate that the instance path bypasses or escalates the whole
+declaration path through Convex, which
+global-invariants/centaur-state-boundary#bot-to-game-flow-never-routes-through-convex
+forbids for the bot half of the same operation.
+
+The requirement consequently no longer declares
+global-invariants/security-enforced-outside-the-library#customised-app-changes-no-invariant.
+That invariant is why a differently-allocating fork is legitimate, but
+"gi permits this" is a defensive note, not a soundness dependency — the
+requirement stands or falls on its own statement that no rule rejects a
+non-Captain declaration, which it now makes locally rather than by
+citation.
+
 ### Captain submit: human judgement suppresses the flush; coordination by observation only
 
 `captain-submit` authors the override: immediate declaration with exactly
-the currently staged moves, tempo-blind, keyboard-bindable, Captain-only
-server-side. Two subtleties are the requirement's point. First, flush
+the currently staged moves, tempo-blind, keyboard-bindable, offered to the
+Captain alone. Two subtleties are the requirement's point. First, flush
 suppression: the Captain's submit asserts that the staged set *as seen*
 is acceptable — flushing dirty snakes afterwards would land fresh softmax
 rolls after the human decision with no chance to respond, so only the
@@ -206,9 +327,11 @@ the Captain approved — the override stops being an override. What breaks
 if coordination goes out-of-band: two sources of "is the turn over"
 (message and state) can disagree under loss or reorder, yielding flushes
 after declaration or cancelled flushes for turns not actually declared;
-observation of the single authoritative state cannot desynchronize. What
-breaks without server-side rejection: any member with a devtools console
-ends the team's turn.
+observation of the single authoritative state cannot desynchronize. Note
+that flush suppression is a *pacing* behaviour and survives the withdrawal
+of the Captain-only gate above: whoever the application let press submit,
+the player stands down its pending flush, because it keys off the game's
+declared state and not off who declared it.
 
 ### The pacing header: display discipline as behaviour
 
@@ -284,13 +407,21 @@ requirements.
   the records were instance-held: retuning and tempo writes would become
   game actions on the authoritative runtime, and a team's pacing stance
   would ride in the game record it is not part of.
-- **Captain-only means server-enforced.** Every Server serves a forkable,
-  customisable application, so a Captain control that a client could
-  re-enable would be no guarantee at all: the gating is a server-side check
-  by
-  global-invariants/security-enforced-outside-the-library#customised-app-changes-no-invariant,
-  and `#non-captain-rejected-server-side` cites it instead of restating
-  "regardless of what any client displayed". Relatedly, the automated
+- **"Captain-only" here is not a security claim, and gi is why it need not
+  be.** Every Server serves a forkable, customisable application, so a
+  Captain control a client can re-enable would be no guarantee at all
+  (global-invariants/security-enforced-outside-the-library#customised-app-changes-no-invariant).
+  The corpus has exactly two honest responses to that: enforce the rule
+  where enforcement lives, or stop calling it a rule. Turn submission takes
+  the second, because the first is unreachable — the declaration is a
+  game-instance operation and the instance authorizes at team granularity
+  (see the withdrawal decision above) — so `captain-submit` states the
+  affordance allocation and disclaims enforcement, and declares no gi
+  dependency for it. Contrast the team-management story's captain gate,
+  where the mutation *is* a Convex function and "only the captain" is
+  therefore a genuine, enforced rule; the difference is which runtime owns
+  the operation, not how much the platform cares about captaincy.
+  Relatedly, the automated
   player's observe-don't-signal coordination is not merely the preferable
   design but the only sanctioned channel it has
   (global-invariants/centaur-state-boundary#bot-to-game-flow-never-routes-through-convex):
@@ -299,14 +430,44 @@ requirements.
   interface-to-player pacing message is outside the boundary as well as
   unnecessary.
 
+### Why no requirement here declares another requirement of this capability
+
+The delta originally carried nine intra-capability `Depends on:` entries,
+including a genuine two-cycle: `flow-quorum` declared `final-flush` and
+`final-flush` declared `flow-quorum`. Both entries were defensible in
+isolation — the quorum is the precondition the flush's declaration step
+waits on, and the flush is one of the paths the quorum permits — which is
+exactly the diagnosis: they are two views of one behaviour, not two
+behaviours with a direction between them. The author's corpus-wide rule
+(2026-07-28) settles it structurally: **the requirements of one capability
+are a single integrated cohort, so none declares a dependency on another.**
+A capability is the unit a reader takes in at one sitting and an
+implementer builds as one thing; a dependency edge inside it records
+nothing a reader of the whole section does not already have, while costing
+the one thing the graph is for — a cycle inside a capability is invisible
+to a capability-grain acyclicity check, so it accumulates silently. All
+nine went; the capability-grain declarations they implied
+(`operator-control`, `bot-framework`, `bot-configuration`, `game-engine`,
+`global-invariants`) were already carried by other requirements, so the
+Purpose line is unchanged. What breaks if reversed: `turn-pacing`'s pacing
+requirements are mutually referential by nature — tempo, quorum, cadence,
+flush and submit are one mechanism described from five angles — so
+permitting intra-capability edges here means permitting a dense cyclic
+subgraph that no lint can check and no reader can order.
+
 ## Constraint-mining (mandatory final step)
 
 - **Minted: budget+clock invariant at every observable instant**
   (`in-game-clock#invariant-at-every-instant`).
 - **Minted: turn-0 clocks run from the moment the game becomes playable**
   (`in-game-clock#clocks-run-from-playability`).
-- **Minted: decision news cleared only on staging acknowledgement**
-  (`scheduled-submission#ack-gates-the-clear`).
+- **Minted: decision news cleared only on staging acknowledgement, and
+  never by the same pass's decision-state publication**
+  (`scheduled-submission#ack-gates-the-clear`,
+  `scheduled-submission#publishing-is-not-staging`).
+- **Minted: team-granular authorization never yields an anonymous act — the
+  instance records the authenticated identity behind every command it
+  accepts** (`turn-declaration#team-granular-but-never-anonymous`).
 - **Minted: the final-flush deadline re-arms when observed remaining time
   shrinks** (`final-flush#deadline-tracks-the-clock`).
 - **Minted: declaration coordination exclusively by observing the game
@@ -321,7 +482,7 @@ requirements.
   clock runs on** (`flow-quorum#zero-operators-defers`).
 - **Checked, owned by dependencies**: the clock arithmetic itself
   (game-engine/chess-timer); no-final-submission-barrier at the log
-  (operator-control/staged-move-log#accepted-until-declaration); manual
+  (game-runtime/staged-move-log#accepted-until-declaration); manual
   snakes never framework-staged (operator-control/manual-mode); the dirty
   flag's definition (bot-framework/score-composition); sampling semantics
   (bot-framework/softmax-decision); parameter storage/captaincy/capture
@@ -332,13 +493,23 @@ requirements.
   invariants (transactional-invariant-enforcement); resolution's sole
   authority and atomicity (authoritative-turn-resolution); team-granular
   authorization with within-team roles in Convex
-  (team-granularity-authorization); the Centaur subsystem as home and
-  privacy boundary of the pacing records (centaur-state-boundary,
-  team-private-centaur-state); and enforcement outside any application's
-  presentation layer (security-enforced-outside-the-library).
+  (team-granularity-authorization); every mutating act arriving under an
+  authenticated identity of decidable kind
+  (authenticated-unambiguous-identity); and the Centaur subsystem as home
+  and privacy boundary of the pacing records (centaur-state-boundary,
+  team-private-centaur-state).
+- **Checked, deliberately *not* cited**: enforcement outside any
+  application's presentation layer
+  (security-enforced-outside-the-library) — it is why a fork may allocate
+  turn-submit differently, but `captain-submit` claims no enforcement for
+  the invariant to underwrite, so citing it would be a defensive note
+  rather than a soundness dependency.
 - **Checked, deferred to owners**: the per-turn record of budgets,
   declaration kinds, and timestamps, and the tempo/boot/submit action-log
-  events (replay-and-audit's rows).
+  events (replay-and-audit's rows); the attribution entry that carries the
+  identity `turn-declaration` records
+  (game-runtime/connect-time-attribution) — this capability owns only
+  that the instance keeps the answer, not the row it is kept in.
 - **Checked, plastic (mechanism, doc-comment territory)**: the expiry
   scheduler's implementation, the interval/timeout primitives and their
   re-arm mechanics, the presence library and channel shape, the default

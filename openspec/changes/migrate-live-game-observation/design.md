@@ -105,6 +105,46 @@ relax that and a client could read a live game out of Convex, leaving every
 filter in this capability enforcing nothing. Reversed, every visibility rule
 in this capability becomes advisory.
 
+### Staged-move privacy is a filtered-view rule and belongs here
+
+A team's staged moves are the most sensitive data a running game holds:
+they are its plans, before they become facts. The rule governing them —
+own-team connections read the complete history including superseded
+entries, no connection outside the team reads any of it live or
+historically — was authored in `operator-control`, because it arrived
+attached to the staged-move log and to the operators who write it. It moves
+here, unchanged in substance, as `staged-move-privacy`.
+
+The reason is that it is a *read* rule, and this capability is where read
+rules live. It answers the same question `invisibility-filtering` answers
+for snake state and `team-private-live-state` answers for the platform-side
+working state — who may observe what of a running game — at the same team
+granularity, enforced in the same server-side views, and it depends on
+nothing operators do. The runtime carve made that plain by taking the log
+itself to `game-runtime`: after it, the requirement described the privacy
+of a record its own capability no longer owned. The declaration follows the
+substance: it declares `game-runtime/staged-move-log` for the log whose
+contents it governs, and drops the citation of
+`filtered-views-are-the-only-surface` it carried as a cross-capability
+import — that sibling is now in the same capability, which never declares
+inside itself, and it already covers every read here. What is *not* claimed
+is the writing: which connection may append to the log is
+`game-runtime/team-scoped-staging`'s, and the operator's staging act is the
+operator story's.
+
+**What breaks if reversed** (leaving it in `operator-control`): a privacy
+rule sits in a capability that owns neither the state it protects nor the
+surface that enforces it, so the enforcement it demands can only be
+requested across a capability boundary while the view that must implement
+it lives here — and the read boundary of a running game stops being
+readable in one place. Someone auditing "what may this connection see"
+reads the observation capability end to end, finds the snake filter, the
+aggregate rule and the team-private boundary, and concludes correctly of
+everything except staged moves, whose rule is one capability away inside an
+operator-interface story they had no reason to open. That is exactly the
+failure mode the whole carve exists to prevent, and it is the kind of gap
+that is discovered by a leak rather than by a review.
+
 ### The scoreboard is the sole aggregate authority
 
 The resolved legacy reviews converged on one architecture: clients are
@@ -120,6 +160,23 @@ resolved reviews: rows are zero-filled for eliminated teams (absence would
 itself leak information and break rendering), and the live score is the
 normalised as-if-ended score per game-engine/scoring (par 1.0), not a raw
 length count.
+
+A row is also a **durable per-turn fact of the game's record**, not a
+projection assembled for whoever is subscribed. That clause and
+`#rows-outlive-the-live-audience` were added because the row's only consumer
+outside live play is the finished game's board-level replay, which renders
+"the rows recorded from the game's sole aggregate authority" from the
+persisted replay alone — and this requirement, the rows' only producer, said
+nothing about them surviving the subscription that carried them. The
+replay-side capability now enumerates the rows among the record's contents
+and among what the game-end export carries; the increment owed here is that
+the row is written to be read later, so the replay never has to re-derive
+it. The alternative — recomputing aggregates from persisted snapshots at
+replay time — is a second implementation of `game-engine/scoring` sitting in
+a viewer, computed over an alive set the viewer may see filtered; any drift
+between it and the published figure would rewrite history with nothing left
+to compare against. What breaks if reversed: a replay's scoreboard could
+disagree with what the teams saw during the game, silently.
 
 The same-transaction write is where this requirement leans on the
 game instance's own transactional guarantees: an aggregate written with the
@@ -188,11 +245,13 @@ window borders — the worse experience the review explicitly rejected.
 
 - **The legacy server-side-filtering negative requirement** had three
   concerns: no client-side invisibility filtering (authored here),
-  blocking staged-move reads (the operator story's substance — its
-  own-team read policy is that capability's to state), and blocking
+  blocking staged-move reads (also authored here now, as
+  `staged-move-privacy` — the author-resolved own-team read policy, which
+  came in from the operator story with the decision above), and blocking
   attribution-metadata reads (owned by
   identity-and-authorization/admission-records-private). The id retires
-  here as the matrix's owning row, with the split noted in its map entry.
+  here as the matrix's owning row, with the split noted in its map entry —
+  which now needs its staged-move clause retargeted onto this capability.
 - **The legacy read-scoping requirement** likewise split: its live
   team-scoping substance is `team-private-live-state`; its finished-game
   (replay) half and its team-configuration-access half belong to the
@@ -225,8 +284,37 @@ window borders — the worse experience the review explicitly rejected.
   the team story's; **coach admission terms** are
   identity-and-authorization/coach-tokens; what is authored here is what
   the admitted coach *sees* — read parity with members, live-boundary
-  meaningfulness, and the coach-mode interface with client-local
-  inspection.
+  meaningfulness, and the coach-mode interface.
+
+### Coach inspection is only its coach-specific increment
+
+`coach-mode-interface` used to restate the general inspection primitive —
+client-local, writes nothing, no selection shadow, at most one per client.
+That idea now has one owner, `decision-transparency/examined-subject`: a
+never-persisted examination lens, independent of holding, that stages
+nothing. The requirement keeps only what is genuinely coach-shaped: the
+mode is the member interface rendered read-only, a coach's inspection
+renders *alongside* the operators' real selection shadows rather than in
+place of them, and it is gesturally and visually distinct from operator
+selection (`#inspection-never-reads-as-selection`) — the increment that
+matters here, because this is the one surface where a non-operator's lens
+sits inside an interface whose every other indication means "an operator
+holds this".
+
+The trim is a deletion, not a citation, and deliberately so: this
+capability **cannot** declare `decision-transparency`. That capability
+depends on `operator-control`, which depends on this one, so the edge
+would close the cycle `live-game-observation → decision-transparency →
+operator-control → live-game-observation` — and the graph's acyclicity is
+what `pnpm spec:check` enforces. The DRY rule covers the case exactly: do
+not restate what another requirement cleanly implies, and cite only where
+soundness depends on it. Coach mode's soundness does not depend on the
+lens's client-locality; it depends on the lens never being *mistaken* for
+a hold, which is what stays. Reversed — keeping the restatement — two
+requirements in two capabilities would own one rule with no way to keep
+them in step (the copy could not even cite the original), and the first
+revision of either would silently fork the corpus's answer to "what does
+inspecting do?".
 
 ### Transport neutrality
 

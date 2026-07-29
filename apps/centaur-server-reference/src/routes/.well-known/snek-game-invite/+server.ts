@@ -1,6 +1,13 @@
 // spec: team-server-management/game-invitations
-// Game-start invitation endpoint. The platform POSTs a bare notification here
-// naming a game and a team, which wakes this server if it had scaled to zero.
+// POST /.well-known/snek-game-invite — game-start invitation endpoint. The
+// platform POSTs a bare notification here naming a game and a team, which
+// wakes this server if it had scaled to zero.
+//
+// The path is fixed platform-wide and sits in the enumerated fork
+// compatibility surface — a spec'd value, changed only as a deliberate
+// breaking change to every fork.
+// spec: centaur-server-runtime/forkable-reference-app#enumerated-surface-is-the-contract
+//
 // Nothing in the request carries authority, so nothing about it is verified:
 // the answer comes from the whitelist, and everything the server can act on it
 // obtains afterwards by authenticating outward with its own key.

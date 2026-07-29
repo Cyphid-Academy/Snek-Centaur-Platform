@@ -102,7 +102,12 @@ context: |
   requirements across capabilities). authored needs >= 1 home with a
   resolving target; dropped must carry NOWHERE and give a reason; every
   non-authored entry needs a reason. Rules: scripts/identifier-map.mjs;
-  completeness against the corpus: pnpm spec:audit. Sixteen
+  completeness against the corpus: pnpm spec:audit. The map is kept LIVE
+  and linted for the rest of the current implementation-planning PR — a
+  correspondence check that large refactors preserve the legacy spec's
+  intent, freely edited to stay accurate — and both it and the legacy
+  corpus are slated for deletion in a future PR
+  (docs/spec-migration/README.md). Sixteen
   capabilities exist as OPEN CHANGES until each is implemented and
   archived (the archive-due gate); the migration's planning artifacts
   are archived under docs/spec-migration/.
@@ -273,9 +278,82 @@ rules:
       archive folder name carries the date prefix).'
     - Include a task to run `pnpm spec:check` (validation + reference lint)
       before the change is considered complete.
-    - 'The identifier map is COMPLETE (every legacy id tombstoned, with a
-      disposition and its homes in carriedBy) — no change adds, removes,
-      or re-attributes entries. The only sanctioned map edit: if a change
-      removes or renames a capability requirement that carriedBy targets
-      point at, update those targets in the same change. pnpm spec:audit
-      fails if any id loses its entry.'
+    - 'DEPENDENCY DECLARATIONS ARE CROSS-CAPABILITY ONLY: a requirement never
+      declares a "Depends on:" entry naming a requirement in its own
+      capability. Requirements within a capability are one integrated cohort —
+      reviewing a change to one against all of them is a tractable local
+      analysis — so the edge carries no information, while forbidding it is
+      what makes capability-grain cycle detection sufficient. Cross-capability
+      entries additionally require the owning capability to declare that
+      capability in its Purpose. Lint-enforced (pnpm spec:citations).'
+    - 'NO CHANGE IS OFF THE TABLE — ONLY MORE OR LESS EXPENSIVE. A constraint in
+      these rules bounds what one change may do, never what the corpus may
+      become: a folded capability can be amended, a Purpose can gain a
+      dependency, a requirement can move, an identifier can be renamed. Before
+      concluding that something "cannot" be done, restate it as what it would
+      cost — a second change, a RENAMED delta with a reference sweep, a
+      re-seeded pair — and check the restatement is true. If the most correct
+      shape is expensive, RAISE IT with the cheaper alternatives; never adopt a
+      workaround silently on the belief that the correct shape is forbidden,
+      and never let such a belief become a premise in an argument for placing a
+      requirement somewhere. (Worked example: one open change may not amend a
+      Purpose another open change is amending — which says nothing about the
+      change already amending that capability, and mistaking the two put a
+      requirement in the wrong capability.)'
+    - 'A CAPABILITY DOES NOT OWN A SECTION OF CODE: a capability may require
+      that a fact it understands appears in a UI context another capability is
+      primarily responsible for building. Author the obligation in the
+      capability that understands the fact, declare the dependency in that
+      direction (it depends on the surface existing), and do NOT restate it in
+      the owning capability — that is the DRY failure, and it puts the rule
+      where the capability that cares about it cannot state it. Implementation
+      arrives as a diff to that surface citing the imposing requirement.'
+    - 'A NO-SECOND-IMPLEMENTATION RULE IS A GLOBAL INVARIANT, not a requirement
+      of the capability that provides the resource. Forbidding a duplicate of a
+      shared thing — the engine, the board generator, any future one — is a
+      negative constraint on what must not be done ANYWHERE in the system, so
+      it binds every consumer and no single capability owns it: gi admission
+      prongs (a) and (b) both hold, and the provider''s own capability is the
+      one place the rule is NOT about. The provider states what the thing is;
+      global-invariants states that there is only one of it. Precedent:
+      global-invariants/one-shared-engine and
+      global-invariants/one-shared-generation, which sit together for this
+      reason and not by analogy.'
+    - 'IDENTIFIERS IN A PLAN ARE LINTED: tasks.md cites the requirements each
+      task discharges, and every identifier must resolve against specs/
+      overlaid with the open changes (pnpm spec:citations). Cite them inline
+      — the no-identifiers-in-prose rule binds spec and delta files, not task
+      plans. When a delta edit renames or drops a requirement, fix the
+      change''s own tasks.md in the same commit.'
+    - 'TASK NUMBERS ARE A CONTIGUOUS SEQUENCE, not labels. Sections run 1..K in
+      order; each task''s major number is its section''s; a section''s minors
+      run 1..J in order; the final `## Archive` section is unnumbered in its
+      heading and continues the sequence. Deleting a task means RENUMBERING the
+      ones after it and sweeping any prose that named them, not leaving the
+      hole — a gap is the fingerprint of a task removed without anyone checking
+      whether its substance was rehomed, and task numbers are how a plan and
+      its design.md refer to each other, so a stale one silently repoints prose
+      at a different task. A section may be emptied deliberately (keep the
+      heading and say where the work went); an empty section is fine, a hole
+      inside one is not. Lint-enforced (pnpm spec:citations).'
+    - 'THE IDENTIFIER MAP IS A LIVE CORRESPONDENCE CHECK, not a frozen
+      migration-completion ledger. It records where each legacy id''s
+      substance now lives, and a change MAY adjust its own affected
+      carriedBy entries FREELY — adding a home, retargeting one, splitting
+      substance across two — whenever the edit keeps that record accurate
+      as the capabilities are refactored. The purpose it now serves is the
+      standing sanity check that a large refactor has not lost the intent
+      the legacy spec communicated: an entry that has drifted from where
+      the substance really lives is the defect, and correcting it is the
+      point, not a violation. What still binds: the map stays COMPLETE
+      (every legacy id keeps its entry, with a disposition) and every
+      target must RESOLVE — pnpm spec:audit enforces both, so a change
+      that removes or renames a requirement carriedBy points at must
+      retarget it in the same change. The disposition still constrains the
+      array (authored needs >= 1 resolving home; dropped carries nowhere,
+      with a reason). An entry whose substance genuinely spans two homes
+      carries a short "part" note on each saying which half that home
+      holds (see 04-REQ-071, 06-REQ-004). Note the trajectory
+      (docs/spec-migration/README.md): the legacy corpus and this map are
+      deliberately kept live and linted for the rest of this PR, and are
+      slated for deletion in a future one.'
