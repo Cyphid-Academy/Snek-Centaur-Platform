@@ -1,7 +1,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: visual-tester/board-editor
-Depends on: game-engine/board-geometry, game-engine/domain-vocabulary, game-engine/movement, game-engine/starting-placement#shared-parity, game-engine/item-spawning.
+Depends on: game-engine/board-geometry, game-engine/domain-vocabulary, game-engine/movement, game-engine/item-spawning.
 
 The tool SHALL provide a map editor over every authorable component of game state: per-cell terrain (Hazard/Fertile/Normal within the fixed Wall ring), board size, snakes (add/remove, team, ordered body cells of any length ≥ 1, health, active effects; the letter is derived, see #letters-auto-assigned), items (place/remove any item type on any cell not occupied by a snake body; placing over an existing item replaces it), the runtime game configuration, and the game seed. A fresh session with no loaded sequence SHALL always start with a valid game seed and a board, so editing and board generation are immediately available without any manual setup. Two snake fields are lifecycle-derived and never directly editable: a snake present in the editor is alive — death arises only from turn resolution — and last direction is null in a hand-authored state, otherwise the direction the snake last moved. The editor SHALL permit any structurally valid state — including states board generation would never produce — enforcing only structural validity: in-bounds cells, the closed domain vocabulary, snake-body contiguity (each consecutive segment pair orthogonally adjacent or sharing a cell, the only shapes the engine's movement rules can produce), and shared head parity (see #head-parity-enforced).
 
@@ -11,7 +11,7 @@ The tool SHALL provide a map editor over every authorable component of game stat
 
 #### Scenario: #head-parity-enforced
 - **WHEN** the tester places a new snake head while other snakes are present
-- **THEN** the head is accepted only on a cell whose `(x + y) mod 2` matches the parity the existing heads share this turn (fixed at starting placement and preserved every turn, because all heads step one cell together), a head on the wrong parity is rejected at the editor boundary, and the board marks every wrong-parity cell with a translucent red checkerboard overlay while the add-snake tool is active; the first head, with no parity yet fixed, may go on any cell
+- **THEN** the head is accepted only on a cell whose `(x + y) mod 2` matches the parity the existing heads share this turn — a parity the movement rules preserve every turn, because all heads step one cell together — a head on the wrong parity is rejected at the editor boundary, and the board marks every wrong-parity cell with a translucent red checkerboard overlay while the add-snake tool is active; the first head, with no parity yet fixed, may go on any cell
 
 #### Scenario: #item-placement-replaces
 - **WHEN** the tester places an item on a cell that already holds an item
@@ -38,9 +38,9 @@ The tool SHALL provide a map editor over every authorable component of game stat
 - **THEN** the edit is rejected at the editor boundary and the state is unchanged
 
 ### Requirement: visual-tester/turn-simulation
-Depends on: test-sequences/determinism.
+Depends on: test-sequences/determinism, game-engine/turn-resolution-model.
 
-The tool SHALL simulate the next turn on demand: it resolves the current state with the currently staged moves and the turn seed derived from the game seed and that turn's number, appends the resolver's full output (next state, events, outcome) as a new turn in the session, and makes the next state current so the process repeats.
+The tool SHALL simulate the next turn on demand: it resolves the current state with the currently staged moves, the timings it supplies for that turn, and the turn seed derived from the game seed and that turn's number, appends the resolver's full output (next state, events, outcome) as a new turn in the session, and makes the next state current so the process repeats. The tool SHALL hold a configurable default turn duration — 500 ms out of the box — supplied as both the turn's length and every team's burn, and SHALL let the tester choose distinct values for an individual turn advance, so a clock can be spent unevenly or run down deliberately.
 
 #### Scenario: #repeatable
 - **WHEN** a turn is simulated
@@ -50,9 +50,17 @@ The tool SHALL simulate the next turn on demand: it resolves the current state w
 - **WHEN** a turn is simulated
 - **THEN** the session records the resolver's next state, events, and outcome for that turn, so saving the session yields expectations without re-resolving
 
+#### Scenario: #a-default-that-needs-no-attention
+- **WHEN** a tester who does not care about time stages moves and simulates
+- **THEN** the default duration is supplied for the turn and for every team, so the resolver's required timings never become a step the tester has to perform — the tool is for vetting rules, and a mandatory input it can answer sensibly by itself is one it should
+
+#### Scenario: #per-advance-values-reach-the-timed-endings
+- **WHEN** a tester chooses a large burn for one team on a single advance
+- **THEN** that turn resolves with exactly those values, so a team can be driven to the end of its clock and the endings that depend on time can be authored in the tool like every other rule — no separate clock-editing surface is needed to reach them
+
 ### Requirement: visual-tester/session-history
 
-The tool SHALL keep the session's full turn history in memory — initial state plus every simulated turn with its staged moves and resolver output — navigable via a scrub bar; scrubbing to any turn displays that turn's board state and, where present, its staged moves, events, and outcome. The session is continuously auto-saved to a scratch sequence; durability across environments comes only from promoting a snapshot to a git-tracked fixture.
+The tool SHALL keep the session's full turn history in memory — initial state plus every simulated turn with its staged moves, the timings supplied for it, and resolver output — navigable via a scrub bar; scrubbing to any turn displays that turn's board state and, where present, its staged moves, timings, events, and outcome. The session is continuously auto-saved to a scratch sequence; durability across environments comes only from promoting a snapshot to a git-tracked fixture.
 
 #### Scenario: #scrub-navigation
 - **WHEN** the tester scrubs to any recorded turn
@@ -62,6 +70,10 @@ The tool SHALL keep the session's full turn history in memory — initial state 
 - **WHEN** the tester only scrubs, without editing
 - **THEN** no autosave occurs (scrubbing is not a modification), and history is unchanged
 
+#### Scenario: #a-re-simulated-turn-reuses-its-timings
+- **WHEN** the tester scrubs back to a turn and simulates it again without changing anything
+- **THEN** the timings that turn recorded are the ones re-supplied, so the outcome is the one already on screen — had the current default been substituted instead, an untouched turn could resolve differently on the second look and the tool would be reporting a discrepancy it created
+
 ### Requirement: visual-tester/sequence-management
 Depends on: test-sequences/validation.
 
@@ -69,7 +81,7 @@ The tool SHALL promote the current session to a git-tracked fixture as its one e
 
 #### Scenario: #save-from-session
 - **WHEN** the tester saves the session as a fixture
-- **THEN** the stored document records the session's initial state, per-turn staged moves, and per-turn resolver outputs as the fixture's expectations
+- **THEN** the stored document records the session's initial state, its per-turn resolution inputs — staged moves and timings alike — and its per-turn resolver outputs as the fixture's expectations
 
 #### Scenario: #fixture-overwrite-confirm
 - **WHEN** the tester saves a fixture whose name matches an existing fixture
