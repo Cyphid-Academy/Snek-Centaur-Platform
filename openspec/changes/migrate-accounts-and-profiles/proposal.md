@@ -16,10 +16,18 @@ place and retires 21 legacy ids and 2 review items.
 Mint **`accounts-and-profiles`** exactly as drawn in the author-approved
 capability map and assignment matrix. The legacy requirements and review
 items this change absorbs are recorded in the identifier map under this
-change's name. Declared dependencies: **global-invariants,
-identity-and-authorization, team-management, replay-and-audit** — all
-four genuinely cited. The declaration is an affordance, extended
-whenever a citation is warranted, not a fixed allowance.
+change's name. Declared dependencies: **game-engine, game-lifecycle,
+global-invariants, identity-and-authorization, replay-and-audit,
+rooms-and-matchmaking, team-management** — all seven genuinely cited. The
+declaration is an affordance, extended whenever a citation is warranted,
+not a fixed allowance: `game-lifecycle` (the per-game roster snapshot,
+the recorded outcome and final scores every history and statistic reads),
+`rooms-and-matchmaking` (the room record a listing labels a game with and
+the room-scoped ranking filters on) and `game-engine` (the scoring rule
+that makes scores comparable within a game and that decides a forfeit)
+were added when it became clear the historical layer's soundness rested
+on records it could not name. The graph stays acyclic — this capability
+is a leaf nothing depends on.
 
 Deliberate boundaries, per the author-resolved decisions:
 
@@ -56,14 +64,16 @@ Deliberate boundaries, per the author-resolved decisions:
 
 ## What Changes
 
-- **New capability `accounts-and-profiles`** (mint delta, ADDED-only, 11
+- **New capability `accounts-and-profiles`** (mint delta, ADDED-only, 12
   requirements): the persistent user record and its permanence
   (never-delete/never-merge), the email-confidentiality contract over
   every user-facing surface (query-boundary omission, email-free
   snapshots, hidden even from self-view), the authenticated-only surface
   rule, the home view, the teams browser, player and team profiles,
-  aggregate statistics consistent with their listings, snapshot-resolved
-  archive-stable attribution, and the closed-criteria leaderboard.
+  aggregate statistics consistent with their listings, the recorded-outcome
+  rule that fixes which games those listings and statistics are drawn
+  from, snapshot-resolved archive-stable attribution, and the
+  closed-criteria leaderboard.
 - **Constraint-mining promotions**: the legacy design's query-boundary
   email projection and email-free roster snapshots become scenarios of
   `email-confidentiality` (they were silently violable design prose);
@@ -98,3 +108,40 @@ default-listing hiding of archived teams; and the email-confidentiality
 requirement is scoped to the user-facing surface, leaving the
 administrative/identity machinery outside it rather than contradicting
 the legacy admin carve-out.
+
+Five questions raised in review are now resolved, each recorded in
+`design.md`:
+
+- **Decision — the historical layer's sources are declared.** Every
+  history, statistic, head-to-head and ranking here reads records owned
+  by `game-lifecycle` (roster snapshot, recorded outcome, final scores)
+  and `rooms-and-matchmaking` (the room record, which
+  `leaderboard#room-scoped-ranking` is a predicate over). Both join the
+  Purpose declaration, along with `game-engine`, and the requirements
+  whose soundness rests on them carry the entries.
+- **Decision — historical team memberships are derivable from game
+  records.** `player-profile` asked for current *and historical*
+  memberships; no membership-history record exists anywhere in the
+  corpus. It is reworded to the derivable definition — past teams are
+  the teams the user's game history attributes to them — with the
+  accepted limitation stated as behaviour
+  (`player-profile#past-teams-are-teams-played-for`): a membership that
+  produced no game leaves no trace.
+- **Decision — forfeited games are ranked, at the engine's score.**
+  `leaderboard` counts a forfeited game towards every criterion at the
+  value the platform's scoring rule assigns a forfeiting team, citing
+  that rule rather than restating the zero
+  (`leaderboard#forfeits-rank-rather-than-vanish`). The rule stands on
+  its own and depends on no other capability surfacing forfeits
+  downstream.
+- **Decision — games with no recorded outcome are presented nowhere.**
+  A game finished by failure records no scores and broke
+  `aggregate-statistics#consistent-with-the-listing` under either
+  reading. New requirement `recorded-outcomes-only` fixes the presented
+  set once for the whole historical layer, excluding such games from
+  listing and statistics identically; a game *decided without play* is
+  not excluded.
+- **Decision — head-to-head is pairwise in multi-team games.** A game
+  with more than two competing teams contributes one entry against each
+  other participant, settled on the two teams' own final scores and
+  independent of who won overall.
