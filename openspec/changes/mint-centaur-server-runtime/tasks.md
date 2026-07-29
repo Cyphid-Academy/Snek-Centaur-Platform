@@ -1,9 +1,49 @@
 # mint-centaur-server-runtime — Tasks
 
-## Implementation
+## 1. Pre-implementation & seam gates
 
-- [ ] 1.1 Plan this change once its spec work is settled
+- [ ] 1.1 Review this change's artifacts with the author immediately before implementation begins, and refine this task breakdown then; resolve Q-A (`whitelist-admission`), Q-B (`reference-server-home`) and Q-C (the mirror workflow's disposition) first
+- [ ] 1.2 Seam gate — capabilities that must be implemented or agreed first, and which archive before this change: `application-shell` (the one application this server serves and delivers as a fork) and `global-invariants` (the trust-chain rules key publication and the administration API rest on)
+- [ ] 1.3 Confirm the runtime home this plan assumes: every requirement here is realised in the Snek Centaur Server deployment — `packages/centaur-server-lib` and `apps/centaur-server-reference` — with no Convex and no SpacetimeDB code in scope. The platform's side of every exchange with a server is `team-server-management`'s
+- [ ] 1.4 The three platform-facing paths are settled and fixed platform-wide — `POST /.well-known/snek-game-invite`, `GET /.well-known/snek-server-keys`, `GET /.well-known/snek-healthcheck`. Build against exactly these, exported from the library as the single constant every implementation reads (`centaur-server-runtime/forkable-reference-app#enumerated-surface-is-the-contract`, `centaur-server-runtime/healthcheck-endpoint`, `centaur-server-runtime/server-key-publication`)
+- [ ] 1.5 Sweep the retired spellings so neither survives anywhere in code, tests, docs, or the mirror: the scaffold's root `/healthcheck` (legacy module 02's Design) and `/.well-known/jwks.json` (renamed because the platform's own OIDC surface already serves a document at that relative path, with different trust semantics). Known stragglers: `apps/centaur-server-reference/src/routes/+page.svelte` links both old paths, and `apps/centaur-server-reference/AGENTS.md` lists them in two places (`centaur-server-runtime/forkable-reference-app#surface-changes-are-platform-changes`)
+- [ ] 1.6 File provisional IANA registrations for the three well-known suffixes under RFC 8615 §3.1, which requires registration of any minted well-known URI. Not a blocker for implementation — unregistered use is a deviation taken knowingly and bounded by the `snek-` prefix — but the protocol does require third parties to serve these paths (`centaur-server-runtime/forkable-reference-app`)
+## 2. Self-provisioning identity
 
+- [ ] 2.1 Generate a signing keypair on first start if none is persisted, persist it, and publish the public half at the well-known keys path — no operator action, nothing to copy, paste or register (`centaur-server-runtime/server-key-publication`, `#first-boot-needs-no-operator`)
+- [ ] 2.2 Support publishing several keys at once so rotation is publish-both, switch, drop-the-old with no exchange with the platform, and test that a redeploy onto storage that lost the key regenerates, republishes, and resumes (`centaur-server-runtime/server-key-publication#rotation-is-uncoordinated`, `#ephemeral-storage-self-heals`)
+## 3. Liveness
+
+- [ ] 3.1 Implement the healthcheck endpoint: unauthenticated, minimal, liveness only, answering identically whether or not the deployment operates any team; test that it carries no team-scoped state and that a server with an empty whitelist answers exactly as a loaded one does (`centaur-server-runtime/healthcheck-endpoint`, `#unauthenticated-and-minimal`, `#liveness-is-not-readiness-to-play`)
+- [ ] 3.2 Keep `HealthcheckResponse` reduced to `status` and `version` — it has already been narrowed to those two — and pin it with a test, since extending it with hosted-team or active-game counts is a violation of the contract rather than an enrichment of it (`centaur-server-runtime/healthcheck-endpoint#unauthenticated-and-minimal`)
+## 4. Administration
+
+- [ ] 4.1 Implement the administration API over a local set of trusted administrative issuers, each recorded with its capability ceiling, enforcing exactly what a presented credential carries and refusing anything beyond the issuer's ceiling at the resource (`centaur-server-runtime/server-administration-api`, `#an-issuer-may-mint-narrower-than-itself`, `#capabilities-beyond-the-ceiling-are-refused`)
+- [ ] 4.2 Make admit and remove idempotent, and test that the platform is not called, consulted, or informed anywhere in this path (`centaur-server-runtime/server-administration-api#adding-an-already-whitelisted-team-succeeds`, `#the-platform-is-not-in-this-path`)
+- [ ] 4.3 Make the capability set extensible without a protocol change, and test that adding one needs no configuration change on a deployed server
+## 5. Tenancy and identity posture
+
+- [ ] 5.1 Make the library's connection management per team and per game throughout, with no ambient client standing in for all hosted teams, and test that a server operating three teams holds three separate credential and subscription sets (`centaur-server-runtime/library-tenant-separation`, `#no-ambient-client`)
+- [ ] 5.2 Hold no user record, no session, and no identity state of any kind, and authenticate no person: add a test that the deployment registers no identity-provider client and exposes no sign-in route, and one that serving the application to a visitor with no relationship to the operated teams exposes nothing — because there is nothing to expose (`centaur-server-runtime/no-operator-state`, `#no-per-server-sign-in`, `#serving-the-wrong-visitor-exposes-nothing`)
+- [ ] 5.3 Restrict the reference implementation to reference-distributed heuristics whenever it operates more than one team, with the single-tenant case unrestricted (`centaur-server-runtime/reference-heuristics-on-shared-hosting`, `#shared-reference-server-refuses-team-code`, `#single-tenant-server-runs-anything`)
+## 6. Distribution — the fork and the library
+
+- [ ] 6.1 Build the mirror publishing path as **mechanism**: `.github/workflows/mirror-centaur-server.yml` (it does not exist), the `git subtree split --prefix=apps/centaur-server-reference` it runs, and the rewrite of the `@cyphid/snek-centaur-server-lib` workspace dependency in the split output to a published reference. Record the procedure in `apps/centaur-server-reference/AGENTS.md` and `docs/external-setup.md`
+- [ ] 6.2 Publish the library as a versioned artifact — it is at `0.0.0` today — and define what its published interfaces are, as a single entry point rather than deep paths, so the compatibility surface is enumerable (`centaur-server-runtime/published-library-surface`)
+- [ ] 6.3 Prove the fork story end to end: clone the mirror output into a clean directory with no access to this repository, install, build, and run it; the test fails if any dependency resolves through the workspace (`centaur-server-runtime/published-library-surface#a-fork-builds-without-the-monorepo`)
+- [ ] 6.4 Adopt and document a release discipline in which removing or narrowing a published interface is a breaking version, and test that a fork pinned to an earlier version builds unchanged against a newly published one (`centaur-server-runtime/published-library-surface#pinned-forks-do-not-drift`, `#a-removal-is-a-version-not-a-surprise`)
+- [ ] 6.5 Reserve nothing outside the `/.well-known/snek-` prefix, and test that a fork restructuring every other route — a status page at the root, a differently organised admin area — stays platform-compatible (`centaur-server-runtime/forkable-reference-app#the-rest-of-the-path-space-is-the-forks`, `#enumerated-surface-is-the-contract`)
+- [ ] 6.6 Surface-change discipline: a check that fails when anything inside the enumerated surface changes without a deliberate breaking-change record, so drift cannot be discovered by a fork when its invitations stop arriving. The paths make this mechanical — assert the library's exported path constant against the reference app's route tree, and that the app serves no platform-facing route outside `/.well-known/snek-` (`centaur-server-runtime/forkable-reference-app#surface-changes-are-platform-changes`)
+- [ ] 6.7 Publish the enumerated compatibility surface as one durable artifact carried into the mirror — the three paths, the published library interfaces the application consumes, and the converse a forker most needs to read: that nothing outside the prefix binds them (`centaur-server-runtime/forkable-reference-app#enumerated-surface-is-the-contract`, `#the-rest-of-the-path-space-is-the-forks`)
+## 7. Spec hygiene and verification
+
+- [ ] 7.1 Retarget the `// spec:` citations of the moved identifiers in `packages/centaur-server-lib/src/index.ts` and the three `.well-known` route files, and note that `packages/centaur-server-lib/dist/` is gitignored but scanned by the reference lint — rebuild or clear it after the sweep
+- [ ] 7.2 Add `// design:` references where this change's rationale warrants them (why the healthcheck split, why the library surface is versioned)
+- [ ] 7.3 Run `pnpm spec:check` and the full battery (`pnpm lint`, `pnpm typecheck`, `pnpm test`)
+- [ ] 7.4 Conformance suite for the enumerated surface, runnable by a third-party server author and driven off the exported path constant so it tests the same strings the platform calls: key publication (present, parseable, multiple keys during rotation) and healthcheck (unauthenticated, minimal), exercised against the reference implementation. The platform's side of the same exchanges is `migrate-team-server-management`'s (seam)
+- [ ] 7.5 Verification specific to this change: the clean-clone fork build, the key-loss self-heal, the ceiling refusal, the empty-whitelist healthcheck, and the no-sign-in-route assertion
 ## Archive
 
-- [ ] 2.1 On explicit author instruction, `pnpm spec:fold mint-centaur-server-runtime` then `openspec archive --skip-specs -y mint-centaur-server-runtime` at the tail of the PR that completes the implementation
+- [ ] 8.1 On explicit author instruction, `pnpm spec:fold mint-centaur-server-runtime` then `openspec archive --skip-specs -y mint-centaur-server-runtime` at the tail of the PR that completes the implementation (fold enforces capability-dependency order: `mint-application-shell` archives first, `migrate-team-server-management` after)
+- [ ] 8.2 Add `centaur-server-runtime` to `openspec/config.yaml`'s context capability list
+- [ ] 8.3 Run `pnpm spec:check` after archiving
