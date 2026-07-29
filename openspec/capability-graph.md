@@ -70,9 +70,9 @@ flowchart TD
   bot-framework -->|4| operator-control
   centaur-server-runtime -->|1| application-shell
   centaur-server-runtime -->|9| global-invariants
-  decision-transparency -->|6| bot-framework
-  decision-transparency -->|7| global-invariants
-  decision-transparency -->|3| operator-control
+  decision-transparency -->|11| bot-framework
+  decision-transparency -->|8| global-invariants
+  decision-transparency -->|4| operator-control
   game-configuration -->|1| application-shell
   game-configuration -->|12| game-engine
   game-configuration -->|17| global-invariants
