@@ -22,6 +22,14 @@ args = "Start application"
 task = "workflow.run"
 args = "Visual Tester"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "SpacetimeDB"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Convex Dev"
+
 [[workflows.workflow]]
 name = "Start application"
 author = "agent"
@@ -49,8 +57,31 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "pnpm --filter @cyphid/visual-tester exec vite dev --port 5173 --host"
-waitForPort = 5173
+args = "pnpm dev:tester"
+waitForPort = 5001
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow]]
+name = "SpacetimeDB"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm dev:stdb"
+waitForPort = 3000
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow]]
+name = "Convex Dev"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm dev:convex"
 
 [workflows.workflow.metadata]
 outputType = "console"
@@ -78,13 +109,13 @@ args = "bash scripts/hard-reset-to-origin.sh"
 outputType = "console"
 
 [[ports]]
+localPort = 3000
+externalPort = 3001
+
+[[ports]]
 localPort = 5000
 externalPort = 80
 
 [[ports]]
 localPort = 5001
 externalPort = 3000
-
-[[ports]]
-localPort = 5173
-externalPort = 5173

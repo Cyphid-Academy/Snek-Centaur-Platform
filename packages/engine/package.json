@@ -19,9 +19,10 @@
     "bench": "vitest bench --run"
   },
   "devDependencies": {
+    "@types/node": "^25.9.0",
     "fast-check": "^4.9.0",
     "typescript": "*",
-    "vitest": "*"
+    "vitest": "^4.1.10"
   },
   "dependencies": {
     "@noble/hashes": "^2.2.0"

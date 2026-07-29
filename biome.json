@@ -11,6 +11,9 @@
         "noUnusedVariables": "warn",
         "noUnusedImports": "warn"
       },
+      "complexity": {
+        "useLiteralKeys": "off"
+      },
       "style": {
         "noNonNullAssertion": "warn"
       }
@@ -29,10 +32,17 @@
       "trailingCommas": "all"
     }
   },
+  "overrides": [
+    {
+      "include": ["**/tsconfig.*.json"],
+      "json": { "parser": { "allowComments": true } }
+    }
+  ],
   "files": {
     "ignore": [
       "node_modules",
       "dist",
+      "_generated",
       ".svelte-kit",
       "build",
       "*.tsbuildinfo",

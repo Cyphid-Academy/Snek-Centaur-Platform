@@ -53,7 +53,7 @@ Claude Code Web has **no encrypted secrets store yet** (unlike Replit): variable
 - Use **least-privilege, non-production** credentials only — a dev/preview Convex deploy key, a non-prod SpacetimeDB instance — because they are stored unencrypted and gated only by environment-edit access.
 - GitHub needs no secret of yours: git and GitHub auth are handled by the platform's proxy, outside the sandbox.
 
-We deliberately **do not ship a `.env.example`**. The provisioning method is the cloud-environment env-vars field, not a `.env` file, so a `.env.example` would prime the wrong workflow. The authoritative record of which variables a session needs is the **code that reads them**: when the Convex/SpacetimeDB integration lands, a startup env-validation step (failing loudly and naming any missing variable) is that contract. Until that code exists, there are no project secrets to set.
+We deliberately **do not ship a `.env.example`**. The provisioning method is the cloud-environment env-vars field, not a `.env` file, so a `.env.example` would prime the wrong workflow. The authoritative record of which variables a session needs is the **code that reads them**: `packages/convex-host/src/env.ts` names every unset variable at once, with what each is for, and never prints a value. It reports rather than throws — a session running tests, a lint, or the UI is not blocked by a credential it never reaches for; code that does reach a runtime fails at that point. Set `CONVEX_DEPLOY_KEY` when you want `pnpm dev:convex` to reach your own dev deployment; nothing else is needed to work in this repo.
 
 ## Cowork
 

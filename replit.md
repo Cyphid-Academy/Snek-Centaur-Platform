@@ -158,7 +158,11 @@ To create a seed/edit pair from scratch, two ordinary commits (seed verbatim,
 then edit) are simplest; reach for this `exec` recipe when you need to
 **re-seed** an existing pair after the base moves.
 
-## Future Workflows (commented out in .replit until needed)
+## Backend runtime workflows
 
-- `pnpm convex dev` — starts the Convex dev backend (requires Convex dashboard setup; see `docs/external-setup.md`)
-- `pnpm stdb dev` — starts a local SpacetimeDB instance (requires STDB CLI; see `docs/external-setup.md`)
+Both are live `.replit` workflows and run as part of the parallel `Project` workflow. They supersede the `pnpm convex dev` / `pnpm stdb dev` names this file used to promise; the real script names differ.
+
+- **Convex Dev** — `pnpm dev:convex`. Pushes schema and functions to your personal Convex dev deployment. Requires `CONVEX_DEPLOY_KEY` as a Replit Secret (never committed, never in a shared environment). See `CLAUDE.md` → "Secrets and third-party resources".
+- **SpacetimeDB** — `pnpm dev:stdb`, a standalone host on local port 3000 (mapped to external 3001), no Docker involved. `pnpm stdb:publish` builds and publishes the game module to it. Requires the `spacetime` CLI on `PATH`.
+
+Full setup is in `docs/external-setup.md`.

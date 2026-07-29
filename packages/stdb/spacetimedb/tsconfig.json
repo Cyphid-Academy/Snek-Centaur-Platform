@@ -1,0 +1,22 @@
+{
+  // Deliberately does NOT extend ../../../tsconfig.base.json. SpacetimeDB
+  // mandates target/module/isolatedModules/noEmit, and the module is bundled by
+  // `spacetime build` (rolldown -> one bundle.js -> V8 isolate) rather than
+  // emitted by tsc, so it cannot participate in the composite build. `spacetime
+  // build` runs tsc over this config itself; nothing else needs to.
+  "compilerOptions": {
+    "strict": true,
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+
+    // Required by SpacetimeDB.
+    "target": "ESNext",
+    "lib": ["ES2021", "dom"],
+    "module": "ESNext",
+    "isolatedModules": true,
+    "noEmit": true
+  },
+  "include": ["./**/*"],
+  "exclude": ["node_modules"]
+}
