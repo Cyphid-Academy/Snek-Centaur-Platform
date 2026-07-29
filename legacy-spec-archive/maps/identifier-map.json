@@ -6765,7 +6765,13 @@
       "carriedBy": [
         {
           "target": "live-game-observation/coach-mode-interface",
-          "change": "migrate-live-game-observation"
+          "change": "migrate-live-game-observation",
+          "part": "the coach-mode half — a coach's inspection renders alongside the team's operators' real selection shadows inside the read-only coach interface, and is gesturally and visually distinct from operator selection"
+        },
+        {
+          "target": "decision-transparency/examined-subject",
+          "change": "migrate-decision-transparency",
+          "part": "the general lens — at most one client-local examined snake, written to no store, invisible to other clients, surviving neither reload nor reconnect, and never holding, staging, or otherwise touching the game"
         }
       ],
       "scenarios": ["live-game-observation/coach-mode-interface#inspection-is-client-local"],
@@ -7142,7 +7148,13 @@
       "carriedBy": [
         {
           "target": "replay-and-audit/replay-inspection",
-          "change": "migrate-replay-and-audit"
+          "change": "migrate-replay-and-audit",
+          "part": "the replay half — inspection is purely additive over the reconstructed view, leaving the recorded selection shadows rendering exactly as recorded, with no shared state for concurrent viewers of the same game to conflict over"
+        },
+        {
+          "target": "decision-transparency/examined-subject",
+          "change": "migrate-decision-transparency",
+          "part": "the general lens — at most one client-local examined snake, held only in the viewing client, written to no store or recorded slot, and never staging or otherwise acting on the game"
         }
       ],
       "scenarios": [
@@ -7156,7 +7168,13 @@
       "carriedBy": [
         {
           "target": "replay-and-audit/replay-inspection",
-          "change": "migrate-replay-and-audit"
+          "change": "migrate-replay-and-audit",
+          "part": "the replay half — the subject is free of the game's history: any snake on the viewed team at any scrubbed moment, whichever operator (if any) held it then"
+        },
+        {
+          "target": "decision-transparency/examined-subject",
+          "change": "migrate-decision-transparency",
+          "part": "the general rule — examinability is independent of holding, so a snake nobody holds, or one a teammate holds, is examinable within the viewer's read scope"
         }
       ],
       "scenarios": ["replay-and-audit/replay-inspection#inspect-regardless-of-history"],
