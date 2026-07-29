@@ -41,6 +41,7 @@ flowchart TD
   live-game-observation["live-game-observation"]:::open
   operator-control["operator-control"]:::open
   platform-integrations["platform-integrations"]:::open
+  platform-persistence["platform-persistence"]:::open
   replay-and-audit["replay-and-audit"]:::open
   rooms-and-matchmaking["rooms-and-matchmaking"]:::open
   team-management["team-management"]:::open
@@ -73,7 +74,7 @@ flowchart TD
   game-lifecycle -->|24| global-invariants
   game-lifecycle -->|2| identity-and-authorization
   game-lifecycle -->|3| team-server-management
-  global-invariants -->|2| game-engine
+  global-invariants -->|4| game-engine
   identity-and-authorization -->|35| global-invariants
   live-game-observation -->|5| game-engine
   live-game-observation -->|7| global-invariants
@@ -85,6 +86,7 @@ flowchart TD
   platform-integrations -->|3| game-lifecycle
   platform-integrations -->|3| global-invariants
   platform-integrations -->|10| identity-and-authorization
+  platform-persistence -->|4| global-invariants
   replay-and-audit -->|4| decision-transparency
   replay-and-audit -->|5| game-engine
   replay-and-audit -->|3| game-lifecycle
@@ -116,5 +118,5 @@ flowchart TD
   visual-tester -->|4| test-sequences
 
   class game-engine,global-invariants base;
-  linkStyle 0,4,5,7,10,11,14,16,17,19,20,24,25,26,28,29,33,36,38,45,47,49,52,54,59,60,62 stroke-opacity:0.25;
+  linkStyle 0,4,5,7,10,11,14,16,17,19,20,24,25,26,28,29,33,35,37,39,46,48,50,53,55,60,61,63 stroke-opacity:0.25;
 ```
