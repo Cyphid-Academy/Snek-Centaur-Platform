@@ -1518,7 +1518,7 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "team-server-management/forkable-reference-app",
+          "target": "centaur-server-runtime/forkable-reference-app",
           "change": "mint-global-invariants"
         }
       ],
@@ -2389,7 +2389,7 @@
         }
       ],
       "scenarios": [
-        "team-server-management/library-tenant-separation#no-ambient-client",
+        "centaur-server-runtime/library-tenant-separation#no-ambient-client",
         "team-server-management/game-invitations#https-only"
       ],
       "note": "One session per hosted team, each obtained by the server itself over an authenticated transport; the well-known address at which a server publishes its key is code-level, its stability spec'd via forkable-reference-app's enumerated surface."
@@ -5875,13 +5875,13 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "team-server-management/server-administration-api",
+          "target": "centaur-server-runtime/server-administration-api",
           "change": "migrate-team-server-management"
         }
       ],
       "scenarios": [
-        "team-server-management/server-administration-api#adding-an-already-whitelisted-team-succeeds",
-        "team-server-management/library-tenant-separation#no-ambient-client"
+        "centaur-server-runtime/server-administration-api#adding-an-already-whitelisted-team-succeeds",
+        "centaur-server-runtime/library-tenant-separation#no-ambient-client"
       ],
       "note": "The server's only inbound surface requiring credential verification is its administration API, which admits and removes teams from its whitelist idempotently; the sessions it uses for hosting are ones it obtained itself and holds per team."
     },
@@ -7224,13 +7224,13 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "team-server-management/forkable-reference-app",
+          "target": "centaur-server-runtime/forkable-reference-app",
           "change": "migrate-team-server-management"
         }
       ],
       "scenarios": [
-        "team-server-management/forkable-reference-app#full-source-ownership",
-        "team-server-management/forkable-reference-app#enumerated-surface-is-the-contract"
+        "centaur-server-runtime/forkable-reference-app#full-source-ownership",
+        "centaur-server-runtime/forkable-reference-app#enumerated-surface-is-the-contract"
       ],
       "note": "Forkable reference repository, full source ownership; the 'no customisation relaxes invariants / enforcement is external' half is carried by global-invariants (08-REQ-080a's requirement), and the fork-stable compatibility surface is constraint-mined into the same requirement."
     },
@@ -8098,7 +8098,7 @@
           "change": "migrate-team-server-management"
         }
       ],
-      "scenarios": ["team-server-management/server-healthcheck#unauthenticated-and-minimal"],
+      "scenarios": ["centaur-server-runtime/healthcheck-endpoint#unauthenticated-and-minimal"],
       "note": "Option A: healthchecks are unauthenticated, verifying reachability only — keeping the sole-issuer and no-secret-at-nomination rules exception-free. The minimal-payload guidance is elevated to the scenario's violation clause: adding team-scoped state to the response changes the threat model and requires revisiting the decision."
     },
     "03-REVIEW-009": {
