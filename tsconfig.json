@@ -1,11 +1,26 @@
 {
   "files": [],
   "references": [
-    { "path": "packages/engine" },
-    { "path": "packages/stdb" },
-    { "path": "packages/convex-snek-platform" },
-    { "path": "packages/convex-centaur-state" },
-    { "path": "packages/convex-host" },
-    { "path": "packages/centaur-server-lib" }
+    {
+      "path": "packages/engine"
+    },
+    {
+      "path": "packages/game-configuration"
+    },
+    {
+      "path": "packages/stdb"
+    },
+    {
+      "path": "packages/convex-snek-platform"
+    },
+    {
+      "path": "packages/convex-centaur-state"
+    },
+    {
+      "path": "packages/convex-host"
+    },
+    {
+      "path": "packages/centaur-server-lib"
+    }
   ]
 }

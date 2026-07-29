@@ -5,7 +5,14 @@
 // valid state (in-bounds cells, closed domain vocabulary, fixed Wall ring),
 // including states board generation would never produce. Invalid edits are
 // rejected here and the state is unchanged.
-import { CellType, cellIndex, initialClock, isInner, itemsByCell } from "@cyphid/snek-engine";
+import {
+  CellType,
+  cellIndex,
+  currentTurn,
+  initialClock,
+  isInner,
+  itemsByCell,
+} from "@cyphid/snek-engine";
 import type {
   Cell,
   CellIndex,
@@ -162,7 +169,7 @@ export function letterForIndex(i: number): string {
 
 /**
  * Re-letter every snake from its index within its team, in snake order
- * (game-engine/initial-snakes: lettered consecutively from A within the team).
+ * (game-configuration/initial-snakes: lettered consecutively from A within the team).
  * Letters are derived, never hand-set, so this runs after any add/remove/team
  * change (visual-tester/board-editor#letters-auto-assigned).
  */
@@ -199,12 +206,14 @@ export function addSnake(
     );
   }
   // spec: visual-tester/board-editor#head-parity-enforced — a new head must
-  // share the parity of the existing heads this turn, the only head arrangement
-  // any reachable state has (game-engine/starting-placement#shared-parity).
+  // share the parity of the existing heads this turn. The rule rests on
+  // MOVEMENT preserving parity every turn (all heads step one cell together),
+  // not on how the first parity was chosen, so it survives board generation
+  // leaving the engine (spec: game-engine/movement).
   const parity = requiredHeadParity(state);
   if (parity !== null && cellParity(cell) !== parity) {
     return reject(
-      `cell (${cell.x}, ${cell.y}) is the wrong parity; a new head must share (x + y) mod 2 = ${parity} with the existing heads (game-engine/starting-placement)`,
+      `cell (${cell.x}, ${cell.y}) is the wrong parity; a new head must share (x + y) mod 2 = ${parity} with the existing heads`,
     );
   }
   const snake: SnakeState = {
@@ -216,6 +225,9 @@ export function addSnake(
     activeEffects: [],
     lastDirection: null,
     alive: true,
+    // A hand-authored snake joins the state at the turn the state is at.
+    // spec: game-engine/domain-vocabulary
+    turn: currentTurn(state),
   };
   return ok(syncClocks(relabelTeams({ ...state, snakes: [...state.snakes, snake] }), config));
 }
@@ -350,10 +362,11 @@ export function cellParity(cell: Cell): Parity {
 
 // spec: visual-tester/board-editor#head-parity-enforced — the parity all new
 // heads must share this turn, or null when no head yet fixes it. Every snake
-// moves one cell per turn, so `(x + y) mod 2` flips in lockstep for all heads;
-// since all starting heads share one parity (game-engine/starting-placement
-// #shared-parity), every head at every reachable turn shares it. Dead snakes
-// are off the board, so only alive heads fix the parity.
+// moves one cell per turn, so `(x + y) mod 2` flips in lockstep for all heads
+// (spec: game-engine/movement): whatever parity the heads on a board share,
+// they go on sharing it every turn. The editor enforces the shared parity, not
+// where it came from. Dead snakes are off the board, so only alive heads fix
+// the parity.
 export function requiredHeadParity(state: GameState): Parity | null {
   for (const s of state.snakes) {
     const head = s.body[0];

@@ -157,15 +157,30 @@ advanced. Both are expressed over one data structure and one rule set.
   engine may read the current time from now name the declared timings, which is
   the one place the "no ambient clock" rule could otherwise be read as "no time
   at all".
-- **ADDED `game-engine/held-snakes`** — what holding means: the snake does not
-  move and its body stays on the board as an obstacle *including its head and
-  its tail*, it contests nothing, and the turn reaches it exactly as far as what
-  its own movement could not have changed — timers run, health does not.
+- **ADDED `game-engine/held-snakes`** — what holding means: the snake splits
+  into a **historic record**, frozen at the turn it was held from and changed by
+  nothing thereafter, and a **projection** that stands on the board in its
+  place. The projection is an ordinary occupant in every respect the rules read
+  — severable, carrying effects that expire and that team events reach,
+  advancing its turn with the state, dying with its team's clock — and differs
+  in exactly one way: it has **no head**, because the cell a snake vacates only
+  into its own next segment is certain while where the head went is not. It
+  carries maximum health and does not vacate its tail, both because a snake
+  nobody modelled might have reached food.
+- **ADDED `game-engine/historic-advance`** — a hold need not be terminal. The
+  move a projection made *at the turn it was held at* may be supplied later, and
+  the board is then resolved again from before that turn with the fact in place
+  and every resolution since replayed over it, from a rewind log the partial
+  state carries. The revision may change what already happened, and reports
+  which snakes' fates it changed. One move recovers one turn, not all of them.
 - **ADDED `game-engine/hypothetical-resolution-failure`** — imagining moves
   returns a failure rather than a state when the answer would depend on
   information the caller did not supply, or on resolving a snake whose lag the
-  rules cannot express. Conservative refusal, because the caller is a
-  worst-case search.
+  rules cannot express. Four kinds: no disposition for an alive snake, a
+  lagging snake asked to move, a running stage's turn seed missing, and input
+  that could not have arisen. The seed refusal names no snake, because it is
+  about the resolution rather than about one. Conservative refusal, because the
+  caller is a worst-case search.
 
 Two consumer capabilities are dragged along by the calling-convention change,
 and this change carries their deltas because a resolution input is worthless
@@ -225,18 +240,27 @@ No implementation is performed by this change.
 - `packages/engine/`: a per-snake turn and a state-level turn on the game-state
   types; the game's consumed duration alongside the team clocks; direction
   resolution factored out of the turn context so both entry points share stages
-  1–5; held-snake occupancy and participant/present separation inside the
-  context builder; per-snake effect expiry; the standing score on the public
+  1–5; the historic record and headless projection a hold splits a snake into,
+  sharing one declared supertype with an ordinary snake, and the
+  participant/present separation inside the context builder that follows;
+  a third entry point supplying a projection's move at the turn it was held at,
+  over a rewind log the partial state carries; per-snake effect expiry; the
+  standing score on the public
   surface; a hazard-damage event kind; a `maxGameDurationMs` field on the
   gameplay configuration subtree; the timing
   parameters on both entry points, with the clock arithmetic moving from
   `clock.ts` helpers the runtime calls into the commit stage; and a
   `clock_exhaustion` death cause in the existing closed set.
-- **`packages/engine/src/boardgen.ts` and `perlin.ts` do not move.** The
-  requirements move; the 448 production lines and their 475 test lines stay
-  exactly where they are and are extracted to a shared package in a later PR,
-  planned in §12 of `tasks.md`. The code citations they carry retarget to the
-  new identifiers in this change, which is the whole of what the code sees.
+- **`packages/engine/src/boardgen.ts` and `perlin.ts` move with the
+  requirements**, into a new `@cyphid/snek-game-configuration` package — the 448
+  production lines and their 475 test lines, behaviour untouched, citations
+  retargeted to the new identifiers. Planned in §12 of `tasks.md`, and it lands
+  the receiving half of `migrate-game-configuration`'s own §1: requirements
+  moving with no code to receive them would leave the corpus describing a
+  package layout that does not exist. The cost this pays is the engine property
+  suite's source of initial states, which built every one by *calling*
+  generation; it now draws them, deliberately harsher than a generated board,
+  with a branch-coverage baseline over `resolve/` proving reach was not lost.
 - **Migration cost, accepted:** `SnakeState` and the game-state aggregate gain
   fields and both entry points gain parameters, so every runtime that assembles
   or calls them changes — `packages/stdb/`, `packages/centaur-server-lib/`, and
@@ -245,7 +269,9 @@ No implementation is performed by this change.
   schema version increments; the fixture directory holds none yet, so nothing
   is migrated today and a version-1 document is rejected rather than guessed
   at. The regression suite fails loudly on any that appear before then, which
-  is the wanted signal.
+  is the wanted signal. Every ingest path owes such a document a readable
+  rejection naming its version, and the listing marks it before a reader spends
+  a click on it.
 - Dependents unblocked: `live-game-observation/scoreboard-sole-aggregate-authority`,
   `game-runtime/turn-event-record`, `bot-framework/foreign-snake-treatment`,
   `bot-framework/frozen-snake-timestamps`,

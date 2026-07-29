@@ -155,6 +155,12 @@ function onCellClick(cell: Cell): void {
         onStage={(id, dir) => store.stage(id, dir)}
         onUnstage={(id) => store.unstage(id)}
         onSimulate={() => store.simulate()}
+        defaultTurnDurationMs={store.defaultTurnDurationMs}
+        turnDurationOverrideMs={store.turnDurationOverrideMs}
+        burnOverrides={store.burnOverrides}
+        onSetDefaultTurnDuration={(ms) => store.setDefaultTurnDuration(ms)}
+        onSetTurnDurationOverride={(ms) => store.setTurnDurationOverride(ms)}
+        onSetBurnOverride={(team, ms) => store.setBurnOverride(team, ms)}
         selectedSnakeId={store.selectedSnakeId}
         onSelect={(id) => store.selectSnake(id)}
         teamName={(id) => store.teamName(id)}

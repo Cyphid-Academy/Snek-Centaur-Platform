@@ -44,7 +44,8 @@ Full architectural detail is in `legacy-spec-archive/spec/02-platform-architectu
 
 | Path | npm name | What it is | Spec module(s) |
 |------|----------|------------|----------------|
-| `packages/engine/` | `@cyphid/snek-engine` | Shared game engine — domain types, `resolveTurn`, collision detection, move validation. Consumed by all runtimes. | 01, 02 |
+| `packages/engine/` | `@cyphid/snek-engine` | Shared game engine — domain types, the two turn-resolution entry points (`advanceTurn`, `imagineMoves`), collision detection, chess-timer arithmetic, move validation. Handed a board; never builds one. Consumed by all runtimes. | 01, 02 |
+| `packages/game-configuration/` | `@cyphid/snek-game-configuration` | The configuration vocabulary a game is shaped with, and the platform's one board generator. Depends on the engine. | 01, 05 |
 | `packages/stdb/` | `@cyphid/snek-stdb` | SpacetimeDB TypeScript module — reducers, RLS, schema, chess timer. | 04 |
 | `packages/convex-snek-platform/` | `@cyphid/convex-snek-platform` | Convex Component for platform-wide state (users, rooms, games, replays, webhooks). | 03, 05 |
 | `packages/convex-centaur-state/` | `@cyphid/convex-centaur-state` | Convex Component for Centaur subsystem (snake config, drives, action log). | 06 |
@@ -81,16 +82,45 @@ Code cites identifiers **inline**, as above. The rule that identifiers never app
 
 **Testing**: Vitest. Run `pnpm test` across the workspace. Every package should have at least a smoke test confirming it loads.
 
-**Dev server**: `pnpm dev` starts the Centaur Server reference app on port 5000 via Vite. The Replit preview iframe connects to this port.
+**Dev server**: `pnpm dev` starts the Centaur Server reference app on port 5000 via Vite; `pnpm dev:tester` starts the visual tester on 5001. The Replit preview iframe connects to port 5000.
+
+**Apps consume the packages' built `dist/`, not their source.** `packages/*/package.json` export `./dist/index.js`, and `dist/` is gitignored — so a package that has never been built is a *resolve failure* in every consumer, which surfaces as an HTTP 500 from a dev server rather than as a compile error. Every script that needs them (`dev`, `dev:tester`, `test`, `build`, `smoke`, and each app's own `dev`/`test`/`build` via a `pre*` hook) therefore runs `build:packages` first. That script is `tsc -b` over the root project references, so **a new package that typechecks is a new package this builds** — do not replace it with a hand-listed set, which is what silently broke when the second package arrived.
+
+**Changes under `apps/` must be run, not only tested.** `lint`, `typecheck`, `test` and `spec:check` never start a server; `pnpm smoke` is what does, and it is deliberately shallow (boots, renders, answers its own API). Run it before pushing, and for anything a reviewer would click — a new panel, a changed flow, an edited persisted format — open the app as well. A schema change additionally needs a thought the suites cannot have for you: **the documents already on disk were written by the previous version.** `apps/visual-tester/sequences/scratch/` is gitignored, so it survives branch switches and outlives the version that wrote it; every ingest path owes such a document a readable rejection rather than a crash (see `routes.test.ts` and `downgradeToPreviousVersion` in `test-sequences/fixtures.ts`).
+
+## Validation at Two Densities
+
+The battery is ~33s. Running all of it at every commit of a phase-structured branch costs minutes and answers the same question ten times, so validation is split by **what each density is for**.
+
+**Tier 1 — `pnpm check:commit`, ~2–7s.** Is *this commit* green standing alone? That is a narrow question with a narrow answer: a boundary defect is a commit referencing something that only exists in a later one, and every such defect is **static**. So tier 1 is `tsc -b`, `biome` over the commit's own files, `spec:citations`, the touched change's own validation and freshness, the graph when a declaration moved, and `vitest related` over the changed sources. It runs against **the commit**, not the working tree — it refuses a dirty tree rather than answering a question you did not ask, since the divergence between the two is the bug it exists to catch.
+
+Scope comes from the diff: any path under `openspec/changes/<name>/` names a change, so a commit carved at a change boundary scopes itself. `--change <name>` (repeatable) adds to that set for a commit that moves responsibilities between changes without touching both folders; a commit touching no change folder skips the four change-scoped gates entirely.
+
+```
+pnpm check:commit                       # the HEAD commit
+pnpm check:commit origin/main..HEAD     # every commit on the branch
+pnpm check:commit --no-tests            # static gates only, ~1.5s
+```
+
+**Tier 2 — `pnpm verify`, the full battery.** Is the *code* right? Lint, typecheck, both suites, `smoke`, `spec:check`. Run it at the tip before pushing. **CI runs the same named scripts** — its jobs are `pnpm verify` decomposed for wall-clock, never their own inlined steps. That is not a style preference: the `test` job once carried an inline build step local `pnpm test` did not have, and it was red for a week while every local check agreed the branch was fine.
+
+The division follows from what discriminates. On the branch that motivated this, four boundary defects were caught — a `tasks.md` citing a scenario renamed in a later commit (twice, one of which forced a commit reorder), a type field added without its construction sites, and a section renumbering. Every one fell to a static gate costing under 1.5s combined. The two test suites — half the battery's wall clock — caught none of them; they caught *semantic* errors, which is tier 2's job.
+
+So: **tier 1 over every commit, tier 2 once at the tip.** For a ten-commit branch that is ~50s rather than ~6 minutes.
 
 ## Root Scripts
 
 | Script | What it does |
 |--------|-------------|
+| `pnpm check:commit` | **Tier 1** — is each commit green standing alone (see above) |
+| `pnpm verify` | **Tier 2** — the full battery, what CI runs |
 | `pnpm typecheck` | `tsc -b` across the workspace |
 | `pnpm lint` | `biome check .` |
 | `pnpm format` | `biome check --write .` |
-| `pnpm test` | `vitest run` across all packages |
+| `pnpm test` | Builds the packages, then `vitest run` across the workspace |
+| `pnpm smoke` | Boots each app and checks it serves — the only check that runs the app |
+| `pnpm coverage` | Branch coverage over the engine's resolver |
+| `pnpm build:packages` | `tsc -b` over the workspace packages (their gitignored `dist/`) |
 | `pnpm dev` | Starts the Centaur Server reference app |
 | `pnpm build` | Builds all packages |
 

@@ -1,20 +1,19 @@
+import type { Board, Cell } from "@cyphid/snek-engine";
+import { CellType, ItemType, cellIndex, isInner, parityOf } from "@cyphid/snek-engine";
 // Board-generation property tests: configurations drawn from the FULL
 // documented parameter ranges (see arbitraries.ts) with 2-6 teams and
 // arbitrary 32-byte seeds; every successful generation must hold the
-// structural guarantees of game-engine/board-geometry, game-engine/hazards,
-// game-engine/starting-placement, game-engine/initial-snakes, and
-// game-engine/initial-food#food-count-per-territory, and every failure must
-// be the machine-readable shape of game-engine/board-generation-retry
+// structural guarantees of game-engine/board-geometry, game-configuration/hazards,
+// game-configuration/starting-placement, game-configuration/initial-snakes, and
+// game-configuration/initial-food#food-count-per-territory, and every failure must
+// be the machine-readable shape of game-configuration/board-generation-retry
 // (a legal outcome for hostile draws — small boards with many snakes).
 // Generation is also a pure function of (config, seed) —
 // game-engine/determinism.
 import * as fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { gameConfigArb, gameSeedArb, teamsArb } from "./arbitraries.js";
-import { cellIndex, isInner, parityOf } from "./board.js";
 import { generateBoardAndInitialState } from "./boardgen.js";
-import type { Board, Cell } from "./types.js";
-import { CellType, ItemType } from "./types.js";
 
 function innerCellsOf(board: Board): Cell[] {
   const cells: Cell[] = [];
@@ -26,7 +25,7 @@ function innerCellsOf(board: Board): Cell[] {
   return cells;
 }
 
-/** BFS over 4-connected non-hazard inner cells (game-engine/hazards#connectivity-guarantee). */
+/** BFS over 4-connected non-hazard inner cells (game-configuration/hazards#connectivity-guarantee). */
 function nonHazardConnected(board: Board): boolean {
   const open = innerCellsOf(board).filter(
     (c) => board.cells[cellIndex(board, c)] !== CellType.Hazard,
@@ -58,13 +57,13 @@ describe("board generation properties", () => {
   it("every successful generation holds the structural guarantees", () => {
     fc.assert(
       fc.property(gameConfigArb, teamsArb, gameSeedArb, (config, teams, gameSeed) => {
-        const { boardSize, snakesPerTeam, hazardPercentage } = config.orchestration;
+        const { boardSize, snakesPerTeam, hazardPercentage } = config.generation;
         const generated = generateBoardAndInitialState(config, teams, gameSeed);
 
         if ("code" in generated) {
           // Failure is a legal outcome for a hostile draw, but only in the
           // machine-readable shape of
-          // game-engine/board-generation-retry#infeasible-configuration.
+          // game-configuration/board-generation-retry#infeasible-configuration.
           expect([
             "HAZARD_CONNECTIVITY",
             "TERRITORY_PARITY_SHORTAGE",
@@ -75,7 +74,7 @@ describe("board generation properties", () => {
         }
         const { board, snakes, items } = generated;
 
-        // game-engine/board-geometry#construction: full wall ring, playable interior.
+        // game-configuration/generated-board-shape: full wall ring, playable interior.
         expect(board.cells).toHaveLength(boardSize ** 2);
         const inner = innerCellsOf(board);
         expect(inner).toHaveLength((boardSize - 2) ** 2);
@@ -87,12 +86,12 @@ describe("board generation properties", () => {
           }
         }
 
-        // game-engine/hazards: exact count and connectivity.
+        // game-configuration/hazards: exact count and connectivity.
         const hazards = inner.filter((c) => board.cells[cellIndex(board, c)] === CellType.Hazard);
         expect(hazards).toHaveLength(Math.floor((inner.length * hazardPercentage) / 100));
         expect(nonHazardConnected(board)).toBe(true);
 
-        // game-engine/initial-snakes: full teams of 3-stacked, full-health snakes.
+        // game-configuration/initial-snakes: full teams of 3-stacked, full-health snakes.
         expect(snakes).toHaveLength(teams.length * snakesPerTeam);
         for (const snake of snakes) {
           const head = snake.body[0] as Cell;
@@ -104,10 +103,10 @@ describe("board generation properties", () => {
           expect(board.cells[cellIndex(board, head)]).not.toBe(CellType.Hazard);
           expect(isInner(board, head)).toBe(true);
         }
-        // game-engine/starting-placement#shared-parity
+        // game-configuration/starting-placement#shared-parity
         const parities = new Set(snakes.map((s) => parityOf(s.body[0] as Cell)));
         expect(parities.size).toBe(1);
-        // Per-team lettering from 'A' (game-engine/initial-snakes#naming)
+        // Per-team lettering from 'A' (game-configuration/initial-snakes#naming)
         for (const team of teams) {
           const letters = snakes
             .filter((s) => s.centaurTeamId === team.centaurTeamId)
@@ -118,7 +117,7 @@ describe("board generation properties", () => {
           );
         }
 
-        // game-engine/initial-food#food-count-per-territory: N x S items — S per
+        // game-configuration/initial-food#food-count-per-territory: N x S items — S per
         // territory is pinned by the per-territory shortage failure plus the
         // total; here we check the externally observable half.
         expect(items).toHaveLength(teams.length * snakesPerTeam);

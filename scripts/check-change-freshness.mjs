@@ -235,7 +235,21 @@ export function freshnessProblemsFor(root, changeName) {
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const root = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
-  const { problems, notes, checkedBlocks, checkedFiles, skipped } = freshnessProblemsFor(root);
+  // `--change <name>` narrows to one change, for the per-commit gate
+  // (scripts/check-commit.mjs) which knows which change a commit touched.
+  // Repeating it checks each in turn; omitting it checks every open change.
+  const requested = [];
+  for (let i = 2; i < process.argv.length; i++) {
+    if (process.argv[i] === "--change") requested.push(process.argv[++i]);
+  }
+  const results = (requested.length > 0 ? [...new Set(requested)] : [undefined]).map((name) =>
+    freshnessProblemsFor(root, name),
+  );
+  const problems = results.flatMap((r) => r.problems);
+  const notes = results.flatMap((r) => r.notes);
+  const checkedBlocks = results.reduce((n, r) => n + r.checkedBlocks, 0);
+  const checkedFiles = results.reduce((n, r) => n + r.checkedFiles, 0);
+  const skipped = results.reduce((n, r) => n + r.skipped, 0);
   for (const n of notes) console.log(`note: ${n}`);
   if (problems.length > 0) {
     console.error(`Seed-freshness check FAILED (${problems.length}):`);

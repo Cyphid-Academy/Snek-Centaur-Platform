@@ -58,6 +58,7 @@ const deathCauseSchema = z.enum([
   "body_collision",
   "head_to_head",
   "health_depletion",
+  "clock_exhaustion",
 ]);
 const damageSourceSchema = z.enum(["tick", "hazard"]);
 const cancelReasonSchema = z.enum(["collector_disruption", "expiry", "replaced"]);
@@ -115,6 +116,8 @@ const snakeSchema = z.strictObject({
   activeEffects: z.array(potionEffectSchema),
   lastDirection: directionSchema.nullable(),
   alive: z.boolean(),
+  // spec: game-engine/domain-vocabulary — the turn this snake has advanced to.
+  turn: nonNegInt,
 });
 
 const boardSchema = z.strictObject({
@@ -142,6 +145,7 @@ const gameStateSchema = z
     items: z.record(numericKeySchema, itemSchema),
     snakes: z.array(snakeSchema),
     clocks: z.array(clockSchema),
+    consumedDurationMs: z.number().nonnegative(),
   })
   .superRefine((state, ctx) => {
     const size = state.board.boardSize;
@@ -174,6 +178,21 @@ const gameStateSchema = z
         });
       }
       seenSnakeIds.add(snake.snakeId);
+    }
+    // Lockstep: a recorded state is the persisted form, in which every alive
+    // snake's turn equals the state's current turn (the greatest any snake has
+    // reached). A document holding a lagging snake describes a hypothetical,
+    // which is not a thing the mainline ever produced.
+    // spec: game-engine/domain-vocabulary#lockstep-is-the-game-state-invariant
+    const currentTurn = state.snakes.reduce((max, s) => Math.max(max, s.turn), 0);
+    for (const [i, snake] of state.snakes.entries()) {
+      if (snake.alive && snake.turn !== currentTurn) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["snakes", i, "turn"],
+          message: `alive snake ${snake.snakeId} is at turn ${snake.turn}, behind the state's turn ${currentTurn} — a recorded state is always in lockstep`,
+        });
+      }
     }
   });
 
@@ -264,10 +283,16 @@ const eventSchema = z.discriminatedUnion("kind", [
     family: effectFamilySchema,
     reason: cancelReasonSchema,
   }),
+  z.strictObject({
+    kind: z.literal("hazard_damage_taken"),
+    snakeId: snakeIdSchema,
+    damage: z.number(),
+    cell: cellSchema,
+  }),
 ]);
 
 const configSchema = z.strictObject({
-  orchestration: z.strictObject({
+  generation: z.strictObject({
     boardSize: z.number().int().positive(),
     snakesPerTeam: z.number().int().positive(),
     hazardPercentage: z.number(),
@@ -276,6 +301,7 @@ const configSchema = z.strictObject({
   runtime: z.strictObject({
     maxHealth: z.number().int().positive(),
     maxTurns: nonNegInt,
+    maxGameDurationMs: z.number().nonnegative(),
     hazardDamage: z.number(),
     foodSpawnRate: z.number(),
     invulnPotionSpawnRate: z.number(),
@@ -289,9 +315,16 @@ const configSchema = z.strictObject({
   }),
 });
 
+// spec: test-sequences/sequence-format#timings-are-inputs-not-metadata
+const timingsSchema = z.strictObject({
+  durationMs: z.number().nonnegative(),
+  burnMs: z.record(z.string().min(1), z.number().nonnegative()),
+});
+
 const turnSchema = z.strictObject({
   turnNumber: nonNegInt,
   stagedMoves: z.record(numericKeySchema, stagedMoveSchema),
+  timings: timingsSchema,
   expected: z.strictObject({
     nextState: gameStateSchema,
     events: z.array(eventSchema),
@@ -341,6 +374,29 @@ function checkCrossTurnIntegrity(doc: z.infer<typeof docSchema>): ValidationErro
         });
       }
     }
+
+    // spec: test-sequences/validation#a-turn-declares-every-teams-burn — a
+    // resolution needs a burn for each team, so a document missing one would
+    // replay only by inventing a value: the divergence the replay-check
+    // exists to detect rather than to introduce.
+    const teams = new Set(preState.clocks.map((c) => c.centaurTeamId));
+    for (const team of Object.keys(turn.timings.burnMs)) {
+      if (!teams.has(team)) {
+        errors.push({
+          path: `turns[${i}].timings.burnMs.${team}`,
+          message: `turn ${turn.turnNumber} declares a burn for team ${team}, which holds no clock in that turn's pre-state`,
+        });
+      }
+    }
+    for (const team of teams) {
+      if (!(team in turn.timings.burnMs)) {
+        errors.push({
+          path: `turns[${i}].timings.burnMs`,
+          message: `turn ${turn.turnNumber} declares no burn for team ${team}, which is present in that turn's pre-state`,
+        });
+      }
+    }
+
     preState = turn.expected.nextState;
   }
   return errors;

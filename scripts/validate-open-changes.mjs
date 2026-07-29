@@ -28,12 +28,29 @@ import { promisify } from "node:util";
 const run = promisify(execFile);
 const root = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
 const changesDir = join(root, "openspec", "changes");
-const open = existsSync(changesDir)
+const all = existsSync(changesDir)
   ? readdirSync(changesDir, { withFileTypes: true })
       .filter((e) => e.isDirectory() && e.name !== "archive" && !e.name.startsWith("."))
       .map((e) => e.name)
       .sort()
   : [];
+
+// `--change <name>` (repeatable) narrows to the named changes. The per-commit
+// gate (scripts/check-commit.mjs) derives that set from a commit's own diff:
+// this work is ~160ms per change, so validating all of them at every commit
+// spends most of its time on changes the commit did not touch. Unnamed, or
+// with no `--change` at all, the full open set runs — which is what
+// `pnpm spec:check` wants.
+const requested = [];
+for (let i = 2; i < process.argv.length; i++) {
+  if (process.argv[i] === "--change") requested.push(process.argv[++i]);
+}
+const unknown = requested.filter((n) => !all.includes(n));
+if (unknown.length > 0) {
+  console.error(`Unknown open change(s): ${unknown.join(", ")}`);
+  process.exit(1);
+}
+const open = requested.length > 0 ? [...new Set(requested)].sort() : all;
 
 if (open.length === 0) {
   console.log("Open-change validation passed (no open changes).");

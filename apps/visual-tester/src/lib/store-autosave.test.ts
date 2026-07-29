@@ -7,7 +7,7 @@ import { CellType } from "@cyphid/snek-engine";
 import { describe, expect, it } from "vitest";
 import type { SequenceClient, SequenceListEntry, SequenceTier } from "./sequenceClient.js";
 import { TesterStore } from "./store.svelte.js";
-import type { TestSequenceDoc } from "./test-sequences/codec.js";
+import { SCHEMA_VERSION, type TestSequenceDoc } from "./test-sequences/codec.js";
 
 interface Entry {
   tier: SequenceTier;
@@ -22,7 +22,14 @@ class FakeClient implements SequenceClient {
 
   #toListEntry(id: string, e: Entry): SequenceListEntry {
     const t = String(e.seq).padStart(6, "0");
-    return { id, name: e.name, tier: e.tier, createdAt: t, updatedAt: t };
+    return {
+      id,
+      name: e.name,
+      tier: e.tier,
+      createdAt: t,
+      updatedAt: t,
+      schemaVersion: SCHEMA_VERSION,
+    };
   }
 
   async list(): Promise<SequenceListEntry[]> {

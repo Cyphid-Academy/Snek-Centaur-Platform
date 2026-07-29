@@ -1,7 +1,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: game-engine/domain-vocabulary
-The game SHALL use a closed domain vocabulary: four directions (`Up`/`Right`/`Down`/`Left`), four cell types (`Normal`/`Wall`/`Hazard`/`Fertile`), three item types (`Food`/`InvulnPotion`/`InvisPotion`), potion effects as `(family, state, expiryTurn)` triples over two families (`invulnerability`/`invisibility`) and two states (`buff`/`debuff`), present items as (identity, type, cell), and the snake state shape: `snakeId`, `letter`, `centaurTeamId`, `body` (ordered cells, head first), `health`, `activeEffects`, `lastDirection`, `alive`, `turn` (the turn this snake has advanced to). Game state SHALL carry a current turn, which SHALL be the greatest turn any snake on it has reached. A **partial game state** permits a snake's turn to lag the state's; a **game state** is the case where every alive snake's turn equals the state's, and is the only form a runtime persists — so a game state is a partial game state, and anything accepting the partial form accepts both.
+The game SHALL use a closed domain vocabulary: four directions (`Up`/`Right`/`Down`/`Left`), four cell types (`Normal`/`Wall`/`Hazard`/`Fertile`), three item types (`Food`/`InvulnPotion`/`InvisPotion`), potion effects as `(family, state, expiryTurn)` triples over two families (`invulnerability`/`invisibility`) and two states (`buff`/`debuff`), present items as (identity, type, cell), and the shape every board occupant shares: `snakeId`, `letter`, `centaurTeamId`, `health`, `activeEffects`, `alive`, `turn` (the turn it has advanced to). A **snake** adds `body` (ordered cells, head first) and `lastDirection`; a **projection** adds its cells and the historic record it projects, and adds no head. Game state SHALL carry a current turn, which SHALL be the greatest turn any snake on it has reached, and a set of **projections** — snakes held through an earlier resolution, each standing on the board headless beside the historic record it projects. A **partial game state** is one carrying a live projection; a **game state** is the case where none stands, so every alive snake is on the board whole and at the state's own turn, and it is the only form a runtime persists — so a game state is a partial game state, and anything accepting the partial form accepts both.
 
 #### Scenario: #closed-sets
 - **WHEN** any rule, event, or state refers to a direction, cell type, item type, or potion effect
@@ -12,12 +12,12 @@ The game SHALL use a closed domain vocabulary: four directions (`Up`/`Right`/`Do
 - **THEN** it is computed on demand from `activeEffects`; neither is a stored field of the snake state
 
 #### Scenario: #turns-at-two-grains
-- **WHEN** a consumer asks how far behind the state a snake is
-- **THEN** it subtracts the snake's turn from the state's — the turn is absolute on both, never a staleness counter, because staleness is a fact about a comparison whose other operand changes as a search descends
+- **WHEN** a consumer asks how far behind the state a projection's record is
+- **THEN** it subtracts the record's turn from the state's — the turn is absolute on both, never a staleness counter, because staleness is a fact about a comparison whose other operand changes as a search descends. That difference is also the count of the projection's leading segments no cell can name
 
 #### Scenario: #lockstep-is-the-game-state-invariant
 - **WHEN** a partial game state is narrowed to a game state
-- **THEN** it succeeds only if every alive snake's turn equals the state's, and the narrowing is the sole way to obtain the persisted form — so a caller that left a snake behind cannot produce it
+- **THEN** it succeeds only if nothing live is still projected, and the narrowing is the sole way to obtain the persisted form — so a caller that left a snake unmodelled cannot produce it
 
 ### Requirement: game-engine/board-geometry
 The engine SHALL take the board as fully specified data: a square grid of `boardSize × boardSize` cells, each carrying its own terrain, held as one flat row-major array in which the cell at `(x, y)` is the entry at index `y × boardSize + x`. The grid's own dimensions SHALL be the whole statement of the board's size, and the snakes placed on it the whole statement of how many each team fields — the engine reads no size, count, density, or clustering from configuration, and no rule of a turn consults how the board came to look as it does. The **playable area** is the `(boardSize − 2)²` inner cells, those off the outermost 1-cell ring, and is the area within which items may spawn. A cell beyond the grid's edge SHALL be treated exactly as a `Wall` cell is. Terrain SHALL be fixed for the whole game: no rule changes any cell's type, so hazard and fertile designations made before the first turn are permanent, and the board handed to one resolution is the board every later resolution sees.
@@ -276,42 +276,81 @@ The engine SHALL depend only on portable ECMAScript facilities and SHALL take al
 ## ADDED Requirements
 
 ### Requirement: game-engine/held-snakes
-A snake **held** for a resolution SHALL not move: its body is unchanged, its turn does not advance, and no movement event is emitted for it. A hold SHALL suspend that snake's own turn and nothing more. Its body SHALL remain on the board as an obstacle including its head, since a head standing still is an occupied cell like any other segment. It SHALL contest nothing — taking no part in head-to-head precedence, entering no cell, consuming no item. What a turn does to it SHALL divide on one line: whatever is determined regardless of how the snake would have moved SHALL apply, and whatever its own movement could have changed SHALL NOT. Its potion effects therefore expire on schedule against the state's current turn, because that timer runs on turns rather than on the snake; its health takes no tick and is not resolved, because a snake that moved could have eaten. What other snakes' actions do to it SHALL apply unchanged.
+A snake **held** for a resolution SHALL split into two representations, and that split SHALL be the whole of what holding means.
 
-#### Scenario: #a-held-body-is-an-obstacle-including-its-head
-- **WHEN** a moving snake enters a cell occupied by a held snake's head
-- **THEN** it dies by body collision — a stationary head is an occupied cell, not a contested one
+The snake itself SHALL **crystallize** into its **historic record**: it leaves the board frozen at the turn it was held from, and nothing SHALL ever change it again — not a sever, not an expiry, not its team's collection. It is a record rather than a participant, carried on the state so a reader may take the last known position from it, and no turn's calculation SHALL resolve against it.
 
-#### Scenario: #a-held-snake-contests-nothing
-- **WHEN** a moving snake's head enters any cell a held snake occupies
-- **THEN** head-to-head precedence never applies, so invulnerability and length decide nothing here: the mover collided with something that never moved
+Its **projection** SHALL be what stands on the board from then on: the same snake one turn later, minus what the hold declines to model. It SHALL carry the shape every board occupant shares, so that the rules which do not distinguish the two kinds reach it through the same statements that reach a snake. It SHALL be an ordinary board occupant in every respect the rules read — severable on the ordinary terms, carrying potion effects that expire on schedule and that its team's cancellations and rebuilds reach, advancing its turn with the state, and dying with the rest of its team when that team is left with no remaining time. It SHALL differ from a snake in exactly one way: **it has no head.**
 
-#### Scenario: #a-hold-suspends-the-snakes-own-turn
-- **WHEN** a snake is held through a resolution
-- **THEN** it takes no tick damage and its health is not resolved — holding a snake at one health does not starve it, because a snake allowed to move might have reached food, and a death the hold invented would clear an obstacle the real game keeps
+That difference SHALL follow from what a hold declines to say. A snake vacates the cell its head occupies only by putting its own next segment there, so that cell is the one whose occupant next turn is certain without knowing the snake's choice, and the projection stands in it. Where the head itself advanced to is precisely the thing nobody chose, so it SHALL be in no plane the resolution can reach. A projection held from turn T and read at turn T+N therefore has N leading segments at cells no record names, derived from the two turns rather than stored.
 
-#### Scenario: #timers-do-not-pause-for-a-hold
-- **WHEN** a held snake's potion effect is due to expire at the turn being resolved
-- **THEN** it expires: the timer is a fact about the turn, not about the snake, so nothing the snake might have done could have changed it and withholding the expiry would model an uncertainty that does not exist
+A projection SHALL carry its team's maximum health, whatever the snake's health was when it was held: a snake nobody modelled might have reached food on any turn since, so a lower figure would assert a starvation the hold has no grounds to claim. For the same reason its final segment SHALL NOT be vacated, since a snake that reaches food keeps it. Both are deliberately conservative and rest on the same unmodelled fact.
+
+A sever SHALL truncate a projection like any body, and one reaching its first segment SHALL leave it standing in nothing while alive: it keeps only the head that had already advanced beyond every cell it could name. A projection SHALL NOT be given a direction and SHALL NOT be named as held — it is held by what it is — so a resolution can neither advance one nor narrow a state carrying a live one.
+
+#### Scenario: #a-projection-has-no-head
+- **WHEN** a moving snake enters the first cell a projection stands in — the cell its historic record names as the head
+- **THEN** the outcome is the ordinary body-collision one, severed if the mover's invulnerability level is higher and otherwise fatal to the mover, because the projection will vacate that cell only into its own next segment: a body stands there whatever the snake chose. Head-to-head precedence never applies anywhere on a projection, since it has no head to contest and entered no cell
+
+#### Scenario: #a-severed-projection-locates-nothing
+- **WHEN** a sever reaches a projection's first segment, taking every cell it stands in
+- **THEN** it survives standing in nothing: it holds only the head no cell could name, so it obstructs nothing and no rule finds it on the board, while its historic record stays readable as the last position anyone modelled
+
+#### Scenario: #a-projection-carries-its-own-effects
+- **WHEN** a potion effect on a projection is due to expire, or its team's collection cancels or rebuilds that family
+- **THEN** the projection's effects change and its historic record's do not. The timer is a fact about the turn rather than about the snake, so nothing it might have done could have moved it — and the record cannot express the change at all, because nothing ever changes a record
+
+#### Scenario: #a-projection-cannot-be-starved-by-a-hold
+- **WHEN** a snake at one health is held
+- **THEN** its projection carries maximum health rather than that figure, takes no tick, and has no health resolved — a snake allowed to move might have reached food, so a countdown nobody watched would invent a death that clears an obstacle the real game keeps
+
+#### Scenario: #a-projected-tail-is-impassable
+- **WHEN** a moving snake enters the last cell a projection stands in — a legal follow against a snake taking the turn, whose tail vacates as it moves
+- **THEN** the cell is occupied and the ordinary body-collision outcome follows. A snake that reaches food keeps its final segment, and a resolution that will not model a snake must not assume the outcome that happens to be convenient
 
 #### Scenario: #a-held-snakes-team-still-spends-its-time
 - **WHEN** every snake of a team is held through a resolution that advances the turn
-- **THEN** the burn declared for that team is spent from its clock all the same, and if that leaves the team with no remaining time its held snakes die with the rest — the time a turn cost is a fact about the turn on the same terms as an expiry, and a hold that stopped a team's clock would hand a search a free reprieve from the deaths it is meant to see coming
+- **THEN** the burn declared for that team is spent from its clock all the same, and if that leaves the team with no remaining time its projections die with the rest — the time a turn cost is a fact about the turn on the same terms as an expiry, and a hold that stopped a team's clock would hand a search a free reprieve from the deaths it is meant to see coming
 
 #### Scenario: #a-hold-does-not-shield-the-snake
 - **WHEN** a teammate collects a potion whose effects reach a held snake
-- **THEN** the held snake receives them, and the collection event's affected-teammate list is what it would be had nobody been held — a hold suspends the snake's turn, not the world's effect on it
+- **THEN** its projection receives them, and the collection event's affected-teammate list is what it would be had nobody been held — a hold declines to model a snake's own choice, not the world's effect on it
 
 #### Scenario: #holding-is-an-input-not-a-correction
-- **WHEN** a snake is held and another snake moves through cells the held snake would have vacated had it advanced
-- **THEN** the outcome follows from where the held body actually is. Resolving with the snake advanced and restoring its body afterwards would record events for a board that never existed
+- **WHEN** a snake is held and another moves through cells it would have vacated had it advanced
+- **THEN** the outcome follows from where the projection actually stands. Resolving with the snake advanced and restoring its body afterwards would record events for a board that never existed
 
-#### Scenario: #a-held-tail-is-impassable
-- **WHEN** a moving snake enters the cell a held snake's tail occupies — a legal follow in lockstep, where the tail vacates as it moves
-- **THEN** it dies by body collision. Even had the held snake been simulated its tail might not have vacated, because a snake that reaches food keeps its final segment, and a resolution that will not model a snake must not assume the outcome that happens to be convenient
+#### Scenario: #a-hold-that-advances-nothing-projects-nothing
+- **WHEN** every alive snake is held, so the state's current turn does not advance
+- **THEN** no projection is created and nothing crystallizes: a projection is a snake read one turn on, and with no turn taken there is no later turn to read it at
+
+### Requirement: game-engine/historic-advance
+A projection's move at the turn it was held MAY become known after the fact, and the engine SHALL offer a way to supply it. Doing so SHALL NOT advance the snake from where the board now stands: the move is a fact about the **past**, so the board SHALL be resolved again from before that turn with the fact in place, and every resolution applied since replayed over it.
+
+A partial game state SHALL therefore carry what its resolutions were **asked** — each one's directions, the snakes it held, its declared timings and its turn seed — together with the board as it stood before the oldest still-standing projection was held. A resolution is a function of its declared inputs alone, so replaying those inputs against a revised board is the same computation over a different premise rather than an approximation of one. This record SHALL exist exactly while something is projected, so a state a runtime persists never carries one.
+
+Supplying a move SHALL leave the snake **one turn less historic** rather than caught up: it takes the turn it was held at, and is held again at every turn after, because the record says nothing about those either. Catching a snake up N turns is N supplied moves.
+
+A revision SHALL be permitted to change what already happened. The newly located head may enter a cell another snake was allowed to pass through, so snakes that lived may die and a game in progress may have ended. The engine SHALL report which snakes' fates the revision changed rather than leaving a caller to discover it, and SHALL adapt the replayed record to whatever board the revision produces — dropping a direction for a snake that is no longer there, and holding a snake the record says nothing about, since a hold is exactly the answer for a move nobody modelled.
+
+#### Scenario: #a-learned-move-settles-the-turn-it-was-made-at
+- **WHEN** a projection held at turn T is given the move it made at T, on a board that has since reached turn T+N
+- **THEN** the board is resolved again from before T with that move in place, the result stands at turn T+N as before, and the snake is projected from T+1 — one turn of history recovered, not N
+
+#### Scenario: #a-revision-can-rewrite-what-already-happened
+- **WHEN** the newly located head occupies a cell another snake was allowed to move through while the snake was projected
+- **THEN** the revision resolves that collision as the rules always would, so a snake that lived may now be dead, and the change of fate is reported with the result. A search keeps this rare by holding only snakes unlikely to bear on the ground it cares about; rare is not never, and a caller that ignores the report is reading a board it did not compute
+
+#### Scenario: #a-revision-adapts-the-record-it-replays
+- **WHEN** the revised board no longer matches the record — a directed snake has died, or one the record is silent about has survived
+- **THEN** the replay drops the direction in the first case and holds the snake in the second, rather than refusing: the record is what a resolution was asked, and a snake it never mentioned is a snake nobody modelled
+
+#### Scenario: #only-a-projection-has-a-move-to-learn
+- **WHEN** a move is supplied for a snake that is not projected
+- **THEN** it is refused: a snake on the board has no unknown past, and its next move belongs to the resolution of the next turn
 
 ### Requirement: game-engine/hypothetical-resolution-failure
-Imagining moves SHALL yield either a partial game state or a failure, never a partial answer alongside one. It SHALL fail rather than resolve when an alive snake is given neither a direction nor a hold, when a snake whose turn lags the state's is asked to move, or when the input could not have arisen — a direction supplied for a held snake, a held snake that is not alive, a declared duration or burn that is not a non-negative length of time, or a state that is not structurally valid. A failure SHALL name the snake and the kind of refusal.
+Imagining moves SHALL yield either a partial game state or a failure, never a partial answer alongside one. It SHALL fail rather than resolve on any of four kinds of refusal: when an alive snake is given neither a direction nor a hold; when a snake whose turn lags the state's is asked to move; when a stage that will run requires a turn seed the caller did not supply; or when the input could not have arisen — a direction supplied for a held snake, a held snake that is not alive, a declared duration or burn that is not a non-negative length of time, or a state that is not structurally valid. A failure SHALL name its kind, and the snake it is about where it is about one — the seed refusal is about the resolution rather than any snake.
 
 #### Scenario: #every-snake-needs-a-disposition
 - **WHEN** an alive snake is neither given a direction nor held
@@ -320,6 +359,10 @@ Imagining moves SHALL yield either a partial game state or a failure, never a pa
 #### Scenario: #only-holds-may-lag
 - **WHEN** a snake whose turn is behind the state's is asked to move
 - **THEN** the resolution fails — advancing a snake held through earlier turns would need interactions that already committed to be re-resolved, and refusing is the conservative answer for a caller searching for a worst case
+
+#### Scenario: #a-running-stage-needs-its-seed
+- **WHEN** a resolution leaves nothing behind, so item spawning runs, and no turn seed was supplied
+- **THEN** the resolution fails rather than spawning from some substitute entropy. This is the same refusal as a missing direction one step further on — an answer that would depend on information the caller did not supply — and it is a refusal about the resolution rather than about any snake, so it names no snake. A resolution that leaves a snake behind runs no seeded stage and needs no seed
 
 #### Scenario: #impossible-input-is-refused
 - **WHEN** the input contradicts itself or describes a state the game could not produce

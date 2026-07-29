@@ -1,6 +1,13 @@
 // spec: visual-tester/invalid-state-surfacing — detection of discontinuous
 // snake bodies, the invalid state the board must expose rather than hide.
-import type { Cell, CentaurTeamId, GameState, SnakeId, SnakeState } from "@cyphid/snek-engine";
+import type {
+  Cell,
+  CentaurTeamId,
+  GameState,
+  SnakeId,
+  SnakeState,
+  TurnNumber,
+} from "@cyphid/snek-engine";
 import { itemsByCell } from "@cyphid/snek-engine";
 import { describe, expect, it } from "vitest";
 import { describeContiguityIssue, snakeContiguityIssues } from "./boardIssues";
@@ -16,12 +23,19 @@ function snake(letter: string, body: Cell[], id: number): SnakeState {
     activeEffects: [],
     lastDirection: null,
     alive: true,
+    turn: 0 as TurnNumber,
   };
 }
 
 function stateWith(snakes: SnakeState[]): GameState {
   const board = { boardSize: 11, cells: [] } as unknown as GameState["board"];
-  return { board, snakes, items: itemsByCell(board, []), clocks: [] };
+  return {
+    board,
+    snakes,
+    items: itemsByCell(board, []),
+    clocks: [],
+    consumedDurationMs: 0,
+  } as unknown as GameState;
 }
 
 describe("firstDiscontinuity", () => {

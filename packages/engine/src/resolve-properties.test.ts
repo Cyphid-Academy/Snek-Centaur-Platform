@@ -16,18 +16,23 @@
 // resolve-rules-properties.test.ts via constructive generators.
 import * as fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { gameConfigArb, gameSeedArb, teamsArb } from "./arbitraries.js";
+import type { StateDraw } from "./arbitraries.js";
+import {
+  gameSeedArb,
+  initialStateFrom,
+  runtimeConfigArb,
+  stateDrawArb,
+  timingsFor,
+} from "./arbitraries.js";
 import { cellIndex } from "./board.js";
-import type { TeamRegistration } from "./boardgen.js";
-import { generateBoardAndInitialState } from "./boardgen.js";
 import { EFFECT_DURATION_TURNS } from "./effects.js";
-import { itemIdOf, itemsByCell } from "./items.js";
-import { resolveTurn, resolveTurnWithRules } from "./resolve/index.js";
+import { itemIdOf } from "./items.js";
+import { advanceTurn, advanceTurnWithRules } from "./resolve/index.js";
 import type { InteractionRule } from "./resolve/rules.js";
 import { INTERACTION_RULES } from "./resolve/rules.js";
 import { rngFromSeed, subSeed } from "./rng.js";
 import { seed } from "./testkit.js";
-import type { GameConfig, GameState, TurnEvent, TurnNumber } from "./types.js";
+import type { GameRuntimeConfig, GameState, TurnEvent } from "./types.js";
 
 // Harness bound, NOT a spec range: maxTurns is generated from its full
 // documented range, but each fuzzed game simulates at most this many turns
@@ -45,28 +50,30 @@ const EVENT_CLASS_ORDER: ReadonlyArray<TurnEvent["kind"]> = [
   "potion_spawned",
   "effect_applied",
   "effect_cancelled",
+  "hazard_damage_taken",
 ];
 
 const fuzzArb = fc.record({
-  config: gameConfigArb,
-  teams: teamsArb,
+  config: runtimeConfigArb,
+  state: stateDrawArb,
   gameSeed: gameSeedArb,
+  // The turn's declared timings, drawn rather than fixed: a burn that outruns
+  // a small clock is how a fuzzed game reaches clock exhaustion, and a
+  // duration that outruns maxGameDurationMs is how it reaches the timed
+  // ending. spec: game-engine/chess-timer, game-engine/game-end-conditions
+  durationMs: fc.integer({ min: 0, max: 5000 }),
+  burnMs: fc.integer({ min: 0, max: 5000 }),
 });
 interface FuzzDraw {
-  config: GameConfig;
-  teams: TeamRegistration[];
+  config: GameRuntimeConfig;
+  state: StateDraw;
   gameSeed: Uint8Array;
+  durationMs: number;
+  burnMs: number;
 }
 
 function initialState(draw: FuzzDraw): GameState | null {
-  const generated = generateBoardAndInitialState(draw.config, draw.teams, draw.gameSeed);
-  if ("code" in generated) return null;
-  return {
-    board: generated.board,
-    snakes: generated.snakes,
-    items: itemsByCell(generated.board, generated.items),
-    clocks: [],
-  };
+  return initialStateFrom(draw.state, draw.config);
 }
 
 function shuffledRules(seedN: number): InteractionRule[] {
@@ -75,8 +82,8 @@ function shuffledRules(seedN: number): InteractionRule[] {
   return rules;
 }
 
-function turnsToSimulate(config: GameConfig): number {
-  const { maxTurns } = config.runtime;
+function turnsToSimulate(config: GameRuntimeConfig): number {
+  const { maxTurns } = config;
   return maxTurns === 0 ? SIMULATED_TURN_BUDGET : Math.min(maxTurns, SIMULATED_TURN_BUDGET);
 }
 
@@ -93,17 +100,11 @@ function playFuzzGame(
   const budget = turnsToSimulate(draw.config);
   for (let t = 0; t < budget; t++) {
     const turnSeed = subSeed(draw.gameSeed, `turn:${t}`);
+    const timings = timingsFor(state, draw.durationMs, draw.burnMs);
     const result =
       rules === null
-        ? resolveTurn(state, new Map(), t as TurnNumber, turnSeed, draw.config.runtime)
-        : resolveTurnWithRules(
-            rules,
-            state,
-            new Map(),
-            t as TurnNumber,
-            turnSeed,
-            draw.config.runtime,
-          );
+        ? advanceTurn(state, new Map(), turnSeed, timings, draw.config)
+        : advanceTurnWithRules(rules, state, new Map(), turnSeed, timings, draw.config);
     state = result.nextState;
     events.push([...result.events]);
     check?.(state, result.events, t);
@@ -145,7 +146,7 @@ describe("multi-turn structural invariants", () => {
             // Alive snakes: non-empty body, health in (0, maxHealth]
             expect(snake.body.length).toBeGreaterThanOrEqual(1);
             expect(snake.health).toBeGreaterThan(0);
-            expect(snake.health).toBeLessThanOrEqual(draw.config.runtime.maxHealth);
+            expect(snake.health).toBeLessThanOrEqual(draw.config.maxHealth);
             // Alive heads pairwise distinct (game-engine/head-to-head-precedence#unique-entrancy)
             const head = snake.body[0];
             const key = `${head?.x},${head?.y}`;
@@ -206,20 +207,9 @@ describe("multi-turn structural invariants", () => {
         const budget = Math.min(turnsToSimulate(draw.config), 10);
         for (let t = 0; t < budget && state !== null; t++) {
           const turnSeed = subSeed(draw.gameSeed, `turn:${t}`);
-          const once = resolveTurn(
-            state,
-            new Map(),
-            t as TurnNumber,
-            turnSeed,
-            draw.config.runtime,
-          );
-          const twice = resolveTurn(
-            state,
-            new Map(),
-            t as TurnNumber,
-            turnSeed,
-            draw.config.runtime,
-          );
+          const timings = timingsFor(state, draw.durationMs, draw.burnMs);
+          const once = advanceTurn(state, new Map(), turnSeed, timings, draw.config);
+          const twice = advanceTurn(state, new Map(), turnSeed, timings, draw.config);
           expect(twice.events).toEqual(once.events);
           expect(twice.nextState).toEqual(once.nextState);
           state = once.outcome.kind === "in_progress" ? once.nextState : null;

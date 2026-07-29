@@ -8,7 +8,7 @@
 // design: add-visual-tester (D5) — halt-at-first-divergence is spec-level
 // behaviour: one run surfaces one actionable divergence with zero noise.
 
-import { type GameState, type TurnNumber, resolveTurn } from "@cyphid/snek-engine";
+import { type GameState, advanceTurn } from "@cyphid/snek-engine";
 import { type TestSequence, type TurnOutputJson, encodeTurnOutput } from "./codec.js";
 import { deriveTurnSeed } from "./seed.js";
 
@@ -101,11 +101,15 @@ export function runReplayCheck(seq: TestSequence): ReplayResult {
 
   for (const [i, turn] of seq.turns.entries()) {
     const turnSeed = deriveTurnSeed(seq.gameSeed, turn.turnNumber);
-    const resolution = resolveTurn(
+    // spec: test-sequences/replay-check#recorded-time-is-replayed-not-remeasured
+    // — the turn resolves from the timings the RECORDING holds, however long
+    // the replay itself takes, so a slower machine computes the same clocks,
+    // the same consumed duration, and the same ending.
+    const resolution = advanceTurn(
       preState,
       turn.stagedMoves,
-      turn.turnNumber as TurnNumber,
       turnSeed,
+      turn.timings,
       seq.config.runtime,
     );
 

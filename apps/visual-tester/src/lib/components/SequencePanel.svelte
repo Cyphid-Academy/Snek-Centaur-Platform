@@ -7,7 +7,8 @@
 // spec: visual-tester/auto-persist, visual-tester/sequence-management
 import { onMount } from "svelte";
 import type { SequenceFilter, TesterStore } from "../store.svelte.js";
-import type { SequenceListEntry } from "../sequenceClient.js";
+import { type SequenceListEntry, isReadable } from "../sequenceClient.js";
+import { SUPPORTED_SCHEMA_VERSIONS } from "../test-sequences/schema.js";
 
 interface Props {
   store: TesterStore;
@@ -199,15 +200,26 @@ async function importPaste(): Promise<void> {
   {:else}
     <ul class="list">
       {#each store.filteredSequences as entry (entry.id)}
-        <li class:selected={entry.id === store.selectedId}>
+        {@const readable = isReadable(entry)}
+        <li class:selected={entry.id === store.selectedId} class:unreadable={!readable}>
           <span class="name" title={`updated ${entry.updatedAt}`}>
             <span class={`badge ${entry.tier}`}>{entry.tier}</span>
+            {#if !readable}
+              <!-- The version is the whole of what a reader needs to decide
+                   what to do with the document. spec: visual-tester/sequence-management#unreadable-sequences-are-listed-not-hidden -->
+              <span
+                class="badge stale"
+                title={`Written against schema v${entry.schemaVersion ?? "?"}; this build reads v${SUPPORTED_SCHEMA_VERSIONS.join(", v")}. Copy the JSON to upgrade it elsewhere.`}
+              >v{entry.schemaVersion ?? "?"} — unreadable</span>
+            {/if}
             {entry.name}
           </span>
           <span class="rowactions">
-            <button type="button" onclick={() => void load(entry)}>Load</button>
+            <!-- Loading and running would fail on a document this build cannot
+                 decode; copying is how it leaves for an upgrade, so it stays. -->
+            <button type="button" disabled={!readable} onclick={() => void load(entry)}>Load</button>
             <button type="button" onclick={() => void copy(entry)}>Copy JSON</button>
-            <button type="button" class="run" onclick={() => void run(entry)}>Run</button>
+            <button type="button" class="run" disabled={!readable} onclick={() => void run(entry)}>Run</button>
           </span>
         </li>
       {/each}
@@ -266,6 +278,9 @@ async function importPaste(): Promise<void> {
   .list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.3rem; max-height: 14rem; overflow: auto; }
   .list li { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.1rem 0.25rem; border-radius: 4px; }
   .list li.selected { background: #0c2a3f; outline: 1px solid #38bdf8; }
+  .list li.unreadable .name { opacity: 0.65; }
+  .badge.stale { background: #7c2d12; color: #fed7aa; }
+  .rowactions button:disabled { opacity: 0.4; cursor: not-allowed; }
   .name { color: #e2e8f0; font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .badge { display: inline-block; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.03em; padding: 0.05rem 0.3rem; border-radius: 3px; vertical-align: middle; margin-right: 0.3rem; }
   .badge.fixture { background: #14532d; color: #86efac; }

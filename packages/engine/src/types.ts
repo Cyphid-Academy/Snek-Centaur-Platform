@@ -78,20 +78,91 @@ export interface PotionEffect {
 // spec: game-engine/domain-vocabulary. `invulnerabilityLevel` and `visible` are NOT stored
 // fields — they are derived from `activeEffects` per game-engine/collisions-and-severing/023 via
 // `invulnerabilityLevel(snake)` and `isVisible(snake)` in effects.ts.
-// SnakeState carries no intra-turn bookkeeping: growth is a duplicated tail
-// segment in `body` (game-engine/food-and-growth) and team rebuilds are intra-turn claims.
-export interface SnakeState {
+//
+// What EVERY occupant of a board carries, whether it is a whole snake or the
+// projection of one held through a resolution. Declared once so the two stay
+// siblings by construction: a field added here reaches both, and every stage
+// that does not care which kind it has — team effect cancellation, rebuilds,
+// expiry, clock exhaustion, roster membership — is typed against this and
+// therefore cannot diverge between them.
+export interface SnakeCore {
   readonly snakeId: SnakeId;
   readonly letter: string; // single alphabetic char, 'A' + index within team
   readonly centaurTeamId: CentaurTeamId;
+  readonly health: number;
+  readonly activeEffects: ReadonlyArray<PotionEffect>; // ≤1 per family (game-engine/team-potion-effects)
+  readonly alive: boolean;
+  // The turn this occupant has advanced to — absolute, never a staleness
+  // counter (game-engine/domain-vocabulary#turns-at-two-grains). Deliberately
+  // NOT optional: "absent means caught up" defeats the lockstep invariant and
+  // pushes an `undefined` case into every consumer's analysis.
+  readonly turn: TurnNumber;
+}
+
+// SnakeState carries no intra-turn bookkeeping: growth is a duplicated tail
+// segment in `body` (game-engine/food-and-growth) and team rebuilds are intra-turn claims.
+export interface SnakeState extends SnakeCore {
   // Head at index 0, tail at last index. Consecutive entries may share a
   // cell (duplicated tail from growth; fully stacked game-start body).
   readonly body: ReadonlyArray<Cell>;
-  readonly health: number;
-  readonly activeEffects: ReadonlyArray<PotionEffect>; // ≤1 per family (game-engine/team-potion-effects)
   readonly lastDirection: Direction | null;
-  readonly alive: boolean;
 }
+
+// spec: game-engine/held-snakes
+//
+// A snake held through a resolution splits in two, and the split is the whole
+// of what holding means.
+//
+// The snake itself CRYSTALLIZES into the HISTORIC record below: frozen at the
+// turn it was held from, and changed by nothing thereafter — not a sever, not
+// an expiry, not its team's collection. It is a record, not a participant, and
+// no turn's calculation resolves against it.
+//
+// Its PROJECTION is what stands on the board from then on: the same snake, one
+// turn later, minus what a hold declines to model. It shares `SnakeCore` with a
+// snake, so severing, team effects, expiry and the clock reach it through the
+// same code as reaches any snake. It differs in exactly one way, stated in the
+// type by what it is missing: it HAS NO HEAD.
+//
+// The head is what a hold declines to model. A snake vacates its head cell only
+// by putting its own next segment there, so the cell its record names as the
+// head is the one cell whose occupant next turn is certain — the neck. Where
+// the head itself went is precisely the thing nobody chose, so it is in no
+// plane this resolution can touch.
+export interface ProjectedSnake extends SnakeCore {
+  /**
+   * The cells it stands in, nearest the unlocated head first — its BODY, never
+   * its head. Empty means a sever took every cell it could name; it is alive
+   * and obstructs nothing.
+   *
+   * Held from turn T and read at turn T+N, `segments[i]` plays body index
+   * `N + i`: the first N are at cells no record names (see `unlocatedSegments`).
+   * This is a computed list rather than a view over `historic.body`, which is
+   * what leaves room for a later projection to drop tail segments it can prove
+   * were vacated.
+   */
+  readonly segments: ReadonlyArray<Cell>;
+  /**
+   * `health` (from `SnakeCore`) is conservatively the configured maximum,
+   * always. A snake nobody modelled might have reached food on any turn since
+   * it was held, so any lower figure asserts a starvation the hold has no
+   * grounds to claim. A less conservative figure is available to the same
+   * future pass that would shorten `segments`: both fall out of reasoning about
+   * the food a projection could have reached.
+   *
+   * The HISTORIC record this projects, frozen at the turn it was held from.
+   * Read it for the last modelled position; never write it, and never resolve
+   * against it — its projection is what the turn's calculations run over.
+   */
+  readonly historic: SnakeState;
+}
+
+/**
+ * Either kind of occupant, where a consumer needs the cells as well as the
+ * common fields. `occupiedCells` and `isProjection` in state.ts are the ONE
+ * place the difference between the two is handled.
+ */
+export type BoardOccupant = SnakeState | ProjectedSnake;
 
 // spec: game-engine/item-identity — a present item. Consumption removes the entry from the
 // items collection at commit; there is no consumed flag. The full lifetime
@@ -148,21 +219,18 @@ export interface CentaurTeamClockState {
   readonly declaredTurnOver: boolean;
 }
 
-// spec: game-engine/configuration-parameters..070 (ranges enforced by user-facing surfaces, not here)
-export interface GameOrchestrationConfig {
-  readonly boardSize: number; // positive integer, game-engine/board-geometry, game-engine/configuration-parameters
-  readonly snakesPerTeam: number; // 1-10, default 5, game-engine/initial-snakes, game-engine/configuration-parameters
-  readonly hazardPercentage: number; // 0-30, default 0, game-engine/hazards, game-engine/configuration-parameters
-  readonly fertileGround: {
-    readonly density: number; // 0-90, default 30, game-engine/configuration-parameters (0 = disabled)
-    readonly clustering: number; // 1-20, default 10, game-engine/configuration-parameters
-  };
-}
-
-// spec: game-engine/configuration-parameters..068, game-engine/configuration-parameters..077
+// The engine's own configuration vocabulary: exactly the parameters a turn's
+// resolution reads, with their ranges, defaults and disable sentinels. Ranges
+// are enforced by the user-facing configuration surfaces, not here.
+// spec: game-engine/configuration-parameters
 export interface GameRuntimeConfig {
   readonly maxHealth: number; // 1-500, default 100, game-engine/configuration-parameters
   readonly maxTurns: number; // 0 (disabled) or 1-1000, default 100, game-engine/configuration-parameters
+  // 0 (disabled) or 1000-86400000, default 0 — the wall-clock duration a game
+  // may consume. Evaluated against the durations DECLARED to the engine's own
+  // resolutions, never against a clock the engine reads
+  // (game-engine/game-end-conditions#the-duration-limit-is-an-ending-like-any-other).
+  readonly maxGameDurationMs: number;
   readonly hazardDamage: number; // 1-100, default 15, game-engine/configuration-parameters
   readonly foodSpawnRate: number; // 0-5, default 0.5, game-engine/configuration-parameters
   readonly invulnPotionSpawnRate: number; // 0-0.2, default 0.15, game-engine/configuration-parameters
@@ -175,34 +243,22 @@ export interface GameRuntimeConfig {
   };
 }
 
-export interface GameConfig {
-  readonly orchestration: GameOrchestrationConfig;
-  readonly runtime: GameRuntimeConfig;
-}
-
-// Canonical defaults from game-engine/configuration-parameters..077. Exported as a convenience for
-// downstream configuration surfaces and tests; not part of the minimal
-// module-01 contract.
-export const DEFAULT_GAME_CONFIG: GameConfig = {
-  orchestration: {
-    boardSize: 21,
-    snakesPerTeam: 5,
-    hazardPercentage: 0,
-    fertileGround: { density: 30, clustering: 10 },
-  },
-  runtime: {
-    maxHealth: 100,
-    maxTurns: 100,
-    hazardDamage: 15,
-    foodSpawnRate: 0.5,
-    invulnPotionSpawnRate: 0.15,
-    invisPotionSpawnRate: 0.1,
-    clock: {
-      initialBudgetMs: 60000,
-      budgetIncrementMs: 500,
-      firstTurnTimeMs: 60000,
-      maxTurnTimeMs: 10000,
-    },
+// Canonical gameplay defaults. spec: game-engine/configuration-parameters.
+// The board-generation half's defaults are game-configuration's own
+// declaration and live with the generator they drive.
+export const DEFAULT_RUNTIME_CONFIG: GameRuntimeConfig = {
+  maxHealth: 100,
+  maxTurns: 100,
+  maxGameDurationMs: 0,
+  hazardDamage: 15,
+  foodSpawnRate: 0.5,
+  invulnPotionSpawnRate: 0.15,
+  invisPotionSpawnRate: 0.1,
+  clock: {
+    initialBudgetMs: 60000,
+    budgetIncrementMs: 500,
+    firstTurnTimeMs: 60000,
+    maxTurnTimeMs: 10000,
   },
 };
 
@@ -227,7 +283,12 @@ export type DeathCause =
   | "self_collision"
   | "body_collision"
   | "head_to_head"
-  | "health_depletion";
+  | "health_depletion"
+  // A competing team left with no remaining time at all loses every snake
+  // still alive at that commit. A cause of death, not an ending — what the
+  // deaths leave behind is what decides the game
+  // (game-engine/chess-timer#exhaustion-kills-the-teams-snakes).
+  | "clock_exhaustion";
 
 // Damage-claim sources reported on health_depletion deaths (game-engine/health-and-starvation).
 export type DamageSource = "tick" | "hazard";
@@ -303,18 +364,18 @@ export type TurnEvent =
       readonly snakeId: SnakeId;
       readonly family: EffectFamily;
       readonly reason: "collector_disruption" | "expiry" | "replaced";
+    }
+  | {
+      // Hazard damage taken by a snake that survived the turn, so a consumer
+      // learns why its health fell without diffing successive snapshots. A
+      // snake the damage kills reports through its death event instead, which
+      // already carries its contributing damage sources — one act never
+      // produces two events (game-engine/turn-events#hazard-damage-is-announced).
+      readonly kind: "hazard_damage_taken";
+      readonly snakeId: SnakeId;
+      readonly damage: number;
+      readonly cell: Cell;
     };
-
-// spec: game-engine/board-generation-retry (Section 3.6)
-export interface BoardGenerationFailure {
-  readonly code: "HAZARD_CONNECTIVITY" | "TERRITORY_PARITY_SHORTAGE" | "INITIAL_FOOD_SHORTAGE";
-  readonly attemptsUsed: 4;
-  readonly details: {
-    readonly centaurTeamId?: CentaurTeamId;
-    readonly innerCellCount: number;
-    readonly eligibleCellCount?: number;
-  };
-}
 
 // spec: Section 3.8
 export interface StagedMove {
@@ -322,12 +383,102 @@ export interface StagedMove {
   readonly stagedBy: Agent; // never null on input; absence = omit the map entry
 }
 
+// The timings of the turn being resolved — a DECLARED INPUT of every
+// resolution, exactly like the staged moves and the turn seed, and the sole
+// channel by which elapsed time reaches committed state. The engine reads no
+// clock: determinism is "identical inputs give identical outcomes", and the
+// input tuple grew by these two quantities and stayed closed
+// (game-engine/determinism#time-is-an-input-not-a-reading).
+//
+// The two quantities do not collapse into one. A team that declared early
+// burned less than the turn lasted, and the teams' clocks run concurrently,
+// so no aggregate of the burns is the turn's length
+// (game-engine/chess-timer#burn-is-not-the-turns-length).
+export interface TurnTimings {
+  /** How long the turn lasted, in milliseconds. Moves the game's total. */
+  readonly durationMs: number;
+  /**
+   * How much of its own clock each team burned on this turn. An entry is
+   * required for exactly the teams the state holds a clock for — a resolution
+   * that invented a missing one would decide the game on a number nobody
+   * measured.
+   */
+  readonly burnMs: ReadonlyMap<CentaurTeamId, number>;
+}
+
 // spec: game-engine/domain-vocabulary. The canonical aggregate of the
-// four game-state components; module 04 assembles this shape from its tables
-// (`items` via itemsByCell over the active item_lifetimes rows).
-export interface GameState {
+// game-state components; the per-game runtime assembles this shape from its
+// tables (`items` via itemsByCell over the active item_lifetimes rows).
+//
+// A PARTIAL game state is one carrying PROJECTIONS: snakes held through some
+// earlier resolution, standing on the board headless while their historic
+// records sit beside it. It is what a hypothetical resolution takes and yields.
+// The state's current turn is the greatest turn any snake on it has reached,
+// derived rather than stored (see currentTurn in state.ts).
+export interface PartialGameState {
   readonly board: Board;
   readonly snakes: ReadonlyArray<SnakeState>;
+  /**
+   * Snakes held through an earlier resolution, as the board finds them now.
+   * Each carries the historic record it projects; nothing here is a snake
+   * a resolution of the NEXT turn may move, and a state with a live one will
+   * not narrow. Their moves at the turn they were held are supplied through
+   * `advanceHistory` instead.
+   */
+  // spec: game-engine/held-snakes
+  readonly projections: ReadonlyArray<ProjectedSnake>;
   readonly items: ItemsByCell;
   readonly clocks: ReadonlyArray<CentaurTeamClockState>;
+  // The wall-clock duration this game has consumed, advanced at a commit by
+  // the turn's declared duration. Committed state like the clocks beside it,
+  // which is what lets a reader recompute the duration ending from the record
+  // (game-engine/chess-timer).
+  readonly consumedDurationMs: number;
+  /**
+   * Everything needed to resolve this state's history again once a projection's
+   * move stops being unknown — `null` exactly when nothing is projected.
+   * spec: game-engine/historic-advance
+   */
+  readonly rewind: RewindLog | null;
 }
+
+// spec: game-engine/historic-advance
+//
+// What a resolution was ASKED, kept so it can be asked again. A resolution is a
+// function of its declared inputs alone (game-engine/determinism), so replaying
+// these against a revised board is not an approximation of what happened — it
+// is the same computation over a different premise.
+export interface ResolutionRecord {
+  readonly directions: ReadonlyMap<SnakeId, Direction>;
+  /** Snakes held here — the record of where each projection crystallized. */
+  readonly held: ReadonlySet<SnakeId>;
+  readonly timings: TurnTimings;
+  readonly turnSeed: Uint8Array | null;
+}
+
+/**
+ * The board as it stood before the oldest still-standing projection was held,
+ * and every resolution applied since.
+ *
+ * `base` is a GAME state by construction: it is the moment before anything was
+ * first held, so nothing was projected then — which is also why the nesting
+ * terminates, since a game state's own `rewind` is always `null`.
+ *
+ * This exists only while something is projected, so the mainline never carries
+ * one: `advanceTurn` holds nothing, so its states always have `rewind: null`
+ * and no runtime ever persists a log.
+ */
+export interface RewindLog {
+  readonly base: GameState;
+  /** Oldest first; one entry per resolution that advanced the turn. */
+  readonly resolutions: ReadonlyArray<ResolutionRecord>;
+}
+
+// A GAME state is the lockstep case: nothing is still projected, so every
+// alive snake is on the board whole and at the state's own turn. It is the only form a runtime persists, and the sole way to obtain
+// one is to narrow a partial state (state.ts) — so a caller that left a snake
+// behind cannot produce it, and every function taking the partial form takes
+// both (game-engine/domain-vocabulary#lockstep-is-the-game-state-invariant).
+// The brand follows the same phantom-property pattern as the branded ids
+// above: type-only, never present at runtime.
+export type GameState = PartialGameState & { readonly __brand: "GameState" };

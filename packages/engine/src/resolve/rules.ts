@@ -12,10 +12,10 @@ import { cellAt, sameCell } from "../board.js";
 import { familyOfPotion, invulnerabilityLevel } from "../effects.js";
 import { itemIdOf } from "../items.js";
 import { CellType, ItemType } from "../types.js";
+import type { SnakeId } from "../types.js";
 import type { ClaimSet } from "./claims.js";
 import type { TurnContext } from "./context.js";
-import { projectionOf } from "./context.js";
-import type { WorkSnake } from "./work.js";
+import { movedOf } from "./context.js";
 
 export type InteractionRule = (ctx: TurnContext, claims: ClaimSet) => void;
 
@@ -32,7 +32,7 @@ export const wallRule: InteractionRule = (ctx, claims) => {
 // Self-collision rule. spec: game-engine/collisions-and-severing
 export const selfCollisionRule: InteractionRule = (ctx, claims) => {
   for (const { snake, head } of ctx.survivingHeads) {
-    const body = projectionOf(ctx, snake.snakeId).body;
+    const body = movedOf(ctx, snake.snakeId).body;
     if (body.slice(1).some((c) => sameCell(c, head))) {
       claims.certainDeath(snake.snakeId, { cause: "self_collision", killer: null }, "self_death");
     }
@@ -47,19 +47,25 @@ export const bodyCollisionRule: InteractionRule = (ctx, claims) => {
     // ctx.bodySegmentsAt entries are ordered by (snakeId, segment index), so
     // the first entry seen per victim is the head-closest contact and victims
     // are evaluated in ascending-snakeId order.
-    const contacted = new Set<WorkSnake>();
-    for (const { snake: victim, index: contactIndex } of ctx.bodySegmentsAt(head)) {
-      if (victim.snakeId === attacker.snakeId || contacted.has(victim)) continue;
-      contacted.add(victim);
+    const contacted = new Set<SnakeId>();
+    for (const { occupant: victim, index: contactIndex } of ctx.bodySegmentsAt(head)) {
+      if (victim.snakeId === attacker.snakeId || contacted.has(victim.snakeId)) continue;
+      contacted.add(victim.snakeId);
       // Snapshot invulnerability levels (game-engine/turn-resolution-model).
+      // Severing is scoped to NON-HEAD segments, and every entry in the segment
+      // index is one — a participant's head is contested through head-to-head
+      // and a projection has no head at all. So the level comparison alone
+      // decides, with no case in which the higher level dies to the lower, and
+      // the rule needs no idea which kind of occupant it just hit.
+      // spec: game-engine/collisions-and-severing, game-engine/held-snakes#a-projection-has-no-head
       if (invulnerabilityLevel(attacker) > invulnerabilityLevel(victim)) {
-        const victimBody = projectionOf(ctx, victim.snakeId).body;
+        const cells = ctx.cellsThisTurn(victim.snakeId);
         claims.sever(
           {
             attackerSnakeId: attacker.snakeId,
             victimSnakeId: victim.snakeId,
-            contactCell: victimBody[contactIndex] as (typeof victimBody)[number],
-            segmentsLost: victimBody.length - contactIndex,
+            contactCell: cells[contactIndex] as (typeof cells)[number],
+            segmentsLost: cells.length - contactIndex,
           },
           contactIndex,
         );
@@ -85,9 +91,15 @@ export const hazardRule: InteractionRule = (ctx, claims) => {
   }
 };
 
-// Health-tick rule. spec: game-engine/health-and-starvation
+// Health-tick rule. spec: game-engine/health-and-starvation — participants
+// only. A projection takes no tick: a snake allowed to move might have reached
+// food, so its health after a turn it did not take is genuinely unknown, and
+// the projection answers that with maxHealth rather than with a countdown
+// nobody watched. At health 1 a tick would also *kill* it, clearing an obstacle
+// the real game keeps.
+// spec: game-engine/held-snakes#a-projection-cannot-be-starved-by-a-hold
 export const healthTickRule: InteractionRule = (ctx, claims) => {
-  for (const snake of ctx.aliveInS) {
+  for (const snake of ctx.participants) {
     claims.damage(snake.snakeId, 1, "tick");
   }
 };
@@ -144,8 +156,10 @@ export const INTERACTION_RULES: ReadonlyArray<InteractionRule> = [
  * itself a disruption that can trigger a cancellation.
  */
 export function runDerivedRules(ctx: TurnContext, claims: ClaimSet): void {
-  // Health resolution and health deaths. spec: game-engine/health-and-starvation
-  for (const snake of ctx.aliveInS) {
+  // Health resolution and health deaths, over participants only — a held
+  // snake's health is not resolved at all (game-engine/held-snakes).
+  // spec: game-engine/health-and-starvation
+  for (const snake of ctx.participants) {
     const resolved = claims.hasHeal(snake.snakeId)
       ? ctx.config.maxHealth
       : snake.health - claims.totalDamage(snake.snakeId);
@@ -158,11 +172,13 @@ export function runDerivedRules(ctx: TurnContext, claims: ClaimSet): void {
   // Cancellation. spec: game-engine/team-potion-effects — snapshot debuff-holders
   // only, so a collector is disruptable only from the turn after its debuff
   // committed; rebuild claims from this turn are unaffected (supersede rule).
+  // Over every occupant: a projection carries effects like any snake, so a
+  // disruption to one cancels its team's family exactly as a snake's would.
   for (const d of claims.disruptions) {
-    const snake = ctx.byId.get(d.snakeId);
-    if (snake === undefined) continue;
-    for (const e of snake.activeEffects) {
-      if (e.state === "debuff") claims.cancelFamily(snake.centaurTeamId, e.family);
+    const occupant = ctx.occupants.find((o) => o.snakeId === d.snakeId);
+    if (occupant === undefined) continue;
+    for (const e of occupant.activeEffects) {
+      if (e.state === "debuff") claims.cancelFamily(occupant.centaurTeamId, e.family);
     }
   }
 }

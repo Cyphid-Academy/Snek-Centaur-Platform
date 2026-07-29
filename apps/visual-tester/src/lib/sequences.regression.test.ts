@@ -10,7 +10,12 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { defaultSequencesRoot } from "./server/fsStore.js";
-import { type TestSequenceDoc, decodeTestSequence } from "./test-sequences/codec.js";
+import {
+  type TestSequenceDoc,
+  decodeTestSequence,
+  encodeTestSequence,
+} from "./test-sequences/codec.js";
+import { downgradeToPreviousVersion, recordedDoc } from "./test-sequences/fixtures.js";
 import { runReplayCheck } from "./test-sequences/replay.js";
 import { validateTestSequenceDoc } from "./test-sequences/schema.js";
 
@@ -53,6 +58,32 @@ describe("committed Test Sequence fixtures", () => {
           .join("\n")}`,
       );
     }
+    expect(result.passed).toBe(true);
+  });
+});
+
+// With no fixtures committed the suite above passes vacuously, which reads as
+// coverage and is not. This is the part of it that always runs: the check every
+// committed fixture is put through, applied to a document an older schema
+// version wrote. A fixture this build cannot read must be reported as such —
+// naming the version — rather than crashing the run with a decoder error.
+// spec: test-sequences/schema-version#unknown-version-rejected
+describe("a fixture this build cannot read", () => {
+  it("is reported as invalid, naming the version, rather than crashing the run", () => {
+    const stale = downgradeToPreviousVersion(encodeTestSequence(recordedDoc("stale fixture")));
+    const validated = validateTestSequenceDoc(stale);
+    expect(validated.ok).toBe(false);
+    if (validated.ok) return;
+    expect(validated.errors[0]?.path).toBe("schemaVersion");
+    expect(validated.errors[0]?.message).toContain("unsupported schema version 1");
+  });
+
+  it("round-trips a current-version fixture through the same gate", () => {
+    const doc = encodeTestSequence(recordedDoc("current fixture"));
+    const validated = validateTestSequenceDoc(JSON.parse(JSON.stringify(doc)));
+    expect(validated.ok).toBe(true);
+    if (!validated.ok) return;
+    const result = runReplayCheck(decodeTestSequence(validated.doc as TestSequenceDoc));
     expect(result.passed).toBe(true);
   });
 });

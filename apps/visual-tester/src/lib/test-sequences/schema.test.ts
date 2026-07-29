@@ -144,3 +144,53 @@ describe("referential integrity (#referential-integrity)", () => {
     expect(errors.some((e) => e.path === "turns[1].turnNumber")).toBe(true);
   });
 });
+
+describe("declared timings (#a-turn-declares-every-teams-burn)", () => {
+  it("accepts a document whose every turn declares a burn for every team", () => {
+    const result = validateTestSequenceDoc(clone(validDoc()));
+    expect(result.ok).toBe(true);
+  });
+
+  it("rejects a turn that omits a team present in its pre-state", () => {
+    const doc = clone(validDoc());
+    doc.turns[1].timings.burnMs = { "team-blue": doc.turns[1].timings.burnMs["team-blue"] };
+    const errors = errorsOf(doc);
+    const err = errors.find((e) => e.path === "turns[1].timings.burnMs");
+    if (err === undefined) throw new Error("expected an error at turns[1].timings.burnMs");
+    expect(err.message).toContain("team-red");
+  });
+
+  it("rejects a turn naming a team absent from its pre-state", () => {
+    const doc = clone(validDoc());
+    doc.turns[0].timings.burnMs["team-green"] = 100;
+    const errors = errorsOf(doc);
+    expect(errors.some((e) => e.path === "turns[0].timings.burnMs.team-green")).toBe(true);
+  });
+
+  it("rejects a negative declared duration", () => {
+    const doc = clone(validDoc());
+    doc.turns[0].timings.durationMs = -1;
+    const errors = errorsOf(doc);
+    expect(errors.some((e) => e.path === "turns[0].timings.durationMs")).toBe(true);
+  });
+
+  // A version-1 document predates the timings, so it is missing inputs its
+  // turns were resolved from: it can be rejected, never replayed.
+  // spec: test-sequences/schema-version#unknown-version-rejected
+  it("rejects a document that predates the recorded timings", () => {
+    const doc = clone(validDoc());
+    doc.schemaVersion = 1;
+    const errors = errorsOf(doc);
+    expect(errors[0]?.path).toBe("schemaVersion");
+    expect(SUPPORTED_SCHEMA_VERSIONS).not.toContain(1);
+  });
+});
+
+describe("a recorded state is in lockstep (#lockstep-is-the-game-state-invariant)", () => {
+  it("rejects a recorded state holding an alive snake behind the state's turn", () => {
+    const doc = clone(validDoc());
+    doc.turns[0].expected.nextState.snakes[0].turn = 0;
+    const errors = errorsOf(doc);
+    expect(errors.some((e) => e.path.endsWith(".turn"))).toBe(true);
+  });
+});

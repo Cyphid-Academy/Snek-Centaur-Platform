@@ -19,7 +19,7 @@ export function isInner(board: Board, cell: Cell): boolean {
   return cell.x > 0 && cell.x < board.boardSize - 1 && cell.y > 0 && cell.y < board.boardSize - 1;
 }
 
-// spec: game-engine/starting-placement
+// spec: game-configuration/starting-placement
 export function parityOf(cell: Cell): 0 | 1 {
   return ((cell.x + cell.y) & 1) as 0 | 1;
 }

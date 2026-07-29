@@ -104,3 +104,85 @@ When module 07 lands: profile against the bench baseline first, then choose alon
 1. **Hazard 30% is frequently infeasible.** Uniform hazard placement at 25–30% density sits near the site-percolation threshold on mid-size boards: on a 13-board at 30%, roughly half of game seeds exhaust all four attempts on `HAZARD_CONNECTIVITY` (measured: 11/20 seeds succeed; 15-board: 3/20). The bounded-retry design absorbs this, but room-owner UX at the top of the 0–30 range will see "provisioning failed" often enough to notice. A connectivity-aware placement algorithm (e.g. carve from a spanning structure) or a tighter range cap may be worth a REVIEW item.
 2. **01-REQ-049 wording** ("same eligible-cell criteria as food") vs. the food-only fertile restriction — see §2.1.
 3. **The `teams[].name` parameter** of `generateBoardAndInitialState` is unused by module 01 (display names are derived downstream per 01-REQ-018); kept for signature stability.
+
+---
+
+## §4 The contract revision (`revise-game-engine-contract`)
+
+Recorded here for readers of this package; the full rationale is the change's
+`design.md`, and these entries point at the requirements rather than restating
+them.
+
+**§4.1 Two entry points, one stage list.** Sorting the eight stages by whether
+they need every snake at the same turn puts the seam in exactly one place: item
+spawning and the win check need lockstep, the rest do not. Both are therefore
+gated on a condition about the STATE — every alive snake at the current turn —
+never on which entry point was called or on what the caller passed. Gating
+spawning on "was a seed supplied" would make it a property of the call, and it
+is a property of the world: a mixed-turn board cannot place items correctly
+however much entropy it is handed.
+
+**§4.2 A hold splits a snake in two, and that is all holding is.** The snake
+CRYSTALLIZES into a record frozen at the turn it was held from — carried on the
+state, read for the last known position, changed by nothing ever again. Its
+PROJECTION stands on the board in its place: the same snake one turn on, and an
+ordinary board occupant in every respect the rules read — severable, carrying
+effects that expire and that team events reach, advancing its turn with the
+state, dying with its team's clock. It differs from a snake in exactly one way,
+and the type says so by what it lacks: **no head.**
+
+Keeping them as two representations rather than one record read with an offset
+is what makes the rules uniform (they see occupants, not two kinds), keeps the
+frozen record genuinely frozen (a projection's effects advance; a record's
+cannot), and leaves the projection owning its own cell list — which is where a
+later, less conservative projection would put a shorter one.
+
+**§4.3 Severing is scoped to non-head segments, and a projection has none.**
+`game-engine/collisions-and-severing` says so and this change did not touch it.
+Every cell a projection stands in is therefore a severable segment, including
+the one its record names as the head — because a snake vacates that cell only by
+putting its own next segment there, so a body stands there whatever it chose.
+The level comparison alone decides, and no encounter is left in which the higher
+invulnerability level dies to the lower.
+
+**§4.3a Conservatism has one source and two consequences.** A projection's final
+segment does not vacate, and its health is the team maximum. Both rest on the
+same unmodelled fact — a snake nobody simulated might have reached food — and
+both are the seam a later pass reasoning about reachable food would narrow. A
+sever taking every cell a projection stands in leaves it standing in nothing
+while alive: an empty cell list, which needs no flag and no case of its own.
+
+**§4.3b Learning a held move revises the past, and is its own entry point.**
+A projection's missing move is the one at the turn it was HELD, not one at the
+turn the board now stands at, so settling it means resolving those turns again
+rather than advancing anything. That is why it is `advanceHistory` and not a
+direction passed to `imagineMoves`: the same call cannot plan the next turn
+against a board it is about to rewrite, and a caller wants the revised board
+back before deciding what to do on it. The state therefore carries what each of
+its resolutions was asked, over the board before the first hold — which exists
+exactly while something is projected, so the mainline never accumulates one.
+Revisions can change what already happened; the result reports which snakes'
+fates it changed rather than leaving that to be discovered.
+
+**§4.4 The clock moved into the commit.** `applyTurnStart` and `declareTurnOver`
+are gone from the package surface. A runtime that kept applying them between
+turns *and* passed burns to the resolution would produce two writers of one
+budget, and the disagreement is unfalsifiable from inside either side. What is
+left is `initialClock`, which performs turn 0's carve-out — the one carve no
+resolution can, because turn 0 has no preceding commit.
+
+**§4.5 The ordering inside the clock commit is load-bearing.** Spend the burn,
+bank the remainder, judge exhaustion, *then* increment and carve. Applied the
+other way round a positive `budgetIncrementMs` is a floor no team can cross and
+the exhaustion rule is dead code in every default configuration — which
+compiles, and passes every test that does not deliberately drain a budget.
+
+**§4.6 The fuzzer no longer starts from a generated board.** Generation left the
+package, so `resolve-properties.test.ts` draws states from `arbitraries.ts`
+instead. The replacement is deliberately more adversarial than generation
+(interior walls, ringless boards, disconnected hazards, snakes on hazards, mixed
+head parities, bodies of length 1–5, near-empty clocks): a fuzzer for the rules
+of a turn should explore harder than the thing that produces the game's boards,
+not re-run it. What it deliberately keeps is body contiguity and disjointness —
+shapes the movement rules themselves can only produce, so violating them is not
+a harder case, it is a different game.

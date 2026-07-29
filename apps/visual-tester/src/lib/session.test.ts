@@ -2,8 +2,8 @@ import {
   CellType,
   Direction,
   ItemType,
+  advanceTurn,
   isValidMove,
-  resolveTurn,
   subSeed,
 } from "@cyphid/snek-engine";
 import type {
@@ -14,7 +14,7 @@ import type {
   StagedMove,
   TurnNumber,
 } from "@cyphid/snek-engine";
-import { DEFAULT_GAME_CONFIG } from "@cyphid/snek-engine";
+import { DEFAULT_GAME_CONFIG } from "@cyphid/snek-game-configuration";
 import { describe, expect, it } from "vitest";
 import {
   addSnake,
@@ -29,8 +29,10 @@ import {
 } from "./editor.js";
 import { blankState } from "./factory.js";
 import { turnSeedFor } from "./seed.js";
+import type { Session } from "./session.js";
 import {
   createSession,
+  defaultTimings,
   editStateAt,
   simulateNext,
   stateAt,
@@ -41,6 +43,11 @@ import {
 const CONFIG: GameRuntimeConfig = DEFAULT_GAME_CONFIG.runtime;
 const TEAM = "team-red" as CentaurTeamId;
 const SEED = new Uint8Array(32).fill(7);
+
+/** The tool's default timings for the next turn of `session`. */
+function tick(session: Session, durationMs = 500) {
+  return defaultTimings(stateAt(session, session.turns.length), durationMs);
+}
 
 function must<T extends { ok: boolean }>(result: T): Extract<T, { ok: true }> {
   if (!result.ok) throw new Error(`edit rejected: ${JSON.stringify(result)}`);
@@ -75,7 +82,7 @@ describe("turn simulation", () => {
   it("records the resolver's full output and matches a direct engine call", () => {
     const session = createSession(baseState(), CONFIG, SEED);
     const staged = stagedUp(session.initialState);
-    const next = simulateNext(session, staged);
+    const next = simulateNext(session, staged, tick(session));
     expect(next.turns).toHaveLength(1);
     const record = next.turns[0];
     expect(record).toBeDefined();
@@ -83,11 +90,11 @@ describe("turn simulation", () => {
 
     // spec: test-sequences/determinism#production-seed-derivation
     expect(turnSeedFor(SEED, 0 as TurnNumber)).toEqual(subSeed(SEED, "turn-0"));
-    const direct = resolveTurn(
+    const direct = advanceTurn(
       stateAt(session, 0),
       staged,
-      0 as TurnNumber,
       subSeed(SEED, "turn-0"),
+      tick(session),
       CONFIG,
     );
     expect(record.nextState).toEqual(direct.nextState);
@@ -99,9 +106,9 @@ describe("turn simulation", () => {
   // spec: visual-tester/turn-simulation#repeatable
   it("is repeatable: each simulated turn becomes the base for the next", () => {
     let session = createSession(baseState(), CONFIG, SEED);
-    session = simulateNext(session, stagedUp(session.initialState));
-    session = simulateNext(session, new Map());
-    session = simulateNext(session, new Map());
+    session = simulateNext(session, stagedUp(session.initialState), tick(session));
+    session = simulateNext(session, new Map(), tick(session));
+    session = simulateNext(session, new Map(), tick(session));
     expect(turnCount(session)).toBe(3);
     expect(session.turns.map((t) => t.turnNumber)).toEqual([0, 1, 2]);
     expect(stateAt(session, 3)).toBe(session.turns[2]?.nextState);
@@ -123,7 +130,8 @@ describe("turn simulation", () => {
         },
       ],
     ]);
-    const session = simulateNext(createSession(state, CONFIG, SEED), staged);
+    const base = createSession(state, CONFIG, SEED);
+    const session = simulateNext(base, staged, tick(base));
     const events = session.turns[0]?.events ?? [];
     // spec: visual-tester/move-staging#certain-death-moves-stageable — the
     // resolver's own collision handling is exercised.
@@ -136,9 +144,9 @@ describe("session history", () => {
   // spec: visual-tester/session-history — immutable per-turn snapshots.
   it("never lets an edit at one turn mutate neighbouring snapshots", () => {
     let session = createSession(baseState(), CONFIG, SEED);
-    session = simulateNext(session, stagedUp(session.initialState));
-    session = simulateNext(session, new Map());
-    session = simulateNext(session, new Map());
+    session = simulateNext(session, stagedUp(session.initialState), tick(session));
+    session = simulateNext(session, new Map(), tick(session));
+    session = simulateNext(session, new Map(), tick(session));
 
     const before0 = structuredClone(stateAt(session, 0));
     const before1 = structuredClone(stateAt(session, 1));
@@ -173,10 +181,10 @@ describe("history rewrite", () => {
   // spec: visual-tester/history-rewrite#future-turns-discarded
   it("editing turn k discards turns k+1..n and simulation continues from k", () => {
     let session = createSession(baseState(), CONFIG, SEED);
-    session = simulateNext(session, stagedUp(session.initialState));
-    session = simulateNext(session, new Map());
-    session = simulateNext(session, new Map());
-    session = simulateNext(session, new Map());
+    session = simulateNext(session, stagedUp(session.initialState), tick(session));
+    session = simulateNext(session, new Map(), tick(session));
+    session = simulateNext(session, new Map(), tick(session));
+    session = simulateNext(session, new Map(), tick(session));
     expect(turnCount(session)).toBe(4);
 
     const edited = must(paintCell(stateAt(session, 2), { x: 4, y: 4 }, CellType.Hazard)).state;
@@ -185,14 +193,14 @@ describe("history rewrite", () => {
     expect(stateAt(rewritten, 2)).toEqual(edited);
 
     // The next simulation produces a new turn k+1 (turn number 2, position 3).
-    const continued = simulateNext(rewritten, new Map());
+    const continued = simulateNext(rewritten, new Map(), tick(rewritten));
     expect(turnCount(continued)).toBe(3);
     expect(continued.turns[2]?.turnNumber).toBe(2);
   });
 
   it("editing the initial state (k=0) clears the whole history", () => {
     let session = createSession(baseState(), CONFIG, SEED);
-    session = simulateNext(session, new Map());
+    session = simulateNext(session, new Map(), tick(session));
     const edited = must(paintCell(stateAt(session, 0), { x: 2, y: 2 }, CellType.Fertile)).state;
     const rewritten = editStateAt(session, 0, edited);
     expect(turnCount(rewritten)).toBe(0);
@@ -201,8 +209,8 @@ describe("history rewrite", () => {
 
   it("truncateAfter keeps exactly the first k turns", () => {
     let session = createSession(baseState(), CONFIG, SEED);
-    session = simulateNext(session, new Map());
-    session = simulateNext(session, new Map());
+    session = simulateNext(session, new Map(), tick(session));
+    session = simulateNext(session, new Map(), tick(session));
     expect(turnCount(truncateAfter(session, 1))).toBe(1);
     expect(truncateAfter(session, 2)).toBe(session);
   });
@@ -236,7 +244,8 @@ describe("editor boundary", () => {
     // Clocks were synced for both teams (read-only carried data).
     expect(state.clocks.map((c) => c.centaurTeamId).sort()).toEqual(["team-blue", "team-red"]);
     // The resolver accepts it.
-    const session = simulateNext(createSession(state, CONFIG, SEED), new Map());
+    const base = createSession(state, CONFIG, SEED);
+    const session = simulateNext(base, new Map(), tick(base));
     expect(session.turns[0]?.outcome).toBeDefined();
   });
 

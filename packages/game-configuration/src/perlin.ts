@@ -1,6 +1,6 @@
 // 2D Perlin gradient noise for fertile-tile generation.
-// spec: game-engine/fertile-ground, 01 §2.5. Module-internal (not part of the 01 contract).
-import type { Rng } from "./rng.js";
+// spec: game-configuration/fertile-ground, 01 §2.5. Package-internal.
+import type { Rng } from "@cyphid/snek-engine";
 
 export interface Perlin2D {
   noise2D(x: number, y: number): number; // [-1, 1]
@@ -68,7 +68,7 @@ export function makePerlin(rng: Rng): Perlin2D {
 /**
  * 4-octave fractal sum: each successive octave doubles the frequency of the
  * previous and halves its amplitude, normalised back into ~[-1, 1].
- * spec: game-engine/fertile-ground, 01 §2.5 step 2.
+ * spec: game-configuration/fertile-ground, 01 §2.5 step 2.
  */
 export function fractalNoise2D(perlin: Perlin2D, x: number, y: number, baseFreq: number): number {
   let sum = 0;

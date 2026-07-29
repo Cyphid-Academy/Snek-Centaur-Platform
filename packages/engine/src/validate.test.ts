@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { emptyBoard, makeSnake, sid } from "./testkit.js";
+import { makeSnake, makeState, sid } from "./testkit.js";
 import type { GameState, SnakeState } from "./types.js";
 import { Direction } from "./types.js";
 import { isValidMove } from "./validate.js";
 
 function state(snakes: SnakeState[]): GameState {
-  return { board: emptyBoard(11), snakes, items: new Map(), clocks: [] };
+  return makeState(snakes);
 }
 
 describe("isValidMove", () => {

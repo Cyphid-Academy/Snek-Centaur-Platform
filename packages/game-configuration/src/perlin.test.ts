@@ -1,10 +1,10 @@
+import { rngFromSeed } from "@cyphid/snek-engine";
 import { describe, expect, it } from "vitest";
 import { fractalNoise2D, makePerlin } from "./perlin.js";
-import { rngFromSeed } from "./rng.js";
 import { seed } from "./testkit.js";
 
 describe("perlin noise", () => {
-  // spec: game-engine/fertile-ground / 01 §2.5 — deterministic 4-octave fractal Perlin
+  // spec: game-configuration/fertile-ground / 01 §2.5 — deterministic 4-octave fractal Perlin
   it("is deterministic for the same seed", () => {
     const a = makePerlin(rngFromSeed(seed(1)));
     const b = makePerlin(rngFromSeed(seed(1)));

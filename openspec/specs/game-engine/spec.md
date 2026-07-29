@@ -17,8 +17,7 @@ touches gameplay.
 ## Requirements
 
 ### Requirement: game-engine/domain-vocabulary
-
-The game SHALL use a closed domain vocabulary: four directions (`Up`/`Right`/`Down`/`Left`), four cell types (`Normal`/`Wall`/`Hazard`/`Fertile`), three item types (`Food`/`InvulnPotion`/`InvisPotion`), potion effects as `(family, state, expiryTurn)` triples over two families (`invulnerability`/`invisibility`) and two states (`buff`/`debuff`), present items as (identity, type, cell), and the snake state shape: `snakeId`, `letter`, `centaurTeamId`, `body` (ordered cells, head first), `health`, `activeEffects`, `lastDirection`, `alive`.
+The game SHALL use a closed domain vocabulary: four directions (`Up`/`Right`/`Down`/`Left`), four cell types (`Normal`/`Wall`/`Hazard`/`Fertile`), three item types (`Food`/`InvulnPotion`/`InvisPotion`), potion effects as `(family, state, expiryTurn)` triples over two families (`invulnerability`/`invisibility`) and two states (`buff`/`debuff`), present items as (identity, type, cell), and the shape every board occupant shares: `snakeId`, `letter`, `centaurTeamId`, `health`, `activeEffects`, `alive`, `turn` (the turn it has advanced to). A **snake** adds `body` (ordered cells, head first) and `lastDirection`; a **projection** adds its cells and the historic record it projects, and adds no head. Game state SHALL carry a current turn, which SHALL be the greatest turn any snake on it has reached, and a set of **projections** — snakes held through an earlier resolution, each standing on the board headless beside the historic record it projects. A **partial game state** is one carrying a live projection; a **game state** is the case where none stands, so every alive snake is on the board whole and at the state's own turn, and it is the only form a runtime persists — so a game state is a partial game state, and anything accepting the partial form accepts both.
 
 #### Scenario: #closed-sets
 - **WHEN** any rule, event, or state refers to a direction, cell type, item type, or potion effect
@@ -28,92 +27,58 @@ The game SHALL use a closed domain vocabulary: four directions (`Up`/`Right`/`Do
 - **WHEN** a snake's invulnerability level or visibility is needed
 - **THEN** it is computed on demand from `activeEffects`; neither is a stored field of the snake state
 
+#### Scenario: #turns-at-two-grains
+- **WHEN** a consumer asks how far behind the state a projection's record is
+- **THEN** it subtracts the record's turn from the state's — the turn is absolute on both, never a staleness counter, because staleness is a fact about a comparison whose other operand changes as a search descends. That difference is also the count of the projection's leading segments no cell can name
+
+#### Scenario: #lockstep-is-the-game-state-invariant
+- **WHEN** a partial game state is narrowed to a game state
+- **THEN** it succeeds only if nothing live is still projected, and the narrowing is the sole way to obtain the persisted form — so a caller that left a snake unmodelled cannot produce it
+
 ### Requirement: game-engine/board-geometry
-The board SHALL be a square grid of `boardSize × boardSize` cells whose outermost 1-cell-thick border is entirely `Wall`. The playable area is the `(boardSize − 2)²` inner cells.
+The engine SHALL take the board as fully specified data: a square grid of `boardSize × boardSize` cells, each carrying its own terrain, held as one flat row-major array in which the cell at `(x, y)` is the entry at index `y × boardSize + x`. The grid's own dimensions SHALL be the whole statement of the board's size, and the snakes placed on it the whole statement of how many each team fields — the engine reads no size, count, density, or clustering from configuration, and no rule of a turn consults how the board came to look as it does. The **playable area** is the `(boardSize − 2)²` inner cells, those off the outermost 1-cell ring, and is the area within which items may spawn. A cell beyond the grid's edge SHALL be treated exactly as a `Wall` cell is. Terrain SHALL be fixed for the whole game: no rule changes any cell's type, so hazard and fertile designations made before the first turn are permanent, and the board handed to one resolution is the board every later resolution sees.
 
-#### Scenario: #construction
-- **WHEN** a board is generated with edge length N
-- **THEN** it is an N×N grid with a complete Wall ring and an (N−2)² playable interior
+#### Scenario: #dimensions-state-the-size
+- **WHEN** a rule needs the board's edge length or a team's snake count
+- **THEN** it reads the grid and the placed snakes — the same board resolves identically however it was produced, which is what lets a hand-authored state and a generated one be the same kind of input
 
-### Requirement: game-engine/hazards
-When the configured hazard percentage H is greater than 0, board generation SHALL designate `floor(inner_cell_count × H / 100)` inner cells as Hazard terrain, seeded from the game seed. Hazard cells are permanent for the whole game.
+#### Scenario: #row-major-addressing
+- **WHEN** a cell is addressed by coordinates
+- **THEN** it is the entry at `y × boardSize + x` of the flat array, one encoding shared by every runtime that holds a board
 
-#### Scenario: #connectivity-guarantee
-- **WHEN** hazards are placed
-- **THEN** all non-Hazard, non-Wall inner cells form a single connected region
+#### Scenario: #playable-interior
+- **WHEN** the playable area is needed — for a spawn location, or to decide whether a cell is an inner one
+- **THEN** it is the `(boardSize − 2)²` cells off the outermost ring, excluded by position rather than by what terrain that ring happens to carry
 
-#### Scenario: #permanence
+#### Scenario: #off-board-is-wall
+- **WHEN** a moved head leaves the grid
+- **THEN** the outcome is the one a `Wall` cell produces — so a complete wall ring is a convention of the boards handed in, not a precondition the rules rest on, and a board without one still resolves correctly
+
+#### Scenario: #terrain-is-fixed
 - **WHEN** the game progresses
-- **THEN** the set of Hazard cells never changes
-
-### Requirement: game-engine/fertile-ground
-When fertile ground is enabled, board generation SHALL designate a fixed subset of inner non-Wall non-Hazard cells as `Fertile` at game start, forming organic clustered patches: the density parameter D sets coverage (the top D% of candidate cells ranked by seeded fractal noise) and the clustering parameter C sets patch scale.
-
-#### Scenario: #stable-designation
-- **WHEN** the game progresses
-- **THEN** fertile designations never change
-
-#### Scenario: #knob-semantics
-- **WHEN** C is low
-- **THEN** fertile cells form small scattered patches; high C forms large contiguous blobs, with D controlling total coverage in both cases
-
-### Requirement: game-engine/starting-placement
-For an N-team game, board generation SHALL divide the board into N starting territories using a circular pie of N equal angular sectors centred on the board with a seeded-random angular offset. Each snake's starting head SHALL be placed on a seeded-random non-Wall, non-Hazard inner cell inside its team's territory, and all starting heads across all teams SHALL share one seeded-random parity of `(x + y) mod 2`.
-
-#### Scenario: #territory-assignment
-- **WHEN** inner cells are assigned to territories
-- **THEN** each cell belongs to the sector it overlaps most, ties broken by seeded randomness
-
-#### Scenario: #shared-parity
-- **WHEN** all starting heads are placed
-- **THEN** every head cell has the same `(x + y) mod 2` parity
-
-### Requirement: game-engine/initial-snakes
-Each team SHALL field exactly `snakesPerTeam` snakes. Every snake starts with length 3 (all three segments stacked on its starting cell), `health = MaxHealth`, no active effects, no prior direction, and alive. Snakes are lettered consecutively from `A` within their team; a snake's display name is `{centaurTeamName}.{letter}`.
-
-#### Scenario: #initial-state
-- **WHEN** a game starts
-- **THEN** every snake is a 3-segment stack on its start cell at full health with empty `activeEffects` (so derived invulnerability level 0 and visible true) and null `lastDirection`
-
-#### Scenario: #naming
-- **WHEN** team Red fields three snakes
-- **THEN** they are `Red.A`, `Red.B`, `Red.C`
-
-### Requirement: game-engine/initial-food
-After all starting positions are assigned, setup SHALL spawn `snakesPerTeam` food items per starting territory — one per snake of the owning team — each on a seeded-random distinct eligible cell within that territory: inner, non-Wall, non-Hazard, and not occupied by any snake body. Initial food eligibility ignores fertile designations.
-
-#### Scenario: #food-count-per-territory
-- **WHEN** a game with N teams and S snakes per team is set up
-- **THEN** exactly N × S food items are placed, S inside each starting territory, on distinct eligible cells — Fertile or not
-
-### Requirement: game-engine/board-generation-retry
-Board generation SHALL be an all-or-nothing attempt, retried on failure with deterministic sub-seeds derived from the game seed and the attempt index, up to three retries (four attempts total); if all attempts fail, generation SHALL be reported infeasible with a machine-readable error.
-
-#### Scenario: #failure-conditions
-- **WHEN** an attempt runs
-- **THEN** it fails if hazard connectivity cannot be satisfied, or any team's territory lacks `snakesPerTeam` eligible starting cells of the chosen parity, or any starting territory holds fewer than `snakesPerTeam` distinct eligible initial-food cells after head placement
-
-#### Scenario: #reproducible-retries
-- **WHEN** the same game seed is used twice
-- **THEN** the sequence of attempts and the final outcome are identical
-
-#### Scenario: #infeasible-configuration
-- **WHEN** all four attempts fail
-- **THEN** the game is left unplayable, the error identifies the constraint that failed on the last attempt, and the room owner can reconfigure and re-provision
+- **THEN** no cell's type ever changes: the set of Hazard cells and the set of Fertile cells are the ones the board arrived with
 
 ### Requirement: game-engine/determinism
-All randomness SHALL be deterministic from seeds — game setup from the per-game seed, each turn's resolution from a per-turn seed derived from it — and no seed SHALL be accessible to any game client.
+All randomness in a turn's resolution SHALL be deterministic from that turn's seed, itself derived from the per-game seed, and no seed SHALL be accessible to any game client. A resolution SHALL be a function of its declared inputs alone: the state it resolves, the directions it is given, its turn seed, and the timings declared for the turn. Time is one of those inputs rather than something the engine observes, so a resolution's dependence on real time is entirely a dependence on values its caller supplied.
 
 #### Scenario: #reproducibility
-- **WHEN** a game is replayed from the same seed and the same staged moves
-- **THEN** every board, spawn, and outcome is identical
+- **WHEN** a game is replayed from the same initial state, the same seed, the same staged moves, and the same declared turn timings
+- **THEN** every state, spawn, and outcome is identical
+
+#### Scenario: #time-is-an-input-not-a-reading
+- **WHEN** one turn is resolved twice from an identical state, directions, turn seed, and declared timings
+- **THEN** the two resolutions agree in every respect, including whether the game ended on time — the tuple grew by two quantities and stayed closed, which is why a limit measured in real time can be an ordinary rule of the game without any resolution ever consulting a clock
 
 #### Scenario: #secrecy
 - **WHEN** any client (operator, bot, or spectator) reads game state
 - **THEN** neither the game seed nor any turn seed is observable
 
 ### Requirement: game-engine/turn-resolution-model
-Each turn SHALL resolve in fixed stages: move projection, head-to-head precedence, interaction rules, derived rules, commit, item spawning, win-condition check, event derivation. Every rule reads only the start-of-turn snapshot (plus the surviving moved-head set from head-to-head precedence, and — for derived rules — interaction-rule claims); the commit is the sole writer of game state.
+Resolution SHALL run in fixed stages: move projection, head-to-head precedence, interaction rules, derived rules, commit, item spawning, win-condition check, event derivation. Every rule reads only the start-of-turn snapshot (plus the surviving moved-head set from head-to-head precedence, and — for derived rules — interaction-rule claims); the commit is the sole writer of game state.
+
+The engine SHALL offer two entry points over that one stage list. **Imagining moves** takes a partial game state, explicit directions for a caller-chosen subset of its alive snakes, and the remainder held, and yields a partial game state with its events. **Advancing a turn** takes a game state and staged moves, resolves every alive snake's direction by the movement rules, imagines exactly those moves with nothing held, and yields a game state. Item spawning and the win-condition check SHALL run only when every alive snake's turn equals the state's current turn — a condition on the state alone, independent of which entry point was called and of what the caller supplied. Imagining moves MAY be given a turn seed, and uses it only where a stage that runs requires one, so a caller that wants seeded stages can have them the moment the state is caught up.
+
+Both entry points SHALL require the timings of the turn being resolved: how long the turn lasted, and how much of its own clock each team burned on it. They are declared inputs of the call, like the directions and the turn seed, and they are the **only** channel by which elapsed time reaches committed state — the movements they drive land at the commit, together with everything else the turn commits, and only when the state's current turn advances.
 
 #### Scenario: #snapshot-purity
 - **WHEN** any rule evaluates during a turn
@@ -123,13 +88,36 @@ Each turn SHALL resolve in fixed stages: move projection, head-to-head precedenc
 - **WHEN** the rules within the interaction stage or the derived stage are evaluated in any order or concurrently
 - **THEN** every outcome is identical
 
-### Requirement: game-engine/movement
+#### Scenario: #imagining-moves-yields-a-partial-state
+- **WHEN** moves are imagined with one or more snakes held
+- **THEN** the result is a partial game state that will not narrow, so the hypothetical cannot be mistaken for, or persisted as, the game's actual state
 
-All alive snakes SHALL move simultaneously each turn. Direction: the staged move if any; else `lastDirection` unconditionally, even into a lethal cell; else (turn 0 with nothing staged) a seeded-random direction, also unconstrained by lethality. The moved body advances the head one cell and drops the final tail segment; `lastDirection` updates to the direction moved.
+#### Scenario: #advancing-is-imagining-with-nothing-held
+- **WHEN** a turn is advanced over a game state
+- **THEN** the state and events are identical to imagining the same complete set of directions and the same timings with nothing held, then spawning and checking the outcome — one rule set, reached two ways
+
+#### Scenario: #spawning-and-outcome-need-lockstep
+- **WHEN** a resolution leaves any alive snake behind the state's current turn
+- **THEN** no item spawns and no outcome is reported, whether or not a seed was supplied: eligible spawn cells are those unoccupied by any alive body and the eligible set determines where items land, so a mixed-turn board would place items where the real game cannot, and aggregate body length would compare snakes from different turns
+
+#### Scenario: #time-enters-a-turn-once
+- **WHEN** a resolution applies the timings it was given
+- **THEN** the team clocks and the game's consumed duration move here and nowhere else — a caller that moved them between turns would leave the time a turn committed and the time its outcome was decided on free to disagree, which is the one disagreement a limit measured in real time cannot survive
+
+#### Scenario: #a-turn-nobody-took-charges-nothing
+- **WHEN** every alive snake is held, so the state's current turn does not advance
+- **THEN** no clock moves and no duration accumulates, whatever timings were declared — time is charged per turn taken, which is what keeps holding everything the no-op it already was rather than a way to burn a team's clock down for free
+
+### Requirement: game-engine/movement
+All alive snakes taking a turn SHALL move simultaneously, and advancing a turn SHALL have every alive snake take it — only a hold excuses a snake from moving, and only while moves are being imagined. Direction, when advancing a turn: the staged move if any; else `lastDirection` unconditionally, even into a lethal cell; else (turn 0 with nothing staged) a seeded-random direction, also unconstrained by lethality. Imagining moves SHALL apply no fallback: a direction is supplied for every snake taking the turn. The moved body advances the head one cell and drops the final tail segment; `lastDirection` updates to the direction moved.
 
 #### Scenario: #direction-precedence
 - **WHEN** a snake has a staged move, or none but a prior direction, or neither
 - **THEN** it moves the staged direction, or repeats `lastDirection`, or moves a seeded-random direction respectively
+
+#### Scenario: #fallback-belongs-to-advancing-a-turn
+- **WHEN** moves are imagined and a snake taking the turn has no direction supplied
+- **THEN** nothing is inferred from `lastDirection` or drawn from a seed — a hypothetical never invents a snake's choice, because inventing one is the false assumption the second entry point exists to avoid
 
 #### Scenario: #no-steering-assistance
 - **WHEN** the repeated or random direction leads into a wall or a body
@@ -261,6 +249,8 @@ An invisibility `buff` SHALL hide a snake from connections belonging to opponent
 ### Requirement: game-engine/chess-timer
 Each team SHALL have a persistent millisecond time budget: `initialBudget` at game start, incremented by `budgetIncrement` each turn. At each turn start, `min(cap, budget)` moves from the budget onto the team's per-turn clock — the cap is `firstTurnTime` on turn 0 and `maxTurnTime` afterwards — so total remaining time is always `budget + perTurnClock`. Declaring turn over returns the unused clock to the budget; a clock reaching zero auto-declares; turn resolution commences when every team has declared.
 
+A turn's resolution SHALL apply the time the turn is declared to have cost, in this order and all within the one commit: each team's declared burn is spent from its per-turn clock — a burn exceeding what that clock holds spends the clock and no more — the unspent remainder returns to the budget; every competing team then left with no remaining time at all SHALL have each of its snakes still alive at that commit die (`clock_exhaustion`); and only after that does the next turn's increment and carve-out follow. Running out of time is therefore a cause of death and not an ending of its own, and the increment is not a floor beneath a team: a team that burns the whole of its remaining time on one turn reaches zero before the next turn's increment ever arrives. The game SHALL additionally carry the wall-clock duration it has consumed, advanced at that commit by the turn's declared duration. A team's burn and the turn's duration are distinct quantities: the turn lasts until its last declaration while a team that declared early burned less, and the teams' clocks run concurrently, so no aggregate of the burns is the turn's length.
+
 #### Scenario: #carve-out-arithmetic
 - **WHEN** a turn starts with budget B and cap C
 - **THEN** the clock holds `min(C, B)`, the budget holds `B − min(C, B)`, and their sum is unchanged
@@ -273,8 +263,24 @@ Each team SHALL have a persistent millisecond time budget: `initialBudget` at ga
 - **WHEN** a team's clock reaches zero
 - **THEN** its turn is declared over without action, and resolution starts once all teams have declared
 
+#### Scenario: #burn-is-not-the-turns-length
+- **WHEN** one team declares two seconds into a turn and another ten seconds into it
+- **THEN** each team's clock is charged its own burn while the game's consumed duration grows by the turn's own length — one number cannot serve both, so collapsing them would either credit a slow team with a fast team's economy or bill the game for time no clock spent
+
+#### Scenario: #only-a-resolution-moves-a-budget
+- **WHEN** a team's remaining time is read between two turns
+- **THEN** it is exactly what the last resolution committed: the arithmetic runs once, at a commit, from a declared burn, so no separately ticked copy of a budget exists to disagree with the committed one
+
+#### Scenario: #exhaustion-kills-the-teams-snakes
+- **WHEN** a competing team's per-turn clock and budget are both empty once its declared burn has been spent and the remainder banked
+- **THEN** every one of its snakes still alive at that commit dies, and nothing else follows from the clock: whether the game is over is decided from the state the commit leaves, on exactly the terms that decide it after any other cause of death. A clock that merely reached zero while the budget still holds time is the ordinary expiry that ends only the turn
+
+#### Scenario: #the-increment-is-not-a-floor
+- **WHEN** a team spends the entirety of its remaining time on one turn rather than declaring early, in a game whose per-turn increment is positive
+- **THEN** it is at zero when exhaustion is judged, because the increment and carve-out are applied only afterwards — the arrival of more time next turn is what a team that survives this one gets, not a reason it cannot run out
+
 ### Requirement: game-engine/game-end-conditions
-The game SHALL end at the end of the turn whose commit leaves at most one competing team with a living snake — last-team-standing (one team survives) or simultaneous elimination (none does) — or at the end of the turn in which the configured `maxTurns` is reached; `maxTurns` of 0 or absent means no turn limit. Win conditions are evaluated against each turn's committed state.
+The game SHALL end at the end of the turn whose commit leaves at most one competing team with a living snake — last-team-standing (one team survives) or simultaneous elimination (none does); at the end of the turn in which the configured `maxTurns` is reached; or at the end of the turn whose commit takes the game's consumed duration to the configured `maxGameDurationMs`. `maxTurns` of 0 or absent means no turn limit, and `maxGameDurationMs` of 0 or absent means no duration limit. Every condition SHALL be evaluated against each turn's committed state and the first met SHALL end the game, so the duration limit is an ordinary end condition rather than a second kind of ending: the time a turn cost is one of the resolution's declared inputs, and the total it moves is committed state like any other. A team left with no remaining time is not an ending here at all — its snakes die at that commit and the elimination conditions then decide, exactly as they do for any other cause of death. Where an elimination condition and a limit are both met at one commit the game still ends once, and the elimination is the ending: it says what became of the game, while a limit only says a game still in progress may run no further.
 
 #### Scenario: #last-team-standing
 - **WHEN** only one competing team still has a living snake after commit
@@ -286,10 +292,22 @@ The game SHALL end at the end of the turn whose commit leaves at most one compet
 
 #### Scenario: #turn-limit-and-no-limit
 - **WHEN** `maxTurns` is reached, or is 0/absent
-- **THEN** the game ends at the end of that turn, or continues indefinitely until an elimination ending, respectively
+- **THEN** the game ends at the end of that turn, or runs on until an elimination or the duration limit, respectively
+
+#### Scenario: #a-team-out-of-time-ends-nothing-by-itself
+- **WHEN** a competing team is left with no remaining time at all and its snakes die at that commit
+- **THEN** the game ends at that commit only if what the deaths leave behind meets an elimination condition — with three teams left it carries on with two, and with two it ends by last-team-standing on that condition's terms, so there is no ending that names the clock and nothing to reconcile with the limits
+
+#### Scenario: #the-first-condition-met-ends-the-game
+- **WHEN** a game is configured with both a turn limit and a duration limit, or an elimination arrives at a commit that also reaches a limit
+- **THEN** the earlier commit is the one that ends it, and a commit meeting several conditions ends it once — an elimination present at that commit is the ending, and the limits are silent
+
+#### Scenario: #the-duration-limit-is-an-ending-like-any-other
+- **WHEN** the game's consumed duration reaches a positive `maxGameDurationMs` at a commit
+- **THEN** the game ends at the end of that turn and the final turn resolves exactly as any other — and a reader recomputes this ending from the record just as it recomputes the turn limit, because the duration the game consumed is committed state rather than a measurement only the thing that took it remembers
 
 ### Requirement: game-engine/scoring
-A team's score at game end SHALL be its normalised body-share times the number of competing teams: `score(team) = (alive_segments_owned / total_alive_segments) × competing_teams`, with par exactly `1.0` for a proportional share. Forfeited teams are excluded from all terms and score `0` (if every team forfeited, all score `0`). Ending-specific scores: the last-standing survivor scores `1.0 × competing_teams` and eliminated teams `0`; at simultaneous elimination, teams alive at the final turn's start score `1.0` and earlier-eliminated teams `0`. Highest score wins; ties produce a draw.
+A team's **standing score** at any turn SHALL be its normalised body-share times the number of competing teams: `score(team) = (alive_segments_owned / total_alive_segments) × competing_teams`, with par exactly `1.0` for a proportional share. Forfeited teams are excluded from all terms and score `0` (if every team forfeited, all score `0`). A team's **final score** is its standing score at the game's last turn with the ending-specific adjustments applied: the last-standing survivor scores `1.0 × competing_teams` and eliminated teams `0`; at simultaneous elimination, teams alive at the final turn's start score `1.0` and earlier-eliminated teams `0`. Highest final score wins; ties produce a draw.
 
 #### Scenario: #proportional-par
 - **WHEN** three competing teams hold equal living segment counts at the turn limit
@@ -299,34 +317,46 @@ A team's score at game end SHALL be its normalised body-share times the number o
 - **WHEN** one of three teams forfeits
 - **THEN** it scores 0 and the survivors' scores are computed over 2 competing teams
 
+#### Scenario: #standing-score-at-any-turn
+- **WHEN** a standing score is taken partway through a game
+- **THEN** every competing team has one, from the same formula the final score is built on — so a mid-game figure and the figure the game is decided by can never be two different calculations
+
 #### Scenario: #ending-specific-scores
-- **WHEN** the game ends by survival, simultaneous elimination, or turn limit
+- **WHEN** the game ends by survival, simultaneous elimination, the turn limit, or the duration limit
 - **THEN** scores follow the ending's rule above, and any tie at the top is a draw
 
+#### Scenario: #running-out-of-time-needs-no-adjustment
+- **WHEN** a team's snakes all die because it was left with no remaining time
+- **THEN** it is scored as any other team whose snakes died at that commit — `0` if those deaths ended the game by an elimination, and otherwise its plain standing score, which holds no living segment and is therefore `0` for as long as the game runs on. Nothing here reads the clock, because the clock's whole effect on the game was the deaths it caused
+
+#### Scenario: #the-duration-limit-faults-nobody
+- **WHEN** the game ends on its duration limit
+- **THEN** every competing team simply scores its standing score at that turn — the limit is a bound on the game rather than a fault of any team
+
 ### Requirement: game-engine/turn-events
-Each turn SHALL emit a closed set of events sufficient to reconstruct and narrate the turn: movements (with who staged them), deaths (cause — including contributing damage sources for starvation — killer where applicable, and location), severs, food consumption and potion collection (each carrying the consumed item's identity; potion collection also the collector and affected teammates), spawns, effect applications, and effect cancellations.
+Each turn SHALL emit a closed set of events sufficient to reconstruct and narrate the turn: movements (with who staged them), deaths (cause — including contributing damage sources for starvation — killer where applicable, and location), severs, food consumption and potion collection (each carrying the consumed item's identity; potion collection also the collector and affected teammates), spawns, effect applications, effect cancellations, and hazard damage taken by a snake that survived the turn (carrying the snake, the damage applied, and the cell).
 
 #### Scenario: #every-significant-outcome-is-an-event
 - **WHEN** any turn resolves
-- **THEN** each movement, death, sever, consumption, collection, spawn, and effect change appears as exactly one typed event from the closed set
+- **THEN** each movement, death, sever, consumption, collection, spawn, effect change, and survived hazard damage appears as exactly one typed event from the closed set
 
 #### Scenario: #deterministic-order
-- **WHEN** the same turn resolves twice from an identical snapshot, staged moves, and turn seed
+- **WHEN** the same turn resolves twice from an identical snapshot, staged moves, turn seed, and declared timings
 - **THEN** the emitted event sequence is identical
 
+#### Scenario: #hazard-damage-is-announced
+- **WHEN** a snake's moved head lands on a Hazard cell and it survives the turn
+- **THEN** the turn carries a hazard-damage event for it, so a consumer learns why its health fell without diffing successive snapshots; a snake the damage kills reports through its death event instead, which already carries contributing damage sources, so one act never produces two events
+
 ### Requirement: game-engine/configuration-parameters
-Game configuration SHALL comprise exactly these parameters, with these ranges, defaults, and disable sentinels:
+Game configuration SHALL comprise exactly these parameters — every one of them a parameter of a game already under way — with these ranges, defaults, and disable sentinels:
 
 | Parameter | Range | Default | Sentinel |
 |---|---|---|---|
-| `boardSize` | 7–32 | — | |
-| `snakesPerTeam` | 1–10 | 5 | |
 | `maxHealth` | 1–500 | 100 | |
 | `maxTurns` | 0 or 1–1000 | 100 | 0 = no turn limit |
-| `hazardPercentage` | 0–30 | 0 | 0 = no hazards |
+| `maxGameDurationMs` | 0 or 1000–86400000 | 0 | 0 = no time limit |
 | `hazardDamage` | 1–100 | 15 | |
-| `fertileGround.density` | 0–90 | 30 | 0 = fertile ground disabled |
-| `fertileGround.clustering` | 1–20 | 10 | |
 | `foodSpawnRate` | 0–5 | 0.5 | 0 = no food spawns |
 | `invulnPotionSpawnRate` | 0–0.2 | 0.15 | 0 = no invulnerability potions |
 | `invisPotionSpawnRate` | 0–0.2 | 0.1 | 0 = no invisibility potions |
@@ -335,15 +365,19 @@ Game configuration SHALL comprise exactly these parameters, with these ranges, d
 | `clock.firstTurnTimeMs` | 1000–300000 | 60000 | |
 | `clock.maxTurnTimeMs` | 100–300000 | 10000 | |
 
-Numeric bounds SHALL be enforced by the user-facing configuration surfaces; the game engine itself accepts any type-valid configuration (for `boardSize`, any positive integer).
+The vocabulary SHALL carry no parameter describing how a board is built — no edge length, snake count, hazard proportion, fertile density or clustering — because the engine is handed a board rather than a recipe for one, and a parameter it never reads is a parameter it must not declare. Numeric bounds SHALL be enforced by the user-facing configuration surfaces; the game engine itself accepts any type-valid configuration. `maxGameDurationMs` bounds the wall-clock duration a game may consume and is a dynamic gameplay parameter like the clock values — declared here so that one declaration serves every surface and every runtime, and evaluated here too, against the durations declared to the engine's own resolutions.
 
 #### Scenario: #disable-sentinels
-- **WHEN** `maxTurns`, `fertileGround.density`, `foodSpawnRate`, or a potion spawn rate is 0
-- **THEN** the corresponding feature is fully disabled (no limit, no fertile cells, no spawns of that kind)
+- **WHEN** `maxTurns`, `maxGameDurationMs`, `foodSpawnRate`, or a potion spawn rate is 0
+- **THEN** the corresponding feature is fully disabled (no turn limit, no time limit, no spawns of that kind)
 
 #### Scenario: #bounds-live-at-the-surfaces
-- **WHEN** a value outside a documented range (e.g. `boardSize` outside 7–32) reaches the engine
+- **WHEN** a value outside a documented range (e.g. `hazardDamage` outside 1–100) reaches the engine
 - **THEN** the engine does not reject it on range grounds — rejection is the configuration surfaces' job
+
+#### Scenario: #no-parameter-the-engine-does-not-read
+- **WHEN** a parameter is proposed for this vocabulary
+- **THEN** it belongs only if a turn's resolution reads it: whatever shapes the board before the first turn is declared by whoever builds the board, so the two sets are disjoint and no surface has to guess which half the engine wants
 
 #### Scenario: #cross-runtime-expressibility
 - **WHEN** the configuration schema evolves
@@ -369,8 +403,105 @@ The engine SHALL depend only on portable ECMAScript facilities and SHALL take al
 
 #### Scenario: #no-ambient-nondeterminism
 - **WHEN** the engine needs randomness or the current time
-- **THEN** it reads them from explicit inputs (the `Rng` state, the game seed, the configuration), never from host facilities such as `Date.now` or `crypto`
+- **THEN** it reads them from explicit inputs (the `Rng` state, the game seed, the configuration, and the timings declared for the turn being resolved), never from host facilities such as `Date.now` or `crypto`
 
 #### Scenario: #no-runtime-specific-api
 - **WHEN** the same engine build is loaded into a different conformant JavaScript runtime
 - **THEN** it runs unchanged, relying on no Node-, browser-, or host-specific API
+
+### Requirement: game-engine/held-snakes
+A snake **held** for a resolution SHALL split into two representations, and that split SHALL be the whole of what holding means.
+
+The snake itself SHALL **crystallize** into its **historic record**: it leaves the board frozen at the turn it was held from, and nothing SHALL ever change it again — not a sever, not an expiry, not its team's collection. It is a record rather than a participant, carried on the state so a reader may take the last known position from it, and no turn's calculation SHALL resolve against it.
+
+Its **projection** SHALL be what stands on the board from then on: the same snake one turn later, minus what the hold declines to model. It SHALL carry the shape every board occupant shares, so that the rules which do not distinguish the two kinds reach it through the same statements that reach a snake. It SHALL be an ordinary board occupant in every respect the rules read — severable on the ordinary terms, carrying potion effects that expire on schedule and that its team's cancellations and rebuilds reach, advancing its turn with the state, and dying with the rest of its team when that team is left with no remaining time. It SHALL differ from a snake in exactly one way: **it has no head.**
+
+That difference SHALL follow from what a hold declines to say. A snake vacates the cell its head occupies only by putting its own next segment there, so that cell is the one whose occupant next turn is certain without knowing the snake's choice, and the projection stands in it. Where the head itself advanced to is precisely the thing nobody chose, so it SHALL be in no plane the resolution can reach. A projection held from turn T and read at turn T+N therefore has N leading segments at cells no record names, derived from the two turns rather than stored.
+
+A projection SHALL carry its team's maximum health, whatever the snake's health was when it was held: a snake nobody modelled might have reached food on any turn since, so a lower figure would assert a starvation the hold has no grounds to claim. For the same reason its final segment SHALL NOT be vacated, since a snake that reaches food keeps it. Both are deliberately conservative and rest on the same unmodelled fact.
+
+A sever SHALL truncate a projection like any body, and one reaching its first segment SHALL leave it standing in nothing while alive: it keeps only the head that had already advanced beyond every cell it could name. A projection SHALL NOT be given a direction and SHALL NOT be named as held — it is held by what it is — so a resolution can neither advance one nor narrow a state carrying a live one.
+
+#### Scenario: #a-projection-has-no-head
+- **WHEN** a moving snake enters the first cell a projection stands in — the cell its historic record names as the head
+- **THEN** the outcome is the ordinary body-collision one, severed if the mover's invulnerability level is higher and otherwise fatal to the mover, because the projection will vacate that cell only into its own next segment: a body stands there whatever the snake chose. Head-to-head precedence never applies anywhere on a projection, since it has no head to contest and entered no cell
+
+#### Scenario: #a-severed-projection-locates-nothing
+- **WHEN** a sever reaches a projection's first segment, taking every cell it stands in
+- **THEN** it survives standing in nothing: it holds only the head no cell could name, so it obstructs nothing and no rule finds it on the board, while its historic record stays readable as the last position anyone modelled
+
+#### Scenario: #a-projection-carries-its-own-effects
+- **WHEN** a potion effect on a projection is due to expire, or its team's collection cancels or rebuilds that family
+- **THEN** the projection's effects change and its historic record's do not. The timer is a fact about the turn rather than about the snake, so nothing it might have done could have moved it — and the record cannot express the change at all, because nothing ever changes a record
+
+#### Scenario: #a-projection-cannot-be-starved-by-a-hold
+- **WHEN** a snake at one health is held
+- **THEN** its projection carries maximum health rather than that figure, takes no tick, and has no health resolved — a snake allowed to move might have reached food, so a countdown nobody watched would invent a death that clears an obstacle the real game keeps
+
+#### Scenario: #a-projected-tail-is-impassable
+- **WHEN** a moving snake enters the last cell a projection stands in — a legal follow against a snake taking the turn, whose tail vacates as it moves
+- **THEN** the cell is occupied and the ordinary body-collision outcome follows. A snake that reaches food keeps its final segment, and a resolution that will not model a snake must not assume the outcome that happens to be convenient
+
+#### Scenario: #a-held-snakes-team-still-spends-its-time
+- **WHEN** every snake of a team is held through a resolution that advances the turn
+- **THEN** the burn declared for that team is spent from its clock all the same, and if that leaves the team with no remaining time its projections die with the rest — the time a turn cost is a fact about the turn on the same terms as an expiry, and a hold that stopped a team's clock would hand a search a free reprieve from the deaths it is meant to see coming
+
+#### Scenario: #a-hold-does-not-shield-the-snake
+- **WHEN** a teammate collects a potion whose effects reach a held snake
+- **THEN** its projection receives them, and the collection event's affected-teammate list is what it would be had nobody been held — a hold declines to model a snake's own choice, not the world's effect on it
+
+#### Scenario: #holding-is-an-input-not-a-correction
+- **WHEN** a snake is held and another moves through cells it would have vacated had it advanced
+- **THEN** the outcome follows from where the projection actually stands. Resolving with the snake advanced and restoring its body afterwards would record events for a board that never existed
+
+#### Scenario: #a-hold-that-advances-nothing-projects-nothing
+- **WHEN** every alive snake is held, so the state's current turn does not advance
+- **THEN** no projection is created and nothing crystallizes: a projection is a snake read one turn on, and with no turn taken there is no later turn to read it at
+
+### Requirement: game-engine/historic-advance
+A projection's move at the turn it was held MAY become known after the fact, and the engine SHALL offer a way to supply it. Doing so SHALL NOT advance the snake from where the board now stands: the move is a fact about the **past**, so the board SHALL be resolved again from before that turn with the fact in place, and every resolution applied since replayed over it.
+
+A partial game state SHALL therefore carry what its resolutions were **asked** — each one's directions, the snakes it held, its declared timings and its turn seed — together with the board as it stood before the oldest still-standing projection was held. A resolution is a function of its declared inputs alone, so replaying those inputs against a revised board is the same computation over a different premise rather than an approximation of one. This record SHALL exist exactly while something is projected, so a state a runtime persists never carries one.
+
+Supplying a move SHALL leave the snake **one turn less historic** rather than caught up: it takes the turn it was held at, and is held again at every turn after, because the record says nothing about those either. Catching a snake up N turns is N supplied moves.
+
+A revision SHALL be permitted to change what already happened. The newly located head may enter a cell another snake was allowed to pass through, so snakes that lived may die and a game in progress may have ended. The engine SHALL report which snakes' fates the revision changed rather than leaving a caller to discover it, and SHALL adapt the replayed record to whatever board the revision produces — dropping a direction for a snake that is no longer there, and holding a snake the record says nothing about, since a hold is exactly the answer for a move nobody modelled.
+
+#### Scenario: #a-learned-move-settles-the-turn-it-was-made-at
+- **WHEN** a projection held at turn T is given the move it made at T, on a board that has since reached turn T+N
+- **THEN** the board is resolved again from before T with that move in place, the result stands at turn T+N as before, and the snake is projected from T+1 — one turn of history recovered, not N
+
+#### Scenario: #a-revision-can-rewrite-what-already-happened
+- **WHEN** the newly located head occupies a cell another snake was allowed to move through while the snake was projected
+- **THEN** the revision resolves that collision as the rules always would, so a snake that lived may now be dead, and the change of fate is reported with the result. A search keeps this rare by holding only snakes unlikely to bear on the ground it cares about; rare is not never, and a caller that ignores the report is reading a board it did not compute
+
+#### Scenario: #a-revision-adapts-the-record-it-replays
+- **WHEN** the revised board no longer matches the record — a directed snake has died, or one the record is silent about has survived
+- **THEN** the replay drops the direction in the first case and holds the snake in the second, rather than refusing: the record is what a resolution was asked, and a snake it never mentioned is a snake nobody modelled
+
+#### Scenario: #only-a-projection-has-a-move-to-learn
+- **WHEN** a move is supplied for a snake that is not projected
+- **THEN** it is refused: a snake on the board has no unknown past, and its next move belongs to the resolution of the next turn
+
+### Requirement: game-engine/hypothetical-resolution-failure
+Imagining moves SHALL yield either a partial game state or a failure, never a partial answer alongside one. It SHALL fail rather than resolve on any of four kinds of refusal: when an alive snake is given neither a direction nor a hold; when a snake whose turn lags the state's is asked to move; when a stage that will run requires a turn seed the caller did not supply; or when the input could not have arisen — a direction supplied for a held snake, a held snake that is not alive, a declared duration or burn that is not a non-negative length of time, or a state that is not structurally valid. A failure SHALL name its kind, and the snake it is about where it is about one — the seed refusal is about the resolution rather than any snake.
+
+#### Scenario: #every-snake-needs-a-disposition
+- **WHEN** an alive snake is neither given a direction nor held
+- **THEN** the resolution fails: nothing is inferred from its last direction, because a silently invented direction is exactly the false assumption this entry point exists to avoid, and the caller is least likely to look for it here
+
+#### Scenario: #only-holds-may-lag
+- **WHEN** a snake whose turn is behind the state's is asked to move
+- **THEN** the resolution fails — advancing a snake held through earlier turns would need interactions that already committed to be re-resolved, and refusing is the conservative answer for a caller searching for a worst case
+
+#### Scenario: #a-running-stage-needs-its-seed
+- **WHEN** a resolution leaves nothing behind, so item spawning runs, and no turn seed was supplied
+- **THEN** the resolution fails rather than spawning from some substitute entropy. This is the same refusal as a missing direction one step further on — an answer that would depend on information the caller did not supply — and it is a refusal about the resolution rather than about any snake, so it names no snake. A resolution that leaves a snake behind runs no seeded stage and needs no seed
+
+#### Scenario: #impossible-input-is-refused
+- **WHEN** the input contradicts itself or describes a state the game could not produce
+- **THEN** the resolution fails rather than resolving over it, so a malformed hypothetical never reads as a sound one
+
+#### Scenario: #holding-everything-is-a-no-op-not-a-failure
+- **WHEN** every alive snake is held
+- **THEN** the resolution succeeds and returns the state unchanged. This needs no special case: the current turn is the greatest turn any snake has reached, so with nothing advanced it does not move either, and the state that comes back is the state that went in

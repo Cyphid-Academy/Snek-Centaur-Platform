@@ -1,10 +1,9 @@
+import { CellType, ItemType, cellIndex, isInner, parityOf, rngFromSeed } from "@cyphid/snek-engine";
 import { describe, expect, it } from "vitest";
-import { cellIndex, isInner, parityOf } from "./board.js";
 import { generateBoardAndInitialState, placeInitialFood } from "./boardgen.js";
-import { rngFromSeed } from "./rng.js";
+import type { GameConfig } from "./config.js";
+import { DEFAULT_GAME_CONFIG } from "./config.js";
 import { seed, tid } from "./testkit.js";
-import type { GameConfig } from "./types.js";
-import { CellType, DEFAULT_GAME_CONFIG, ItemType } from "./types.js";
 
 function cfg(overrides: {
   boardSize?: number;
@@ -15,7 +14,7 @@ function cfg(overrides: {
   maxHealth?: number;
 }): GameConfig {
   return {
-    orchestration: {
+    generation: {
       boardSize: overrides.boardSize ?? 15,
       snakesPerTeam: overrides.snakesPerTeam ?? 2,
       hazardPercentage: overrides.hazardPercentage ?? 0,
@@ -57,14 +56,14 @@ describe("board construction", () => {
     }
   });
 
-  // spec: game-engine/hazards
+  // spec: game-configuration/hazards
   it("places floor(innerCount * H / 100) hazard cells", () => {
     const { board } = generateOk(cfg({ boardSize: 11, hazardPercentage: 20 }));
     const hazards = board.cells.filter((c) => c === CellType.Hazard).length;
     expect(hazards).toBe(Math.floor(81 * 0.2)); // 16
   });
 
-  // spec: game-engine/hazards — all non-hazard inner cells form a single connected region
+  // spec: game-configuration/hazards — all non-hazard inner cells form a single connected region
   it("keeps non-hazard inner cells 4-connected", () => {
     // seed(1) is a known-feasible seed for 30% hazards on a 13-board; ~half
     // of seeds exhaust all four attempts at this density (see DECISIONS.md).
@@ -103,7 +102,7 @@ describe("board construction", () => {
     expect(visited.size).toBe(open.length);
   });
 
-  // spec: game-engine/fertile-ground, 01 §2.5 step 4 — ceil(|candidates| * D / 100)
+  // spec: game-configuration/fertile-ground, 01 §2.5 step 4 — ceil(|candidates| * D / 100)
   it("marks ceil(candidates * density / 100) fertile cells, never on walls or hazards", () => {
     const config = cfg({ boardSize: 15, hazardPercentage: 10, fertileDensity: 30 });
     const { board } = generateOk(config);
@@ -130,7 +129,7 @@ describe("board construction", () => {
 });
 
 describe("snake initialization", () => {
-  // spec: game-engine/initial-snakes..021
+  // spec: game-configuration/initial-snakes..021
   it("creates snakesPerTeam snakes per team with consecutive letters from A", () => {
     const { snakes } = generateOk(cfg({ snakesPerTeam: 3 }));
     expect(snakes).toHaveLength(6);
@@ -154,7 +153,7 @@ describe("snake initialization", () => {
     }
   });
 
-  // spec: game-engine/starting-placement — non-Wall, non-Hazard inner cells, distinct per snake
+  // spec: game-configuration/starting-placement — non-Wall, non-Hazard inner cells, distinct per snake
   it("places heads on distinct non-wall, non-hazard inner cells", () => {
     const { board, snakes } = generateOk(cfg({ boardSize: 15, hazardPercentage: 20 }));
     const heads = snakes.map((s) => s.body[0]);
@@ -168,7 +167,7 @@ describe("snake initialization", () => {
     }
   });
 
-  // spec: game-engine/starting-placement — single parity across ALL teams
+  // spec: game-configuration/starting-placement — single parity across ALL teams
   it("places all heads on cells of the same parity", () => {
     for (const s of [1, 2, 3, 4, 5]) {
       const { snakes } = generateOk(cfg({}), seed(s));
@@ -185,10 +184,10 @@ describe("snake initialization", () => {
 });
 
 describe("initial food", () => {
-  // spec: game-engine/initial-food
+  // spec: game-configuration/initial-food
   it("spawns snakesPerTeam food per starting territory on eligible cells", () => {
     const { board, snakes, items } = generateOk(cfg({ snakesPerTeam: 3 }));
-    expect(items).toHaveLength(6); // 2 teams x 3 (game-engine/initial-food#food-count-per-territory)
+    expect(items).toHaveLength(6); // 2 teams x 3 (game-configuration/initial-food#food-count-per-territory)
     const occupied = new Set(snakes.map((s) => `${s.body[0]?.x},${s.body[0]?.y}`));
     const itemCells = new Set<string>();
     for (const item of items) {
@@ -202,7 +201,7 @@ describe("initial food", () => {
     expect(new Set(items.map((i) => `${i.spawnTurn}:${i.spawnIndex}`)).size).toBe(6);
   });
 
-  // spec: game-engine/initial-food#food-count-per-territory — fertile designations ignored
+  // spec: game-configuration/initial-food#food-count-per-territory — fertile designations ignored
   it("ignores fertile scarcity (a config that would starve fertile-restricted placement succeeds)", () => {
     const result = generateBoardAndInitialState(
       cfg({ boardSize: 9, snakesPerTeam: 3, fertileDensity: 1 }),
@@ -215,7 +214,7 @@ describe("initial food", () => {
 });
 
 describe("determinism and retry", () => {
-  // spec: game-engine/determinism, game-engine/board-generation-retry — reproducible from the game seed alone
+  // spec: game-engine/determinism, game-configuration/board-generation-retry — reproducible from the game seed alone
   it("produces identical output for identical seeds and different output for different seeds", () => {
     const config = cfg({ boardSize: 13, hazardPercentage: 15, fertileDensity: 25 });
     const a = generateBoardAndInitialState(config, TEAMS, seed(11));
@@ -225,7 +224,7 @@ describe("determinism and retry", () => {
     expect(a).not.toEqual(c);
   });
 
-  // spec: game-engine/board-generation-retry — territory/parity infeasibility surfaces after 4 attempts
+  // spec: game-configuration/board-generation-retry — territory/parity infeasibility surfaces after 4 attempts
   it("reports TERRITORY_PARITY_SHORTAGE for too many snakes on a tiny board", () => {
     const result = generateBoardAndInitialState(
       cfg({ boardSize: 7, snakesPerTeam: 10 }),
@@ -239,7 +238,7 @@ describe("determinism and retry", () => {
     expect(result.details.centaurTeamId).toBeDefined();
   });
 
-  // spec: game-engine/board-generation-retry#failure-conditions — a territory
+  // spec: game-configuration/board-generation-retry#failure-conditions — a territory
   // with no eligible initial-food cell fails the attempt (direct unit test:
   // the condition is unreachable from in-range configurations).
   it("fails placement when a starting territory has no eligible cell", () => {

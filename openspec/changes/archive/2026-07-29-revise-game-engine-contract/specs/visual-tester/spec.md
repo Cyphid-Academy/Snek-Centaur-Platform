@@ -79,6 +79,8 @@ Depends on: test-sequences/validation.
 
 The tool SHALL promote the current session to a git-tracked fixture as its one explicit save; list all saved sequences filtered by tier (fixtures, scratch, or the union) and distinguishing the two; load a saved sequence into the session (a fixture loads read-only, forking to a scratch on first edit); copy any saved sequence's JSON document to the clipboard; and import pasted raw JSON as a new scratch sequence, accepting it only if it passes sequence validation.
 
+The listing SHALL mark a sequence this build cannot read, naming the schema version that wrote it, and SHALL offer no action that would fail on it — save the copy, which is how its document leaves for an upgrade. A stored sequence outlives the format version that wrote it, so an unreadable one is an ordinary listing entry rather than an error state, and the version it names is the whole of what a reader needs to decide what to do with it.
+
 #### Scenario: #save-from-session
 - **WHEN** the tester saves the session as a fixture
 - **THEN** the stored document records the session's initial state, its per-turn resolution inputs — staged moves and timings alike — and its per-turn resolver outputs as the fixture's expectations
@@ -90,6 +92,10 @@ The tool SHALL promote the current session to a git-tracked fixture as its one e
 #### Scenario: #filter-by-tier
 - **WHEN** the tester selects the fixtures, scratch, or union filter
 - **THEN** the listing shows exactly the sequences of the selected tier(s), each marked with its tier
+
+#### Scenario: #unreadable-sequences-are-listed-not-hidden
+- **WHEN** the listing includes a sequence written against a schema version this build does not support
+- **THEN** the entry appears like any other, marked unreadable and carrying the version that wrote it, with loading and running unavailable and copying still offered — the tester learns the document needs upgrading before spending a click on it, and can take it away to be upgraded without the tool having to read it
 
 #### Scenario: #fixture-loads-read-only
 - **WHEN** the tester loads a fixture and then modifies it

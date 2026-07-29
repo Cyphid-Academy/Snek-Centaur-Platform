@@ -1,15 +1,17 @@
 // spec: test-sequences/persistence — round-trip fidelity, metadata-only
 // listing, and tier placement, against a temp store directory. No database,
 // so this runs everywhere (Replit, agent VMs, CI) with no setup.
-import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Direction } from "@cyphid/snek-engine";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { canonicalizeDoc, encodeTestSequence } from "../test-sequences/codec.js";
+import { isReadable } from "../sequenceClient.js";
+import { SCHEMA_VERSION, canonicalizeDoc, encodeTestSequence } from "../test-sequences/codec.js";
 import {
   buildInitialState,
   defaultConfig,
+  downgradeToPreviousVersion,
   gameSeed,
   moves,
   recordSequence,
@@ -60,6 +62,40 @@ describe("fsStore", () => {
     if (!fetched) throw new Error("saved sequence not found");
     expect(fetched.data).toEqual(d);
     expect(JSON.stringify(fetched.data)).toBe(JSON.stringify(d));
+  });
+
+  // The listing decides which actions to offer from the version rather than
+  // from a failed attempt, so it must recover the version of a document it
+  // cannot otherwise read — and must not drop that document from the listing.
+  // spec: visual-tester/sequence-management#unreadable-sequences-are-listed-not-hidden
+  it("lists a document this build cannot read, carrying the version that wrote it", async () => {
+    const current = await createSequence(doc("current"), "scratch", root);
+    const stale = downgradeToPreviousVersion(doc("stale"));
+    await writeFile(`${root}/stale-fixture.json`, `${JSON.stringify(stale, null, 2)}\n`, "utf8");
+
+    const list = await listSequences(root);
+    expect(list.map((e) => e.name).sort()).toEqual(["current", "stale"]);
+
+    const staleEntry = list.find((e) => e.name === "stale");
+    expect(staleEntry?.schemaVersion).toBe(1);
+    expect(isReadable(staleEntry as { schemaVersion: number | null })).toBe(false);
+
+    const currentEntry = list.find((e) => e.id === current.id);
+    expect(currentEntry?.schemaVersion).toBe(SCHEMA_VERSION);
+    expect(isReadable(currentEntry as { schemaVersion: number | null })).toBe(true);
+  });
+
+  // A file that is not JSON at all has no metadata to list; one that is JSON
+  // but carries no version is listed, unreadable, under its id.
+  it("skips a non-JSON file but lists a versionless one under its id", async () => {
+    await writeFile(`${root}/broken.json`, "{not json at all", "utf8");
+    await writeFile(`${root}/versionless.json`, JSON.stringify({ turns: [] }), "utf8");
+
+    const list = await listSequences(root);
+    expect(list.map((e) => e.id)).toEqual(["versionless"]);
+    expect(list[0]?.name).toBe("versionless");
+    expect(list[0]?.schemaVersion).toBeNull();
+    expect(isReadable({ schemaVersion: list[0]?.schemaVersion ?? null })).toBe(false);
   });
 
   it("lists id/name/tier/timestamps and never the document payload", async () => {

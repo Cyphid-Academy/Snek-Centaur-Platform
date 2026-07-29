@@ -1,23 +1,31 @@
 // Session ⇄ Test Sequence bridge and run-mode presentation helpers.
-import { DEFAULT_GAME_CONFIG, Direction } from "@cyphid/snek-engine";
+import { Direction } from "@cyphid/snek-engine";
+import { DEFAULT_GAME_CONFIG } from "@cyphid/snek-game-configuration";
 import { describe, expect, it } from "vitest";
 import { groupDifferences, implicatedCellIndices, sectionOf } from "./run.js";
 import { sequenceToSession, sessionToSequence } from "./sequences.js";
-import { createSession, simulateNext } from "./session.js";
+import type { Session } from "./session.js";
+import { createSession, defaultTimings, simulateNext, stateAt } from "./session.js";
 import { encodeTestSequence } from "./test-sequences/codec.js";
 import { buildInitialState, gameSeed, moves } from "./test-sequences/fixtures.js";
 import { runReplayCheck } from "./test-sequences/replay.js";
 import { validateTestSequenceDoc } from "./test-sequences/schema.js";
 
+/** The tool's default timings for the next turn of `session`. */
+function tick(session: Session, durationMs = 500) {
+  return defaultTimings(stateAt(session, session.turns.length), durationMs);
+}
+
 function simulatedSession() {
   let session = createSession(buildInitialState(), DEFAULT_GAME_CONFIG.runtime, gameSeed());
-  session = simulateNext(session, moves([[1, Direction.Right]]));
+  session = simulateNext(session, moves([[1, Direction.Right]]), tick(session));
   session = simulateNext(
     session,
     moves([
       [1, Direction.Down],
       [2, Direction.Up],
     ]),
+    tick(session),
   );
   return session;
 }
@@ -53,7 +61,7 @@ describe("sequenceToSession", () => {
     expect(session.turns).toHaveLength(2);
     expect(sessionToSequence(session, "loaded")).toEqual(seq);
 
-    session = simulateNext(session, moves([]));
+    session = simulateNext(session, moves([]), tick(session));
     expect(session.turns).toHaveLength(3);
     expect(session.turns[2]?.turnNumber).toBe(2);
   });

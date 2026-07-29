@@ -22,6 +22,11 @@ export interface SequenceListEntry {
   readonly tier: SequenceTier;
   readonly createdAt: string; // ISO timestamp
   readonly updatedAt: string; // ISO timestamp
+  // The version the document was written against, or null if it carries none.
+  // A stored sequence outlives the format version that wrote it, so a listing
+  // that omits this can only offer actions that may fail on the entry it just
+  // showed. spec: test-sequences/schema-version#unknown-version-rejected
+  readonly schemaVersion: number | null;
 }
 
 export interface SequenceRecord extends SequenceListEntry {
@@ -59,10 +64,24 @@ async function statTimes(file: string): Promise<{ createdAt: string; updatedAt: 
   return { createdAt: birth.toISOString(), updatedAt: s.mtime.toISOString() };
 }
 
+/** Metadata a listing recovers from a document, tolerating one this build
+ *  cannot read: such a document is an ordinary entry rather than an error, and
+ *  the version that wrote it is what a reader needs to decide what to do with
+ *  it. Only a file that is not JSON at all has nothing to list.
+ *  spec: visual-tester/sequence-management#unreadable-sequences-are-listed-not-hidden */
+function metadataOf(doc: unknown, id: string): { name: string; schemaVersion: number | null } {
+  const record = (doc ?? {}) as { name?: unknown; schemaVersion?: unknown };
+  return {
+    name: typeof record.name === "string" ? record.name : id,
+    schemaVersion: typeof record.schemaVersion === "number" ? record.schemaVersion : null,
+  };
+}
+
 /** List every sequence in both tiers, newest first. Reads each file to
- *  recover its display name but returns metadata only — never the document
- *  payload (spec: test-sequences/persistence#listing). Unparseable files are
- *  skipped with a warning rather than breaking the whole listing. */
+ *  recover its display name and schema version but returns metadata only —
+ *  never the document payload (spec: test-sequences/persistence#listing).
+ *  Files that are not JSON at all are skipped with a warning rather than
+ *  breaking the whole listing. */
 export async function listSequences(
   root: string = defaultSequencesRoot,
 ): Promise<ReadonlyArray<SequenceListEntry>> {
@@ -80,8 +99,8 @@ export async function listSequences(
       const id = file.slice(0, -".json".length);
       const path = `${dir}/${file}`;
       try {
-        const doc = JSON.parse(await readFile(path, "utf8")) as TestSequenceDoc;
-        entries.push({ id, tier, name: doc.name, ...(await statTimes(path)) });
+        const doc: unknown = JSON.parse(await readFile(path, "utf8"));
+        entries.push({ id, tier, ...metadataOf(doc, id), ...(await statTimes(path)) });
       } catch (err) {
         console.warn(`skipping unparseable sequence file ${path}:`, err);
       }
@@ -101,7 +120,7 @@ export async function getSequence(
     const path = `${tierDir(root, tier)}/${id}.json`;
     try {
       const doc = JSON.parse(await readFile(path, "utf8")) as TestSequenceDoc;
-      return { id, tier, name: doc.name, data: doc, ...(await statTimes(path)) };
+      return { id, tier, ...metadataOf(doc, id), data: doc, ...(await statTimes(path)) };
     } catch {
       // not in this tier; try the next
     }
@@ -122,7 +141,7 @@ export async function createSequence(
   const id = `${slugify(doc.name)}-${randomUUID().slice(0, 8)}`;
   const path = `${dir}/${id}.json`;
   await writeFile(path, `${JSON.stringify(doc, null, 2)}\n`, "utf8");
-  return { id, tier, name: doc.name, data: doc, ...(await statTimes(path)) };
+  return { id, tier, ...metadataOf(doc, id), data: doc, ...(await statTimes(path)) };
 }
 
 // Overwrite an existing sequence in place, keeping its id and tier. Used for
@@ -144,7 +163,7 @@ export async function updateSequence(
       continue;
     }
     await writeFile(path, `${JSON.stringify(doc, null, 2)}\n`, "utf8");
-    return { id, tier, name: doc.name, data: doc, ...(await statTimes(path)) };
+    return { id, tier, ...metadataOf(doc, id), data: doc, ...(await statTimes(path)) };
   }
   return undefined;
 }

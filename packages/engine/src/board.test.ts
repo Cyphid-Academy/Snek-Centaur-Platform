@@ -34,7 +34,7 @@ describe("isInner", () => {
 });
 
 describe("parityOf", () => {
-  // spec: game-engine/starting-placement — parity is (x + y) mod 2
+  // spec: game-configuration/starting-placement — parity is (x + y) mod 2
   it("computes (x + y) mod 2", () => {
     expect(parityOf({ x: 0, y: 0 })).toBe(0);
     expect(parityOf({ x: 1, y: 0 })).toBe(1);

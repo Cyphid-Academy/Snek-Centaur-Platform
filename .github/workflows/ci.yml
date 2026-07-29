@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+# These jobs are `pnpm verify` decomposed for wall-clock: each runs a NAMED
+# root script and nothing else. An inline step here is a step no local run
+# performs — which is how the `test` job once stayed red for a week while every
+# local check agreed the branch was fine. Add work to the script, not the job.
 jobs:
   lint:
     name: lint
@@ -50,10 +54,32 @@ jobs:
           node-version: "20"
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # Workspace consumers resolve @cyphid/snek-engine through its published
-      # exports (dist/), so build it before running tests that import it.
-      - run: pnpm --filter @cyphid/snek-engine build
+      # `pnpm test` builds the workspace packages first (`build:packages`).
+      # Consumers resolve them through their published exports (dist/), which
+      # is gitignored, so an unbuilt package is a resolve failure rather than a
+      # test failure — and it was a hand-listed single package here until
+      # adding a second one broke this job. `build:packages` is `tsc -b` over
+      # the root project references, so a new package that typechecks is a new
+      # package this builds.
       - run: pnpm test
+
+  # Boots each app and checks it serves. Nothing else in this workflow starts a
+  # server, which is how a branch reached `main`-adjacent review with every
+  # other job green and `pnpm dev:tester` answering 500 on its first request.
+  smoke:
+    name: smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm smoke
 
   spec-check:
     name: spec-check

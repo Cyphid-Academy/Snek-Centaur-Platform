@@ -2,7 +2,7 @@
 // spec: visual-tester/move-staging — per-snake manual staging; any snake
 // may stay unstaged; certain-death marking is advisory only.
 import { Direction, isValidMove } from "@cyphid/snek-engine";
-import type { GameState, SnakeId, StagedMove } from "@cyphid/snek-engine";
+import type { CentaurTeamId, GameState, SnakeId, StagedMove } from "@cyphid/snek-engine";
 
 interface Props {
   state: GameState;
@@ -10,6 +10,14 @@ interface Props {
   onStage: (snakeId: SnakeId, direction: Direction) => void;
   onUnstage: (snakeId: SnakeId) => void;
   onSimulate: () => void;
+  // spec: visual-tester/turn-simulation — the tool supplies the turn's
+  // timings; these let the tester override them for one advance.
+  defaultTurnDurationMs: number;
+  turnDurationOverrideMs: number | null;
+  burnOverrides: ReadonlyMap<CentaurTeamId, number>;
+  onSetDefaultTurnDuration: (ms: number) => void;
+  onSetTurnDurationOverride: (ms: number | null) => void;
+  onSetBurnOverride: (centaurTeamId: CentaurTeamId, ms: number | null) => void;
   // spec: visual-tester/snake-selection — the selected snake is highlighted
   // here too, and clicking a snake's name selects it.
   selectedSnakeId?: SnakeId | null;
@@ -24,12 +32,26 @@ const {
   onStage,
   onUnstage,
   onSimulate,
+  defaultTurnDurationMs,
+  turnDurationOverrideMs,
+  burnOverrides,
+  onSetDefaultTurnDuration,
+  onSetTurnDurationOverride,
+  onSetBurnOverride,
   selectedSnakeId = null,
   onSelect,
   teamName = (id) => id,
 }: Props = $props();
 
 const alive = $derived(state.snakes.filter((s) => s.alive));
+// Teams whose clock this turn's burns will be spent from.
+const clockedTeams = $derived(state.clocks.map((c) => c.centaurTeamId));
+const effectiveDuration = $derived(turnDurationOverrideMs ?? defaultTurnDurationMs);
+
+function parseMs(value: string): number | null {
+  const n = Number(value);
+  return value.trim() === "" || !Number.isFinite(n) || n < 0 ? null : n;
+}
 
 const DIRECTIONS: Array<{ dir: Direction; label: string }> = [
   { dir: Direction.Up, label: "\u2191" },
@@ -78,6 +100,48 @@ const DIRECTIONS: Array<{ dir: Direction; label: string }> = [
       {/each}
     </ul>
   {/if}
+  <!--
+    spec: visual-tester/turn-simulation#a-default-that-needs-no-attention — the
+    default is supplied for the turn AND for every team, so a tester who does
+    not care about time never has to touch this;
+    #per-advance-values-reach-the-timed-endings — a large burn on one advance
+    runs a team's clock down, which is how the timed endings are reached
+    without a clock-editing surface.
+  -->
+  <details class="timings">
+    <summary>Turn timing <span class="muted">({effectiveDuration} ms)</span></summary>
+    <label>
+      Default duration (ms)
+      <input
+        type="number"
+        min="0"
+        value={defaultTurnDurationMs}
+        onchange={(e) => onSetDefaultTurnDuration(parseMs(e.currentTarget.value) ?? 0)}
+      />
+    </label>
+    <label>
+      This turn only (ms)
+      <input
+        type="number"
+        min="0"
+        placeholder={String(defaultTurnDurationMs)}
+        value={turnDurationOverrideMs ?? ""}
+        onchange={(e) => onSetTurnDurationOverride(parseMs(e.currentTarget.value))}
+      />
+    </label>
+    {#each clockedTeams as team (team)}
+      <label>
+        {teamName(team)} burn (ms)
+        <input
+          type="number"
+          min="0"
+          placeholder={String(effectiveDuration)}
+          value={burnOverrides.get(team) ?? ""}
+          onchange={(e) => onSetBurnOverride(team, parseMs(e.currentTarget.value))}
+        />
+      </label>
+    {/each}
+  </details>
   <button type="button" class="simulate" onclick={onSimulate}>Simulate turn</button>
 </section>
 
@@ -122,4 +186,21 @@ const DIRECTIONS: Array<{ dir: Direction; label: string }> = [
     padding: 0.4rem 1rem;
   }
   sup { color: #fda4af; }
+  .timings { font-size: 0.8rem; color: #94a3b8; }
+  .timings summary { cursor: pointer; }
+  .timings label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-top: 0.35rem;
+  }
+  .timings input {
+    width: 7rem;
+    background: #1e293b;
+    color: #e2e8f0;
+    border: 1px solid #334155;
+    border-radius: 4px;
+    padding: 0.15rem 0.35rem;
+  }
 </style>
