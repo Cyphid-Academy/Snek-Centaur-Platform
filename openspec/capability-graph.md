@@ -67,8 +67,9 @@ flowchart TD
   decision-transparency -->|6| bot-framework
   decision-transparency -->|7| global-invariants
   decision-transparency -->|3| operator-control
-  game-configuration -->|3| game-engine
-  game-configuration -->|10| global-invariants
+  game-configuration -->|1| application-shell
+  game-configuration -->|12| game-engine
+  game-configuration -->|17| global-invariants
   game-lifecycle -->|7| game-configuration
   game-lifecycle -->|2| game-engine
   game-lifecycle -->|24| global-invariants
@@ -118,5 +119,5 @@ flowchart TD
   visual-tester -->|4| test-sequences
 
   class game-engine,global-invariants base;
-  linkStyle 0,4,5,7,10,11,14,16,17,19,20,24,25,26,28,29,33,35,37,39,46,48,50,53,55,60,61,63 stroke-opacity:0.25;
+  linkStyle 0,4,5,7,10,11,14,17,18,20,21,25,26,27,29,30,34,36,38,40,47,49,51,54,56,61,62,64 stroke-opacity:0.25;
 ```

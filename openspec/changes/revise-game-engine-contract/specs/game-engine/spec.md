@@ -19,6 +19,29 @@ The game SHALL use a closed domain vocabulary: four directions (`Up`/`Right`/`Do
 - **WHEN** a partial game state is narrowed to a game state
 - **THEN** it succeeds only if every alive snake's turn equals the state's, and the narrowing is the sole way to obtain the persisted form — so a caller that left a snake behind cannot produce it
 
+### Requirement: game-engine/board-geometry
+The engine SHALL take the board as fully specified data: a square grid of `boardSize × boardSize` cells, each carrying its own terrain, held as one flat row-major array in which the cell at `(x, y)` is the entry at index `y × boardSize + x`. The grid's own dimensions SHALL be the whole statement of the board's size, and the snakes placed on it the whole statement of how many each team fields — the engine reads no size, count, density, or clustering from configuration, and no rule of a turn consults how the board came to look as it does. The **playable area** is the `(boardSize − 2)²` inner cells, those off the outermost 1-cell ring, and is the area within which items may spawn. A cell beyond the grid's edge SHALL be treated exactly as a `Wall` cell is. Terrain SHALL be fixed for the whole game: no rule changes any cell's type, so hazard and fertile designations made before the first turn are permanent, and the board handed to one resolution is the board every later resolution sees.
+
+#### Scenario: #dimensions-state-the-size
+- **WHEN** a rule needs the board's edge length or a team's snake count
+- **THEN** it reads the grid and the placed snakes — the same board resolves identically however it was produced, which is what lets a hand-authored state and a generated one be the same kind of input
+
+#### Scenario: #row-major-addressing
+- **WHEN** a cell is addressed by coordinates
+- **THEN** it is the entry at `y × boardSize + x` of the flat array, one encoding shared by every runtime that holds a board
+
+#### Scenario: #playable-interior
+- **WHEN** the playable area is needed — for a spawn location, or to decide whether a cell is an inner one
+- **THEN** it is the `(boardSize − 2)²` cells off the outermost ring, excluded by position rather than by what terrain that ring happens to carry
+
+#### Scenario: #off-board-is-wall
+- **WHEN** a moved head leaves the grid
+- **THEN** the outcome is the one a `Wall` cell produces — so a complete wall ring is a convention of the boards handed in, not a precondition the rules rest on, and a board without one still resolves correctly
+
+#### Scenario: #terrain-is-fixed
+- **WHEN** the game progresses
+- **THEN** no cell's type ever changes: the set of Hazard cells and the set of Fertile cells are the ones the board arrived with
+
 ### Requirement: game-engine/determinism
 All randomness in a turn's resolution SHALL be deterministic from that turn's seed, itself derived from the per-game seed, and no seed SHALL be accessible to any game client. A resolution SHALL be a function of its declared inputs alone: the state it resolves, the directions it is given, its turn seed, and the timings declared for the turn. Time is one of those inputs rather than something the engine observes, so a resolution's dependence on real time is entirely a dependence on values its caller supplied.
 
@@ -190,6 +213,41 @@ Each turn SHALL emit a closed set of events sufficient to reconstruct and narrat
 - **WHEN** a snake's moved head lands on a Hazard cell and it survives the turn
 - **THEN** the turn carries a hazard-damage event for it, so a consumer learns why its health fell without diffing successive snapshots; a snake the damage kills reports through its death event instead, which already carries contributing damage sources, so one act never produces two events
 
+### Requirement: game-engine/configuration-parameters
+Game configuration SHALL comprise exactly these parameters — every one of them a parameter of a game already under way — with these ranges, defaults, and disable sentinels:
+
+| Parameter | Range | Default | Sentinel |
+|---|---|---|---|
+| `maxHealth` | 1–500 | 100 | |
+| `maxTurns` | 0 or 1–1000 | 100 | 0 = no turn limit |
+| `maxGameDurationMs` | 0 or 1000–86400000 | 0 | 0 = no time limit |
+| `hazardDamage` | 1–100 | 15 | |
+| `foodSpawnRate` | 0–5 | 0.5 | 0 = no food spawns |
+| `invulnPotionSpawnRate` | 0–0.2 | 0.15 | 0 = no invulnerability potions |
+| `invisPotionSpawnRate` | 0–0.2 | 0.1 | 0 = no invisibility potions |
+| `clock.initialBudgetMs` | 0–600000 | 60000 | 0 = no initial budget |
+| `clock.budgetIncrementMs` | 100–5000 | 500 | |
+| `clock.firstTurnTimeMs` | 1000–300000 | 60000 | |
+| `clock.maxTurnTimeMs` | 100–300000 | 10000 | |
+
+The vocabulary SHALL carry no parameter describing how a board is built — no edge length, snake count, hazard proportion, fertile density or clustering — because the engine is handed a board rather than a recipe for one, and a parameter it never reads is a parameter it must not declare. Numeric bounds SHALL be enforced by the user-facing configuration surfaces; the game engine itself accepts any type-valid configuration. `maxGameDurationMs` bounds the wall-clock duration a game may consume and is a dynamic gameplay parameter like the clock values — declared here so that one declaration serves every surface and every runtime, and evaluated here too, against the durations declared to the engine's own resolutions.
+
+#### Scenario: #disable-sentinels
+- **WHEN** `maxTurns`, `maxGameDurationMs`, `foodSpawnRate`, or a potion spawn rate is 0
+- **THEN** the corresponding feature is fully disabled (no turn limit, no time limit, no spawns of that kind)
+
+#### Scenario: #bounds-live-at-the-surfaces
+- **WHEN** a value outside a documented range (e.g. `hazardDamage` outside 1–100) reaches the engine
+- **THEN** the engine does not reject it on range grounds — rejection is the configuration surfaces' job
+
+#### Scenario: #no-parameter-the-engine-does-not-read
+- **WHEN** a parameter is proposed for this vocabulary
+- **THEN** it belongs only if a turn's resolution reads it: whatever shapes the board before the first turn is declared by whoever builds the board, so the two sets are disjoint and no surface has to guess which half the engine wants
+
+#### Scenario: #cross-runtime-expressibility
+- **WHEN** the configuration schema evolves
+- **THEN** every field remains expressible identically in all three runtimes' type systems: plain numbers (no bigint), no optional or null fields (zero sentinels encode disabled features), string-literal enums, milliseconds for time values
+
 ### Requirement: game-engine/runtime-portability
 The engine SHALL depend only on portable ECMAScript facilities and SHALL take all nondeterminism and external input as explicit parameters — using no ambient clock, randomness, I/O, or runtime-specific API — so that a single build runs unchanged in any conformant JavaScript runtime.
 
@@ -200,6 +258,20 @@ The engine SHALL depend only on portable ECMAScript facilities and SHALL take al
 #### Scenario: #no-runtime-specific-api
 - **WHEN** the same engine build is loaded into a different conformant JavaScript runtime
 - **THEN** it runs unchanged, relying on no Node-, browser-, or host-specific API
+
+## REMOVED Requirements
+
+### Requirement: game-engine/hazards
+
+### Requirement: game-engine/fertile-ground
+
+### Requirement: game-engine/starting-placement
+
+### Requirement: game-engine/initial-snakes
+
+### Requirement: game-engine/initial-food
+
+### Requirement: game-engine/board-generation-retry
 
 ## ADDED Requirements
 
