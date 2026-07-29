@@ -105,6 +105,7 @@ flowchart TD
   platform-integrations -->|3| game-lifecycle
   platform-integrations -->|3| global-invariants
   platform-integrations -->|10| identity-and-authorization
+  platform-integrations -->|1| platform-persistence
   platform-persistence -->|4| global-invariants
   replay-and-audit -->|2| application-shell
   replay-and-audit -->|5| decision-transparency
@@ -149,5 +150,5 @@ flowchart TD
   visual-tester -->|4| test-sequences
 
   class game-engine,global-invariants base;
-  linkStyle 0,2,7,8,11,14,16,19,21,24,25,27,28,31,33,37,39,41,43,46,50,52,55,58,65,67,71,74,76,78,86,88,91,92 stroke-opacity:0.25;
+  linkStyle 0,2,7,8,11,14,16,19,21,24,25,27,28,31,33,37,39,41,43,46,50,53,56,59,66,68,72,75,77,79,87,89,92,93 stroke-opacity:0.25;
 ```
