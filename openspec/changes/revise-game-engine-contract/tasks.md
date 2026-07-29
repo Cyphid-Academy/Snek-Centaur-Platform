@@ -75,7 +75,7 @@ board-generation *code* out of the engine package, landing the half of
 - [x] 9.3 The session keeps each turn's timings, and re-simulating a scrubbed-to turn re-supplies the ones that turn recorded rather than the current default (`visual-tester/session-history#a-re-simulated-turn-reuses-its-timings`); a saved fixture records them among its inputs (`visual-tester/sequence-management#save-from-session`)
 - [x] 9.4 The editor's parity rule drops its declared dependency on the departing starting-placement requirement: it rests on movement preserving parity every turn, not on how the first parity was chosen (`visual-tester/board-editor#head-parity-enforced`)
 
-- [ ] 9.5 The sequence listing marks what this build cannot read, naming the version that wrote it, with load and run unavailable and copy still offered — the affordance a version rejection needs to be usable rather than merely correct (`visual-tester/sequence-management#unreadable-sequences-are-listed-not-hidden`)
+- [x] 9.5 The sequence listing marks what this build cannot read, naming the version that wrote it, with load and run unavailable and copy still offered — the affordance a version rejection needs to be usable rather than merely correct (`visual-tester/sequence-management#unreadable-sequences-are-listed-not-hidden`)
 
 ## 10. The rest of the workspace
 

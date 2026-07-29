@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 import { addSnake, appendBodyCell, removeSnake } from "./editor.js";
 import type { SequenceClient, SequenceListEntry, SequenceTier } from "./sequenceClient.js";
 import { TesterStore } from "./store.svelte.js";
-import type { TestSequenceDoc } from "./test-sequences/codec.js";
+import { SCHEMA_VERSION, type TestSequenceDoc } from "./test-sequences/codec.js";
 
 const CONFIG = DEFAULT_GAME_CONFIG.runtime;
 
@@ -21,10 +21,24 @@ const noopClient: SequenceClient = {
     throw new Error("unused");
   },
   async create(doc: TestSequenceDoc, tier: SequenceTier): Promise<SequenceListEntry> {
-    return { id: "scratch-0", name: doc.name, tier, createdAt: "0", updatedAt: "0" };
+    return {
+      id: "scratch-0",
+      name: doc.name,
+      tier,
+      createdAt: "0",
+      updatedAt: "0",
+      schemaVersion: SCHEMA_VERSION,
+    };
   },
   async update(id: string, doc: TestSequenceDoc): Promise<SequenceListEntry> {
-    return { id, name: doc.name, tier: "scratch", createdAt: "0", updatedAt: "0" };
+    return {
+      id,
+      name: doc.name,
+      tier: "scratch",
+      createdAt: "0",
+      updatedAt: "0",
+      schemaVersion: SCHEMA_VERSION,
+    };
   },
 };
 

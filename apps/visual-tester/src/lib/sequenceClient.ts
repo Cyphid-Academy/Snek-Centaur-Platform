@@ -2,6 +2,7 @@
 // interface so the store's auto-persist logic (design D11) can be unit-tested
 // against an in-memory fake instead of a live server.
 import type { TestSequenceDoc } from "./test-sequences/codec.js";
+import { SUPPORTED_SCHEMA_VERSIONS } from "./test-sequences/schema.js";
 
 export type SequenceTier = "fixture" | "scratch";
 
@@ -11,6 +12,18 @@ export interface SequenceListEntry {
   readonly tier: SequenceTier;
   readonly createdAt: string;
   readonly updatedAt: string;
+  /** The version the document was written against; null if it carries none. */
+  readonly schemaVersion: number | null;
+}
+
+/**
+ * Whether this build can read the document behind a listing entry. A stored
+ * sequence outlives the format version that wrote it, so the listing decides
+ * which actions to offer from the version rather than from a failed attempt.
+ * spec: visual-tester/sequence-management#unreadable-sequences-are-listed-not-hidden
+ */
+export function isReadable(entry: Pick<SequenceListEntry, "schemaVersion">): boolean {
+  return entry.schemaVersion !== null && SUPPORTED_SCHEMA_VERSIONS.includes(entry.schemaVersion);
 }
 
 export interface PathError {
