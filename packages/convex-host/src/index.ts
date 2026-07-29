@@ -1,15 +1,18 @@
 // spec: global-invariants/single-convex-deployment
-// Convex Host deployment — mounts both Convex Components and adds:
-//   - Auth wrappers (Google sign-in, service-principal issuance)
-//   - Platform HTTP API (registered integration clients)
-//   - Game lifecycle orchestration
+// @cyphid/snek-convex-host — the Node-side surface of the platform's one Convex
+// deployment.
+//
+// The deployment itself lives in `convex/`: `convex.config.ts` mounts both
+// components, and `platform.ts` / `centaur.ts` are its public function surface.
+// This package exports what the rest of the workspace needs in order to talk to
+// it — the record types and the environment contract — without pulling the
+// Convex runtime into every consumer.
 //
 // TODO: Integrate Better Auth (local install mode) plus the project-owned
-//       capability plugin that issues credentials to service principals.
-//       Deferred to the first Convex implementation task. See
-//       packages/convex-host/AGENTS.md for context.
-//
-// This is a typed skeleton — implementation deferred.
+//       capability plugin that issues credentials to service principals. Still
+//       deferred: the auth model is spec-heavy and belongs with the
+//       migrate-identity-and-authorization change, not with runtime wiring. See
+//       packages/convex-host/AGENTS.md.
 
 export type {
   UserRecord,
@@ -23,14 +26,19 @@ export type {
   DriveRecord,
 } from "@cyphid/convex-centaur-state";
 
-// ---------------------------------------------------------------------------
-// Placeholder public function
-// ---------------------------------------------------------------------------
+export type { EnvRequirement } from "./env.js";
+export { CONVEX_ENV, STDB_ENV, describeMissing, missingEnv } from "./env.js";
 
 /**
- * Returns a hello-world string. Replace with real platform functions.
- * @throws Error("not implemented")
+ * The deployment's public functions, by the name `convex run` and the client
+ * SDK address them. Exported as data so a caller naming one gets a compile
+ * error when it is renamed, rather than a runtime "no such function".
+ *
+ * Only the liveness query so far — the rest are named here as the capability
+ * changes that define them land.
+ *
+ * spec: global-invariants/one-contract-many-surfaces
  */
-export function platformHello(): string {
-  throw new Error("not implemented");
-}
+export const HOST_FUNCTIONS = {
+  platformStatus: "platform:platformStatus",
+} as const;

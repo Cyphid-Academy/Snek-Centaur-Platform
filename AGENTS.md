@@ -80,7 +80,13 @@ Code cites identifiers **inline**, as above. The rule that identifiers never app
 
 **Linting / formatting**: Biome. Run `pnpm lint` (check) or `pnpm format` (write). No ESLint or Prettier.
 
-**Testing**: Vitest. Run `pnpm test` across the workspace. Every package should have at least a smoke test confirming it loads.
+`complexity/useLiteralKeys` is **off**, and should stay off: it forbids `env["CONVEX_URL"]` while the TypeScript baseline's `noPropertyAccessFromIndexSignature` forbids `env.CONVEX_URL`. With both on, reading an index signature has no legal spelling short of destructuring, which is a workaround rather than a style. TypeScript wins because it is the one enforcing the safety property.
+
+**Testing**: Vitest. Run `pnpm test` across the workspace. Every package should have at least a smoke test confirming it loads. Both SvelteKit apps are excluded from workspace project discovery — their Vite transform conflicts with `@sveltejs/kit` resolution during a workspace run — so `pnpm test` invokes each as a separate filtered run after the main one. A new app needs adding there or its tests will never run.
+
+**Pin shared tooling; never `"*"`.** `vitest` and `vite` carry the same explicit caret range in every `package.json` that declares them. `"*"` looks like "inherit the workspace version" and is not: it means *any* version, so the resolution is whatever the lockfile happens to hold. That drifted unnoticed once — one app sat on vitest 2.x while everything else ran 3.x, invisible because its suite was never invoked. When upgrading, bump every declaration in the same commit.
+
+**Apps consume the packages' built `dist/`, not their source.** `packages/*/package.json` export `./dist/index.js`, and `dist/` is gitignored — so a package that has never been built is a *resolve failure* in every consumer, which surfaces as an HTTP 500 from a dev server rather than as a compile error. Every script that needs them (`dev`, `dev:tester`, `test`, `typecheck`, `build`, `smoke`, `stdb:publish`, and each app's own `dev`/`test`/`build` via a `pre*` hook) therefore runs `build:packages` first. That script is `tsc -b` over the root project references, so **a new package that typechecks is a new package this builds** — do not replace it with a hand-listed set, which is what silently broke when the second package arrived. Do not add a separate `pnpm --filter @cyphid/snek-engine build` step to a script, a workflow, or the SessionStart hook — chain `build:packages` instead, so the dependency is expressed once and stays true. (Explicit chaining rather than a `pretest` hook: pnpm does not run npm-style pre/post scripts by default, so such a hook would look correct and silently do nothing.)
 
 **Dev server**: `pnpm dev` starts the Centaur Server reference app on port 5000 via Vite; `pnpm dev:tester` starts the visual tester on 5001. The Replit preview iframe connects to port 5000.
 
@@ -108,13 +114,17 @@ The division follows from what discriminates. On the branch that motivated this,
 
 So: **tier 1 over every commit, tier 2 once at the tip.** For a ten-commit branch that is ~50s rather than ~6 minutes.
 
+**Backend runtimes**: `pnpm dev:stdb` runs a local SpacetimeDB host on port 3000 (natively — no Docker), `pnpm stdb:publish` builds and publishes the game module to it, and `pnpm dev:convex` pushes to your personal Convex dev deployment. Each is one command against a binary on `PATH`; nothing resolves binaries by path. Convex credentials come from your own cloud-environment variables — see `CLAUDE.md` → "Secrets and third-party resources", and `docs/external-setup.md` for the full procedure and the one flag worth knowing (`-p` takes the module project, not the package root).
+
 ## Root Scripts
 
 | Script | What it does |
 |--------|-------------|
 | `pnpm check:commit` | **Tier 1** — is each commit green standing alone (see above) |
 | `pnpm verify` | **Tier 2** — the full battery, what CI runs |
-| `pnpm typecheck` | `tsc -b` across the workspace |
+| `pnpm typecheck` | `build:packages` plus the two foreign TS regimes and both apps |
+| `pnpm typecheck:convex` | Convex component/host files — separate because Convex's generated code is not written for the workspace's strict flags |
+| `pnpm typecheck:stdb-module` | The SpacetimeDB module project, whose tsconfig options SpacetimeDB mandates |
 | `pnpm lint` | `biome check .` |
 | `pnpm format` | `biome check --write .` |
 | `pnpm test` | Builds the packages, then `vitest run` across the workspace |
@@ -122,7 +132,12 @@ So: **tier 1 over every commit, tier 2 once at the tip.** For a ten-commit branc
 | `pnpm coverage` | Branch coverage over the engine's resolver |
 | `pnpm build:packages` | `tsc -b` over the workspace packages (their gitignored `dist/`) |
 | `pnpm dev` | Starts the Centaur Server reference app |
+| `pnpm dev:convex` | `convex dev` against your personal dev deployment |
+| `pnpm dev:stdb` | Local SpacetimeDB host on 127.0.0.1:3000 |
+| `pnpm stdb:publish` | Builds and publishes the game module as `snek-local` |
 | `pnpm build` | Builds all packages |
+
+Three TypeScript regimes coexist, and they are kept apart on purpose: `tsc -b` (the strict composite build, source of truth for `packages/*/src`), the Convex regime, and the SpacetimeDB module regime. The latter two do not extend `tsconfig.base.json` — their code is bundled by their own toolchain rather than emitted by tsc, and neither Convex's generated files nor SpacetimeDB's mandated options survive `exactOptionalPropertyTypes` / `noUncheckedIndexedAccess` / `verbatimModuleSyntax`. Do not try to unify them; add to the right one. `pnpm typecheck` runs all three, and `tsc -b` must run first because it emits `packages/engine/dist`, which the other two resolve through.
 
 ## Commit History & Message Grammar
 

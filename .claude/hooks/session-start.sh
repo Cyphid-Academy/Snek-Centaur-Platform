@@ -38,5 +38,12 @@ for app in centaur-server-reference visual-tester; do
   pnpm --filter "@cyphid/${app}" exec svelte-kit sync >/dev/null 2>&1 || true
 done
 
-echo "[session-start] ready — pnpm lint | test | typecheck | spec:check | exec openspec validate <change> --strict"
+# Report whether Convex is provisioned, without ever printing the value. Absence
+# is not an error here: only the code that reaches for a runtime fails on it.
+if [ -z "${CONVEX_DEPLOY_KEY:-}${CONVEX_DEPLOYMENT:-}${CONVEX_URL:-}" ]; then
+  echo "[session-start] NOTE: no Convex deployment configured — set CONVEX_DEPLOY_KEY" >&2
+  echo "[session-start]       in your personal cloud environment (CLAUDE.md → Secrets)." >&2
+fi
+
+echo "[session-start] ready — pnpm lint | test | typecheck | spec:check | dev:convex | dev:stdb"
 exit 0

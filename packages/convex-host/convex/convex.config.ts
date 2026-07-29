@@ -1,19 +1,19 @@
 // spec: global-invariants/single-convex-deployment
-// Convex Host: mounts both Convex Components.
+// The platform's one Convex deployment. It owns no tables of its own — both
+// components mount here, which is what makes "exactly one deployment" hold
+// while still keeping platform state and Centaur-subsystem state on opposite
+// sides of a boundary Convex enforces.
 //
-// TODO: Replace this stub with real Convex Component mounting once the
-// Convex SDK is installed. The real file will look like:
-//
-//   import { defineApp } from "convex/server";
-//   import snekPlatform from "@cyphid/convex-snek-platform";
-//   import centaurState from "@cyphid/convex-centaur-state";
-//
-//   const app = defineApp();
-//   app.use(snekPlatform);
-//   app.use(centaurState);
-//   export default app;
-//
-// See docs/external-setup.md for Convex dashboard setup instructions.
-// See packages/convex-host/AGENTS.md for auth integration notes.
+// Imported by relative path rather than by package name: Convex bundles a
+// component from its `convex.config.ts` source, and resolving that through a
+// pnpm workspace symlink lands the component root outside the package the
+// import was written in.
+import { defineApp } from "convex/server";
+import centaurState from "../../convex-centaur-state/convex/convex.config.js";
+import snekPlatform from "../../convex-snek-platform/convex/convex.config.js";
 
-export const _convexConfigPlaceholder = true;
+const app = defineApp();
+app.use(snekPlatform);
+app.use(centaurState);
+
+export default app;

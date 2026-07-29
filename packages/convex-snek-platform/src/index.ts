@@ -114,10 +114,6 @@ export interface TeamGameContext {
   readonly config: GameConfigRecord;
 }
 
-// ---------------------------------------------------------------------------
-// Convex Component config — placeholder
-// ---------------------------------------------------------------------------
-
-export const componentConfig = {
-  name: "snek-platform",
-} as const;
+// The component's name and mounting live in `convex/convex.config.ts`, which is
+// what Convex reads. Nothing restates them here: a second spelling of the name
+// (`snek-platform` against the real `snekPlatform`) is a trap, not a convenience.

@@ -17,11 +17,13 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@cyphid/convex-centaur-state": "workspace:*",
     "@cyphid/convex-snek-platform": "workspace:*",
-    "@cyphid/convex-centaur-state": "workspace:*"
+    "convex": "^1.42.3"
   },
   "devDependencies": {
+    "@types/node": "^25.9.0",
     "typescript": "*",
-    "vitest": "*"
+    "vitest": "^4.1.10"
   }
 }

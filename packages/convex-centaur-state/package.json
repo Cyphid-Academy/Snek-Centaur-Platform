@@ -19,6 +19,9 @@
   },
   "devDependencies": {
     "typescript": "*",
-    "vitest": "*"
+    "vitest": "^4.1.10"
+  },
+  "dependencies": {
+    "convex": "^1.42.3"
   }
 }

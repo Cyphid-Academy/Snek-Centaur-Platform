@@ -1,0 +1,15 @@
+{
+  "name": "@cyphid/snek-stdb-module",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The SpacetimeDB module project. Built by `spacetime build`, not by tsc -b.",
+  "dependencies": {
+    "@cyphid/snek-stdb": "workspace:*",
+    "@cyphid/snek-engine": "workspace:*",
+    "spacetimedb": "2.7.*"
+  },
+  "devDependencies": {
+    "typescript": "*"
+  }
+}

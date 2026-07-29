@@ -99,10 +99,5 @@ export interface SelectionState {
   readonly selectorUserId: string;
 }
 
-// ---------------------------------------------------------------------------
-// Convex Component config — placeholder
-// ---------------------------------------------------------------------------
-
-export const componentConfig = {
-  name: "centaur-state",
-} as const;
+// The component's name and mounting live in `convex/convex.config.ts`, which is
+// what Convex reads — see the note in convex-snek-platform's `src/index.ts`.
