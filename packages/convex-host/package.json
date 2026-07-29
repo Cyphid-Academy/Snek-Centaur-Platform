@@ -14,7 +14,8 @@
   "scripts": {
     "build": "tsc -b",
     "typecheck": "tsc -b",
-    "test": "vitest run"
+    "test": "vitest run",
+    "codegen": "convex codegen"
   },
   "dependencies": {
     "@cyphid/convex-centaur-state": "workspace:*",
