@@ -53,9 +53,12 @@ flowchart TD
   turn-pacing["turn-pacing"]:::open
   visual-tester["visual-tester"]
 
+  accounts-and-profiles -->|2| game-engine
+  accounts-and-profiles -->|8| game-lifecycle
   accounts-and-profiles -->|9| global-invariants
   accounts-and-profiles -->|2| identity-and-authorization
   accounts-and-profiles -->|2| replay-and-audit
+  accounts-and-profiles -->|3| rooms-and-matchmaking
   accounts-and-profiles -->|5| team-management
   application-shell -->|1| game-engine
   application-shell -->|5| global-invariants
@@ -141,5 +144,5 @@ flowchart TD
   visual-tester -->|4| test-sequences
 
   class game-engine,global-invariants base;
-  linkStyle 0,4,5,8,11,13,16,18,21,22,24,25,28,30,34,36,38,40,43,47,49,52,55,62,64,68,71,73,78,80,83,84 stroke-opacity:0.25;
+  linkStyle 0,2,7,8,11,14,16,19,21,24,25,27,28,31,33,37,39,41,43,46,50,52,55,58,65,67,71,74,76,81,83,86,87 stroke-opacity:0.25;
 ```
