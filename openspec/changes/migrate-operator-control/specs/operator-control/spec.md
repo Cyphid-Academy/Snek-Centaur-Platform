@@ -6,19 +6,25 @@ append-only staged-move log, entering and leaving manual mode, being
 displaced by a teammate, and being booted by the Captain. This capability
 owns the within-team coordination of who controls which snake and the path
 by which a participant's moves reach the game. The rules of movement and
-turn resolution belong to the engine; who may obtain a game connection and
-on what terms is the identity story; what an admitted connection may see is
-the observation story; when the team's turn resolves — tempo, declaration,
-quorum — and how automated play decides its moves belong to the capabilities
-that own those workflows.
+turn resolution belong to the engine; the log a staged move lands in, the
+terms on which the game's own runtime accepts it, and everything the
+resolving transaction does with it belong to the game-runtime story; who may
+obtain a game connection and on what terms is the identity story; what an
+admitted connection may see — including which of a team's staged moves it
+may read — is the observation story; the game's status
+machine and the bracket that opens and closes play — which is what decides
+when this capability's interface exists and when its coordination state is
+cleared — belong to the lifecycle story; when the team's turn resolves —
+tempo, declaration, quorum — and how automated play decides its moves belong
+to the capabilities that own those workflows.
 
-Depends on: game-engine, global-invariants, identity-and-authorization,
-live-game-observation.
+Depends on: game-engine, game-lifecycle, game-runtime, global-invariants,
+identity-and-authorization, live-game-observation.
 
 ## ADDED Requirements
 
 ### Requirement: operator-control/operator-dual-connection
-Depends on: global-invariants/authenticated-unambiguous-identity, global-invariants/one-contract-many-surfaces#operators-never-proxy-through-the-server.
+Depends on: global-invariants/authenticated-unambiguous-identity, global-invariants/one-contract-many-surfaces#operators-never-proxy-through-the-server, identity-and-authorization/admission-validation, identity-and-authorization/role-bound-privileges.
 
 During play an operator's client SHALL hold two independently authenticated connections: one directly to the game's SpacetimeDB instance — observing the game within its filtered view and staging moves — and one to Convex for the team's coordination state (selection and manual mode). Each SHALL be authenticated as the operator themself, never as the team's Server; the team's nominated hosting server serves the interface only.
 
@@ -34,68 +40,8 @@ During play an operator's client SHALL hold two independently authenticated conn
 - **WHEN** a team member opens the operator interface
 - **THEN** it is served from the team's nominated hosting server, and the connections the client then opens are still the direct ones above
 
-### Requirement: operator-control/staged-move-log
-Depends on: game-engine/movement, game-engine/chess-timer, global-invariants/state-confined-to-owning-runtime#convex-never-mirrors-a-live-game.
-
-The game's SpacetimeDB instance SHALL record staged moves in an append-only per-turn log retained for the game's lifetime: every staging appends an entry, no entry is ever edited or cleared — turn resolution included — and no cancel operation exists. The effective move for a snake is the latest entry for that snake in the current turn; entries from prior turns never carry over — a snake with no current-turn entry moves by the engine's fallback.
-
-#### Scenario: #supersession-is-not-deletion
-- **WHEN** an operator stages Up and then Left for the same snake in one turn
-- **THEN** both entries remain in the log permanently and Left is the effective move — last-write-wins is a read rule over the log, never a destructive overwrite
-
-#### Scenario: #nothing-carries-over
-- **WHEN** a snake's newest entry was staged in turn T and turn T+1 resolves with nothing staged for it
-- **THEN** the snake moves by fallback (`lastDirection`), not by the stale entry — even though that entry is still in the log
-
-#### Scenario: #revocation-is-supersession
-- **WHEN** an operator wants to take back a staged move
-- **THEN** there is nothing to cancel — they stage a different direction, and the log records the change of mind instead of erasing it
-
-#### Scenario: #accepted-until-declaration
-- **WHEN** a burst of staged moves arrives just before the team declares its turn over
-- **THEN** each is an ordinary append with no final-submission barrier or freeze window, and resolution consumes exactly what the log holds at the instant of declaration
-
-#### Scenario: #single-home
-- **WHEN** any component needs a staged move — to display it, supersede it, or resolve the turn
-- **THEN** it reads this log in the game's instance, the state's owning runtime
-
-### Requirement: operator-control/team-scoped-staging
-Depends on: identity-and-authorization/role-bound-privileges, global-invariants/team-granularity-authorization#staging-is-team-checked, global-invariants/security-enforced-outside-the-library.
-
-The game's SpacetimeDB instance SHALL accept a staged move only from an admitted operator or bot connection of the team that owns the named snake, and any such connection MAY stage for any of its team's snakes — staging rights are team-granular, never tied to selection, which the instance neither stores nor checks. The team binding SHALL be the association established at admission, never assertable per call, and SHALL be checked by the instance's own reducer.
-
-#### Scenario: #any-team-snake-regardless-of-selection
-- **WHEN** an operator stages for a team snake they have not selected — even one a teammate currently holds
-- **THEN** the instance accepts the move; within-team discipline is coordination state held elsewhere, invisible to the game runtime
-
-#### Scenario: #spoofed-parameters-rejected
-- **WHEN** a call's parameters imply an association with another team
-- **THEN** the instance decides from the connection's admission-time binding alone and rejects staging for the other team's snake
-
-### Requirement: operator-control/staging-is-unvalidated
-Depends on: game-engine/movement, global-invariants/authoritative-turn-resolution.
-
-Move staging SHALL perform no legality evaluation: any direction in the game vocabulary is accepted for any living team snake, including directions that are immediately lethal. Consequences attach only at turn resolution, through the engine's movement and collision rules as the instance runs them.
-
-#### Scenario: #lethal-direction-accepted
-- **WHEN** a direction leading straight into a wall is staged
-- **THEN** the entry is appended like any other, and if still effective at resolution the snake moves there and dies by the collision rules — staging never protects a team from its own choice
-
-### Requirement: operator-control/staged-move-privacy
-Depends on: global-invariants/team-granularity-authorization#spectators-hold-no-private-state, live-game-observation/filtered-views-are-the-only-surface.
-
-A team's connections SHALL be able to read their own team's complete staged-move history — every entry, superseded ones included, across all turns — and no connection outside the team SHALL ever read any of it, live or historical — staging is a team's private state, and observation is bounded at the same team granularity as action. Staged-move reads SHALL be delivered only through the server-filtered read surface.
-
-#### Scenario: #own-history-complete
-- **WHEN** a team connection reads its staged moves
-- **THEN** the full multi-turn history is available, including entries that were superseded before ever resolving
-
-#### Scenario: #cross-team-never-even-after-resolution
-- **WHEN** a turn has long since resolved
-- **THEN** opposing and spectator connections still cannot read the team's staged entries for it — other teams learn only committed movement outcomes, never staging intent, timing, or changes of mind
-
 ### Requirement: operator-control/exclusive-selection
-Depends on: global-invariants/transactional-invariant-enforcement#concurrent-mutations-cannot-race-past-a-guard, global-invariants/team-granularity-authorization#within-team-discipline-lives-in-convex.
+Depends on: game-lifecycle/status-authority#no-backward-motion, global-invariants/transactional-invariant-enforcement#concurrent-mutations-cannot-race-past-a-guard, global-invariants/team-granularity-authorization#within-team-discipline-lives-in-convex.
 
 Convex SHALL hold, for each snake in an active game, a selection record — the operator currently holding the snake, or none, plus the snake's manual-mode flag — and SHALL enforce at its mutation contract that at most one operator holds any snake and each operator holds at most one snake per game, with no reader ever observing either invariant violated. Only members of the owning team may ever appear as a holder — the selection lock is within-team coordination, which Convex alone arbitrates. At game end every selection SHALL be cleared: selection is live coordination state, not a persistent record.
 
@@ -149,7 +95,7 @@ Holding a selection SHALL make the snake the subject of the operator's per-snake
 - **THEN** the snake's manual-mode flag and its staged move are untouched; release resets nothing but the hold
 
 ### Requirement: operator-control/manual-mode
-Depends on: global-invariants/centaur-state-boundary.
+Depends on: global-invariants/centaur-state-boundary, game-runtime/staged-move-log.
 
 Every snake SHALL begin each game in automatic mode — its moves staged by the team's automated player — and SHALL be in manual mode only between an explicit entry and exit by a current holder: entry by the holder's explicit toggle, or automatically as a side effect of the holder staging a direction; exit only by the holder's explicit return to automatic. While a snake is manual — held or not — the automated player SHALL never stage for it, and automated staging SHALL never supersede a move an operator staged in the current turn: manual-mode entry is ordered before, or atomically with, the operator's staging act, leaving no window in which automation overwrites the operator — an ordering guarantee rather than one transaction, because no transaction spans the runtimes holding the flag and the log.
 
@@ -178,6 +124,8 @@ Every snake SHALL begin each game in automatic mode — its moves staged by the 
 - **THEN** it stages only what an operator explicitly picks, implementing no scheduling or automated staging logic of its own — automated staging originates solely in the team's automated player
 
 ### Requirement: operator-control/live-interface-availability
+Depends on: game-lifecycle/status-authority.
+
 The application SHALL offer a team's live operator interface exactly while that team has a game being played: available from the moment the game is playing, surfaced prominently to the team's members so an arriving operator finds the active game without searching, and refused with an explanatory empty state when no game is playing. When the game finishes, the interface SHALL be replaced by a terminal view — the final outcome and a path to the game's replay — offering no mutating affordances.
 
 #### Scenario: #arriving-operator-lands-in-the-game
@@ -193,9 +141,9 @@ The application SHALL offer a team's live operator interface exactly while that 
 - **THEN** their interface transitions to the terminal view — final scores and the replay link, zero mutating affordances — rather than freezing on the last turn
 
 ### Requirement: operator-control/board-and-move-interface
-Depends on: live-game-observation/ui-honours-the-filter, global-invariants/one-shared-engine#no-parallel-implementation, game-engine/chess-timer.
+Depends on: live-game-observation/ui-honours-the-filter, global-invariants/one-shared-engine#no-parallel-implementation, game-engine/chess-timer, game-runtime/staging-is-unvalidated, game-runtime/staged-move-log.
 
-The live interface SHALL render the current board from the connection's filtered observation surface — terrain, items, and observable snakes — marking each owned snake's currently staged move and updating the marker live whatever the staging origin. For the operator's held snake it SHALL present a four-direction staging affordance that reflects the currently effective staged direction, keeps immediately lethal directions visibly discouraged yet selectable — the client judging lethality with the same engine build the instance resolves with — and stages immediately on every pick: no separate commit act exists, and staged moves remain changeable until the team's turn is over.
+The live interface SHALL render the current board from the connection's filtered observation surface — terrain, items, and observable snakes — marking each owned snake's currently staged move and updating the marker live whatever the staging origin. For the operator's held snake it SHALL present a four-direction staging affordance that reflects the currently effective staged direction, keeps immediately lethal directions visibly discouraged yet selectable — the client judging lethality with the same engine build the instance resolves with — and stages immediately on every pick: **every pick on this affordance is a staging act**, it offers no inert, preview-only, or otherwise non-committal way to nominate a direction, no separate commit act exists, and staged moves remain changeable until the team's turn is over.
 
 #### Scenario: #marker-follows-any-origin
 - **WHEN** a snake's staged move changes — by the automated player, this operator, or a teammate on another client
@@ -206,8 +154,12 @@ The live interface SHALL render the current board from the connection's filtered
 - **THEN** its affordance is visibly marked as such but remains selectable and stages normally
 
 #### Scenario: #exploration-is-staging
-- **WHEN** an operator tries a direction to examine its consequences
-- **THEN** that direction is genuinely staged, and the interface makes clear that exploring and committing are indistinguishable to the game until the turn ends
+- **WHEN** an operator picks a direction on this affordance to see where it would lead
+- **THEN** that direction is genuinely staged, and the interface makes clear that exploring and committing are indistinguishable to the game until the turn ends — nothing on this affordance is a look-without-touching gesture
+
+#### Scenario: #no-second-direction-selector
+- **WHEN** some other surface offers a way to single out a direction without staging it
+- **THEN** it is not this affordance and carries none of its authority — this affordance's picks are the only direction nominations that reach the game, so a read-only lens over a direction can never become a move
 
 ### Requirement: operator-control/operator-presence-and-identity
 Each operator SHALL be identified throughout the team's live interface by a colour that is a deterministic function of the game and the operator — identical across clients, reloads, and reconnects for the game's whole lifetime — used consistently wherever the operator appears: the presence display of currently connected teammates and the selection indication on held snakes. The interface SHALL also show a connection-quality indicator measured entirely by the client itself.

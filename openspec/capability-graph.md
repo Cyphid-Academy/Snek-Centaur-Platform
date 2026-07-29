@@ -93,10 +93,12 @@ flowchart TD
   live-game-observation -->|6| game-runtime
   live-game-observation -->|8| global-invariants
   live-game-observation -->|4| identity-and-authorization
-  operator-control -->|4| game-engine
-  operator-control -->|14| global-invariants
-  operator-control -->|1| identity-and-authorization
-  operator-control -->|2| live-game-observation
+  operator-control -->|1| game-engine
+  operator-control -->|2| game-lifecycle
+  operator-control -->|3| game-runtime
+  operator-control -->|9| global-invariants
+  operator-control -->|2| identity-and-authorization
+  operator-control -->|1| live-game-observation
   platform-integrations -->|3| game-lifecycle
   platform-integrations -->|3| global-invariants
   platform-integrations -->|10| identity-and-authorization
@@ -139,5 +141,5 @@ flowchart TD
   visual-tester -->|4| test-sequences
 
   class game-engine,global-invariants base;
-  linkStyle 0,4,5,8,11,13,16,18,21,22,24,25,28,30,34,36,38,40,41,45,47,50,53,60,62,66,69,71,76,78,81,82 stroke-opacity:0.25;
+  linkStyle 0,4,5,8,11,13,16,18,21,22,24,25,28,30,34,36,38,40,43,47,49,52,55,62,64,68,71,73,78,80,83,84 stroke-opacity:0.25;
 ```

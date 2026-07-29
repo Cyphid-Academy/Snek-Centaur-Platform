@@ -129,22 +129,21 @@ satisfy it. What breaks if reversed: intermittent, race-timed loss of
 human moves — the least debuggable and most trust-destroying defect this
 platform could have.
 
-### Staged-move privacy: own-team full history, cross-team never
+### Staged-move privacy was resolved here and is authored elsewhere
 
 The legacy runtime module's blanket "block staged-move reads" was
 contradicted by its own Design, which grants each team its own staged-move
-history view; the author resolved own-team-only, and this change owns that
-half of the split id (the invisibility half went to the observation story,
-the attribution-metadata half to identity). Authored as
-`staged-move-privacy`: complete own-team history — superseded entries
-included — through the server-filtered read surface
-(live-game-observation/filtered-views-are-the-only-surface); no cross-team
-read, ever, including historically (`#cross-team-never-even-after-
-resolution` — other teams learn committed movement outcomes, not staging
-intent or changes of mind). What breaks if reversed: open cross-team reads
-leak plans before resolution (staged moves are the most sensitive data in
-the instance); a total block starves the team's own interface of the
-staged-move markers and the replay story of sub-turn fidelity.
+history view; the author resolved own-team-only — complete own-team
+history, superseded entries included, no cross-team read ever, including
+historically. That resolution stands and is unchanged; only its home moved.
+The rule is a read rule, and the runtime carve took the staged-move log
+itself out of this capability, so it is now authored in the observation
+capability, which owns what an admitted connection may see and enforces
+every other read boundary of a running game in the same filtered views.
+Nothing here depends on it: this capability's interface reads staged moves
+through that surface, exactly as it reads the board. The full rationale,
+including the "what breaks if reversed" note, is in the observation
+change's design.md; the decision is recorded in both changes' proposals.
 
 ### Boot is a stateless forced disconnect
 
@@ -210,6 +209,56 @@ the server becomes a live single point of failure for human moves, and the
 identity story's per-connection admission model no longer describes
 reality.
 
+### The lifecycle bracket is a declared dependency, not an ambient fact
+
+Three requirements here are written entirely against the game's status
+machine and the per-game instance bracket, and the Purpose declared
+neither. `live-interface-availability` *is* the playing→finished bracket
+rendered as an interface — available from the moment the game is playing,
+terminal the moment it finishes; `exclusive-selection#cleared-at-finish`
+clears live coordination state at that same finish; and
+`staged-move-log`'s "retained for the game's lifetime" is only true
+because an instance's lifetime is bounded by its game's and extended by
+the persistence gate on teardown. Each now cites the lifecycle
+requirement it rests on — `game-lifecycle/status-authority` for
+availability, `status-authority#no-backward-motion` for the clearing (a
+`finished` game is never played again, which is exactly what makes
+clearing safe rather than premature), `game-lifecycle/instance-per-game`
+for retention — and `game-lifecycle` joins the Purpose's declared list.
+Checked before declaring: game-lifecycle reaches only game-engine,
+game-configuration, global-invariants, identity-and-authorization and
+team-server-management transitively, none of which reaches
+operator-control, so the edge is acyclic; its cost is archive order
+(game-lifecycle folds before this change). What breaks if left
+undeclared: the dependency graph stops being a soundness record exactly
+where it is load-bearing — someone could relax the forward-only status
+rule, or let an instance outlive or predecease its game, and nothing
+would point at the three requirements here that quietly stop making
+sense. Declaring it is also what makes the graph tell the truth about
+fold order, which is otherwise discovered by a fold failure.
+
+### One pick, one meaning: every pick on the staging affordance stages
+
+The decision displays are specified against two different notions of
+"current direction" — one the operator has *picked*, one being
+*examined* — and this capability's vocabulary was ambiguous enough to let
+a reader collapse them. `#exploration-is-staging` said "an operator tries
+a direction to examine its consequences", which reads as a claim about
+*any* act of examining, when the intended claim is narrower and stronger:
+this affordance has no non-committal mode. The requirement now says so
+directly — every pick on it is a staging act, it offers no inert or
+preview-only nomination — and `#no-second-direction-selector` closes the
+converse: a read-only lens over a direction elsewhere in the interface
+carries none of this affordance's authority and can never become a move.
+That leaves the transparency capability free to own a client-local
+examined direction without this capability having to know it exists (it
+sits downstream and cannot be named here). What breaks if reversed: if
+examining and staging are one control, an auditor scrubbing a replay or a
+coach comparing directions would be staging moves; if instead this
+affordance ever grows a "just look" mode, `#exploration-is-staging`'s
+warning to the operator becomes false and the game's most consequential
+control acquires a state in which it silently does nothing.
+
 ### Enforcement locus and state placement: cited once, not per requirement
 
 Two cross-cutting facts bear on nearly every requirement here, and the delta
@@ -268,10 +317,21 @@ commit instead.
 - **Minted: selection cleared at game end**
   (`exclusive-selection#cleared-at-finish`) — live selection state never
   masquerades as historical record.
+- **Minted: no second surface nominates a direction to the game**
+  (`board-and-move-interface#no-second-direction-selector`) — the
+  invariant that lets a client-local direction lens exist elsewhere in
+  the interface without any risk of it reaching the instance; an
+  implementer wiring a "preview this direction" control to the same
+  staging call would violate it while every test still passed.
+- **Checked, owned by game-lifecycle**: the playing/finished status
+  machine and the per-game instance bracket — now declared, and cited at
+  `live-interface-availability`, `exclusive-selection` and
+  `staged-move-log` rather than assumed.
 - **Checked, owned by dependencies**: team-granular mutation privilege
-  (identity-and-authorization/role-bound-privileges); staged-move reads
-  through filtered views only
-  (live-game-observation/filtered-views-are-the-only-surface); the board
+  (identity-and-authorization/role-bound-privileges); staged-move reads —
+  both their team-privacy and their delivery through filtered views only
+  (live-game-observation/staged-move-privacy,
+  live-game-observation/filtered-views-are-the-only-surface); the board
   never inferring hidden state
   (live-game-observation/ui-honours-the-filter); server-side enforcement
   against a raw-protocol client and the Convex/instance state boundary
