@@ -9,10 +9,14 @@ game-end bracket — the commit boundary at which play stops, the pushed
 finish notification, and the teardown that waits for the record's
 persistence; and the successor auto-creation that keeps play going. The
 per-game instance's provision/teardown bracket is owned here end to end.
-What happens during play — operating snakes, watching the board, pacing
-turns — and what the persisted record must contain to be replayable belong
-to the capabilities that own those workflows; the scoring consequences of
-forfeits and walkovers belong to the competition formats that define them.
+Because every game is owned here, this capability is also the single
+publisher of whether a team is competitively engaged right now — the one
+fact a capability gates on when it must know a team is playing without
+knowing anything about games. What happens during play — operating snakes,
+watching the board, pacing turns — and what the persisted record must
+contain to be replayable belong to the capabilities that own those
+workflows; the scoring consequences of forfeits and walkovers belong to the
+competition formats that define them.
 
 Depends on: game-engine, game-configuration, global-invariants, identity-and-authorization, team-server-management.
 
@@ -51,7 +55,7 @@ Convex SHALL be the sole authority for every game's status, drawn from the close
 ### Requirement: game-lifecycle/roster-snapshot
 Depends on: global-invariants/game-instance-hermeticity, global-invariants/authenticated-unambiguous-identity#instance-team-ids-resolve-uniquely, identity-and-authorization/roster-snapshot-binding.
 
-Convex SHALL keep, for every launched game, a persistent snapshot of the participating Centaur Teams and, for each, the team's authorized members and their roles, captured at initialization. The snapshot SHALL be treated as append-only historical fact, SHALL seed the instance's admission state through the initialization payload, and is the snapshot that binds the game's authorization for its whole life. When a launch proceeds with a restricted participant set, the snapshot SHALL reflect exactly the teams actually seated.
+Convex SHALL keep, for every launched game, a persistent snapshot of the participating Centaur Teams and, for each, the team's authorized members, captured at initialization. The snapshot SHALL be treated as append-only historical fact, SHALL seed the instance's admission state through the initialization payload, and is the snapshot that binds the game's authorization for its whole life. When a launch proceeds with a restricted participant set, the snapshot SHALL reflect exactly the teams actually seated.
 
 #### Scenario: #snapshot-survives-later-edits
 - **WHEN** team membership or team records change after the game was initialized — during play or after finish
@@ -60,6 +64,23 @@ Convex SHALL keep, for every launched game, a persistent snapshot of the partici
 #### Scenario: #restricted-set-is-what-binds
 - **WHEN** a launch seats fewer teams than were enrolled
 - **THEN** the snapshot contains only the seated teams, and the game's admission — which humans may obtain operator access, which teams participate — follows the snapshot, not the enrollment
+
+### Requirement: game-lifecycle/competitive-engagement
+Depends on: global-invariants/single-convex-deployment#cross-record-invariants-are-one-transaction, global-invariants/transactional-invariant-enforcement#concurrent-mutations-cannot-race-past-a-guard.
+
+Convex SHALL publish, for every Centaur Team, whether that team is competitively engaged right now — a fact derived from the games this capability owns and from nothing else. A team SHALL be engaged from the moment a game it participates in commits to `playing` until that game reaches `finished`, and SHALL stay engaged while any such game of its own is still being played; a game that never enters play SHALL never engage anyone. The published fact SHALL be the platform's single definition of engagement: stated about the team, readable by any capability that must gate on it without knowing that games exist, and readable inside the transaction of a write that must be refused while it holds — so no consumer ever assembles an answer of its own out of game records.
+
+#### Scenario: #published-not-inferred
+- **WHEN** any capability needs to know whether a team is competitively engaged — to hold something frozen, to refuse a mutation, to explain an unavailable affordance
+- **THEN** it reads the published fact and nothing else: it opens no game record, matches no status, and joins no participant list — engagement has exactly one definition, and it lives with the games it is derived from
+
+#### Scenario: #engaged-while-any-of-its-games-plays
+- **WHEN** a team is participating in two games at once and one of them finishes
+- **THEN** the team is still engaged, and stops being engaged only once the last of its games in play has reached its terminal state — the fact is about the team, never about one game
+
+#### Scenario: #a-game-that-never-played-engages-nobody
+- **WHEN** a game is waiting to launch, has had its launch aborted, or walks straight over to `finished` without ever being played
+- **THEN** no team is engaged on that game's account — engagement begins at the commit to play and at no earlier moment
 
 ### Requirement: game-lifecycle/instance-per-game
 Depends on: global-invariants/runtime-ownership, global-invariants/state-confined-to-owning-runtime#game-instance-holds-only-its-games-state.
@@ -177,24 +198,24 @@ A fresh game SHALL begin with no pre-existing per-game platform state: before it
 ### Requirement: game-lifecycle/game-end-boundary
 Depends on: game-engine/game-end-conditions, global-invariants/authoritative-turn-resolution#turn-resolution-is-atomic.
 
-A game SHALL end at the commit of the turn whose resolution detects an end condition. From that commit onward the instance SHALL reject all further gameplay operations — move staging, turn declarations, turn resolution — as game-over, with zero grace window: an in-flight operation arriving after the commit is rejected, and no further turn is ever resolved.
+A game SHALL end at the commit of the turn whose resolution detects an end condition, and that commit SHALL be the sole event that establishes the game as over: nothing outside the game's own runtime decides it, and terminal handling — the notification, the record's persistence, the transition to `finished`, teardown — proceeds from it. What the runtime refuses from that commit onward is that runtime's own obligation, on the same terms.
 
-#### Scenario: #zero-grace-window
-- **WHEN** a staged move races the final turn's commit and arrives after it
-- **THEN** it is rejected as game-over — there is no window between the commit and enforcement in which late operations land
+#### Scenario: #the-commit-is-the-end
+- **WHEN** a game's end condition becomes true
+- **THEN** it is the resolving commit that establishes the game as over — no later sweep, poll, administrative act, or external observation makes a game ended before that commit, and none is needed after it
 
-#### Scenario: #no-turns-after-end
-- **WHEN** the end-detecting turn has committed
-- **THEN** no subsequent turn resolves under any circumstances; the committed final turn is the last
+#### Scenario: #terminal-handling-follows-the-commit
+- **WHEN** terminal handling runs for a game that ended in play
+- **THEN** every step of it is downstream of that one commit, so the outcome it records and the record it persists are the committed final turn's and no other
 
 ### Requirement: game-lifecycle/finish-notification
 Depends on: global-invariants/game-instance-hermeticity#no-egress-before-game-end, global-invariants/state-confined-to-owning-runtime#convex-never-mirrors-a-live-game, global-invariants/credential-confinement#signing-keys-never-leave-convex, identity-and-authorization/sole-credential-issuer.
 
-Convex SHALL learn of a game's terminal state only from a notification the game's instance pushes to the callback registered at initialization. The registration SHALL consist of the callback address and a callback credential the platform pre-signs before initialization: the instance stores and presents it unchanged. Convex SHALL validate the presented credential on receipt as a self-contained proof — verifying it, never comparing against a stored copy, and never persisting it. The notification SHALL carry the game's outcome together with the complete game record for persistence; on receipt Convex SHALL record the outcome, persist the record, transition the game to `finished`, and tear down the instance. An error outcome — a game terminated by failure rather than by play — SHALL still take the game to `finished` and tear the instance down, without recording scores. Delivery SHALL be retried a bounded number of times; because it can still be lost, Convex SHALL detect stale games — records still `playing` whose instance has fallen silent — by polling as a required fallback, so a lost notification never leaves a game `playing` forever.
+Convex SHALL learn of a game's terminal state from a notification the game's instance pushes to the callback registered at initialization, and never from any observation of the game in progress. The registration SHALL consist of the callback address and a callback credential the platform pre-signs before initialization: the instance stores and presents it unchanged. Convex SHALL validate the presented credential on receipt as a self-contained proof — verifying it, never comparing against a stored copy, and never persisting it. The notification SHALL carry the game's outcome together with the complete game record for persistence; on receipt Convex SHALL record the outcome, persist the record, transition the game to `finished`, and tear down the instance. An error outcome — a game terminated by failure rather than by play — SHALL still take the game to `finished` and tear the instance down, without recording scores. Delivery SHALL be retried a bounded number of times; because it can still be lost, the push SHALL NOT be the only path to `finished` — a game whose notification never arrives is carried there by the recovery this capability owns for games gone stale, so a lost notification never leaves a game `playing` forever.
 
 #### Scenario: #pushed-never-polled-live
 - **WHEN** a game is being played
-- **THEN** its status stays `playing` until the instance's terminal notification arrives — or, if it never does, until stale-game detection fires: the push is the only thing that carries the outcome and the record to Convex, and no observation of the game in progress advances the status
+- **THEN** its status stays `playing` until the instance's terminal notification arrives — or, if it never does, until stale-game recovery fires: the push is the only thing that carries the outcome and the record to Convex while the game is running, and no observation of the game in progress advances the status
 
 #### Scenario: #forged-callback-refused
 - **WHEN** a notification arrives whose credential does not validate as platform-issued for this game
@@ -202,11 +223,36 @@ Convex SHALL learn of a game's terminal state only from a notification the game'
 
 #### Scenario: #lost-notification-recovered
 - **WHEN** every delivery attempt of the terminal notification fails
-- **THEN** stale-game detection eventually notices the silent `playing` game and drives it to `finished` with its instance torn down — the fallback is required behaviour, not an operational nicety
+- **THEN** stale-game recovery eventually notices the game still marked `playing` and drives it to `finished` with nothing of its instance left running — the fallback is required behaviour, not an operational nicety
 
 #### Scenario: #error-outcome-still-finishes
-- **WHEN** the instance reports an error outcome — the game died to a failure, not to play
-- **THEN** the game still transitions to `finished` and the instance is still torn down; no scores are recorded for it
+- **WHEN** an error outcome is recorded for a game — the game died to a failure rather than to play — however it arises: reported by the instance, or reached by recovery for a game whose instance is gone and can report nothing
+- **THEN** the game still transitions to `finished` and nothing of its instance is left running; no scores are recorded for it
+
+### Requirement: game-lifecycle/stale-game-recovery
+Depends on: global-invariants/state-confined-to-owning-runtime#convex-never-mirrors-a-live-game, global-invariants/runtime-ownership, global-invariants/transactional-invariant-enforcement#concurrent-mutations-cannot-race-past-a-guard, game-engine/chess-timer, game-engine/game-end-conditions.
+
+Convex SHALL sweep on a recurring schedule for stale games — records still marked `playing` whose finish notification has not arrived within a bound longer than the longest game the configured clocks and turn limit can produce — and SHALL drive every one it finds to `finished`. The bound SHALL be set generously above that maximum rather than tuned to a typical game, because a game still being played must never be mistaken for a lost one. For a record found stale, and for no other, Convex SHALL establish whether a live instance still stands behind it, learning nothing else: the probe consumes no gameplay state. When a live instance answers, Convex SHALL retrieve the game's completed record from it and carry out the same terminal handling a pushed notification receives — persist, transition to `finished`, tear down — the complete record still arriving exactly once, merely fetched because the push was lost; a retrieval that yields no completed record SHALL leave the status untouched for a later sweep. When no live instance answers, Convex SHALL take the game to `finished` with an error outcome, recording no scores, and reclaim whatever of the instance remains. Either branch SHALL commit its transition under the same guard the pushed path commits under, so a notification arriving late can never finish a game twice.
+
+#### Scenario: #stale-only-past-the-maximum-game-duration
+- **WHEN** a record has stood at `playing` with no finish notification for longer than any game its configuration's clocks and turn limit could produce
+- **THEN** the sweep treats it as stale and recovers it — while a quiet game still inside that bound is left entirely alone, since the bound's generosity is the whole reason a game in play is never recovered out from under itself
+
+#### Scenario: #live-instance-yields-the-record
+- **WHEN** the probe finds a live instance behind a stale record
+- **THEN** Convex retrieves the completed record from it and runs the ordinary terminal handling in the ordinary order — persist, then `finished`, then tear down — so the result is indistinguishable from a notification that had arrived, and the persistence gate binds exactly as it does on the pushed path
+
+#### Scenario: #vanished-instance-finishes-with-an-error
+- **WHEN** the probe finds no live instance behind a stale record — reaped, crashed, or unreachable
+- **THEN** the game is taken to `finished` with an error outcome and no scores, and any residue of the instance is reclaimed; it does not sit at `playing` awaiting a record that exists nowhere
+
+#### Scenario: #nothing-left-to-persist-when-the-instance-is-gone
+- **WHEN** the error-outcome branch reclaims what remains of an instance that never delivered its record
+- **THEN** the persistence gate is satisfied vacuously rather than bypassed: there is no retrievable record for the reclamation to destroy, so nothing is lost by reclaiming — and the gate still forbids reclaiming an instance that does hold one
+
+#### Scenario: #probing-is-not-licence-to-watch-a-game
+- **WHEN** the probe or the record retrieval is reached for
+- **THEN** neither is available against a healthy game: the probe answers only whether an instance stands behind the record, never reading a turn log, a staged move, or a board, and the retrieval is reachable once, at the end, for a record already stale — so recovery opens no channel for observing a game in progress
 
 ### Requirement: game-lifecycle/teardown-after-persistence
 Depends on: global-invariants/state-confined-to-owning-runtime#convex-never-mirrors-a-live-game, global-invariants/runtime-ownership.
