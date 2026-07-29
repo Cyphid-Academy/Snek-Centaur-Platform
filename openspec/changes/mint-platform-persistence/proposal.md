@@ -60,22 +60,15 @@ lets it own the bootstrap.
   requirements), all new: `component-boundaries`, `generated-access-path`,
   `schema-change-rollout`.
 
-- **The engine-schema drift guard becomes a `global-invariants` requirement,
-  not this capability's.** This reverses the premise it was proposed under
-  (*every mirror is a Convex validator*). It is not: the drift-guard ownership task
-  `migrate-game-configuration` carried enumerated **four** mirror sites, of
-  which two are not Convex —
-  the Zod schema and field-by-field encoder in
-  `apps/visual-tester/src/lib/test-sequences/` (owned by `test-sequences`) and
-  the stub in `packages/stdb` (owned by `game-lifecycle`'s initialization
-  payload). A rule binding three runtimes and three capabilities is
-  `global-invariants`' by that capability's own admission test, and it fails
-  this capability's prong (d) — it is not a fact about one deployment.
-  Minted as `global-invariants/engine-mirrors-are-guarded`, with the scenario
-  the current corpus most needs: **modifier-only divergence is divergence**,
-  because the naive mutual-`extends` idiom passes while `readonly` differs,
-  which is precisely the drift a Convex `Infer<>` mirror of a `readonly`
-  engine type acquires.
+- **The engine-schema drift guard is not this capability's**, and reversing
+  the premise it was proposed under (*every mirror is a Convex validator*) is
+  what established that: the corpus enumerates **four** mirror sites, two of
+  them outside Convex. A rule binding three runtimes and three capabilities
+  fails this capability's prong (d) — it is not a fact about one deployment.
+  It is `global-invariants/engine-mirrors-are-guarded`, and it is adopted by
+  `adopt-mirror-and-generation-invariants` rather than here: a gi requirement
+  binds nothing until it folds, and this change does not fold until the Convex
+  bootstrap is built. The argument that placed it in gi travels with it.
 
 - **`game-configuration/engine-schema-fidelity` narrows** to what is genuinely
   configuration's: that the stored configuration schema mirrors the engine's
@@ -85,21 +78,12 @@ lets it own the bootstrap.
   mechanism — is deleted rather than retargeted: the question is answered.
   Deleted, so no number here names it; the numbers around it close up.
 
-- **`global-invariants` gains a second requirement: `one-shared-generation`.**
-  Board generation has just moved from `game-engine` to `game-configuration`,
-  spec-only. While it was the engine's, `one-shared-engine` forbade a second
-  implementation of it; after the move nothing does, and a spec-only move must
-  not quietly delete a constraint. The rule binds three capabilities —
-  configuration's preview, lifecycle's launch-time generation, and the visual
-  tester's session seeding — and cannot live in `game-configuration`, because
-  `visual-tester` is folded, declares only `game-engine` and `test-sequences`,
-  and is already being amended by `revise-game-engine-contract`. It states one
-  *implementation*, not one *definition* (the rules already have exactly one
-  owner) and not a *location* (the visual tester legitimately runs the shared
-  generator in a browser), and it names what it does not touch: hand-authored,
-  edited, fixture, and test-constructed boards. This change is its home for the
-  same mechanical reason the drift guard is: `global-invariants` is folded and
-  no second open change may carry a delta against it.
+- **`global-invariants/one-shared-generation` is likewise not this
+  capability's.** Board generation moved from `game-engine` to
+  `game-configuration`, and with it went `one-shared-engine`'s cover against a
+  second implementation; a spec-only move must not quietly delete a constraint.
+  Both requirements were drafted here and both have moved to
+  `adopt-mirror-and-generation-invariants`, for the reason above.
 
 - **The Convex bootstrap gains an owner.** The SDK install, the three real
   `schema.ts`, the component wiring and the generated client are this change's
@@ -116,7 +100,7 @@ lets it own the bootstrap.
 | `migrate-game-configuration/specs/game-configuration/spec.md` | narrow `engine-schema-fidelity` and retarget its declaration; narrow `generation-parameter-boundary`'s one-implementation clause and declare `one-shared-generation` there and on `board-preview` |
 | `migrate-game-configuration/tasks.md` | delete the drift-guard ownership task and renumber §6; retarget the `#drift-fails-the-build` citations; add the single-generation call-site task and its citations |
 | `migrate-game-configuration/design.md`, `proposal.md` | close the deliberately-left generation gap as a Decision |
-| `legacy-spec-archive/maps/identifier-map.json` | 08-REVIEW-014 ("single generation authority") gains this change's home for that half |
+| `legacy-spec-archive/maps/identifier-map.json` | 08-REVIEW-014 ("single generation authority") — that half is `adopt-mirror-and-generation-invariants`' |
 | `migrate-platform-integrations/specs/platform-integrations/spec.md` | Purpose `Depends on:` += `platform-persistence`; `functions-are-the-api` declares the host's ownership of the public surface |
 | `openspec/maps/identifier-lineage.json` | one split |
 | `openspec/capability-graph.md` | regenerate (`pnpm spec:graph`) |
@@ -124,17 +108,16 @@ lets it own the bootstrap.
 
 ## Open Questions
 
-**Decision (author, 2026-07-28): the gi delta carries two requirements, not
-one.** `global-invariants/one-shared-generation` is minted here, closing the gap
-`migrate-game-configuration/design.md` recorded and left for another change:
-board generation left the engine, and with it left `one-shared-engine`'s cover
-against a second implementation. Two reviewers reached the same reading
-independently. This change is its home because `global-invariants` is folded and
-at most one open change may carry a delta against a given capability — and both
-gi requirements survive Q-A being answered "defer", since neither depends on
-`platform-persistence` existing. Scope, the admission test worked through prong
-by prong, and the six requirements considered for a declaration (two taken) are
-in design.md §2b–2c.
+**Decision (2026-07-29): the two gi requirements leave this change.** They
+were drafted here on the reasoning that gi is folded and at most one open
+change may carry a delta against a capability — true, and the wrong question.
+What matters is that a gi requirement binds nothing until it folds, and this
+change does not fold until the Convex bootstrap is built. They are adopted by
+`adopt-mirror-and-generation-invariants`, which archives in the PR that opens
+it. Neither depended on `platform-persistence` existing, so both survive Q-A
+being answered "defer" — now trivially, since they are no longer here at all.
+The admission test worked prong by prong, and the six requirements considered
+for a declaration (two taken), moved with them.
 
 ### Q-A. Is a three-requirement capability worth a graph node?
 
@@ -143,9 +126,9 @@ in design.md §2b–2c.
 new. Its measured cost is one capability node, one requirement-grain edge
 inward, and no fold-order movement whatsoever.
 
-**Options.** (i) Mint it. (ii) Defer: keep the gi drift guard (which is
-independently justified), leave the other three facts unstated, and let the
-first Convex implementation set the conventions.
+**Options.** (i) Mint it. (ii) Defer: the gi drift guard is independently
+justified and now lives elsewhere, so deferring would leave the other three
+facts unstated and let the first Convex implementation set the conventions.
 
 **Recommendation:** (i), on the bootstrap-ownership argument above — there is
 no other capability that folds before every Convex consumer, so under (ii) the
@@ -173,4 +156,6 @@ asserts against engine types, and its first consumer in fold order may well be
 
 **Recommendation:** the helper is a task here, with a note that if
 `revise-game-engine-contract` needs it sooner it takes it. Unlike a capability
-requirement, a task can move.
+requirement, a task can move — and the requirement itself has now moved to
+`adopt-mirror-and-generation-invariants`, which changes nothing about who
+writes the assertion.

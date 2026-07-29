@@ -228,7 +228,7 @@ No implementation is performed by this change.
   1–5; held-snake occupancy and participant/present separation inside the
   context builder; per-snake effect expiry; the standing score on the public
   surface; a hazard-damage event kind; a `maxGameDurationMs` field on the
-  gameplay configuration subtree with its bounds descriptor entry; the timing
+  gameplay configuration subtree; the timing
   parameters on both entry points, with the clock arithmetic moving from
   `clock.ts` helpers the runtime calls into the commit stage; and a
   `clock_exhaustion` death cause in the existing closed set.
@@ -242,9 +242,10 @@ No implementation is performed by this change.
   or calls them changes — `packages/stdb/`, `packages/centaur-server-lib/`, and
   `apps/visual-tester/`, whose `test-sequences` schema is a `z.strictObject`
   with committed fixtures. The recorded format gains a per-turn field, so its
-  schema version increments and every committed fixture is migrated. The
-  regression suite fails loudly on unmigrated fixtures, which is the wanted
-  signal.
+  schema version increments; the fixture directory holds none yet, so nothing
+  is migrated today and a version-1 document is rejected rather than guessed
+  at. The regression suite fails loudly on any that appear before then, which
+  is the wanted signal.
 - Dependents unblocked: `live-game-observation/scoreboard-sole-aggregate-authority`,
   `game-runtime/turn-event-record`, `bot-framework/foreign-snake-treatment`,
   `bot-framework/frozen-snake-timestamps`,

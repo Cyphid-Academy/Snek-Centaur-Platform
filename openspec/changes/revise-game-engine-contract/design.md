@@ -539,88 +539,6 @@ committed fixture becomes unreplayable the moment a clock matters, and the
 failure presents as a resolver bug in the replay-check rather than as the missing
 field it is.
 
-### The tester has two ways to get a board, and only one of them was ever written down
-
-Once generation is `game-configuration`'s, a question that had no good answer
-acquires one: where does the visual tester's *starting board* come from? The
-tool has always had two sources and has only ever specified one.
-`board-editor` specifies hand-authoring in detail, down to which fields are
-lifecycle-derived and which structurally invalid states are refused. Generation
-appears in it exactly twice, both times as an aside — a fresh session starts
-with a seed and a board "so board generation and editing work immediately" —
-which promises the affordance without ever saying what it is, what it takes, or
-what it guarantees.
-
-Meanwhile the code has had it all along.
-`apps/visual-tester/src/lib/factory.ts` calls the generator the engine package
-exports and `store.svelte.ts` starts a session on the result, with a parameter
-panel and a failure path already built. **That call is the shared
-implementation, not a copy of it** — checked, because the alternative would have
-been a live violation of the invariant this requirement declares rather than a
-gap in it. So this is a requirement describing something the tool partly does
-and the spec never said, which is exactly the kind of thing that rots: the
-comment above the factory calls it "a UI affordance, not spec surface", and an
-affordance nobody specified is an affordance nobody has to keep honest.
-
-**A new requirement rather than an extension of `board-editor`.** The editor
-requirement is about what is authorable and what validity is enforced while
-authoring; this one is about where a session's starting board comes from, and it
-carries three cross-capability dependencies — the generation parameter
-vocabulary, the seeded all-or-nothing attempt, and the one-implementation
-invariant — that have nothing to do with editing rules. Folding it in would bury
-the second source inside the requirement that specifies the first, which is
-precisely the reading that let it go unspecified for this long, and it would
-enlarge an already-seeded MODIFIED block with unrelated substance.
-
-**Both routes are first class, and the requirement has to say so in both
-directions.** Generation must not read as the proper way to start, with
-hand-authoring as the fallback — the tool exists to drive the resolver into
-states generation would never produce. And a generated board must not read as a
-lesser board: once it is on screen it is editable cell by cell like any other,
-and generation asserts nothing about it afterwards. The invariant already
-carries the general form of that second point — a board nobody offers as the
-product of the generation rules is outside it entirely — which is why the
-requirement states the tool-local consequence and does not restate the rule.
-
-**Why the dependency is declared rather than avoided.** The tempting shape is a
-tester that quietly grows its own small generator: it removes a dependency,
-removes an ordering constraint, and looks harmless because the two would agree
-on the day it is written. That is the exact violation
-`one-shared-generation` was minted to catch, and the tool it would be
-committed in is the one whose entire purpose is catching drift between itself
-and the platform. Declaring the dependency is what makes relaxing the invariant
-visible here.
-
-**What it costs, stated rather than absorbed.** Two things.
-`visual-tester` moves from depth 2 to depth 4 in the capability graph, below
-`game-configuration` — harmless, and verified acyclic: `game-configuration`'s
-closure is `application-shell`, `global-invariants` and `game-engine`, none of
-which reaches `visual-tester`. The second is real: **this change stops being
-fold-first.** Its `visual-tester` delta cites requirements that exist only in
-`mint-platform-persistence` and `migrate-game-configuration`, and fold refuses a
-delta citing a requirement not yet in `specs/`, so those archive first (and
-`mint-application-shell` before the latter). The change-grain order stays
-acyclic — neither of those changes cites anything this one adds — but several
-sibling changes' plans still say this one folds first, and `game-engine`'s own
-independence is what makes that assumption look safe when it is now a statement
-about a three-capability folder rather than about the engine.
-
-The cheaper alternative was considered and rejected: declare only
-`global-invariants/one-shared-generation` and leave the generation parameters
-and the seeded attempt undeclared. It buys back one ordering edge and costs the
-requirement its footing — `#same-parameters-and-seed-same-board` would then rest
-on a rule the capability cannot reach, which is the "pointer filling a gap the
-requirement should have specified itself" failure rather than a soundness
-declaration.
-
-**What breaks if reversed** (generation left unspecified in the tool, as it is
-today): the affordance stays a UI convenience with no contract, so nothing
-forbids it drifting — a locally-tuned parameter panel, a convenience default
-that differs from the platform's, a "quick regenerate" that skips a stage — and
-the drift surfaces as a tester confidently reporting that the engine behaves
-differently on boards that were never the boards the platform builds. The tool
-whose job is detecting divergence becomes a second source of it.
-
 ## Constraint-mining
 
 Per `config.yaml`'s design rules, each decision was checked for an invariant a
@@ -682,15 +600,6 @@ future implementer could silently violate.
   minted as `chess-timer#the-increment-is-not-a-floor`, inside the requirement
   that owns the arithmetic rather than as a new one.
 
-- The visual tester's generation route mints nothing, and the check is worth
-  recording rather than assumed: the invariant a tester growing its own
-  generator would violate already exists as `one-shared-generation`, minted this
-  branch by `mint-platform-persistence`, and the tester is a consumer of it
-  rather than a second author. What the tester's requirement adds beyond it —
-  that both board sources yield the same kind of session, that a generated board
-  stays editable, that a declined generation changes nothing — binds one
-  capability's own surface and fails prong (a) of gi's admission test.
-
 Five invariants minted, all inside requirements this change already amends.
 
 ## Risks / Trade-offs
@@ -714,8 +623,9 @@ Five invariants minted, all inside requirements this change already amends.
   Two required parameters on both entry points reach every caller, and two
   consumer capabilities gain deltas to record and supply them. That is the cost
   of the reversal, paid once, and it is visible rather than deferred: the recorded
-  format's schema version increments and every committed fixture is migrated in
-  the same pass as the hazard event and the state-shape fields.
+  format's schema version increments in the same pass as the hazard event and
+  the state-shape fields, and a version-1 document is rejected rather than
+  migrated — it is missing inputs its turns were resolved from.
 - **Nothing forces a truthful measurement.** The engine believes whatever burn it
   is told, so a runtime that supplied a constant would produce a game whose
   clocks are fiction, and every check in the engine would still pass. That is

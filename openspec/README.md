@@ -35,6 +35,25 @@ game-engine/team-potion-effects#sacrificial-collection   # one of its scenarios
   Purpose` amendment) declares its dependencies in a `Depends on:`
   sentence; a capability's spec may reference only itself and those
   declared dependencies, and the declared graph must stay acyclic.
+- **A `global-invariants` change gets its own change folder, and archives in
+  the PR that opens it.** Never carry a gi requirement inside a change that
+  has an implementation phase. gi prescribes nothing to build itself, so its
+  change has nothing to wait on, and enforcement is each dependent's
+  obligation verified at *that* dependent's archive — never a precondition of
+  archiving gi. The reason is not tidiness: **an unfolded invariant binds only
+  the change carrying it.** It never reaches `specs/`, so it constrains none
+  of the other open changes and nothing that opens while it waits, however
+  emphatically its prose says it binds everything. `extend-global-invariants`,
+  `adopt-federated-trust-invariants` and
+  `adopt-mirror-and-generation-invariants` are the shape to copy.
+- **Ask what a placement obliges, not which change may carry it.** *Which open
+  change is allowed to hold this?* has a crisp answer from the rules — one
+  change per Purpose, that one already amends the capability, the slot is
+  taken — and it is the easier question, so it is the one you will drift into.
+  *What does holding this oblige?* is the one that decides correctly. A
+  permission test will confirm a placement a purpose test rejects. Whenever a
+  placement argument's weight rests on what is **permitted**, re-derive it
+  from what the requirement is **for**.
 - **`global-invariants` is a meta layer; depend on it where your soundness
   rests on it.** gi constrains how concrete capabilities may be shaped, so
   the direction is always concrete → gi, never gi → a user-story capability
