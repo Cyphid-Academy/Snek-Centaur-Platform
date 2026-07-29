@@ -32,6 +32,7 @@ flowchart TD
   application-shell["application-shell"]:::open
   bot-configuration["bot-configuration"]:::open
   bot-framework["bot-framework"]:::open
+  centaur-server-runtime["centaur-server-runtime"]:::open
   decision-transparency["decision-transparency"]:::open
   game-configuration["game-configuration"]:::open
   game-engine["game-engine"]
@@ -64,6 +65,8 @@ flowchart TD
   bot-framework -->|4| game-engine
   bot-framework -->|10| global-invariants
   bot-framework -->|6| operator-control
+  centaur-server-runtime -->|1| application-shell
+  centaur-server-runtime -->|9| global-invariants
   decision-transparency -->|6| bot-framework
   decision-transparency -->|7| global-invariants
   decision-transparency -->|3| operator-control
@@ -121,5 +124,5 @@ flowchart TD
   visual-tester -->|4| test-sequences
 
   class game-engine,global-invariants base;
-  linkStyle 0,4,5,7,10,11,14,17,18,20,21,25,26,27,29,30,34,36,38,40,47,49,51,54,56,61,62,65,66 stroke-opacity:0.25;
+  linkStyle 0,4,5,7,10,11,14,16,19,20,22,23,27,28,29,31,32,36,38,40,42,49,51,53,56,58,63,64,67,68 stroke-opacity:0.25;
 ```
