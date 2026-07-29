@@ -59,7 +59,8 @@ flowchart TD
   accounts-and-profiles -->|5| team-management
   application-shell -->|1| game-engine
   application-shell -->|5| global-invariants
-  bot-configuration -->|8| bot-framework
+  bot-configuration -->|9| bot-framework
+  bot-configuration -->|1| game-lifecycle
   bot-configuration -->|5| global-invariants
   bot-configuration -->|1| identity-and-authorization
   bot-configuration -->|4| team-management
@@ -132,5 +133,5 @@ flowchart TD
   visual-tester -->|4| test-sequences
 
   class game-engine,global-invariants base;
-  linkStyle 0,4,5,7,10,11,14,16,19,20,22,23,26,28,32,33,34,36,37,41,43,45,47,54,56,60,63,65,70,71,74,75 stroke-opacity:0.25;
+  linkStyle 0,4,5,8,11,12,15,17,20,21,23,24,27,29,33,34,35,37,38,42,44,46,48,55,57,61,64,66,71,72,75,76 stroke-opacity:0.25;
 ```

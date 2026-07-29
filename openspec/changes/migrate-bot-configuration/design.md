@@ -68,6 +68,34 @@ standing configuration every future game inherits. The timekeeper role
 considered in the legacy review no longer exists; nothing here reintroduces
 role vocabulary beyond structural captaincy.
 
+**Game-scoped bot parameters are any-member too.** The snapshot forks the
+team's bot parameters into game-scoped values, and nothing originally said
+who may adjust them — `any-member-live-editing` reached per-snake portfolio
+fields only, while `game-start-snapshot` and the pacing story's live record
+both presumed mid-game adjustment without naming an authority. Resolved by
+reading the established grain on the axis that actually distinguishes the
+two gates: it is **durability, not breadth**. The captain gate exists over
+standing policy that every future game silently inherits — an edit there is
+unattended and permanent. A game-scoped value dies with the game and is
+precisely the knob a roster must retune under time pressure. So the
+game-scoped values sit with live portfolio editing, authored as part of
+`any-member-live-editing` (`#game-scoped-parameters-need-no-captain`),
+which is also what this design already assumed when it described the
+game-scoped temperature as any-member-adjustable.
+
+Breadth would be the wrong axis anyway, because it produces an incoherent
+gate: the per-snake temperature override is any-member by rule, so a
+captain-only game temperature would let any member override the value on
+every snake while forbidding them the shared fallback those overrides
+default to. What breaks if reversed (captain-only game-scoped values): the
+one-human bottleneck the split exists to avoid returns at exactly the
+moment it costs most — the captain becomes a required participant in
+retuning submission cadence mid-game, and a team whose captain is
+concentrating on their own snakes cannot adjust pacing at all. The residual
+risk — a careless member changing a team-wide knob — is the ordinary
+within-team coordination risk the platform deliberately leaves social,
+enforced only at the team granularity where enforcement is possible.
+
 **How the two gates integrate with the rules that own enforcement.** Neither
 requirement restates that authorization is enforced server-side at the
 mutating function contract with interface gating as presentation only: that
@@ -120,6 +148,25 @@ audit story of who changed what during play; conversely, game-scoped edits
 leaking back into defaults would make every game rewrite team policy as a
 side effect of playing it.
 
+**The snapshot's caller is a declared dependency, not just a code fact.**
+`game-start-snapshot` says "at each game's start" and owns the mutation;
+`game-lifecycle/fresh-game-state` owns the launch orchestration that
+invokes it, guarantees no per-game state pre-exists, guarantees the
+initialization is idempotent, and guarantees the snake identifiers it
+initializes under are the ones board generation assigned. Every one of
+those is load-bearing here: "every team snake's portfolio is initialised"
+is only well-defined because the snake set is fixed and agreed at that
+moment, and "the captured values" are only a capture rather than a merge
+because nothing per-game existed before. The pairing was previously visible
+only in the tasks' seam note, so the requirement now declares
+`game-lifecycle/fresh-game-state` and the capability declares
+`game-lifecycle`. Consequence for the train: `migrate-game-lifecycle` joins
+the set of changes that must archive before this one. What breaks if the
+dependency stays undeclared: relaxing the freshness or idempotence
+guarantee — retrying a launch, or reusing a predecessor's per-game rows —
+silently turns the snapshot into a partial overwrite of live portfolios,
+and nothing in the graph would have flagged this capability as affected.
+
 ### The 06-REQ-011 split: timing fields stored here as opaque scalars
 
 The legacy bot parameter record bundles the softmax temperature (this
@@ -140,6 +187,34 @@ consumption here): this capability would need the deadline formula and the
 chess-clock vocabulary, inverting the DAG, and every pacing change would
 ripple into the configuration spec despite changing nothing about storage
 or authority.
+
+**A timing parameter may be unset, and its default is not this capability's
+to state (author-decided 2026-07-28).** The author has fixed the automatic
+submission time allocation's default: absent a team setting, it is exactly
+the clock time the game accrues to the team each turn. Where that rule
+should live was a real choice, since the *captured default* is this
+capability's. It is authored in the pacing story
+(`turn-pacing/live-pacing-parameters`), for the same two reasons that put
+the rest of the consumption semantics there: the rule is stated in
+chess-clock vocabulary, which this capability does not declare and has no
+other use for, and this requirement's entire posture is that it holds these
+three fields as *opaque* scalars — a rule saying what one of them means in
+terms of the game clock is precisely the semantics it declines to own.
+
+What *is* this capability's, and is now stated, is the shape that gives a
+default something to be the default of: a submission-timing parameter **may
+be left unset**, and an unset parameter is stored and captured as unset
+rather than as a placeholder (`#unset-timing-parameter-stays-unset`). That
+keeps `game-start-snapshot` unchanged — capture copies the absence like any
+other value — and puts the substitution in exactly one place, the pacing
+record's initialisation. What breaks if reversed (storing a stand-in at
+write time, or defaulting here): the record has to name a number, so either
+this capability acquires a `game-engine` dependency and starts stating clock
+semantics it declared out of scope, or a platform constant is baked in that
+is wrong for every game format whose per-turn budget differs from the one it
+was chosen against — and once a placeholder is stored, nothing downstream
+can tell "the team chose this value" from "nobody ever set it", so the
+default can never be corrected without overwriting deliberate choices.
 
 ### Temperature derivation lives here (the cycle-break's counterpart)
 
@@ -196,7 +271,7 @@ imported by framework and frontend, making render/simulate drift
 structurally impossible within a build) is mechanism — code with a
 `// design:` reference here.
 
-### Unresolvable Drive targets: omitted, never deleted
+### Omitted from play: one category, two causes, never a deletion
 ### (constraint-mined — the routed lead)
 
 `per-snake-portfolio-record` mints the legacy design's handling of Drives
@@ -211,19 +286,58 @@ mid-game (a cell target obscured for one turn would vanish permanently),
 and permitting targetless Drives would force the framework to invent
 resolution semantics the vocabulary deliberately lacks.
 
+The framework's **retirement of a satisfied Drive** is the second cause of
+the same effect, and is authored here as such rather than as a separate
+mechanism. The framework story resolved that retirement is deactivation
+inside the framework's own in-memory working portfolio — it has no channel
+to write Centaur state, and this capability's record is written only by an
+operator's edit — so from this side a retired Drive is exactly an omitted
+Drive: inert, listed, reversible, and nobody's to delete but the operator's
+(`#satisfied-drive-keeps-its-record`). Both capabilities therefore state
+one contract: the *cause* is the framework's (evaluated per turn against
+the observed board), the *record consequence* is this capability's (none).
+Because retirement is re-derived each turn rather than latched, the
+re-entry clause needs no special case — the record was never touched, so
+there is nothing to restore. The operator-facing half is
+`drive-management-interface#omitted-drives-stay-visible`: an omitted Drive
+stays listed with its reason distinguished, so "target gone" and "job done"
+are not one indistinguishable greyed row. What breaks if reversed
+(persisting retirement, in either capability): a Drive satisfied by a
+transient board is destroyed or flagged off permanently with no way back
+but the operator noticing, and the platform acquires a writer of the
+portfolio record other than the operator — which the record's whole
+never-deleted guarantee is built on not having.
+
 ### Live edits reach the running player without loss
+### — the observable property, not the mechanism that delivers it
 
 `any-member-live-editing` carries the legacy live-edit guarantee at intent
 grain: portfolio mutations take effect reactively on the running player,
-never restart it, never discard accumulated evaluation, and a weight
-change is pure rescoring of already-evaluated worlds. The cheap-rescan
-mechanism that delivers this (weights applied at scoring time over cached
-normalised outputs) is bot-framework's demoted machinery; what this
-capability binds is the operator experience — editing is safe mid-turn.
-What breaks if reversed: if edits discarded evaluation, operators would
-learn that touching a weight mid-turn costs the team its computed
-progress, and the live-editing affordance would be self-defeating at
-exactly the moment it matters.
+never restart it, and never discard the evaluation already accumulated for
+the turn.
+
+An earlier draft of `#weight-edit-keeps-evaluated-work` bound more than
+that — "nothing is re-simulated" — which re-minted, as a requirement of
+this capability, precisely the property the framework story had just
+demoted. That story's mechanism boundary retired cache-based rescoring and
+the no-re-simulation half of branch activation as *efficiency properties of
+the machinery*: an implementation that re-derived a world cheaply, or
+re-ran a memoised resolution, would violate the letter of "nothing is
+re-simulated" while delivering everything anyone can observe. Two
+capabilities cannot hold opposite positions on one property, and the one
+that owns the machinery had already ruled — so this capability gives. The
+scenario now binds the observable pair: the turn's accumulated evaluation
+is not discarded, and the operator sees updated scores within the same turn
+rather than waiting out a fresh evaluation cycle.
+
+What breaks if reversed (re-minting the mechanism here): the corpus states
+two rules about the same behaviour from two capabilities, the weaker of
+which cannot be enforced from where it sits — and any future scheduler or
+memoisation change becomes a spec change against a capability that never
+had authority over the machinery. What breaks if the observable half is
+dropped instead: operators learn that touching a weight mid-turn costs the
+team its computed progress, and the live-editing affordance is
+self-defeating at exactly the moment it matters.
 
 ### UI mirrors folded as scenarios; the tab-cycle sort demoted
 
@@ -281,6 +395,15 @@ different targets from the same board, and muscle memory is worthless.
 - **Minted: unresolvable targets are omitted, never deleted, and re-enter
   automatically** (`per-snake-portfolio-record#dead-target-omits-never-deletes`)
   — the routed lead.
+- **Minted: a satisfied Drive's record survives its retirement untouched**
+  (`per-snake-portfolio-record#satisfied-drive-keeps-its-record`) and stays
+  visible with its reason (`drive-management-interface#omitted-drives-stay-visible`)
+  — without them "retired from the portfolio" is implemented as a delete,
+  by a writer this record is not supposed to have.
+- **Minted: game-scoped parameter values are member-editable**
+  (`any-member-live-editing#game-scoped-parameters-need-no-captain`) — an
+  unstated authority defaults, in implementation, to whichever gate the
+  first developer copies.
 - **Minted: the framework never writes team-scoped configuration**
   (`registry-sync-insert-only#framework-never-writes-configuration`).
 - **Minted: the lazy insert runs on the captain's visit — consent, not

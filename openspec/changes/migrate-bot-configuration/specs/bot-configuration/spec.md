@@ -9,17 +9,19 @@ member performs live during play — Drives with concrete targets, weight and
 activation overrides, the temperature override — and the derivation of the
 effective configuration and effective temperature the framework consumes as
 opaque inputs. Two authority grains structure everything here: team-scoped
-defaults belong to the captain alone, while game-scoped portfolio editing
-belongs to the whole roster. What the configured heuristics mean — the
+defaults belong to the captain alone, while everything a game is played
+with — per-snake portfolios and the game's own copy of the bot parameters
+— belongs to the whole roster. What the configured heuristics mean — the
 Drive/Preference vocabulary and the decision engine that runs them —
-belongs to the framework story; when decided moves are submitted, and the
-consumption of the submission-timing parameters stored here, belongs to the
-pacing story; how decision state is rendered and explained belongs to the
-transparency story; which operator holds a snake belongs to the operator
-story.
+belongs to the framework story; when a game starts and what per-game state
+its launch creates belongs to the lifecycle story; when decided moves are
+submitted, and the consumption of the submission-timing parameters stored
+here, belongs to the pacing story; how decision state is rendered and
+explained belongs to the transparency story; which operator holds a snake
+belongs to the operator story.
 
 Depends on: bot-framework, team-management, identity-and-authorization,
-global-invariants.
+game-lifecycle, global-invariants.
 
 ## ADDED Requirements
 
@@ -44,14 +46,20 @@ team-scoped and SHALL persist for the lifetime of the team.
 - **THEN** its heuristic defaults and bot parameters are exactly as they were at archiving — team-scoped bot configuration is never deleted or reset by any team lifecycle event
 
 ### Requirement: bot-configuration/team-bot-parameters
-
 Each Centaur Team SHALL have a persistent **bot parameter record** holding:
 the team's default softmax temperature; three submission-timing parameters
 — an automatic submission time allocation, a scheduled-submission interval,
 and an imminent-deadline threshold — which this capability stores, edits,
 and snapshots as opaque team-tunable scalars whose consumption semantics
 are owned elsewhere; and the ordered pinned-heuristics list that governs
-Drive ordering.
+Drive ordering. A submission-timing parameter MAY be left unset, and an
+unset parameter SHALL be stored and captured as unset rather than as a
+stand-in value: what an absent value means is the consuming story's to
+define, and this record never invents one.
+
+#### Scenario: #unset-timing-parameter-stays-unset
+- **WHEN** a team has never set one of the submission-timing parameters
+- **THEN** the record carries it as unset and each game's capture carries the same absence — no placeholder is stored here, so the default a consumer applies is the one that story defines rather than a constant this record silently chose
 
 #### Scenario: #timing-parameters-are-tunable-not-constants
 - **WHEN** a team's hosting topology makes the built-in submission timing wrong for it
@@ -85,6 +93,8 @@ state.
 - **THEN** the captain-gated affordances follow the transfer reactively — the new captain gains them and the former captain loses them without anyone reloading
 
 ### Requirement: bot-configuration/game-start-snapshot
+Depends on: game-lifecycle/fresh-game-state.
+
 At each game's start the team's heuristic defaults and bot parameters SHALL
 be captured for that game: every team snake's portfolio is initialised from
 the captured defaults — each active-by-default Preference present at its
@@ -112,7 +122,6 @@ next game.
 - **THEN** the surface states that edits configure future games only — the snapshot semantics are communicated, not left for the team to discover mid-game
 
 ### Requirement: bot-configuration/registry-defines-availability
-
 The heuristics a team can operate SHALL be the **intersection** of its
 heuristic default configuration with the heuristic registry compiled into
 its hosting server's build: a registry entry with no configuration row is
@@ -159,18 +168,22 @@ own workflows.
 - **THEN** it writes nothing to team-scoped configuration; a running game has no path by which it could mutate the team's defaults
 
 ### Requirement: bot-configuration/per-snake-portfolio-record
-Depends on: bot-framework/per-snake-portfolio.
+Depends on: bot-framework/per-snake-portfolio, bot-framework/drive-satisfaction.
 
 For each team snake in each active game the platform SHALL persist a
-**portfolio record** realising the snake's portfolio: its active Drives — each with a
+**portfolio record** realising the snake's portfolio: its Drives — each with a
 concrete target, a specific snake or a specific cell, and a current weight
 — and its deviations from the game's captured defaults: weight overrides,
 Preference activation overrides, and a nullable temperature override. A
-Drive SHALL always carry a concrete target; a Drive whose target cannot
-currently be resolved against the board is omitted from play — contributing
-nothing — but never deleted by the platform, re-entering automatically if
-its target becomes resolvable again. The record SHALL persist across turns,
-and no selection change or turn transition SHALL reset any part of it.
+Drive SHALL always carry a concrete target. A Drive is omitted from play —
+contributing nothing — while its target cannot currently be resolved
+against the board, and equally while the automated player holds it retired
+for having been satisfied on the board; either way it re-enters
+automatically once the condition lifts. Neither omission SHALL be recorded
+and neither SHALL delete anything: the record changes only by an operator's
+own edit, so removing a Drive is exclusively an operator's act. The record
+SHALL persist across turns, and no selection change or turn transition
+SHALL reset any part of it.
 
 #### Scenario: #no-drive-without-a-target
 - **WHEN** a Drive is added to a snake's portfolio
@@ -180,6 +193,10 @@ and no selection change or turn transition SHALL reset any part of it.
 - **WHEN** a Drive's target snake dies, or its cell target becomes unresolvable
 - **THEN** the Drive stops contributing but its record remains — listed for an operator to remove or keep — and if the target becomes resolvable again the Drive resumes contributing without being re-added
 
+#### Scenario: #satisfied-drive-keeps-its-record
+- **WHEN** a Drive's motivation is satisfied on a resolved board and the automated player stops evaluating it
+- **THEN** its record is untouched — still listed, still the operator's alone to remove — and it contributes again on a later turn whose board no longer satisfies it, so a job done costs the operator nothing to reinstate
+
 #### Scenario: #temperature-override-survives-deselection
 - **WHEN** an operator sets a snake's temperature override and later stops working with that snake
 - **THEN** the override persists exactly as Drives and weight overrides do — deselection and turn transitions reset nothing in the portfolio record
@@ -187,28 +204,35 @@ and no selection change or turn transition SHALL reset any part of it.
 ### Requirement: bot-configuration/any-member-live-editing
 Depends on: team-management/roster-of-operators, global-invariants/team-granularity-authorization#within-team-discipline-lives-in-convex, bot-framework/turn-scoped-evaluation, bot-framework/reactive-inputs.
 
-During a game, every current member of the owning team SHALL be able to mutate its snakes'
-portfolio records: adding a Drive with a target, removing a Drive,
-retargeting a Drive, changing Drive and Preference weights, toggling a
-Preference's activation, and setting or clearing the temperature override.
-This game-scoped editing authority is deliberately broader than the
-team-scoped captain gate and, like it, is
-within-team coordination.
+During a game, every current member of the owning team SHALL be able to
+mutate its snakes' portfolio records — adding a Drive with a target,
+removing a Drive, retargeting a Drive, changing Drive and Preference
+weights, toggling a Preference's activation, and setting or clearing the
+temperature override — and, on the same footing, to adjust the team's
+game-scoped parameter values captured at that game's start. This
+game-scoped editing authority is deliberately broader than the team-scoped
+captain gate and, like it, is within-team coordination: the captain gate
+governs the standing configuration future games inherit, never the values a
+game is being played with.
 Edits SHALL take effect on the running player reactively: the framework
-observes them and rescores without restarting and without discarding
-accumulated evaluation — a weight change is pure rescoring
-of already-evaluated worlds.
+observes them and applies them to the snake's scores within the turn,
+without restarting and without discarding the evaluation already
+accumulated for that turn.
 
 #### Scenario: #any-member-not-only-captain
 - **WHEN** an ordinary member — not the captain — edits a snake's Drives, weights, activations, or temperature override mid-game
 - **THEN** the edit succeeds; the captain gate covers team defaults only, never live portfolio editing
 
+#### Scenario: #game-scoped-parameters-need-no-captain
+- **WHEN** an ordinary member adjusts one of the team's game-scoped parameter values during play — the game's temperature among them
+- **THEN** the adjustment succeeds, exactly as a portfolio edit does; a team-wide knob that dies with the game is retuned by whoever is at the table, not funnelled through one member under time pressure
+
 #### Scenario: #weight-edit-keeps-evaluated-work
 - **WHEN** a member changes a portfolio weight mid-turn
-- **THEN** already-evaluated worlds are rescored under the new weight — nothing is re-simulated, no evaluation progress is lost, and the new scores stand at the snake's next decision
+- **THEN** the snake's scores reflect the new weight without the turn's accumulated evaluation being discarded — the operator sees updated scores within the same turn rather than waiting out a fresh evaluation cycle, and those scores stand at the snake's next decision
 
 #### Scenario: #edits-never-touch-team-defaults
-- **WHEN** any portfolio edit is made during a game
+- **WHEN** any portfolio or game-scoped parameter edit is made during a game
 - **THEN** the team's heuristic defaults and bot parameters are unchanged — game-scoped editing writes game-scoped state only
 
 ### Requirement: bot-configuration/effective-configuration
@@ -291,8 +315,15 @@ predicate accepts, dims the rest,
 supports deterministic keyboard cycling through eligible targets
 nearest-first, and can be cancelled without side effects; confirming an
 eligible target adds the Drive at its default weight with no further step.
-The snake's active Drives SHALL be listed with their targets and weights,
-weight-editable and removable, every edit taking effect immediately.
+The snake's Drives SHALL be listed with their targets and weights,
+weight-editable and removable, every edit taking effect immediately; a
+Drive currently omitted from play SHALL be shown as such, with the reason
+distinguished — an unresolvable target or a satisfied motivation — and
+never dropped from the list.
+
+#### Scenario: #omitted-drives-stay-visible
+- **WHEN** one of a snake's Drives stops contributing — its target unresolvable, or its motivation satisfied on the board
+- **THEN** it stays in the list marked as not currently in play, labelled with which of the two it is, so an operator can tell a dead target from a job done instead of hunting for a Drive that vanished
 
 #### Scenario: #pinned-first-ordering
 - **WHEN** the Drive chooser opens on any member's client
