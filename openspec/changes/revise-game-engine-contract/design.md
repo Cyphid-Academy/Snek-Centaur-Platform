@@ -131,27 +131,91 @@ What breaks if reversed — the turn kept as a parameter: nothing carries which
 snakes are stale, so the compensation rule has no input and a partial board is
 indistinguishable from a complete one.
 
+### A hold splits the snake in two, and that split is the whole of what holding means
+
+An earlier round of this change kept **one** representation and marked it: the
+snake stayed on the board carrying a flag saying it had not moved, and every
+rule that cared consulted the flag. That collapsed under the first question
+review asked of it — what happens when a mover enters the cell a held snake's
+head is standing in. Answering it needs that cell to be a *body* segment for the
+turn being resolved, and needs the *head* to stay readable as the last position
+anyone modelled. One object cannot be both without an index-offset convention
+read at every call site, effects mutated in place on a record that is supposed
+to be frozen, and a flag whose meaning changes with how long the hold has
+lasted. Two objects answer it with no convention at all:
+
+- The **historic record** is the snake as it stood at the turn it was held from,
+  and nothing ever changes it again — not a sever, not an expiry, not its team's
+  collection. It is not on the board and no stage iterates it. It exists so a
+  reader can take the last position anyone modelled.
+- The **projection** is what stands on the board in its place, and is an
+  ordinary occupant in every respect a rule reads: severable on the ordinary
+  terms, carrying effects that expire and that team events reach, advancing its
+  turn with the state, dying with its team's clock.
+
+**The projection has no head, and that is the only way it differs.** A snake
+vacates its head cell only by putting its own next segment there, so the
+occupant of that cell next turn is certain *without knowing the choice* — while
+where the head itself went is precisely the thing nobody made. The first cell a
+projection stands in is therefore a body segment, and the head is in no plane
+the resolution can reach. A projection held at turn T and read at T+N is missing
+N leading segments, derived from the two turns rather than stored.
+
+The payoff is that **`collisions-and-severing` needed no amendment.** Severing
+is scoped to non-head segments, and every cell a projection stands in is one, so
+the invulnerability comparison alone decides and no encounter is left in which
+the higher level dies to the lower. The rule needs no idea which kind of
+occupant it just hit — which is the test of whether the split is real or
+decorative.
+
+Both kinds extend **one declared supertype**, so the fields and the logic they
+share are stated once and the difference is decided in exactly two functions:
+one asking which kind an occupant is, one answering which cells it stands in.
+Severing is a single helper applied at both sites. A sibling type that restates
+its supertype's fields is two types that will drift, not one type with two
+cases.
+
+A sever reaching a projection's first segment takes **every** cell it has, and
+it survives that — standing in nothing, holding only the head no cell could
+name. An empty cell list says this without a flag, which is what keeps the
+representation honest: a projection *is* its cells.
+
+**Conservatism has one source and two consequences.** A snake nobody simulated
+might have reached food on any turn since, so its projection carries the team
+maximum health and its final segment does not vacate. Both follow from that one
+unmodelled fact rather than from two separate judgements. Health is *set* rather
+than withheld deliberately: an ordinary snake reports a health, and a projection
+reporting none would be exceptional in a second way for no gain. That single
+source is also the seam a later pass would narrow — reasoning about the food a
+projection could actually have reached lowers both figures together — which is
+why the projection owns its own cell list instead of deriving it from the record
+by arithmetic.
+
+What breaks if reversed — one flagged object: the flag has to encode how many
+turns of hold have passed, every rule that reads a body needs the offset, and
+the "frozen" record is mutated by the effects that must keep running. Review
+found all three within one round of reading it.
+
 ### Holding changes which set each rule iterates — which is why it is not a wrapper
 
-Four things inside stages 1–5 are structured around "every alive snake moved",
+Three things inside stages 1–5 are structured around "every alive snake moved",
 and each needs the participant/present distinction rather than a filter over the
 result:
 
-- **Occupancy must include held bodies, from the head.** The body-collision index
-  is built from move projections and deliberately skips index 0, because in
-  lockstep a head is only ever contested through head-to-head. A held snake's
-  head is a stationary occupied cell, so a mover entering it is a **body
-  collision**, and held bodies must enter the index from index 0.
-- **Held snakes must not enter head-to-head precedence.** Precedence is about
-  *simultaneous entry into the same cell*. Giving a held snake an identity
-  projection would make a mover landing on it a head-to-head contest it should
-  lose or win by invulnerability and length, when the truth is that it collided
-  with something standing still.
-- **The health tick and health resolution do not.** They iterate every alive
-  snake. A held snake taking the tick means a hold costs it health, and at health
+- **Occupancy must include a projection's cells, from the first.** The
+  body-collision index is built from moved snakes and deliberately skips index
+  0, because a mover's own head is contested through head-to-head instead. A
+  projection has no head to skip, so every cell it stands in enters the index —
+  and every entry in that index is then a non-head segment whichever kind it
+  came from, which is what lets one comparison decide the outcome.
+- **Projections must not enter head-to-head precedence.** Precedence is about
+  *simultaneous entry into the same cell*, and a projection entered none. Having
+  no head, it does not lose the contest — the contest does not arise.
+- **The health tick and health resolution iterate participants only.** A
+  projection taking the tick means a hold costs the snake health, and at health
   1 the hypothetical *kills* it — clearing an obstacle the real game keeps, and
-  making the evaluated snake's candidate look safe for a reason the game will not
-  supply.
+  making the evaluated snake's candidate look safe for a reason the game will
+  not supply. It reports the team maximum instead, for the reason above.
 
 ### The dividing line is what the snake's own movement could have changed
 
@@ -186,7 +250,7 @@ model the snake must not assume the convenient outcome.
 ### Refusal is the conservative answer, and the fence is deliberately blunt
 
 The caller is a worst-case search, so a wrong "safe" costs far more than a
-refusal. Imagining moves therefore fails rather than guesses in three families:
+refusal. Imagining moves therefore fails rather than guesses in four families:
 
 - **Information not supplied.** An alive snake that is neither given a direction
   nor held is a failure, not a fallback. Falling back to `lastDirection` is
@@ -199,14 +263,70 @@ refusal. Imagining moves therefore fails rather than guesses in three families:
   bluntly conservative — one-turn-ahead search never needs to move a stale snake
   — and it fences off the cascading uncertainty that arrives with deeper
   look-ahead, where advancing a snake held for k turns would need interactions
-  that already committed to be re-resolved. Relaxing this fence is the later
-  work; today it is a precondition, checked once.
+  that already committed to be re-resolved. The fence is not relaxed later so
+  much as **gone around**: the next decision supplies the missing move at the
+  turn it belongs to and revises the past, rather than advancing a stale snake
+  into the present.
+- **A running stage's seed not supplied.** A resolution that leaves nothing
+  behind runs item spawning, and spawning needs entropy; substituting some is
+  the missing-direction error one step further on. This is a family of its own
+  rather than a case of impossible input because it is the one refusal that is
+  **about the resolution rather than about a snake** — it names none, and the
+  shape of the failure a caller receives has to say so.
 - **Input that could not have arisen.** Structural validity of the state itself,
-  including holding a snake that is not alive.
+  including holding a snake that is not alive, naming a projection as held, and
+  timings that are not lengths of time.
 
 What breaks if reversed — a permissive resolver that guesses: every failure mode
 above becomes a silently wrong world, and the search's guarantee is gone with no
 signal.
+
+### A held move can be learned afterwards, and learning it revises the past rather than advancing the present
+
+A hold used to be terminal: the snake was behind for good, and the only entry
+point that would look at it refused to move it. But what a hold declines to
+model is a fact about **one past turn**, and it can become known — a search that
+held a snake as irrelevant can find its own snake crossing into that snake's
+territory and become curious about it.
+
+So the move is supplied **at the turn it was held at**, not at the turn the
+board now stands at. Resolution is a function of its declared inputs alone, so
+the board is resolved again from before that turn with the fact in place and
+every resolution since replayed over it. That is the same computation over a
+different premise, not an approximation of one — which is why this is soundly
+available today, well short of the partial-board simulation that advancing a
+stale snake *in place* would need.
+
+**The state carries a rewind log** to make it possible: what each resolution was
+*asked* — directions, holds, declared timings, seed — over the board as it stood
+before the oldest still-standing projection was held. It exists exactly while
+something is projected, so the mainline never accumulates one, no runtime
+persists one, and no schema version moves. The log's base is a lockstep state by
+construction, so the nesting terminates rather than recursing.
+
+**It is its own entry point, not a direction passed to the hypothetical one.**
+A revision can change which snakes are alive, so one call that both revised the
+past and planned the next turn would be planning against a board it was in the
+middle of rewriting. Splitting them hands the revised board back first and lets
+the caller decide what to ask of it.
+
+**Discontinuity is reported, not prevented.** The newly located head may enter a
+cell another snake was allowed to pass through, so a snake that lived may die
+and a game in progress may have ended; the revision names every snake whose fate
+it changed. Preventing it would mean refusing the revision in exactly the cases
+that motivate it. The replay adapts on the same principle — drop a direction for
+a snake that is now gone, hold a snake the log is silent about — because a hold
+is precisely the answer for a move nobody modelled.
+
+One supplied move leaves the snake **one turn less historic**, not caught up,
+since the log says nothing about the turns after. That is a feature for the
+caller it exists for: curiosity about a frozen snake fans out over single facts
+rather than over whole histories.
+
+What breaks if reversed — a hold that stays terminal: the only way to learn
+anything about a snake already held is to re-run the whole line from before the
+hold under a different disposition, which is the cost holding was taken to
+avoid.
 
 ### Time is a declared input, so the ending that depends on it is the engine's
 
@@ -483,18 +603,41 @@ table deliberately left blank because the engine never needed one; a
 configuration record must initialise, so `21` is declared here — the value the
 shipped `DEFAULT_GAME_CONFIG` already uses.
 
-**The code does not move in this change.** `boardgen.ts` (363 lines) and
-`perlin.ts` (85) stay in `packages/engine/`, their citations retargeted to the
-new identifiers and nothing else touched. The extraction is a later PR, planned
-in §12 of `tasks.md`, and the reason for deferring is concentrated in one place:
-`resolve-properties.test.ts` builds every initial state by calling generation
+**The code moves with the requirements**, into `@cyphid/snek-game-configuration`
+— planned in §12 of `tasks.md`. An earlier round of this change deferred the
+extraction to a later PR, and the deferral is what created the awkwardness it
+was meant to avoid: `boardgen.ts` and `perlin.ts` citing `game-configuration/*`
+from inside the engine package is correct (a capability does not own a section
+of code) and reads as a mistake, which makes it a standing invitation to "fix"
+the citations back. Moving the 448 production lines and their 475 test lines
+costs one package and no behaviour change, so the invitation is cheaper to close
+than to document.
+
+The reason the extraction looked expensive is concentrated in one place:
+`resolve-properties.test.ts` built every initial state by **calling** generation
 across the full documented parameter ranges, and once generation lives
 downstream of the engine it cannot. The replacement is **dedicated arbitraries,
 deliberately more adversarial than board generation** — a fuzzer for game rules
 should be harsher than the thing that produces the game's boards, not a re-run
-of it. The risk that plan is really managing is that this loss is *silent*: a
-narrower generator passes the entire suite, and a green run is not evidence. A
-recorded branch-coverage baseline taken before anything moves is.
+of it: interior walls, boards with no wall ring at all, disconnected hazard
+fields, bodies of length 1–5 stacked or walked, mixed head parities, snakes on
+hazards, clocks near exhaustion. What it deliberately keeps is body contiguity
+and disjointness, which are shapes the movement rules alone can produce — a
+state violating them is not a harder case, it is a different game.
+
+The risk that plan is really managing is that the loss would be *silent*: a
+narrower source of states passes the entire suite, and a green run is not
+evidence. So the branch coverage of `resolve/` is recorded on both sides of the
+swap rather than argued about — and recorded around **the swap alone**, which is
+why the extraction lands as its own commit ahead of the contract revision. A
+measurement taken across both at once cannot distinguish reach that was lost
+from reach that never existed, because the revision adds code (the failure
+fence's defensive branches, the lockstep gating, the duration limit) whose own
+coverage moves the aggregate. Isolated, the answer is unambiguous: the drawn
+states reach *strictly more* than generated boards did — aggregate 95.65 →
+96.48, `claims.ts` 90.24 → 95.34, `spawn.ts` 96.96 → 97.05, and no file losing
+anything. `pnpm coverage` is wired into the workspace so the next person to
+widen or narrow the arbitraries re-runs the comparison instead of re-arguing it.
 
 **What breaks if reversed** (generation stays in the engine's spec): the engine
 declares five parameters no resolution reads, so every consumer that mirrors its
@@ -654,12 +797,34 @@ Five invariants minted, all inside requirements this change already amends.
   name. Reversing means a second rename pair and a second lineage entry, and
   the history keeps both. It is cheap in effort and expensive in legibility,
   which is the argument for doing it once and now rather than later.
-- **The engine's citations point at requirements its own capability no longer
-  owns.** `boardgen.ts`, `perlin.ts` and their suites keep living in
-  `packages/engine/` while citing `game-configuration/*`. That reads oddly and
-  is correct — a capability does not own a section of code — but it is a
-  standing invitation to "fix" the citations back, which is why the deferred
-  extraction is planned rather than merely intended.
+- **The engine's property suite loses its source of initial states**, and the
+  replacement's adequacy is not self-evident. Drawn states are harsher than
+  generated ones in every dimension that was checked, but "harsher" is a
+  judgement about the dimensions someone thought of. The branch-coverage
+  baseline bounds it — reach on the pre-existing resolver did not fall — and
+  `pnpm coverage` is committed so the next person to widen or narrow the
+  arbitraries can re-run the same comparison rather than re-argue it.
+- **A new package is a new place for the boundary to blur.** `game-configuration`
+  now holds the generator and the parameter vocabulary, and the pull will be to
+  put the next not-quite-engine thing there too. The test is the one the
+  requirements state: if a turn's resolution reads it, it is the engine's. The
+  engine's own suite asserts the negative half — that its configuration
+  declares no board-building parameter and exports no generator — so the drift
+  fails a test rather than passing review.
+- **A revision can invalidate work a caller has already done.** Supplying a held
+  move rewrites the board from before that turn, so anything a search computed
+  against the pre-revision board — scores, a partial tree, a recorded line — may
+  describe a game that no longer happened. The reported discontinuities bound
+  it, but they are a report rather than a guard: a caller that ignores them is
+  reading a board it did not compute. The alternative was refusing revisions
+  that change a fate, which refuses them exactly when they matter.
+- **The rewind log is state that exists only while a hold does.** It is carried
+  on the partial state and absent from every lockstep one, so no runtime
+  persists it and no schema version moves — but that is an invariant held by
+  construction rather than by a type, and a future entry point that produced a
+  partial state without recording what it was asked would break replay silently.
+  The log's presence is tied to the projections it explains, which is the
+  cheapest place to notice the drift.
 - **Two entry points is a surface a caller can misuse.** Nothing stops a
   mainline caller reaching for the hypothetical resolver and skipping spawning.
   The narrowing back to a game state is the guard: only a lockstep result
