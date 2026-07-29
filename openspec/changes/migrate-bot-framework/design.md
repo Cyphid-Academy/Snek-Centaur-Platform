@@ -84,6 +84,59 @@ never "on the scheduled submission pass"). What breaks if reversed: this
 capability would cite capabilities above it in the DAG, and the pacing
 story's tunable cadence would fossilise inside the decision engine's spec.
 
+**Corollary — `score-composition` is deliberately not amended to describe the
+recorded snapshot (reviewed 2026-07-28).** The transparency story's breakdown
+needs, per candidate direction, each heuristic's scoring-time weight and output;
+`decision-transparency/computed-display-state` already requires exactly that of
+the record — "the portfolio weight in force at the moment the score was computed",
+per candidate direction, self-sufficient against later configuration drift — and
+that obligation falls on whoever writes the record, which is this framework. It
+therefore already binds the producer to capture at composition time rather than
+re-read a portfolio at publish time. Restating it here would be the DRY failure
+the spec rules name explicitly: a duplicate with no authority that drifts into
+conflict, placed in the capability that does not know what the *record* is for.
+The declared edge already exists in the correct direction
+(`computed-display-state` declares `score-composition`). What breaks if reversed
+(restating it here): two requirements own the recorded shape, and the next edit to
+the record's contents updates one of them.
+
+### The dirty flag's lifecycle: set here, cleared by the stager
+
+Three capabilities share the dirty flag — this one raises it, the pacing
+story's submission passes act on it, the transparency story's snapshots are
+published on it — and the original delta minted only the *setting*, leaving
+"when does it go down" owned by nobody. A flag with two consumers and no
+clearing owner is the classic double-consume bug: whichever consumer clears
+it first silently starves the other.
+
+Resolved by giving the flag one owner (this capability, which defines it)
+and one clearer (the workflow that stages the snake's decided move, on the
+staging acknowledgement). `score-composition` now states both halves, so
+the lifecycle is complete on the page that defines the flag, and the pacing
+story authors the clearing act itself. The negative half is the load-bearing
+one and is stated here as well: publishing a snapshot of decision state
+does **not** clear the flag (`#publishing-does-not-consume-the-news`).
+Snapshots are published far more often than moves are staged, so a snapshot
+that consumed the news would routinely wipe it before the submission pass
+ran — the snake would keep a stale staged move for a turn it had already
+rescored. Reporting news is not consuming it.
+
+This capability cannot declare the dependency in the other direction: the
+pacing story sits above the framework in the DAG, so `score-composition`
+names the concept ("the workflow that stages the snake's decided move")
+and the identifier lives on the pacing side. Turn change is not an
+exception to "only the stager clears": the turn reset discards the flag
+along with every other piece of per-turn scratch, which
+`turn-scoped-evaluation` already owns — hence the clearing rule is scoped
+"within a turn".
+
+What breaks if reversed (no owner, or clearing on snapshot): either every
+consumer clears it and news is lost to whichever consumer ran first, or
+none does and the flag latches on for the turn, making
+`#unchanged-scores-set-no-flag` pointless — the submission pass re-rolls
+and re-stages every automatic snake on every pass, which is exactly the
+churn the flag exists to prevent.
+
 ### Author fault containment is a requirement, not a code nicety
 ### (constraint-mined — the routed lead)
 
@@ -145,6 +198,130 @@ moving snakes by one step, biasing all scores against exactly the
 opponents the snake has no Drives about — a subtle, systematic mis-scoring
 no test of the engine would catch.
 
+### Simulated time: the team's live submission allocation, declared for everyone
+### (constraint-mined)
+
+The engine's resolution entry points require the turn's clock duration and each
+team's burn (`revise-game-engine-contract`), so every simulated world has to declare them.
+The choice is what to declare, and it is not free: the values decide when the
+projected clocks empty, and therefore when a clock-driven loss or victory becomes
+visible to the search at all. Four properties settle it.
+
+**The value is an existing pacing parameter, not a framework constant
+(author-corrected, 2026-07-28).** An earlier framing had the framework declaring
+"its own per-turn deliberation limit", a constant it set for itself. That was
+wrong twice over. It invents a second timing knob beside one the corpus already
+has — `turn-pacing/live-pacing-parameters` carries, per game and per team, the
+**automatic submission time allocation**: how long the team's automated player
+deliberates before it auto-submits when no operator is in thinking mode,
+initialised from the team's captured defaults and adjustable during play
+(`bot-configuration/any-member-live-editing#game-scoped-parameters-need-no-captain`
+makes any current member, the captain included, able to retune it live). And it
+justified the number by the framework's own restraint, when the real
+justification is better: this allocation is *the principled duration of a turn
+nobody intervenes to lengthen*. Simulating with it is simulating the game as it
+will actually be paced absent a human taking more time, which is exactly the
+counterfactual a one-turn search is asking about. The framework therefore reads
+the value; it does not own it.
+
+**One value, for every team.** Whatever the number is, the framework declares it
+for opponents and teammates too. That looks like an assumption and is in fact the
+refusal of one: the framework has no information about anybody else's
+deliberation, so a per-team estimate would be a claim about a team it declined to
+model — precisely the failure that `game-engine/held-snakes` exists to prevent on
+the positional axis. One visible, uniform number is auditable; five invented ones
+are not. Nothing about re-sourcing the value changes this.
+
+**A bound, not an average.** The value is what its own team's player will not
+deliberate past before submitting, so its own simulated clock drains at least as
+fast as the real one. The projection therefore reaches the end of its own clock no
+later than the game does: it may warn a turn early, never a turn late. Declaring
+an *average* instead — a smaller number, closer to typical — is the one error that
+matters, because it lets a search conclude that time remains when it does not,
+which is the same class of false safety as advancing an unmodelled snake in its
+last direction. The bound holds under the new sourcing for a structural reason:
+`turn-pacing/final-flush` arms the team's final submission from the smaller of
+this allocation and the observed remaining time, so the allocation is precisely
+the quantity the player is pacing itself to.
+
+**Not the game's turn cap, and that is not merely taste.** Declaring the
+configured maximum turn time instead would project every clock to empty within a
+few turns, so every candidate would score as doomed and the stateMap would stop
+separating one direction from another. A conservative projection is only useful
+while it stays near enough to what will happen to discriminate. The old wording
+made this a hard clause on the requirement ("SHALL be below the game's configured
+maximum turn time"), which is no longer the framework's to promise now that the
+number is an operator-tunable pacing value; the reasoning survives as
+`#a-turn-cap-would-be-useless-not-merely-pessimistic`, and the natural bound is
+`final-flush`'s minimum against the observed remaining time, which the game's own
+per-turn cap already bounds.
+
+**One allocation per turn — the collision with `reactive-inputs`.** Making the
+declared duration live raises a conflict worth stating: `reactive-inputs`
+enumerates *exactly three* reactive inputs and
+`#nothing-else-is-reactive` says nothing else may move a snake's active-world set
+or stateMap. A retune of the allocation mid-turn would move every simulated
+world's clocks, hence its scores — a fourth reactive input by the back door, and
+worse, a stateMap silently mixing worlds projected under two different durations.
+`simulated-turn-timings` resolves it by *reading the allocation in force at the
+turn's start and holding it for that turn* (`#the-turn-holds-one-allocation`): the
+retune is live in the sense the author asked for — it is accepted immediately and
+`turn-pacing/live-pacing-parameters#mid-game-retuning-is-live` has submission
+cadence and deadline arming use it from their next scheduling decision — but the
+turn's *simulations* are unaffected, and the new duration times the next turn's.
+This keeps `reactive-inputs` intact with no amendment, keeps
+`turn-scoped-evaluation`'s only-grows discipline true (nothing accumulated is
+invalidated), and costs at most one turn of latency on a knob whose effect on a
+one-turn projection is second-order anyway.
+
+The residual asymmetry is worth stating rather than hiding: for *opponents'*
+clocks and for the game's consumed duration the declared value is a floor, not a
+bound — real turns can last longer than one team's submission allocation, and
+another team's is very likely a different number — so those endings can arrive
+earlier in the real game than in the projection. Their
+absence from a simulated board is therefore not a guarantee, and a heuristic that
+treats it as one is wrong in the same direction the rest of this design is careful
+about. The honest reading is: the framework's own clock is projected
+conservatively; everything else is projected optimistically, and the search's
+worst-case discipline lives on the moves rather than on other teams' tempo.
+
+This reads consistently with `frozen-snake-timestamps`: a frozen snake's fiction
+is *positional*, which is exactly what its lagging timestamp records and what the
+head-start compensation corrects. Its team's clock was never in doubt, so the
+declared burn applies to it like any other — the same line the engine draws for a
+held snake's potion timers. Nothing here closes Open Question 1: how much of the
+staleness compensation the framework owns versus the author is still open, and
+the answer will not change what a simulation declares about time.
+
+**The dependency is deliberately undeclared, and that is a cycle, not an
+oversight.** The value belongs to `turn-pacing` (the live game-scoped record) and
+its captured default to `bot-configuration`, and **both of those capabilities
+already declare `bot-framework`** — `turn-pacing`'s Purpose lists it, and
+`bot-configuration`'s does too. An edge in the direction this requirement needs
+would close a capability-grain cycle, which the graph forbids and the lint
+rejects. So `simulated-turn-timings` declares nothing new and names the concept in
+prose instead — "the team's live automatic submission time allocation" — which is
+what the no-identifiers-in-prose grammar is for. This is the same cycle-break
+already used twice in this capability: the effective temperature reaches the
+framework as an opaque scalar it neither derives nor stores, and the dirty flag's
+clearing is named as a concept with the identifier living on the pacing side. The
+framework is downstream vocabulary that its configuration and pacing stories
+consume; it reads their values without being able to point at them, and the
+pointer lives on their side of the graph where it can.
+
+**What breaks if reversed** (back to a private framework constant): the bot
+simulates a turn length nobody is actually playing to, so the projection and the
+real submission deadline drift apart with no signal — the search believes the
+clock drains at one rate while the player empties it at another. Retuning pacing
+mid-game then silently stops meaning what it says: the team submits sooner, and
+the analysis that decided *what* to submit still thinks it had the old turn.
+Worse, the constant is a second knob with no owner, no surface, and no default,
+sitting beside a parameter the corpus already has. And in the fully reversed case
+— no timings declared, or a placeholder — the engine cannot report a clock-driven
+ending at all, so a bot plays into a lost clock exactly as confidently as into a
+won position, and the failure looks like a heuristic tuning problem rather than a
+simulator that was never told what time it is.
+
 ### Teammates are foreign; only human intent commits
 
 The legacy module's most counter-intuitive stance is kept and centralised
@@ -175,6 +352,51 @@ joint optimisation of teammates is a different, unbuilt product — depth-1
 worst-case scoring is only coherent when every other snake is adversarial
 or committed.
 
+### Drive retirement is deactivation in the working portfolio, never a write
+
+The legacy text says a satisfied Drive is "retired from the snake's
+portfolio", which reads as a deletion — and three things make that reading
+untenable at once. `observe-and-stage-only` gives the framework exactly two
+channels (subscriptions in, staged moves out), so it has no way to write
+Centaur state at all; the configuration story's portfolio record is
+explicitly never deleted by the platform, only by an operator; and
+`embedded-team-player` makes everything the framework accumulates
+process-owned scratch. Resolved: **retirement is deactivation within the
+framework's own working portfolio** — the in-memory reading of the
+portfolio it was handed — and nothing about it is persisted by anyone.
+
+Three consequences follow and are all authored, so the two capabilities say
+one thing rather than two:
+
+- **Satisfaction is re-evaluated every turn, not latched.** The framework
+  already discards and rebuilds its per-turn work on every turn change, so
+  a retirement flag that outlived the turn would be the one piece of
+  accumulated state with a different lifetime — and it could not survive a
+  restart either, since nothing persists it. Making retirement a predicate
+  over the current observed board removes the special case entirely:
+  `#retirement-reverses-with-the-board` and `#retirement-writes-nothing`
+  pin it. This also fixes a real hole in the deletion reading: a Drive
+  targeting a snake that is momentarily "reached" would be gone for good,
+  even though the same board a turn later no longer satisfies it.
+- **The operator sees a satisfied Drive as inactive, not absent.** The
+  configuration story's record already keeps an unresolvable-target Drive
+  listed-but-inert; satisfaction is now the second member of that same
+  "omitted from play" category, marked with its reason on the Drive list.
+  One category, two causes, one operator affordance — and the operator
+  keeps the only delete button.
+- **Nobody persists it.** Not the framework (it cannot write), not the
+  platform (its record changes only on an operator's edit), not a
+  reconciliation job (there is nothing to reconcile — the state is derived).
+
+What breaks if reversed (retirement as a persisted delete or a persisted
+deactivation flag): the framework needs a Centaur-state write channel it is
+specifically denied, which would also make it a hidden authority over state
+an operator believes only they edit; a satisfied-then-unsatisfied Drive is
+destroyed by a transient board state with no way back except the operator
+noticing and re-adding it; and a mid-turn process restart either loses the
+retirement or, worse, replays it against a board that no longer justifies
+it.
+
 ### The stateMap contract: worst-case over active worlds, undefined is absent
 
 `worst-case-statemap` + `score-composition` carry the scoring semantics:
@@ -199,6 +421,81 @@ arbitrarily many speculative worlds at all rests on
 Relax it (let an off-instance engine run produce committed state) and
 continuous speculative rescoring becomes the most dangerous operation in
 the platform rather than the framework's core loop.
+
+### Every heuristic answers every candidate, and the shallow state is what makes
+### that cheap (author-decided, constraint-mined)
+
+The author's obligation, in his own framing: every heuristic must "come up with
+a concrete aggregate score for every one of our candidate moves, even if they
+may show very little interest in most branches in the tree within some of our
+candidate moves". Two halves, and the second is what stops the first from being
+onerous.
+
+**The obligation.** `total-heuristic-coverage` requires a value from every
+heuristic in the portfolio for every candidate direction the snake scores — a
+number, each candidate, every time. Nothing in the delta previously *permitted*
+a heuristic to skip a candidate; the defect was silence, and silence is enough,
+because the natural implementation of an uninterested heuristic is an early
+return. `score-composition` already summed over the whole portfolio, so no
+existing rule had to be corrected — the coverage obligation is what that
+summation was quietly assuming, stated where an implementer can see it.
+
+**The escape hatch, which is the interesting half.** A heuristic uninterested in
+what other snakes do under a candidate owes no simulation of their replies: it
+may be evaluated over the partial state in which only the evaluated snake has
+advanced and every other snake is held — exactly the shape the engine's
+imagining entry point yields, so this costs the framework no new machinery. The
+consequence is that coverage is not a cost model at all: answering every
+candidate costs at worst one shallow resolution per candidate, and a heuristic's
+selectivity moves from *which candidates it answers* to *how much of the
+branching it asks to see*. Depth is where a heuristic spends; breadth is what it
+owes.
+
+**Why this reconciles with per-world composition.** A world's score is the
+weighted sum of the portfolio's values *for* that world, and a heuristic that
+nominated no foreign moves under a candidate cannot tell that candidate's worlds
+apart — so its shallow value stands as its value for each of them. The
+requirement says so explicitly, which is what keeps the worst-case minimum
+well formed: a heuristic evaluated shallowly contributes a constant across the
+candidate's worlds rather than a hole in some of them. (The one-word edit from
+"its value in that world" to "its value for that world" in `score-composition`
+carries this; a value produced over a shallower state the world extends is still
+that heuristic's value for the world.)
+
+**The staleness connection is real and is left open.** A state in which only the
+evaluated snake has advanced is the *maximal* staleness case the head-start
+compensation contract governs: every other snake lags by a full turn.
+`#the-cheapest-evaluation-is-the-stalest` says so, so the two rules are read as
+one story rather than as a cheap path that quietly escapes the expensive rule.
+This makes Open Question 1 sharper — the staleness-aware primitives are most
+needed by the evaluations least willing to pay for depth — and settles nothing
+about it: what shape those primitives take, and how much of the compensation the
+framework owns versus the author, is still that question's.
+
+**Coverage is per *scored* candidate, not per enumerated one.** A direction with
+no evaluated active world has no entry at all
+(`worst-case-statemap#undefined-is-not-zero`), and that stays true: the coverage
+rule closes holes in the *heuristic* dimension, never in the direction
+dimension. The transparency record's mean therefore ranges over the directions a
+snapshot carries, which is what its own scenario already pins.
+
+**What breaks if reversed** (a heuristic may abstain from a candidate): the
+downstream mean is taken over a set with holes. A heuristic that scored three of
+four candidates has its relative impact computed against a denominator that
+silently disagrees with the column beside it, and the operator reads a number
+that cannot be reconciled with anything on the table — not with the score, not
+with its neighbours, not with a second client that shrank the denominator
+differently. Nothing errors, nothing renders wrong, and the arithmetic appears
+to close per row. The alternative fix — legislating uniformity on the *record*
+— was rejected because it puts a constraint about heuristics in the capability
+that only writes them down: the record would be obliged to carry a set the
+producer was free not to produce, which is unsatisfiable rather than merely
+duplicative. And reversing only the escape hatch, keeping the obligation, is the
+worst of both: coverage then means a heuristic must simulate every foreign
+reply under every candidate it does not care about, so the cheapest way to obey
+is to return a constant zero — a value that is not an opinion, contributing
+noise to the worst-case minimum, and indistinguishable in the record from a
+considered one.
 
 ### Turn-scoped, reconnect-safe evaluation lifecycle (constraint-mined)
 
@@ -297,11 +594,40 @@ placement the cross-cutting layer pins.
   its invariant already owned by `global-invariants/one-shared-engine`,
   which the requirement now cites as the ground the compensation contract
   exists on.
+- **Minted: a simulation declares the team's live automatic submission time
+  allocation as the turn's duration and every team's burn**
+  (`simulated-turn-timings#a-bound-it-honours-not-an-average`,
+  `#one-declared-value-for-every-team`, `#the-turn-holds-one-allocation`) — the
+  engine believes whatever timings it is handed, so a framework that declared a
+  typical figure rather than the bound its player actually paces to, or invented
+  a per-opponent estimate, would produce projections that understate its own
+  drain with nothing anywhere to catch it; and holding one allocation for the
+  whole turn is what stops a live retune from becoming an unlisted fourth
+  reactive input, which `reactive-inputs#nothing-else-is-reactive` forbids and
+  nothing else would detect. Its counterpart —
+  that a frozen snake's fiction is positional and never temporal
+  (`#a-frozen-snake-does-not-freeze-its-teams-clock`) — keeps the freezing rule
+  and the timing rule from being read as one concession.
+- **Minted: every heuristic answers every candidate, and may answer over the
+  partial state in which only the evaluated snake has advanced**
+  (`total-heuristic-coverage`, all four scenarios) — the natural
+  implementation of an uninterested heuristic is an early return, which
+  compiles, scores fine, and leaves the transparency record's centred column
+  averaging over a set with holes; and without the shallow-state permission the
+  obligation would push authors toward a constant filler value, which is worse
+  than an absence because nothing can tell it from an opinion.
 - **Minted: undefined stateMap entries are absent, never zero**
   (`worst-case-statemap#undefined-is-not-zero`,
   `softmax-decision#partial-statemap-is-decidable`).
 - **Minted: retirement anchored to the authoritative board only**
-  (`drive-satisfaction#simulated-satisfaction-does-not-retire`).
+  (`drive-satisfaction#simulated-satisfaction-does-not-retire`), and
+  retirement as reversible in-memory deactivation that writes nothing
+  (`#retirement-reverses-with-the-board`, `#retirement-writes-nothing`) —
+  without these an implementer reads "retired from the portfolio" as a
+  delete against a record this capability may not even write.
+- **Minted: the dirty flag is cleared only by the stager, never by a
+  snapshot** (`score-composition#publishing-does-not-consume-the-news`) —
+  a shared flag with no clearing owner is silently double-consumed.
 - **Minted: same-turn reconnect clears nothing; turn change is the only
   reset** (`turn-scoped-evaluation`, both scenarios).
 - **Minted: automatic teammates never self-commit**
