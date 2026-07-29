@@ -19,7 +19,7 @@ Depends on: game-engine, game-configuration, global-invariants, identity-and-aut
 ## ADDED Requirements
 
 ### Requirement: game-lifecycle/game-record
-Depends on: global-invariants/single-convex-deployment, game-configuration/config-lives-on-the-game, game-lifecycle/status-authority.
+Depends on: global-invariants/single-convex-deployment, game-configuration/config-lives-on-the-game.
 
 Convex SHALL maintain a persistent record of every game, existing from the game's creation onward and never deleted. The record SHALL capture at minimum: the game's configuration, its status, a reference to the game's SpacetimeDB instance while one exists, the timestamps at which the game entered `playing` and `finished`, the final outcome recorded at finish, and — when a launch proceeded without seating every participating team — which teams were not seated.
 
@@ -32,7 +32,7 @@ Convex SHALL maintain a persistent record of every game, existing from the game'
 - **THEN** the record persists indefinitely with its outcome, timestamps, and seating history intact; only the instance reference stops resolving to a live instance
 
 ### Requirement: game-lifecycle/status-authority
-Depends on: global-invariants/runtime-ownership, game-lifecycle/finish-notification, game-lifecycle/launch-gates, global-invariants/transactional-invariant-enforcement.
+Depends on: global-invariants/runtime-ownership, global-invariants/transactional-invariant-enforcement.
 
 Convex SHALL be the sole authority for every game's status, drawn from the closed set `not-started`, `playing`, `finished`, and advancing only forward. The permitted transitions SHALL be exactly three: `not-started → playing` on successful completion of launch orchestration; `playing → finished` through terminal-state handling; and `not-started → finished` — the walkover — when a launch whose abort has been overridden cannot seat the minimum number of teams needed to play, taking the record straight to `finished` without it ever entering `playing`. An aborted launch is not a transition: the game simply remains `not-started`.
 
@@ -62,7 +62,7 @@ Convex SHALL keep, for every launched game, a persistent snapshot of the partici
 - **THEN** the snapshot contains only the seated teams, and the game's admission — which humans may obtain operator access, which teams participate — follows the snapshot, not the enrollment
 
 ### Requirement: game-lifecycle/instance-per-game
-Depends on: global-invariants/runtime-ownership, game-lifecycle/teardown-after-persistence, global-invariants/state-confined-to-owning-runtime#game-instance-holds-only-its-games-state.
+Depends on: global-invariants/runtime-ownership, global-invariants/state-confined-to-owning-runtime#game-instance-holds-only-its-games-state.
 
 Each started game SHALL be served by its own freshly provisioned, transient SpacetimeDB instance: Convex provisions it during that game's launch orchestration and tears it down after the game ends. A game that has not been launched SHALL have no instance; no instance is ever reused across games; and an instance's lifetime is bounded by its game's, extended only by the persistence gate on teardown. This SHALL hold uniformly across every game-creation path.
 
@@ -103,7 +103,7 @@ Launching a game SHALL be a single Convex-orchestrated sequence, and every privi
 - **THEN** the operation is refused
 
 ### Requirement: game-lifecycle/launch-gates
-Depends on: team-server-management/server-healthcheck, global-invariants/client-truthfulness, game-lifecycle/status-authority.
+Depends on: team-server-management/server-healthcheck, global-invariants/client-truthfulness.
 
 A manually started game SHALL NOT launch while any participating team's nominated server reports unhealthy: the start is blocked, with an indication of which teams' servers are failing, until every participating team's server passes. And when any participating team's server refuses its game invitation or fails to answer within the invitation window, the launch SHALL abort: the provisioned instance is torn down, the game remains `not-started`, and the record carries an error naming the declining or unresponsive servers. A schedule-bound competition format MAY override both gates for its starts: unhealthy servers are then ignored — the team participates if its server accepts in time — and a refusal or timeout costs that team its seat rather than aborting the launch, falling to a walkover when fewer than the minimum remain.
 
@@ -120,7 +120,7 @@ A manually started game SHALL NOT launch while any participating team's nominate
 - **THEN** the launch proceeds without that team — and if its server recovers in time to accept within the invitation window, the team is seated and plays
 
 ### Requirement: game-lifecycle/instance-provisioning-authority
-Depends on: global-invariants/no-shared-secrets, global-invariants/issuer-anchored-trust, game-lifecycle/instance-per-game.
+Depends on: global-invariants/no-shared-secrets, global-invariants/issuer-anchored-trust.
 
 The platform SHALL authenticate every provisioning call with a credential it issued itself, and SHALL hold no credential specific to the system instances are provisioned on. The identity that provisions an instance SHALL own it and SHALL be the only identity that can update or delete it. Because the provisioning host admits instance creation without authorization of its own, the deployment SHALL restrict the creation route at the network boundary to callers bearing a valid platform-issued credential — ownership protects instances that already exist, and nothing otherwise protects the act of creating them.
 
@@ -137,7 +137,7 @@ The platform SHALL authenticate every provisioning call with a credential it iss
 - **THEN** it does not create an instance: the boundary in front of that route admits only callers bearing a valid platform-issued credential, and the credential check is what carries the guarantee — any narrowing by network origin is defence in depth on top of it, never the thing relied upon
 
 ### Requirement: game-lifecycle/instance-initialization
-Depends on: global-invariants/transactional-invariant-enforcement#both-stores-guard-their-own-invariants, global-invariants/game-instance-hermeticity#seeded-once-never-refreshed, game-configuration/generation-parameter-boundary, game-engine/determinism, game-lifecycle/roster-snapshot, game-lifecycle/finish-notification, game-lifecycle/no-orphans.
+Depends on: global-invariants/transactional-invariant-enforcement#both-stores-guard-their-own-invariants, global-invariants/game-instance-hermeticity#seeded-once-never-refreshed, game-configuration/generation-parameter-boundary, game-engine/determinism.
 
 A provisioned instance SHALL expose a privileged initialization operation, invocable exactly once, before any client connection is admitted, and authorized by an ordinary platform-issued credential naming that instance and carrying the capability to initialize it — never by anything configured into the instance when it was built or deployed. Its payload SHALL deliver everything the instance needs to run its one game: the precomputed starting state and the dynamic gameplay parameters, the game's root seed — always forwarded, since turn-resolution randomness and the eventual export depend on it — the roster snapshot seeding admission, the game's unique identifier for validating access-token audience, and the finish-notification callback registration. The instance SHALL validate the payload's structural integrity and reject a malformed payload synchronously as an error to the caller; it never generates a board. Successful initialization SHALL leave turn 0 fully written and the instance ready to accept connections, move staging, and turn declarations.
 

@@ -44,7 +44,6 @@ team-scoped and SHALL persist for the lifetime of the team.
 - **THEN** its heuristic defaults and bot parameters are exactly as they were at archiving — team-scoped bot configuration is never deleted or reset by any team lifecycle event
 
 ### Requirement: bot-configuration/team-bot-parameters
-Depends on: bot-configuration/drive-management-interface.
 
 Each Centaur Team SHALL have a persistent **bot parameter record** holding:
 the team's default softmax temperature; three submission-timing parameters
@@ -113,7 +112,6 @@ next game.
 - **THEN** the surface states that edits configure future games only — the snapshot semantics are communicated, not left for the team to discover mid-game
 
 ### Requirement: bot-configuration/registry-defines-availability
-Depends on: bot-configuration/registry-sync-insert-only.
 
 The heuristics a team can operate SHALL be the **intersection** of its
 heuristic default configuration with the heuristic registry compiled into
@@ -187,7 +185,7 @@ and no selection change or turn transition SHALL reset any part of it.
 - **THEN** the override persists exactly as Drives and weight overrides do — deselection and turn transitions reset nothing in the portfolio record
 
 ### Requirement: bot-configuration/any-member-live-editing
-Depends on: team-management/roster-of-operators, bot-configuration/captain-only-team-configuration, global-invariants/team-granularity-authorization#within-team-discipline-lives-in-convex, bot-framework/turn-scoped-evaluation, bot-framework/reactive-inputs.
+Depends on: team-management/roster-of-operators, global-invariants/team-granularity-authorization#within-team-discipline-lives-in-convex, bot-framework/turn-scoped-evaluation, bot-framework/reactive-inputs.
 
 During a game, every current member of the owning team SHALL be able to mutate its snakes'
 portfolio records: adding a Drive with a target, removing a Drive,
@@ -282,7 +280,7 @@ configuration.
 - **THEN** no game-rules parameter appears on it — tuning the team's bot and configuring a game never share a surface
 
 ### Requirement: bot-configuration/drive-management-interface
-Depends on: bot-configuration/registry-defines-availability, bot-framework/heuristic-vocabulary, bot-configuration/any-member-live-editing.
+Depends on: bot-framework/heuristic-vocabulary.
 
 The live interface SHALL let an operator manage a snake's Drives in place.
 A Drive-type chooser SHALL offer the operable Drive types ordered pinned-first:

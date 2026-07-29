@@ -32,7 +32,7 @@ The platform SHALL maintain a persistent record of every room, capturing at mini
 - **THEN** the room's current-game reference designates the successor, and the finished game remains reachable as history rather than as the room's current game
 
 ### Requirement: rooms-and-matchmaking/room-creation
-Depends on: game-lifecycle/game-record, global-invariants/transactional-invariant-enforcement, rooms-and-matchmaking/room-administration.
+Depends on: game-lifecycle/game-record, global-invariants/transactional-invariant-enforcement.
 
 Any authenticated user SHALL be able to create a room, supplying at minimum its name; the creating user becomes the room's owner at creation. Creating a room SHALL also eagerly create the room's initial game — a not-yet-launched game record with default parameter values and no team ready — installed as the room's current game in the same act, so a room never exists without a current game.
 
@@ -62,7 +62,7 @@ Each room SHALL have an administrative actor holding administrative control over
 - **THEN** the mutation is rejected; the absence of the affordance in their view of the lobby was never what stopped them
 
 ### Requirement: rooms-and-matchmaking/team-enrolment
-Depends on: rooms-and-matchmaking/team-readiness, global-invariants/transactional-invariant-enforcement#concurrent-mutations-cannot-race-past-a-guard, team-management/archive-not-delete, game-lifecycle/roster-snapshot, global-invariants/game-instance-hermeticity#seeded-once-never-refreshed.
+Depends on: global-invariants/transactional-invariant-enforcement#concurrent-mutations-cannot-race-past-a-guard, team-management/archive-not-delete, game-lifecycle/roster-snapshot, global-invariants/game-instance-hermeticity#seeded-once-never-refreshed.
 
 The room's administrative actor SHALL be able to enrol Centaur Teams in the room and to remove them; enrolment requires no acceptance step by the team — a team's consent to actually play is expressed through its captain's readiness declaration, not through enrolment. The enrolled teams form a set: a team is enrolled at most once, however enrolments interleave. Enrolling an archived team SHALL be rejected. Enrolment changes affect which teams the room's future starts consider; they never alter a game already launched.
 
@@ -134,7 +134,6 @@ A room's lifetime SHALL be independent of the games played in it: rooms persist 
 - **THEN** the room resumes with its enrolled teams, ownership state, and current game exactly as they were at archiving — nothing was reset by the round trip
 
 ### Requirement: rooms-and-matchmaking/room-discovery
-Depends on: rooms-and-matchmaking/room-creation.
 
 The application SHALL provide a Room Browser listing rooms — excluding archived rooms from the default listing — showing for each at minimum the room's name, its owner or ownerless state, the number of enrolled teams, and whether the room's current game is being played; the listing SHALL be searchable by room name, each listed room SHALL link directly to its lobby, and the browser SHALL offer the room-creation affordance. The browser is the platform-wide discovery surface: no other surface lists games in progress platform-wide, and surfaces scoped to a user list only games involving that user's own teams.
 

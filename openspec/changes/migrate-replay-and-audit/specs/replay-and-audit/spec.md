@@ -315,7 +315,7 @@ Board-level mode SHALL source everything it displays from the persisted replay a
 - **THEN** nothing sourced from the action log appears — a viewer wanting the team experience must be in team-perspective mode, where its participant scoping applies
 
 ### Requirement: replay-and-audit/team-perspective-replay
-Depends on: replay-and-audit/experience-reconstruction, decision-transparency/worst-case-preview, decision-transparency/decision-breakdown.
+Depends on: decision-transparency/worst-case-preview, decision-transparency/decision-breakdown.
 
 Team-perspective mode SHALL present the live operator interface, read-only, over reconstructed state at the scrubbed moment: every mutating affordance — staging, Drive edits, manual-mode and tempo toggles, boots, submission — disabled or absent, while the state-inspection affordances — direction preview, worst-case world preview, decision breakdown — remain fully functional. Historical operator selections SHALL render as coloured shadows in the same per-operator colours used in live play; an operator not connected at the scrubbed moment produces no shadow.
 
@@ -328,7 +328,7 @@ Team-perspective mode SHALL present the live operator interface, read-only, over
 - **THEN** each snake selected at that moment carries its holder's shadow in that operator's live-play colour, and operators who were not connected then cast no shadow
 
 ### Requirement: replay-and-audit/replay-visibility-bound
-Depends on: live-game-observation/invisibility-filtering, replay-and-audit/finished-games-public.
+Depends on: live-game-observation/invisibility-filtering.
 
 Team-perspective replay SHALL reveal nothing about opposing teams beyond what the viewed team's filtered live view showed at that original moment: an opposing snake invisible to the team at a historical moment stays invisible at that moment in the team-perspective replay, even though the persisted replay behind the viewer holds the full record.
 

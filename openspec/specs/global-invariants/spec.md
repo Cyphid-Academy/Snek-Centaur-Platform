@@ -182,7 +182,6 @@ From initialisation to game end, a game's SpacetimeDB instance SHALL be hermetic
 - **THEN** the instance transmits no gameplay or replay data to any external system on its own initiative; the first outward transmission is the game-end notification with the finished record
 
 ### Requirement: global-invariants/bot-compute-view-confinement
-Depends on: global-invariants/server-trust-boundary.
 
 Bot compute acting for a team SHALL consume only that team's authorized, filtered view of that team's game — never another team's view and never another game's state — even when the Server running it legitimately holds other teams' credentials and views; and it SHALL NOT recover, through any side channel, state that the team's own view masks. Within a Server this confinement is bounded by the Server trust boundary: it binds the platform's compute implementations, not the operator.
 

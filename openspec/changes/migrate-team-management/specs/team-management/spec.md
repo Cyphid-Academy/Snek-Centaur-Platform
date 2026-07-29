@@ -45,7 +45,7 @@ Any authenticated caller SHALL be able to create a new Centaur Team. Creation SH
 - **THEN** the team is created; no membership, tenure, standing, or platform role is a precondition
 
 ### Requirement: team-management/roster-of-operators
-Depends on: team-management/team-record, global-invariants/transactional-invariant-enforcement.
+Depends on: global-invariants/transactional-invariant-enforcement.
 
 The platform SHALL maintain persistent membership records associating each human member with their Centaur Team. Every member is an operator; membership SHALL carry no role distinctions of any kind. The captain SHALL themselves be a current member at all times.
 
@@ -115,7 +115,7 @@ A Centaur Team's roster SHALL be frozen at minimum whenever any game the team is
 - **THEN** the edit is permitted — the freeze covers competitive composition, not display identity
 
 ### Requirement: team-management/archive-not-delete
-Depends on: team-management/roster-freeze, global-invariants/single-convex-deployment, identity-and-authorization/platform-admin-role.
+Depends on: global-invariants/single-convex-deployment, identity-and-authorization/platform-admin-role.
 
 A Centaur Team SHALL never be deleted; no deletion operation exists. The captain MAY instead archive the team — only while its roster is not frozen — after which the team is hidden from default listings and cannot be enrolled in new games, while all live and historical state is preserved: membership records, team-scoped state, historical game records, and attribution. Historical records that reference an archived team SHALL continue to resolve the team's historical identity — one guarantee rather than a per-store cleanup contract only because that state shares a single persistent home. The captain MAY unarchive the team to resume activity, and a platform admin MAY do likewise — an expressly granted administrative power.
 

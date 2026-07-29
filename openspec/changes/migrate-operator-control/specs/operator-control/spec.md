@@ -95,7 +95,7 @@ A team's connections SHALL be able to read their own team's complete staged-move
 - **THEN** opposing and spectator connections still cannot read the team's staged entries for it — other teams learn only committed movement outcomes, never staging intent, timing, or changes of mind
 
 ### Requirement: operator-control/exclusive-selection
-Depends on: global-invariants/transactional-invariant-enforcement#concurrent-mutations-cannot-race-past-a-guard, global-invariants/team-granularity-authorization#within-team-discipline-lives-in-convex, operator-control/selection-transfer.
+Depends on: global-invariants/transactional-invariant-enforcement#concurrent-mutations-cannot-race-past-a-guard, global-invariants/team-granularity-authorization#within-team-discipline-lives-in-convex.
 
 Convex SHALL hold, for each snake in an active game, a selection record — the operator currently holding the snake, or none, plus the snake's manual-mode flag — and SHALL enforce at its mutation contract that at most one operator holds any snake and each operator holds at most one snake per game, with no reader ever observing either invariant violated. Only members of the owning team may ever appear as a holder — the selection lock is within-team coordination, which Convex alone arbitrates. At game end every selection SHALL be cleared: selection is live coordination state, not a persistent record.
 
@@ -133,7 +133,6 @@ Selecting a snake held by another operator SHALL succeed only when the caller ex
 - **THEN** A is released within the same atomic mutation, observably as a deselection of A — never a silent vanish, and never a rejection for already holding a snake
 
 ### Requirement: operator-control/selection-is-view-only
-Depends on: operator-control/manual-mode.
 
 Holding a selection SHALL make the snake the subject of the operator's per-snake controls and nothing more: selection never changes the snake's manual/automatic state and never by itself alters play. Per-snake staging and control affordances SHALL be presented only to the snake's current holder, and releasing a snake SHALL change nothing about the snake but the holder.
 
@@ -194,7 +193,7 @@ The application SHALL offer a team's live operator interface exactly while that 
 - **THEN** their interface transitions to the terminal view — final scores and the replay link, zero mutating affordances — rather than freezing on the last turn
 
 ### Requirement: operator-control/board-and-move-interface
-Depends on: live-game-observation/ui-honours-the-filter, global-invariants/one-shared-engine#no-parallel-implementation, game-engine/chess-timer, operator-control/staging-is-unvalidated.
+Depends on: live-game-observation/ui-honours-the-filter, global-invariants/one-shared-engine#no-parallel-implementation, game-engine/chess-timer.
 
 The live interface SHALL render the current board from the connection's filtered observation surface — terrain, items, and observable snakes — marking each owned snake's currently staged move and updating the marker live whatever the staging origin. For the operator's held snake it SHALL present a four-direction staging affordance that reflects the currently effective staged direction, keeps immediately lethal directions visibly discouraged yet selectable — the client judging lethality with the same engine build the instance resolves with — and stages immediately on every pick: no separate commit act exists, and staged moves remain changeable until the team's turn is over.
 
@@ -222,7 +221,7 @@ Each operator SHALL be identified throughout the team's live interface by a colo
 - **THEN** it comes from the client's own round-trip measurement against its game connection — no server-held state backs the indicator
 
 ### Requirement: operator-control/captain-boot
-Depends on: global-invariants/team-granularity-authorization#within-team-discipline-lives-in-convex, operator-control/selection-transfer.
+Depends on: global-invariants/team-granularity-authorization#within-team-discipline-lives-in-convex.
 
 The team's Captain SHALL be able to boot a connected operator from the team's game session: the boot severs the operator's session connection exactly as a network disconnect would and writes no persistent operator state — no lockout, no flag, nothing requiring undo. The booted operator's interface SHALL tell them they were removed, and they MAY reconnect at any time, rejoining exactly as after a network drop. Boot SHALL be refused for any non-Captain caller — a within-team privilege Convex arbitrates — and non-Captains see no boot affordance.
 

@@ -99,7 +99,7 @@ For each game, each team SHALL have game-scoped live values of its submission-ti
 - **THEN** submission cadence and deadline arming use the new value from their next scheduling decision, without restart — and the team's defaults for future games are untouched
 
 ### Requirement: turn-pacing/operator-tempo
-Depends on: operator-control/captain-boot, turn-pacing/flow-quorum.
+Depends on: operator-control/captain-boot.
 
 Each of a team's operators SHALL have a durable per-game **tempo** — `flow` ("comfortable with the automated submission cadence") or `thinking` ("hold the turn while I think") — written only by that operator, toggleable in either direction at any moment of the game, and untouched by turn boundaries. The only automatic write SHALL be that every (re)connect — first join, reconnect after a network drop, or rejoin after a Captain boot — sets the operator's tempo to flow; and a write restating the operator's current tempo SHALL be accepted as a deliberate act of the operator, never rejected as redundant. Tempo SHALL gate nothing but the team's automated declaration path: every operator interaction remains available in either tempo, and the team's clock runs and expires regardless of any operator's tempo.
 
@@ -120,7 +120,7 @@ Each of a team's operators SHALL have a durable per-game **tempo** — `flow` ("
 - **THEN** the write is accepted as that operator's deliberate pacing act — a no-op on the record's value is not an error and is not silently discarded
 
 ### Requirement: turn-pacing/flow-quorum
-Depends on: turn-pacing/final-flush, turn-pacing/captain-submit, operator-control/captain-boot.
+Depends on: operator-control/captain-boot.
 
 A team's **active operators** SHALL be exactly its currently connected member operators — coaches and admins are never active operators, hold no tempo, and never count — and unanimous flow among the active operators SHALL be the necessary precondition for the team's automated player to declare the turn over. The precondition SHALL be passive: its becoming true triggers no flush, submission, or declaration, it merely permits the automated declaration path to proceed on its own schedule. With zero active operators the precondition SHALL be unsatisfied — automated declaration deferred until an operator joins in flow — and the precondition SHALL bind only the automated path: the Captain's submit and clock expiry declare regardless of every operator's tempo.
 
@@ -141,7 +141,7 @@ A team's **active operators** SHALL be exactly its currently connected member op
 - **THEN** the booted operator leaves the active set exactly as a network disconnect would — their tempo no longer counted — and on reconnecting they rejoin the active set in flow like any other joiner
 
 ### Requirement: turn-pacing/scheduled-submission
-Depends on: turn-pacing/live-pacing-parameters, bot-framework/score-composition, bot-framework/softmax-decision, operator-control/staged-move-log, operator-control/manual-mode.
+Depends on: bot-framework/score-composition, bot-framework/softmax-decision, operator-control/staged-move-log, operator-control/manual-mode.
 
 During each turn the team's automated player SHALL run a scheduled submission pass at the team's scheduled-submission interval: for each automatic-mode snake whose decision state has news, it samples a direction and stages it, and SHALL mark the news consumed only upon the staging acknowledgement — never at sampling or send. A snake without news since it was last staged SHALL not be re-rolled, and manual-mode snakes are never swept.
 
@@ -154,7 +154,6 @@ During each turn the team's automated player SHALL run a scheduled submission pa
 - **THEN** the snake still counts as having news and the next pass retries — a decision can be lost by the network, never forgotten by the player
 
 ### Requirement: turn-pacing/final-flush
-Depends on: turn-pacing/live-pacing-parameters, turn-pacing/turn-declaration, turn-pacing/flow-quorum, turn-pacing/scheduled-submission.
 
 Each turn the automated player SHALL arm a final-submission deadline from live state — the smaller of the team's automatic submission time allocation and its observed remaining time, brought forward by the imminent-deadline threshold — re-arming it earlier whenever the observed remaining time falls below what the armed deadline assumed. At the deadline it SHALL flush every automatic-mode snake with pending news, however recently staged; it SHALL then declare the team's turn over once the flow quorum permits — immediately when the quorum holds at the deadline, otherwise on its own schedule if the quorum is satisfied later in the turn. The scheduled cadence SHALL continue until the turn is actually declared over.
 
@@ -171,7 +170,7 @@ Each turn the automated player SHALL arm a final-submission deadline from live s
 - **THEN** the flush still stages everything pending but no declaration is issued — the team spends its remaining time thinking, and the turn ends by a later flow unanimity, the Captain's submit, or expiry
 
 ### Requirement: turn-pacing/captain-submit
-Depends on: operator-control/captain-boot, turn-pacing/turn-declaration, global-invariants/centaur-state-boundary#bot-to-game-flow-never-routes-through-convex, global-invariants/security-enforced-outside-the-library#customised-app-changes-no-invariant.
+Depends on: operator-control/captain-boot, global-invariants/centaur-state-boundary#bot-to-game-flow-never-routes-through-convex, global-invariants/security-enforced-outside-the-library#customised-app-changes-no-invariant.
 
 The live interface SHALL expose the Captain's controls — an immediate **turn-submit**, additionally bindable to a keyboard shortcut, alongside the operator boot — to the team's current Captain alone: invoking turn-submit declares the team's turn over at once with exactly the moves currently staged, regardless of every operator's tempo. A Captain submission SHALL suppress the automated final flush — no fresh decision is sampled or staged after the human judgement that the current staged set stands — and the automated player SHALL learn of any declaration solely by observing the game instance's declared state on its subscription: no interface-to-player channel mediates pacing, and the submission act itself is intent, distinct from the game's declared state. Any invocation of a Captain control by a non-Captain — keyboard shortcut included — SHALL be rejected server-side; the tempo toggle is expressly not Captain-gated.
 

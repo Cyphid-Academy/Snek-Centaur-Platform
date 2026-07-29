@@ -72,7 +72,7 @@ Every computed-display-state update SHALL be a full snapshot that replaces the s
 - **THEN** the resulting dirty flag yields fresh snapshots, and the operator's displays converge on current analysis rather than showing stale leftovers from the unselected tier
 
 ### Requirement: decision-transparency/published-slots-only
-Depends on: global-invariants/client-truthfulness, decision-transparency/snapshot-full-replacement, bot-framework/author-fault-containment.
+Depends on: global-invariants/client-truthfulness, bot-framework/author-fault-containment.
 
 The interface SHALL render decision state purely from the published computed display state: it SHALL never re-evaluate any heuristic, never re-run any simulation, and never interpolate or extrapolate values the record does not carry — a score, world, or heuristic output with no published value renders as visibly absent, never as zero and never back-filled. The published slots SHALL be the complete operator-visible decision surface: heuristic contract violations contained by the framework are diagnosed in the hosting server's process log only and have no operator-interface surface.
 

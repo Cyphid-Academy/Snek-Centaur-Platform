@@ -92,7 +92,7 @@ The tool SHALL track the selected snake in a single value changed through one at
 - **THEN** the cell is appended to the selected snake; with no snake selected the click makes no edit and the tool explains that a snake must be selected first
 
 ### Requirement: visual-tester/invalid-state-surfacing
-Depends on: game-engine/movement, visual-tester/board-editor, test-sequences/validation.
+Depends on: game-engine/movement, test-sequences/validation.
 
 The whole point of the tool is to catch bugs, so it SHALL surface — never silently render as a normal state — any structurally invalid state it is asked to display. In particular, when a state contains a snake whose body is discontinuous (a consecutive segment pair neither orthogonally adjacent nor stacked), the tool SHALL show a prominent on-page error identifying the snake and the offending segment pair, and SHALL NOT draw that snake as a continuous silhouette. Because such a state cannot be authored or imported — the editor and sequence validation both enforce the movement-producible body shapes — its only source is a turn-resolution bug or a corrupt sequence — exactly what must be caught.
 
@@ -140,7 +140,6 @@ The tool SHALL simulate the next turn on demand: it resolves the current state w
 - **THEN** the session records the resolver's next state, events, and outcome for that turn, so saving the session yields expectations without re-resolving
 
 ### Requirement: visual-tester/session-history
-Depends on: visual-tester/auto-persist.
 
 The tool SHALL keep the session's full turn history in memory — initial state plus every simulated turn with its staged moves and resolver output — navigable via a scrub bar; scrubbing to any turn displays that turn's board state and, where present, its staged moves, events, and outcome. The session is continuously auto-saved to a scratch sequence; durability across environments comes only from promoting a snapshot to a git-tracked fixture.
 
@@ -175,7 +174,7 @@ When the tester edits the board state or staged moves at a past (non-head) turn 
 - **THEN** a new scratch sequence holding turns 0..k is created and becomes the session's binding, while the previously bound sequence retains its full history unchanged
 
 ### Requirement: visual-tester/sequence-management
-Depends on: visual-tester/auto-persist, test-sequences/validation.
+Depends on: test-sequences/validation.
 
 The tool SHALL promote the current session to a git-tracked fixture as its one explicit save; list all saved sequences filtered by tier (fixtures, scratch, or the union) and distinguishing the two; load a saved sequence into the session (a fixture loads read-only, forking to a scratch on first edit); copy any saved sequence's JSON document to the clipboard; and import pasted raw JSON as a new scratch sequence, accepting it only if it passes sequence validation.
 
