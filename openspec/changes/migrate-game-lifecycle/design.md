@@ -83,6 +83,62 @@ change follows the initialization-time model the sibling already authored
 creation-time capture — admission would honour a stale roster and the
 restricted-participant snapshot would be impossible to express.
 
+### The snapshot captures members, not "members and their roles"
+
+The legacy phrasing this requirement inherited had the snapshot capture each
+seated team's "authorized members **and their roles**". There is no such
+thing to capture. Per-member roles were removed corpus-wide with the
+timekeeper elimination: `team-management/roster-of-operators` says
+membership carries no role distinctions of any kind, every member is an
+operator, and `team-management/team-record` makes captaincy structural
+precisely so it is not a role on a membership record — the sibling change's
+design already records that it deliberately declines to carry the same
+stale "members with their roles" phrase forward from the legacy view text.
+The one live distinction worth checking was coach vs operator, and it does
+not rescue the phrase: a coach is not a member at all
+(`team-management/coaches` stores designations on the team record, distinct
+from the roster), coach eligibility is answered from the live designation
+rather than from the snapshot, and what the snapshot binds is exactly what
+`identity-and-authorization/roster-snapshot-binding` names — operator-token
+eligibility and which team identities participate. So "and their roles" is
+dropped as a fossil of a dead model, not narrowed. Reversed — carrying the
+phrase — the snapshot's storage shape acquires a role column with no source
+to populate it, and the dead role model has a place to respawn in the one
+record that outlives every roster edit.
+
+### Engagement is published downward, against the natural reading
+
+`team-management/roster-freeze` must hold a team's roster frozen while the
+team is playing. The natural reading is that team-management sources that
+fact — it is the party that needs it — by declaring `game-lifecycle`. It
+cannot: `team-management → game-lifecycle → team-server-management →
+team-management` is a real cycle, and every edge in it is load-bearing.
+game-lifecycle declares team-server-management for the game invitations and
+the launch healthcheck gate; team-server-management declares team-management
+for the captain's server nomination and the team record it hangs on. Neither
+of those can be inverted without a worse distortion, so the *third* edge is
+the one that gives.
+
+The edge is therefore inverted: game-lifecycle **publishes** "this team is
+competitively engaged right now" as a fact about the team
+(`competitive-engagement`), and team-management consumes it as a freeze
+source while declaring nothing. That is why `roster-freeze` reads "facts the
+capabilities that run those engagements own — this capability consumes them
+as freeze sources and resolves none of them itself": the consumer is
+deliberately blind to games. It also composes with the other publisher of an
+enclosing engagement, `tournaments/tournament-roster-freeze`, which anchors
+its own longer hold to the tournament's state rather than to any game — two
+publishers of freeze sources, one consumer, no edge pointing up.
+
+Reversed — the natural direction, team-management reaching down to game
+records — the declared graph closes a cycle, and to escape it every consumer
+that needs the fact instead re-derives it from game status joined to
+participation. "Engaged" then has as many definitions as it has consumers,
+each free to disagree at the edges that matter most: whether a walkover
+counted, whether a second concurrent game holds the freeze open, whether an
+aborted launch ever engaged anyone. Publishing it makes those three answers
+the same answer everywhere, and makes them this capability's to get right.
+
 ### The orchestration is authored as ordering, not steps
 
 The legacy seven-step start sequence is mechanism-shaped; what future
@@ -126,6 +182,109 @@ therefore minted as required behaviour (#lost-notification-recovered) —
 the notification is the fast path, not the only path to `finished`.
 Reversed — fallback left optional — the lifecycle's terminal guarantee
 would silently depend on HTTP delivery never failing four times.
+
+The cost of the hole is worth spelling out, because it is what makes
+recovery required rather than nice to have. A game wedged at `playing`
+freezes everything downstream of its finish: its room can never start
+another game (a successor is created only on finish), its configuration
+stays frozen for "the remainder of the game's life" — which never ends —
+its room cannot be archived while its current game is `playing`, a
+tournament's round chaining stalls because it fires on `finished`, the
+replay is lost the moment the abandoned instance is reaped, and the
+instance itself keeps running unattended at cost and exposure. Every one
+of those is a permanent consequence of one dropped HTTP request.
+
+### A stale game is an elapsed-time judgement, and recovery is a hybrid probe
+
+`#lost-notification-recovered` names an obligation without defining it, so
+this change mints `stale-game-recovery` to define all three of its
+undefined parts — the silence signal, what may be read, and what recovery
+does (author-approved 2026-07-28; the options weighed are in proposal.md
+Open Question 6).
+
+**Detection is a scheduled sweep, because nothing else is available.**
+Convex is the sole status authority and deliberately mirrors nothing live
+(global-invariants/state-confined-to-owning-runtime#convex-never-mirrors-a-live-game),
+so there is no subscription that could notice an instance going quiet. A
+recurring sweep over records still marked `playing` is the only channel
+the architecture leaves, and elapsed time is the only signal such a sweep
+can read: the record's own `playing` timestamp against the clock, with no
+notification arrived.
+
+**The bound is generous by construction, not tuned.** A false positive is
+the expensive direction — it error-finishes a game that was still being
+played, losing its replay — so the threshold is set above the longest game
+the configured clocks and turn limit can produce rather than above a
+typical game. That is why `chess-timer` and `game-end-conditions` are
+cited: the requirement's soundness rests on a game's wall-clock length
+being bounded by its configured budgets, increments and turn limit. The
+legacy corpus's only anchor is mechanism — the callback token expired at
+two hours, described as "well in excess of the maximum expected game
+duration" — so no literal is authored here; the bound's value and the
+sweep's cadence stay plastic, and the requirement carries only the
+property the value must have. Reversed — a bound tuned to typical
+durations — a long, legitimately slow game gets reaped mid-play and its
+replay destroyed by the very mechanism meant to protect against data
+loss.
+
+**The probe reads liveness and nothing else.** It answers one question:
+does a live instance still stand behind this record? No turn log, no
+staged moves, no board. That is what keeps recovery inside the
+confinement invariant rather than smuggling a second channel past it.
+Reversed — a probe that reads game state to decide whether the game
+"looks finished" — Convex acquires exactly the live mirror the invariant
+forbids, and it acquires it on the code path least likely to be reviewed
+for that.
+
+**Recovery branches on the probe.** Alive: retrieve the completed record
+and run the ordinary terminal handling — persist, flip to `finished`,
+tear down. This is not a new mirroring channel. The architecture already
+permits the complete record to arrive exactly once, at the end; recovery
+changes only who initiates that one arrival, because the side that should
+have pushed it could not. Gone or unreachable: finish with an error
+outcome — a disposition #error-outcome-still-finishes already permits —
+and reclaim whatever of the instance remains. A third case is authored as
+a no-op rather than a branch: a retrieval that yields no completed record
+(a live instance whose game genuinely has not ended, under a
+configuration that admits an unbounded game) leaves the status untouched
+for a later sweep, so even a false positive costs nothing but a repeated
+sweep. Reversed — one branch only — pull-always has no answer when the
+instance is already gone and wedges those games forever, while
+error-always throws away the record of every game whose instance is still
+sitting there holding it.
+
+**Both invariants are honoured, and the requirement says how.** The
+persistence gate (#no-teardown-before-persistence) binds normally on the
+alive branch: the order is pull, persist, then tear down, identical to
+the pushed path, which is what #live-instance-yields-the-record pins. On
+the dead branch the gate is *vacuous* rather than bypassed — there is no
+retrievable record left for reclamation to destroy, so reclaiming loses
+nothing the gate exists to protect — and #nothing-left-to-persist-when-the-instance-is-gone
+states that outright, so a reader never has to wonder whether recovery
+violates the gate or is quietly exempt from it. Against
+#convex-never-mirrors-a-live-game, the retrieval is authored as narrowly
+as the behaviour allows: once, at the end, on a record already stale, for
+that record alone, and #probing-is-not-licence-to-watch-a-game exists
+precisely so the pull cannot be read as licence to poll a healthy game's
+state. Finally, both branches commit their transition under the same
+guard the pushed path uses
+(global-invariants/transactional-invariant-enforcement#concurrent-mutations-cannot-race-past-a-guard),
+so a notification that arrives late — mid-sweep — cannot finish a game
+twice or tear an instance down under an in-flight persistence.
+
+`finish-notification` is correspondingly trimmed rather than extended:
+its opening "only from a notification" became "from a notification …
+never from any observation of the game in progress", which keeps the
+prohibition that mattered (nothing live advances a status) without
+contradicting the recovery path it always implied, and its closing
+sentence now hands off to recovery instead of half-defining it. The
+split is deliberate: `finish-notification` is about the push, and
+`stale-game-recovery` is about its absence, which is a different
+behaviour with a different trigger, a different actor and a different
+failure mode. Reversed — folding recovery into `finish-notification` —
+one requirement carries a callback credential contract, a retry policy, a
+scheduled sweep, a liveness probe and two recovery branches, which is
+well past what an author can vet at a read.
 
 ### Teardown discipline: persistence-gated, prompt, Convex-only
 
@@ -198,8 +357,17 @@ the requirements need not restate any of it.
   (global-invariants/state-confined-to-owning-runtime), which is why the
   roster must be *seeded* into it rather than looked up
   (global-invariants/game-instance-hermeticity), and why the snapshot's
-  member/role detail stays Convex-side to be consulted there
-  (global-invariants/team-granularity-authorization).
+  member detail stays Convex-side to be consulted there
+  (global-invariants/team-granularity-authorization). The engagement fact
+  is Convex's on the same grounds — it spans a team's records and its
+  games' records, which is one transaction only because they share one
+  deployment
+  (global-invariants/single-convex-deployment#cross-record-invariants-are-one-transaction),
+  and a consumer freezing on it needs the read inside its own write's
+  transaction
+  (global-invariants/transactional-invariant-enforcement#concurrent-mutations-cannot-race-past-a-guard);
+  a published fact a consumer can only read *before* its write is not a
+  freeze, it is a race.
 - **Why the terminal notification is push-only.** The delta no longer says
   "Convex holds no live gameplay subscription": that is
   global-invariants/state-confined-to-owning-runtime#convex-never-mirrors-a-live-game
@@ -209,11 +377,12 @@ the requirements need not restate any of it.
   is ours is the notification's *content and consequences* — outcome plus
   the complete record, and what Convex does on receipt — which is what
   #pushed-never-polled-live now pins: nothing but the push (or the
-  fallback) advances a `playing` game's status. The stale-game
-  polling fallback is consistent with that confinement: it probes whether a
-  record still marked `playing` has a live instance behind it, and consumes
-  no gameplay state — the record still arrives exactly once, via the
-  notification or via the fallback's terminal handling.
+  fallback) advances a `playing` game's status. Stale-game recovery is
+  consistent with that confinement: it probes whether a record still marked
+  `playing` has a live instance behind it, and consumes no gameplay state —
+  the complete record still arrives exactly once, via the notification or via
+  recovery's terminal handling (see the stale-game decision above for how
+  both halves of that are pinned).
 - **Why the persistence gate exists at all.** Because Convex mirrors
   nothing while the game runs, the instance is the *sole* holder of the
   record until the import lands; that is the whole reason teardown waits
@@ -268,6 +437,19 @@ The routed leads, each judged:
   fallback.** Upgraded from the legacy "can" to required behaviour —
   minted as finish-notification#lost-notification-recovered (see the
   decision above).
+- **What "stale" means, what may be probed, and what recovery does.** The
+  obligation above is silently violable in three separate ways an
+  implementer would not notice: a threshold tuned to typical durations
+  (reaps live games and destroys their replays), a probe that reads game
+  state to guess whether the game ended (reintroduces the live mirror the
+  confinement invariant forbids), and a recovery that reclaims first and
+  persists second (destroys the record it was sent to rescue). All three are
+  minted as stale-game-recovery, with the branch behaviours and both
+  invariant interactions pinned as their own scenarios —
+  #stale-only-past-the-maximum-game-duration, #live-instance-yields-the-record,
+  #vanished-instance-finishes-with-an-error,
+  #nothing-left-to-persist-when-the-instance-is-gone and
+  #probing-is-not-licence-to-watch-a-game.
 - **gameSeed always forwarded.** Violable silently (a payload without
   the seed initializes fine but breaks determinism and export later) —
   minted as the "always forwarded" clause of instance-initialization.
@@ -286,10 +468,22 @@ The routed leads, each judged:
   fresh-game-state#identifiers-agree.
 - **No self-teardown; only Convex tears down after acknowledgement.**
   Minted as teardown-after-persistence#no-self-teardown.
+- **Engagement is published, never inferred.** The inverted-edge decision
+  above is only worth taking if consumers actually consume: an implementer
+  who answers "is this team busy?" with a local join over game status and
+  participation reintroduces the second definition the inversion exists to
+  prevent, and does so invisibly. Minted as
+  competitive-engagement#published-not-inferred, with the two behaviours a
+  local re-derivation gets wrong most easily pinned as their own scenarios
+  — #engaged-while-any-of-its-games-plays and
+  #a-game-that-never-played-engages-nobody.
 
 Checked, plastic (stay in code with `// design:` references when the
 implementation lands): the retry count and backoff schedule of
-notification delivery, the stale-game polling cadence, the callback
+notification delivery, the stale-game sweep's cadence and the transport its
+liveness probe uses, the literal value of the elapsed-time bound past which a
+`playing` record is stale (only the property that value must have —
+comfortably above the maximum game duration — is authored), the callback
 credential's encoding/claims/lifetime, the management-API endpoints and
 the initialization payload's field list, the legacy step numbering, the
 warm-up dispatch's scheduling primitive, and the initialization-order of

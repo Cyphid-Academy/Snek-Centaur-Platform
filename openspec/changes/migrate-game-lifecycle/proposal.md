@@ -62,7 +62,16 @@ Deliberate boundaries:
   seam. The snapshot is authored as captured at initialization,
   consistent with the open sibling's binding requirement and with the
   restricted-roster launch path (see design.md for the reconciliation of
-  the legacy creation-time wording).
+  the legacy creation-time wording). The snapshot captures each seated
+  team's authorized *members* only: per-member roles do not exist in this
+  corpus, and the legacy "and their roles" phrasing is dropped rather than
+  narrowed (design.md).
+- **"This team is competitively engaged right now" is published here, not
+  read from here.** Every game is owned by this capability, so this
+  capability derives the fact and publishes it about the team; consumers
+  that must gate on it — the roster freeze among them — read it without
+  declaring a dependency on games at all. The direction is inverted
+  deliberately: the natural one closes a capability cycle (design.md).
 - **The record-sufficiency half of persistence is not authored here.**
   Teardown waits for confirmed persistence of the complete record (the
   bracket is this capability's); what the record must contain to be
@@ -97,10 +106,11 @@ Deliberate boundaries:
 
 ## What Changes
 
-- **New capability `game-lifecycle`** (mint delta, ADDED-only, 14
+- **New capability `game-lifecycle`** (mint delta, ADDED-only, 16
   requirements): the persistent game record; sole-authority forward-only
   status machine with the walkover; the initialization-time roster
-  snapshot; the fresh-instance-per-started-game bracket; the no-orphans
+  snapshot; the published competitive-engagement fact other capabilities
+  gate on; the fresh-instance-per-started-game bracket; the no-orphans
   invariant with post-provisioning-failure cleanup; the launch
   orchestration's ordering and platform-only privilege; the launch gates
   (healthcheck block, refusal abort, the abstract competition override);
@@ -110,7 +120,10 @@ Deliberate boundaries:
   initialization, identifier agreement); the game-end commit boundary
   (zero grace window); the pushed finish notification (pre-signed
   self-contained callback credential never persisted, error outcomes,
-  bounded retries with required stale-game polling fallback);
+  bounded retries, and the push not being the only path to `finished`);
+  stale-game recovery (the scheduled sweep, the elapsed-time bound above the
+  maximum game duration, the liveness-only probe, and the two branches — pull
+  and finish normally, or finish with an error outcome and reclaim);
   teardown-after-persistence (no self-teardown, prompt after
   confirmation); successor auto-creation (atomic with currency, mutable
   again, no preview carried); and the provisioning host's warm-up signal
@@ -135,7 +148,7 @@ Deliberate boundaries:
 
 ## Open Questions
 
-None remaining; the three this change carried are resolved in place below.
+None remaining; the six this change carried are resolved in place below.
 
 1. **Invitation response window: ten seconds or thirty?**
    - **Context**: the sibling authors the invitation contract's bounded
@@ -202,3 +215,100 @@ None remaining; the three this change carried are resolved in place below.
      hermeticity exception this rests on is already the one the invariant
      sanctions, verification material obtained at startup rather than a
      per-connection call to Convex.
+
+4. **Who sources "this team is competitively engaged right now" for the
+   roster freeze?**
+   - **Context**: `team-management/roster-freeze` must freeze a team's
+     roster while the team is playing, and states that it consumes the fact
+     as a freeze source and resolves none of it itself. Someone has to
+     resolve it. The obvious candidate is team-management declaring
+     `game-lifecycle` and reading game records — but
+     `team-management → game-lifecycle → team-server-management →
+     team-management` is a real cycle: this capability declares
+     team-server-management for the game invitations and the launch
+     healthcheck, and team-server-management declares team-management for
+     the captain's server nomination.
+   - **Question**: which end of that edge owns the fact?
+   - **Options**: (A) team-management declares `game-lifecycle` and derives
+     engagement from game records — rejected, it closes the cycle;
+     (B) game-lifecycle publishes engagement as a fact about the team and
+     team-management consumes it while declaring nothing; (C) leave it
+     unsourced and let each consumer derive its own — rejected, "engaged"
+     then has as many definitions as consumers.
+   - **Decision (2026-07-28)**: Option B — invert the edge. This change
+     adds `game-lifecycle/competitive-engagement`, making this capability
+     the single publisher: derived from the games it owns, true from a
+     game's commit to play until that game's terminal state, held open
+     while any of the team's games is still in play, and readable by a
+     capability that knows nothing about games — including inside the
+     transaction of the write it must exclude. The scenario
+     `#published-not-inferred` pins that consumers read it rather than
+     re-deriving it, so there is exactly one definition of engaged. No
+     dependency is added in either direction: publishing is what removes
+     the need for one. Rationale and the "what breaks if reversed" note are
+     in design.md.
+
+5. **Is the roster snapshot's "and their roles" clause live, or a fossil?**
+   - **Context**: `roster-snapshot` captured each seated team's "authorized
+     members **and their roles**", inherited from legacy wording.
+     `team-management/roster-of-operators` is emphatic that membership
+     carries no role distinctions of any kind and that every member is an
+     operator; per-member roles were removed corpus-wide with the
+     timekeeper elimination, and captaincy was made structural for exactly
+     that reason.
+   - **Question**: does "roles" point at something still live — the
+     coach/operator distinction being the one candidate — or is it a fossil
+     of the dead role model?
+   - **Options**: (A) live, and the clause should be narrowed to name the
+     surviving distinction; (B) fossil, and the clause is dropped.
+   - **Decision (2026-07-28)**: Option B — fossil, dropped. The
+     coach/operator distinction is real but sits outside the snapshot
+     entirely: a coach is not a member (`team-management/coaches` keeps
+     designations on the team record, distinct from the roster), coach
+     eligibility is answered from the live designation, and what the
+     snapshot binds is operator-token eligibility plus which team
+     identities participate, per
+     `identity-and-authorization/roster-snapshot-binding`. Nothing in the
+     corpus can populate a per-member role, so the clause is removed rather
+     than narrowed; the sibling change had already declined to carry the
+     same phrase forward in its own view text.
+
+6. **What is a "stale game", and what does recovering one do?**
+   - **Context**: `finish-notification` raised the legacy "Convex *can*
+     detect stale games via polling as a fallback" to required behaviour
+     (`#lost-notification-recovered`) without defining any of it. Three
+     things were undefined: what makes a game count as silent, what a probe
+     of a still-`playing` record may read, and what recovery actually does.
+     The constraint is tight from both sides: Convex is the sole status
+     authority and deliberately watches nothing live
+     (`global-invariants/state-confined-to-owning-runtime#convex-never-mirrors-a-live-game`),
+     so a scheduled sweep is the only channel it has; and
+     `teardown-after-persistence#no-teardown-before-persistence` forbids
+     reclaiming an instance that still holds an unpersisted record, so
+     "just tear it down" is not available either.
+   - **Question**: which signal marks a game stale, what may the probe read,
+     and what does recovery do with each answer?
+   - **Options**: (A) pull-then-finish always — best fidelity, but it has no
+     answer when the instance is already gone; (B) timeout-to-error always —
+     cheapest, but every false positive silently costs a replay;
+     (C) hybrid — probe for a live instance, pull and finish normally when
+     one answers, error-finish and reclaim when none does; (D) operator-driven
+     recovery only — leaves `#lost-notification-recovered` unbacked;
+     (E) revert the scenario to a MAY — reinstates the liveness hole, and
+     requires deleting the scenario rather than deferring it.
+   - **Decision (author, 2026-07-28)**: Option C — the hybrid probe, minted
+     as `game-lifecycle/stale-game-recovery`. Silence is elapsed time: a
+     record still `playing` with no finish notification past a bound set
+     above the longest game the configured clocks and turn limit can produce,
+     found by a recurring Convex sweep, which is the only channel a runtime
+     that watches nothing live has. The probe establishes only whether a live
+     instance stands behind the record and consumes no gameplay state.
+     Alive ⇒ retrieve the completed record and run the ordinary terminal
+     handling (persist → `finished` → teardown), which is the architecture's
+     existing once-only arrival initiated from the other side rather than a
+     new mirroring channel; gone or unreachable ⇒ finish with an error
+     outcome (already permitted by `#error-outcome-still-finishes`) and
+     reclaim the residue, where the persistence gate is vacuous because
+     nothing retrievable remains. The sweep cadence and the bound's literal
+     value stay plastic. Rationale and the "what breaks if reversed" note are
+     in design.md.

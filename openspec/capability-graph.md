@@ -75,8 +75,8 @@ flowchart TD
   game-configuration -->|12| game-engine
   game-configuration -->|17| global-invariants
   game-lifecycle -->|7| game-configuration
-  game-lifecycle -->|2| game-engine
-  game-lifecycle -->|24| global-invariants
+  game-lifecycle -->|4| game-engine
+  game-lifecycle -->|29| global-invariants
   game-lifecycle -->|2| identity-and-authorization
   game-lifecycle -->|3| team-server-management
   game-runtime -->|17| game-engine
