@@ -47,6 +47,7 @@ describe("@cyphid/snek-game-configuration public API", () => {
         board: generated.board,
         snakes: generated.snakes,
         projections: [],
+        rewind: null,
         items: itemsByCell(generated.board, generated.items),
         clocks: teams.map((t) => initialClock(t.centaurTeamId, config.runtime.clock)),
         consumedDurationMs: 0,

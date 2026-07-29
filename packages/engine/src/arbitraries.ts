@@ -313,6 +313,7 @@ export function initialStateFrom(draw: StateDraw, config: GameRuntimeConfig): Ga
     board,
     snakes,
     projections: [],
+    rewind: null,
     items: itemsByCell(board, items),
     clocks: teams.map((t) => ({
       centaurTeamId: t.centaurTeamId,

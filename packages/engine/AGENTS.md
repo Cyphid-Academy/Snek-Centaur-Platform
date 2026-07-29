@@ -12,6 +12,7 @@ This package is `@cyphid/snek-engine`: the shared game engine. It is the single 
 - Domain type vocabulary: `Direction`, `CellType`, `SnakeState`, `Board`, `ItemState`, `PotionEffect`, `TurnEvent`, etc.
 - `advanceTurn(state, stagedMoves, turnSeed, timings, config)` — the mainline entry point: every alive snake takes the turn, directions resolved by the movement rules, and the result narrows to a `GameState`.
 - `imagineMoves(state, directions, held, timings, config, turnSeed?)` — the hypothetical entry point over a `PartialGameState`: the named snakes take the directions given, the rest are held, and the result is a partial state or a typed refusal. Same stage list, same rules.
+- `advanceHistory(state, directions, config)` — supply a projection's move at the turn it was HELD. The board is resolved again from before that turn with the fact in place and every resolution since replayed over it, so the result stands at the same current turn with the snake one turn less historic. It can change what already happened; the revision reports which snakes' fates it changed (`game-engine/historic-advance`).
 - `isValidMove(state, snakeId, direction): boolean` — pre-validation helper.
 - Any pure game-logic utilities (spawning algorithms, collision math, seeded randomness, chess-timer arithmetic).
 

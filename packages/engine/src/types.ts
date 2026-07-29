@@ -421,7 +421,9 @@ export interface PartialGameState {
   /**
    * Snakes held through an earlier resolution, as the board finds them now.
    * Each carries the historic record it projects; nothing here is a snake
-   * the caller may move, and a state with a live one will not narrow.
+   * a resolution of the NEXT turn may move, and a state with a live one will
+   * not narrow. Their moves at the turn they were held are supplied through
+   * `advanceHistory` instead.
    */
   // spec: game-engine/held-snakes
   readonly projections: ReadonlyArray<ProjectedSnake>;
@@ -432,6 +434,44 @@ export interface PartialGameState {
   // which is what lets a reader recompute the duration ending from the record
   // (game-engine/chess-timer).
   readonly consumedDurationMs: number;
+  /**
+   * Everything needed to resolve this state's history again once a projection's
+   * move stops being unknown — `null` exactly when nothing is projected.
+   * spec: game-engine/historic-advance
+   */
+  readonly rewind: RewindLog | null;
+}
+
+// spec: game-engine/historic-advance
+//
+// What a resolution was ASKED, kept so it can be asked again. A resolution is a
+// function of its declared inputs alone (game-engine/determinism), so replaying
+// these against a revised board is not an approximation of what happened — it
+// is the same computation over a different premise.
+export interface ResolutionRecord {
+  readonly directions: ReadonlyMap<SnakeId, Direction>;
+  /** Snakes held here — the record of where each projection crystallized. */
+  readonly held: ReadonlySet<SnakeId>;
+  readonly timings: TurnTimings;
+  readonly turnSeed: Uint8Array | null;
+}
+
+/**
+ * The board as it stood before the oldest still-standing projection was held,
+ * and every resolution applied since.
+ *
+ * `base` is a GAME state by construction: it is the moment before anything was
+ * first held, so nothing was projected then — which is also why the nesting
+ * terminates, since a game state's own `rewind` is always `null`.
+ *
+ * This exists only while something is projected, so the mainline never carries
+ * one: `advanceTurn` holds nothing, so its states always have `rewind: null`
+ * and no runtime ever persists a log.
+ */
+export interface RewindLog {
+  readonly base: GameState;
+  /** Oldest first; one entry per resolution that advanced the turn. */
+  readonly resolutions: ReadonlyArray<ResolutionRecord>;
 }
 
 // A GAME state is the lockstep case: nothing is still projected, so every

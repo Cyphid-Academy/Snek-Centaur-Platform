@@ -14,6 +14,7 @@ Two entry points over one stage list:
 
 - `advanceTurn(state, stagedMoves, turnSeed, timings, config)` — the mainline. Every alive snake takes the turn, its direction resolved by the movement rules; yields the next `GameState`, ordered `TurnEvent`s and the `GameOutcome`.
 - `imagineMoves(state, directions, held, timings, config, turnSeed?)` — the hypothetical. The named snakes take the directions given and the rest are **held**. A held snake crystallizes into a frozen record and leaves a headless **projection** standing on the board in its place: an obstacle and a severable body that asserts nothing about where the snake's head actually went. Yields a `PartialGameState` (which will not narrow while a live projection stands) or a typed refusal — a worst-case search would rather be told "I cannot answer that" than be guessed at.
+- `advanceHistory(state, directions, config)` — a projection's move at the turn it was **held**, learned after the fact. Resolves the board again from before that turn and replays everything since, so the result is at the same turn with the snake one turn less historic. It may rewrite what already happened, and says which snakes' fates it changed.
 
 Both **require the turn's timings**: how long it lasted, and how much of its own clock each team burned on it. The engine reads no clock — time is a declared input like the staged moves and the turn seed, which is what lets a limit measured in real time be an ordinary rule of the game.
 

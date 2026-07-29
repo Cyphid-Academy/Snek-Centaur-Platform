@@ -616,6 +616,9 @@ export function decodeGameState(json: GameStateJson): GameState {
     // a field that cannot vary in a document this format describes is a field
     // the format should not carry. spec: game-engine/held-snakes
     projections: [],
+    // Nor a rewind log: it exists only to resolve a projection's history again,
+    // and a recorded state has no projection to resolve.
+    rewind: null,
     clocks: json.clocks.map((c) => ({
       centaurTeamId: c.centaurTeamId as CentaurTeamId,
       budgetMs: c.budgetMs,

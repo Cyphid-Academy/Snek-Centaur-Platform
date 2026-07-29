@@ -4,7 +4,8 @@
 // game-engine/hypothetical-resolution-failure
 import { describe, expect, it } from "vitest";
 import type { HypotheticalResolution } from "./resolve.js";
-import { imagineMoves } from "./resolve.js";
+import type { HistoryResult, HistoryRevision } from "./resolve.js";
+import { advanceHistory, imagineMoves } from "./resolve.js";
 import { currentTurn, isLockstep, narrowToGameState } from "./state.js";
 import {
   QUIET_CONFIG,
@@ -27,7 +28,7 @@ import {
   tid,
   timings,
 } from "./testkit.js";
-import type { PartialGameState, TurnNumber } from "./types.js";
+import type { PartialGameState, SnakeId, TurnNumber } from "./types.js";
 import { CellType, Direction, ItemType } from "./types.js";
 
 /** Two snakes on separate teams, three segments each, heading right. */
@@ -59,6 +60,16 @@ function pair() {
 function ok(result: ReturnType<typeof doImagine>): HypotheticalResolution {
   if (!result.ok) throw new Error(`unexpected refusal: ${result.failure.reason}`);
   return result.resolution;
+}
+
+function okHistory(result: HistoryResult): HistoryRevision {
+  if (!result.ok) throw new Error(`unexpected refusal: ${result.failure.reason}`);
+  return result.revision;
+}
+
+/** Directions as a map, for advanceHistory. */
+function moves(entries: Array<[number, Direction]>): Map<SnakeId, Direction> {
+  return new Map(entries.map(([id, d]) => [sid(id), d]));
 }
 
 describe("advancing is imagining with nothing held", () => {
@@ -600,5 +611,192 @@ describe("hazard damage is announced (game-engine/turn-events)", () => {
     const death = eventsOfKind(result.events, "snake_died")[0];
     expect(death?.cause).toBe("health_depletion");
     expect(death?.sources).toEqual(["tick", "hazard"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Advancing a historic snake (game-engine/historic-advance)
+// ---------------------------------------------------------------------------
+
+describe("advancing a historic snake", () => {
+  /** Three snakes far apart; 0 and 2 move right, 1 is held. */
+  function spread() {
+    return [
+      makeSnake({ snakeId: sid(0), centaurTeamId: tid("red"), body: [{ x: 2, y: 2 }] }),
+      makeSnake({ snakeId: sid(1), centaurTeamId: tid("blue"), body: [{ x: 2, y: 8 }] }),
+      makeSnake({ snakeId: sid(2), centaurTeamId: tid("green"), body: [{ x: 8, y: 2 }] }),
+    ];
+  }
+
+  // spec: game-engine/historic-advance#a-learned-move-settles-the-turn-it-was-made-at
+  it("settles the held turn and leaves the snake one turn less historic", () => {
+    const first = ok(
+      doImagine(
+        makeState(spread()),
+        [
+          [0, Direction.Right],
+          [2, Direction.Right],
+        ],
+        [1],
+      ),
+    );
+    const second = ok(
+      imagineFrom(
+        first.nextState,
+        [
+          [0, Direction.Right],
+          [2, Direction.Right],
+        ],
+        [],
+      ),
+    );
+    // Held at turn 1, and the board has since reached turn 3.
+    expect(projectionById(second.nextState, 1).historic.turn).toBe(1);
+    expect(currentTurn(second.nextState)).toBe(3);
+
+    const revised = okHistory(
+      advanceHistory(second.nextState, moves([[1, Direction.Down]]), QUIET_CONFIG),
+    );
+    // Same current turn; the snake advanced one turn of HISTORY, not of board.
+    expect(currentTurn(revised.nextState)).toBe(3);
+    const projection = projectionById(revised.nextState, 1);
+    expect(projection.historic.turn).toBe(2);
+    // It moved down at turn 1, so its historic head is one cell down.
+    expect(projection.historic.body[0]).toEqual({ x: 2, y: 9 });
+    expect(revised.discontinuities).toEqual([]);
+  });
+
+  // spec: game-engine/historic-advance#a-revision-can-rewrite-what-already-happened
+  it("reports a discontinuity when the newly located head kills a snake that lived", () => {
+    const snakes = [
+      // Red walks right along row 5 and will pass through (5,5) at turn 2.
+      makeSnake({ snakeId: sid(0), centaurTeamId: tid("red"), body: [{ x: 3, y: 5 }] }),
+      // Blue sits one cell above (5,5). Held, so nothing knows it steps down.
+      makeSnake({ snakeId: sid(1), centaurTeamId: tid("blue"), body: [{ x: 5, y: 4 }] }),
+    ];
+    const first = ok(doImagine(makeState(snakes), [[0, Direction.Right]], [1]));
+    const second = ok(imagineFrom(first.nextState, [[0, Direction.Right]], []));
+    // Red passed through the cell blue's projection did not stand in.
+    expect(snakeById(second.nextState, 0).alive).toBe(true);
+    expect(snakeById(second.nextState, 0).body[0]).toEqual({ x: 5, y: 5 });
+
+    // Blue actually stepped down at turn 1, so (5,5) was its head all along.
+    const revised = okHistory(
+      advanceHistory(second.nextState, moves([[1, Direction.Down]]), QUIET_CONFIG),
+    );
+    expect(revised.discontinuities).toEqual([{ snakeId: sid(0), wasAlive: true, nowAlive: false }]);
+    expect(snakeById(revised.nextState, 0).alive).toBe(false);
+  });
+
+  // spec: game-engine/historic-advance — the log is what makes the replay a
+  // recomputation rather than a guess, so it exists exactly while it is needed.
+  it("carries a rewind log only while something is projected", () => {
+    const state = makeState(spread());
+    expect(state.rewind).toBeNull();
+    const held = ok(
+      doImagine(
+        state,
+        [
+          [0, Direction.Right],
+          [2, Direction.Right],
+        ],
+        [1],
+      ),
+    );
+    expect(held.nextState.rewind?.resolutions).toHaveLength(1);
+    expect(held.nextState.rewind?.base.snakes).toHaveLength(3); // before the hold
+    const again = ok(
+      imagineFrom(
+        held.nextState,
+        [
+          [0, Direction.Right],
+          [2, Direction.Right],
+        ],
+        [],
+      ),
+    );
+    expect(again.nextState.rewind?.resolutions).toHaveLength(2);
+    expect(again.nextState.rewind?.base).toBe(held.nextState.rewind?.base); // one base, shared
+
+    // The mainline holds nothing, so it never accumulates one.
+    expect(
+      doResolve(
+        state,
+        stagedMoves([
+          [0, Direction.Right],
+          [1, Direction.Right],
+          [2, Direction.Right],
+        ]),
+      ).nextState.rewind,
+    ).toBeNull();
+  });
+
+  it("refuses a move for a snake that is not projected, and names where to send it", () => {
+    const held = ok(
+      doImagine(
+        makeState(spread()),
+        [
+          [0, Direction.Right],
+          [2, Direction.Right],
+        ],
+        [1],
+      ),
+    );
+    const refused = advanceHistory(held.nextState, moves([[0, Direction.Up]]), QUIET_CONFIG);
+    expect(refused.ok).toBe(false);
+    if (refused.ok) return;
+    expect(refused.failure.reason).toContain("is not projected");
+
+    // And the next turn's resolution points the other way.
+    const wrongWay = imagineFrom(
+      held.nextState,
+      [
+        [0, Direction.Right],
+        [1, Direction.Up],
+        [2, Direction.Right],
+      ],
+      [],
+    );
+    expect(wrongWay.ok).toBe(false);
+    if (wrongWay.ok) return;
+    expect(wrongWay.failure.kind).toBe("stale_snake_moved");
+    expect(wrongWay.failure.reason).toContain("advanceHistory");
+  });
+
+  // spec: game-engine/historic-advance#a-revision-adapts-the-record-it-replays
+  it("holds a snake the revision spared, because the log says nothing about it", () => {
+    const snakes = [
+      makeSnake({ snakeId: sid(0), centaurTeamId: tid("red"), body: [{ x: 3, y: 5 }] }),
+      makeSnake({ snakeId: sid(1), centaurTeamId: tid("blue"), body: [{ x: 5, y: 4 }] }),
+      makeSnake({ snakeId: sid(2), centaurTeamId: tid("green"), body: [{ x: 9, y: 9 }] }),
+    ];
+    const first = ok(
+      doImagine(
+        makeState(snakes),
+        [
+          [0, Direction.Right],
+          [2, Direction.Up],
+        ],
+        [1],
+      ),
+    );
+    const second = ok(
+      imagineFrom(
+        first.nextState,
+        [
+          [0, Direction.Right],
+          [2, Direction.Up],
+        ],
+        [],
+      ),
+    );
+    const revised = okHistory(
+      advanceHistory(second.nextState, moves([[1, Direction.Down]]), QUIET_CONFIG),
+    );
+    // Red died in the revised line, so the log's later direction for it was
+    // dropped rather than refused, and the replay ran every recorded turn.
+    expect(snakeById(revised.nextState, 0).alive).toBe(false);
+    expect(currentTurn(revised.nextState)).toBe(3);
+    expect(snakeById(revised.nextState, 2).body[0]).toEqual({ x: 9, y: 7 });
   });
 });

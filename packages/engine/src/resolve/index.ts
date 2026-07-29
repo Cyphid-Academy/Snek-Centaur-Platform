@@ -14,13 +14,16 @@
 // Both are therefore gated on a condition about the STATE — every alive snake
 // at the current turn — never on which entry point was called.
 import { applyDeclaredBurns } from "../clock.js";
-import { asGameState } from "../state.js";
+import { asGameState, projectionOf } from "../state.js";
 import type {
   Direction,
   GameOutcome,
   GameRuntimeConfig,
   GameState,
   PartialGameState,
+  ProjectedSnake,
+  ResolutionRecord,
+  RewindLog,
   SnakeId,
   StagedMove,
   TurnEvent,
@@ -64,6 +67,32 @@ export interface HypotheticalResolution {
  */
 export type HypotheticalResult =
   | { readonly ok: true; readonly resolution: HypotheticalResolution }
+  | { readonly ok: false; readonly failure: ResolutionFailure };
+
+/** A snake whose fate a history revision changed. spec: game-engine/historic-advance */
+export interface Discontinuity {
+  readonly snakeId: SnakeId;
+  readonly wasAlive: boolean;
+  readonly nowAlive: boolean;
+}
+
+/** The board history leaves once one more of its moves is known. */
+export interface HistoryRevision {
+  /** At the same current turn as the state that went in, over a revised past. */
+  readonly nextState: PartialGameState;
+  /** Every replayed turn's events, in order — the revised history, not a diff. */
+  readonly events: ReadonlyArray<TurnEvent>;
+  /**
+   * Snakes whose aliveness the revision changed. Empty is the common case and
+   * the one a search plans for; non-empty means the board just stopped agreeing
+   * with the one the caller was reasoning about. Bodies, items and clocks may
+   * differ even when this is empty — a revision recomputes, it does not patch.
+   */
+  readonly discontinuities: ReadonlyArray<Discontinuity>;
+}
+
+export type HistoryResult =
+  | { readonly ok: true; readonly revision: HistoryRevision }
   | { readonly ok: false; readonly failure: ResolutionFailure };
 
 export type { ResolutionFailure, ResolutionFailureKind } from "./plan.js";
@@ -158,6 +187,158 @@ export function advanceTurnWithRules(
   };
 }
 
+/**
+ * A snake's move at the turn it was held, learned after the fact.
+ *
+ * A hold says "nobody modelled this snake's choice". Learning the choice does
+ * not advance the snake from where the board is now — it settles what happened
+ * at the turn it was frozen at, which is a fact about the PAST. So the board is
+ * resolved again from before that turn, with the fact in place and every
+ * resolution since replayed over it; a resolution is a function of its declared
+ * inputs alone (game-engine/determinism), and the log kept exactly those.
+ *
+ * The result is at the same current turn, and the snake is one turn less
+ * historic: it participated at its freeze turn and was held at every turn after,
+ * because the log says nothing about those either. Catching a snake up N turns
+ * is N calls, each learning one more move.
+ *
+ * **This can rewrite what already happened.** The newly located head may enter a
+ * cell another snake was allowed to pass through, so snakes that lived may die,
+ * bodies may differ, and a game that was in progress may have ended. Those
+ * differences are reported rather than hidden — see `HistoryRevision`. A search
+ * keeps them rare by holding only snakes unlikely to bear on the ground it cares
+ * about, but rare is not never, and a caller that ignores the report is reading
+ * a board it did not compute.
+ */
+// spec: game-engine/historic-advance
+export function advanceHistory(
+  state: PartialGameState,
+  directions: ReadonlyMap<SnakeId, Direction>,
+  config: GameRuntimeConfig,
+): HistoryResult {
+  if (directions.size === 0) {
+    return refusal("impossible_input", null, "no historic move was supplied");
+  }
+  for (const id of directions.keys()) {
+    if (projectionOf(state, id) === undefined) {
+      return refusal(
+        "impossible_input",
+        id,
+        `snake ${id} is not projected, so it has no unknown move to supply; move it through imagineMoves`,
+      );
+    }
+  }
+  const log = state.rewind;
+  if (log === null) {
+    // Unreachable while the invariant holds (a live projection implies a log);
+    // stated rather than assumed, because a caller reaching it has a state this
+    // engine did not build.
+    return refusal("impossible_input", null, "this state carries no history to resolve again");
+  }
+
+  const before = new Map(occupantsById(state));
+  let replayed: PartialGameState = log.base;
+  const events: TurnEvent[] = [];
+  const advanced = new Set<SnakeId>();
+
+  for (const record of log.resolutions) {
+    const plan = replayPlan(replayed, record, directions, advanced);
+    const result = imagineMoves(
+      replayed,
+      plan.directions,
+      plan.held,
+      record.timings,
+      config,
+      record.turnSeed,
+    );
+    // A refusal here would mean the revised board cannot be asked what the log
+    // asked, which `replayPlan` exists to prevent; surface it rather than
+    // silently returning a state built from fewer turns than the log holds.
+    if (!result.ok) return result;
+    replayed = result.resolution.nextState;
+    events.push(...result.resolution.events);
+  }
+
+  return {
+    ok: true,
+    revision: {
+      nextState: replayed,
+      events,
+      discontinuities: discontinuitiesBetween(before, occupantsById(replayed)),
+    },
+  };
+}
+
+/**
+ * What to ask of one replayed turn: the log's own request, with the newly known
+ * move put in at the turn it was made, and adapted to whatever board the
+ * revision produced.
+ *
+ * The adaptation is where a discontinuity lands. A snake the log directed may
+ * be gone — drop the direction, it needs no disposition. A snake the log says
+ * nothing about may be present, because the revision spared it — hold it, since
+ * the log genuinely does not say what it did, and a hold is exactly the answer
+ * for a move nobody modelled.
+ */
+// spec: game-engine/historic-advance#a-revision-adapts-the-record-it-replays
+function replayPlan(
+  state: PartialGameState,
+  record: ResolutionRecord,
+  learned: ReadonlyMap<SnakeId, Direction>,
+  advanced: Set<SnakeId>,
+): { directions: ReadonlyMap<SnakeId, Direction>; held: ReadonlySet<SnakeId> } {
+  const directions = new Map<SnakeId, Direction>();
+  const held = new Set<SnakeId>();
+  const alive = new Map(state.snakes.filter((s) => s.alive).map((s) => [s.snakeId, s]));
+
+  for (const [id, direction] of learned) {
+    // Its freeze turn is the one resolution that held it; after that the log
+    // has nothing to say, so it is held again and stays one turn less historic.
+    if (record.held.has(id) && !advanced.has(id)) {
+      directions.set(id, direction);
+      advanced.add(id);
+    }
+  }
+  for (const [id, direction] of record.directions) {
+    if (alive.has(id) && !directions.has(id)) directions.set(id, direction);
+  }
+  for (const id of record.held) {
+    if (alive.has(id) && !directions.has(id)) held.add(id);
+  }
+  for (const id of alive.keys()) {
+    if (!directions.has(id) && !held.has(id)) held.add(id);
+  }
+  return { directions, held };
+}
+
+function occupantsById(state: PartialGameState): Map<SnakeId, boolean> {
+  const alive = new Map<SnakeId, boolean>();
+  for (const snake of state.snakes) alive.set(snake.snakeId, snake.alive);
+  for (const projection of state.projections) alive.set(projection.snakeId, projection.alive);
+  return alive;
+}
+
+/** Snakes whose fate the revision changed — the sharp edge of a discontinuity. */
+function discontinuitiesBetween(
+  before: ReadonlyMap<SnakeId, boolean>,
+  after: ReadonlyMap<SnakeId, boolean>,
+): ReadonlyArray<Discontinuity> {
+  const out: Discontinuity[] = [];
+  for (const [snakeId, wasAlive] of before) {
+    const nowAlive = after.get(snakeId) ?? false;
+    if (wasAlive !== nowAlive) out.push({ snakeId, wasAlive, nowAlive });
+  }
+  return out.sort((a, b) => a.snakeId - b.snakeId);
+}
+
+function refusal(
+  kind: ResolutionFailure["kind"],
+  snakeId: SnakeId | null,
+  reason: string,
+): { ok: false; failure: ResolutionFailure } {
+  return { ok: false, failure: { kind, snakeId, reason } };
+}
+
 function runStages(
   rules: ReadonlyArray<InteractionRule>,
   state: PartialGameState,
@@ -199,18 +380,52 @@ function runStages(
       )
     : null;
   // Stage 8: event derivation in canonical order.
+  const projections = ctx.projections.map(toProjectedSnake);
   return {
     nextState: {
       board: ctx.board,
       snakes: ctx.snakes.map(toSnakeState),
-      projections: ctx.projections.map(toProjectedSnake),
+      projections,
       items: ctx.items, // the turn-owned working map, now final
       clocks: clockCommit.clocks,
       consumedDurationMs: clockCommit.consumedDurationMs,
+      rewind: rewindAfter(state, plan, timings, turnSeed, projections),
     },
     events: events.ordered(),
     outcome,
   };
+}
+
+/**
+ * The rewind log the committed state carries. It exists exactly while something
+ * is projected: the first hold captures the board it was held from as the base,
+ * every later resolution appends what it was asked, and the moment nothing live
+ * is left the log is dropped — including on the mainline, which holds nothing
+ * and therefore never accumulates one.
+ *
+ * The append copies the array, so a search path of depth N does O(N²) copying
+ * over its lifetime. At the depths a turn-by-turn search reaches that is
+ * nothing, and a linked list would trade it for a shape nobody can read.
+ */
+// spec: game-engine/historic-advance
+function rewindAfter(
+  state: PartialGameState,
+  plan: ResolutionPlan,
+  timings: TurnTimings,
+  turnSeed: Uint8Array | null,
+  projections: ReadonlyArray<ProjectedSnake>,
+): RewindLog | null {
+  if (projections.every((p) => !p.alive)) return null;
+  const record: ResolutionRecord = {
+    directions: plan.moves,
+    held: plan.held,
+    timings,
+    turnSeed,
+  };
+  // Nothing was projected before this resolution, so the state it ran over is
+  // the base: a game state, by the same condition that makes it narrowable.
+  if (state.rewind === null) return { base: asGameState(state), resolutions: [record] };
+  return { base: state.rewind.base, resolutions: [...state.rewind.resolutions, record] };
 }
 
 // Re-exported so the package's public surface can offer the timer's game-start

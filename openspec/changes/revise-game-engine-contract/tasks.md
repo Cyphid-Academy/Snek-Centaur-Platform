@@ -125,10 +125,10 @@ to read, and a standing invitation to "fix" the citations back.
 
 ## 13. Advancing a historic snake
 
-- [ ] 13.1 A partial state carries what each of its resolutions was asked — directions, holds, timings, turn seed — over the board as it stood before the oldest still-standing projection was held. The log exists exactly while something is projected, so the mainline never accumulates one and no runtime persists one (`game-engine/historic-advance`)
-- [ ] 13.2 Supplying a projection's move at the turn it was held resolves the board again from before that turn and replays every resolution since, leaving the snake one turn less historic rather than caught up (`game-engine/historic-advance#a-learned-move-settles-the-turn-it-was-made-at`)
-- [ ] 13.3 The revision may rewrite what already happened, and reports which snakes' fates it changed; the replay adapts the record to the board it produces rather than refusing (`game-engine/historic-advance#a-revision-can-rewrite-what-already-happened`, `#a-revision-adapts-the-record-it-replays`)
-- [ ] 13.4 A move for a snake that is not projected is refused, and the next turn's resolution points a projection's move at the other entry point rather than merely rejecting it (`game-engine/historic-advance#only-a-projection-has-a-move-to-learn`)
+- [x] 13.1 A partial state carries what each of its resolutions was asked — directions, holds, timings, turn seed — over the board as it stood before the oldest still-standing projection was held. The log exists exactly while something is projected, so the mainline never accumulates one and no runtime persists one (`game-engine/historic-advance`)
+- [x] 13.2 Supplying a projection's move at the turn it was held resolves the board again from before that turn and replays every resolution since, leaving the snake one turn less historic rather than caught up (`game-engine/historic-advance#a-learned-move-settles-the-turn-it-was-made-at`)
+- [x] 13.3 The revision may rewrite what already happened, and reports which snakes' fates it changed; the replay adapts the record to the board it produces rather than refusing (`game-engine/historic-advance#a-revision-can-rewrite-what-already-happened`, `#a-revision-adapts-the-record-it-replays`)
+- [x] 13.4 A move for a snake that is not projected is refused, and the next turn's resolution points a projection's move at the other entry point rather than merely rejecting it (`game-engine/historic-advance#only-a-projection-has-a-move-to-learn`)
 
 ## Archive
 

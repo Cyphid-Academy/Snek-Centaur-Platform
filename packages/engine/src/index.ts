@@ -44,6 +44,8 @@ export type {
   PotionType,
   PotionEffect,
   ProjectedSnake,
+  ResolutionRecord,
+  RewindLog,
   SnakeCore,
   SnakeState,
 } from "./types.js";
@@ -80,8 +82,11 @@ export type { Rng } from "./rng.js";
 // Entry points. Both require the turn's timings — how long it lasted and how
 // much of its own clock each team burned on it — as declared inputs.
 // spec: game-engine/turn-resolution-model
-export { advanceTurn, imagineMoves } from "./resolve.js";
+export { advanceHistory, advanceTurn, imagineMoves } from "./resolve.js";
 export type {
+  Discontinuity,
+  HistoryResult,
+  HistoryRevision,
   HypotheticalResolution,
   HypotheticalResult,
   ResolutionFailure,

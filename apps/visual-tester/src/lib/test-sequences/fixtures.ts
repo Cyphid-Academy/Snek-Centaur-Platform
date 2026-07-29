@@ -74,6 +74,7 @@ export function buildInitialState(): GameState {
     board,
     items: itemsByCell(board, items),
     projections: [],
+    rewind: null,
     snakes: [
       snake(1, TEAM_RED, "A", { x: 2, y: 2 }, Direction.Right),
       snake(2, TEAM_BLUE, "A", { x: 6, y: 6 }, Direction.Left),

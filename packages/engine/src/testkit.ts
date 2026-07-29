@@ -135,6 +135,7 @@ export function makeState(snakes: SnakeState[], extra: StateOverrides = {}): Gam
     board,
     snakes,
     projections: extra.projections ?? [],
+    rewind: null,
     items: itemsByCell(board, extra.items ?? []),
     clocks: extra.clocks ?? [],
     consumedDurationMs: extra.consumedDurationMs ?? 0,

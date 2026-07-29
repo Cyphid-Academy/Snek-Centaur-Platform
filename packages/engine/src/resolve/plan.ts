@@ -174,20 +174,21 @@ export function planImaginedMoves(
   const projected = new Set(state.projections.map((p) => p.snakeId));
 
   for (const id of directions.keys()) {
-    // A projection is a snake an earlier resolution declined to model, so
-    // advancing it now would need interactions that already committed to be
-    // re-resolved. Refusing is the conservative answer, and relaxing the fence
-    // is later work. spec: game-engine/hypothetical-resolution-failure#only-holds-may-lag
+    // A direction here is a move at the turn being resolved, and a projection
+    // has no move to make at it — what it is missing is the move at the turn it
+    // was HELD, a fact about the past that reaches the board by resolving those
+    // turns again. That is `advanceHistory`, not something the next turn's
+    // resolution can settle on the way past.
+    // spec: game-engine/hypothetical-resolution-failure#only-holds-may-lag, game-engine/historic-advance
     if (projected.has(id)) {
+      const frozenAt = must(
+        state.projections.find((p) => p.snakeId === id),
+        `projection ${id}`,
+      ).historic.turn;
       return refuse(
         "stale_snake_moved",
         id,
-        `snake ${id} is projected, held since turn ${
-          must(
-            state.projections.find((p) => p.snakeId === id),
-            `projection ${id}`,
-          ).historic.turn
-        }, and cannot be asked to move`,
+        `snake ${id} is projected, held at turn ${frozenAt}; supply its move at that turn through advanceHistory rather than as a move at turn ${turnNumber}`,
       );
     }
     const snake = byId.get(id);

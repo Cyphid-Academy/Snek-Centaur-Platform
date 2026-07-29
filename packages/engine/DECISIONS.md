@@ -152,6 +152,18 @@ both are the seam a later pass reasoning about reachable food would narrow. A
 sever taking every cell a projection stands in leaves it standing in nothing
 while alive: an empty cell list, which needs no flag and no case of its own.
 
+**§4.3b Learning a held move revises the past, and is its own entry point.**
+A projection's missing move is the one at the turn it was HELD, not one at the
+turn the board now stands at, so settling it means resolving those turns again
+rather than advancing anything. That is why it is `advanceHistory` and not a
+direction passed to `imagineMoves`: the same call cannot plan the next turn
+against a board it is about to rewrite, and a caller wants the revised board
+back before deciding what to do on it. The state therefore carries what each of
+its resolutions was asked, over the board before the first hold — which exists
+exactly while something is projected, so the mainline never accumulates one.
+Revisions can change what already happened; the result reports which snakes'
+fates it changed rather than leaving that to be discovered.
+
 **§4.4 The clock moved into the commit.** `applyTurnStart` and `declareTurnOver`
 are gone from the package surface. A runtime that kept applying them between
 turns *and* passed burns to the resolution would produce two writers of one
