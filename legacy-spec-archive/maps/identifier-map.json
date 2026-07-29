@@ -1440,7 +1440,7 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "team-server-management/unified-web-application",
+          "target": "application-shell/unified-web-application",
           "change": "mint-global-invariants"
         }
       ],
@@ -1724,7 +1724,7 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "team-server-management/unified-web-application",
+          "target": "application-shell/unified-web-application",
           "change": "migrate-team-server-management"
         },
         {
@@ -1732,7 +1732,7 @@
           "change": "mint-global-invariants"
         }
       ],
-      "scenarios": ["team-server-management/unified-web-application#no-second-application"],
+      "scenarios": ["application-shell/unified-web-application#no-second-application"],
       "note": "App scope spans platform-level and team-internal concerns in the one unified application (dedupe with 08-REQ-001). The static-host residue noted on the parked ledger is carried by global-invariants/ephemeral-game-credentials, not by this id's binding text — see the change's design.md."
     },
     "02-REQ-060": {
@@ -2535,11 +2535,11 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "team-server-management/unified-web-application",
+          "target": "application-shell/unified-web-application",
           "change": "migrate-team-server-management"
         }
       ],
-      "scenarios": ["team-server-management/unified-web-application#same-data-any-server"],
+      "scenarios": ["application-shell/unified-web-application#same-data-any-server"],
       "note": "Every server serves the same UI and the user sees the same data regardless of server visited; the server is an open-source client. The identity-not-server read-access principle itself (03-REQ-065) is global-invariants'."
     },
     "03-REQ-067": {
@@ -5803,11 +5803,11 @@
       "disposition": "authored",
       "carriedBy": [
         {
-          "target": "team-server-management/unified-web-application",
+          "target": "application-shell/unified-web-application",
           "change": "migrate-team-server-management"
         }
       ],
-      "scenarios": ["team-server-management/unified-web-application#no-second-application"],
+      "scenarios": ["application-shell/unified-web-application#no-second-application"],
       "note": "Single human-facing web application spanning team-internal and platform-wide concerns; no separate platform app (dedupe:02-REQ-059). The module-scope framing ('this module shall define...') is carving-obsolete meta; the substance retires here."
     },
     "08-REQ-002": {
