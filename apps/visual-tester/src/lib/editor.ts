@@ -169,7 +169,7 @@ export function letterForIndex(i: number): string {
 
 /**
  * Re-letter every snake from its index within its team, in snake order
- * (game-engine/initial-snakes: lettered consecutively from A within the team).
+ * (game-configuration/initial-snakes: lettered consecutively from A within the team).
  * Letters are derived, never hand-set, so this runs after any add/remove/team
  * change (visual-tester/board-editor#letters-auto-assigned).
  */

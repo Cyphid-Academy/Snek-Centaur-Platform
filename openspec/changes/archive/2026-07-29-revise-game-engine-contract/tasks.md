@@ -132,4 +132,4 @@ to read, and a standing invitation to "fix" the citations back.
 
 ## Archive
 
-- [ ] 14.1 On explicit author instruction, at the tail of the PR that completes this implementation: `pnpm spec:fold revise-game-engine-contract` then `openspec archive --skip-specs -y revise-game-engine-contract`
+- [x] 14.1 On explicit author instruction, at the tail of the PR that completes this implementation: `pnpm spec:fold revise-game-engine-contract` then `openspec archive --skip-specs -y revise-game-engine-contract`

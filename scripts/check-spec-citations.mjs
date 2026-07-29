@@ -76,10 +76,18 @@ const root = new URL("..", import.meta.url).pathname;
 // prefixes are tombstoned and review-item citations are errors everywhere.
 const MIGRATED_MODULES = new Set(["01", "02", "03", "04", "05", "06", "07", "08"]);
 
+// `dist/` is gitignored BUILD OUTPUT: its citations are copies emitted from the
+// sources this already lints, so scanning it polices nothing new — and `tsc -b`
+// does not delete outputs whose sources were removed, so a stale artifact from
+// an earlier build fails a tree that is itself clean. That is not hypothetical:
+// it failed a commit under `pnpm check:commit`, which checks out each commit in
+// turn and leaves the previous one's `dist/` behind.
+const SKIP_DIRS = new Set(["node_modules", "dist"]);
+
 const walk = (dir, out = []) => {
   if (!existsSync(dir)) return out;
   for (const name of readdirSync(dir)) {
-    if (name === "node_modules" || name.startsWith(".")) continue;
+    if (SKIP_DIRS.has(name) || name.startsWith(".")) continue;
     const p = join(dir, name);
     if (statSync(p).isDirectory()) walk(p, out);
     else out.push(p);
