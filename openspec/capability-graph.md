@@ -105,7 +105,9 @@ flowchart TD
   rooms-and-matchmaking -->|2| team-management
   team-management -->|7| global-invariants
   team-management -->|3| identity-and-authorization
-  team-server-management -->|13| global-invariants
+  team-server-management -->|1| application-shell
+  team-server-management -->|3| centaur-server-runtime
+  team-server-management -->|3| global-invariants
   team-server-management -->|1| identity-and-authorization
   team-server-management -->|4| team-management
   test-sequences -->|4| game-engine
@@ -124,5 +126,5 @@ flowchart TD
   visual-tester -->|4| test-sequences
 
   class game-engine,global-invariants base;
-  linkStyle 0,4,5,7,10,11,14,16,19,20,22,23,27,28,29,31,32,36,38,40,42,49,51,53,56,58,63,64,67,68 stroke-opacity:0.25;
+  linkStyle 0,4,5,7,10,11,14,16,19,20,22,23,27,28,29,31,32,36,38,40,42,49,51,55,58,60,65,66,69,70 stroke-opacity:0.25;
 ```

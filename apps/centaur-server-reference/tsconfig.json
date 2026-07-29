@@ -7,6 +7,11 @@
     "declaration": false,
     "declarationMap": false
   },
-  "include": ["src"],
+  // The second entry is load-bearing, not redundant. TypeScript's wildcard
+  // matching skips any directory whose name starts with a dot, and every
+  // platform-facing route this app serves lives under `src/routes/.well-known/`
+  // — so `src` alone matches no .ts input at all and `tsc` fails with TS18003.
+  // Naming the dotted directory explicitly is the documented way back in.
+  "include": ["src", "src/routes/.well-known/**/*"],
   "exclude": ["node_modules", "dist", ".svelte-kit"]
 }

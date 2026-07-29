@@ -3,14 +3,17 @@
 A team acquires and runs its Snek Centaur Server. This capability owns that
 workflow end to end: the captain's naming of a home server domain, the
 team↔server hosting relationship and the two-sided consent that establishes
-it, the server's own key publication and its whitelist of teams it will
-operate, its administration API and the administrative issuers that reach
-it, the game-start invitation that wakes it, the healthcheck contract and
-availability reporting, the one unified web
-application every server serves, and the forkable reference application a
-team owns outright. What hosting means for a game's launch, and what the
-hosted bots then do in play, belong to the capabilities that own those
-workflows.
+it, the server's independent decision about which teams it will operate and
+the inbox by which it learns who is waiting for it, the game-start invitation
+that wakes it and the answer that commits it, the availability the platform
+records and reports for a team's home domain, the many-to-many shape of
+hosting over time, and the reference deployment the platform undertakes to
+operate so that having no infrastructure is never a bar to playing. What a
+server must *be* in order to be one — its key publication, its administration
+API, the library's separation of co-tenants, its liveness endpoint, and the
+forkable repository it is delivered as — belongs to the server artifact's own
+capability. What hosting means for a game's launch, and what the hosted bots
+then do in play, belong to the capabilities that own those workflows.
 
 The trust model is deliberate and asymmetric. A server operates a team only
 where two independent facts hold — the team's captain named its domain, and
@@ -28,7 +31,7 @@ invariant is ever enforced by server-controlled code, a hostile server can
 betray only what its own visitors could already read, never widen anyone's
 read or write authority.
 
-Depends on: identity-and-authorization, team-management, global-invariants.
+Depends on: identity-and-authorization, team-management, global-invariants, centaur-server-runtime, application-shell.
 
 ## ADDED Requirements
 
@@ -77,24 +80,9 @@ A Snek Centaur Server SHALL be able to act for a Centaur Team only where both of
 - **WHEN** a captain re-homes their team to a different domain
 - **THEN** the previous server's next request for that team is refused, and any credential it holds lapses within its own short lifetime — nothing it kept at rest outlives the captain's decision
 
-### Requirement: team-server-management/server-key-publication
-Depends on: global-invariants/no-shared-secrets, global-invariants/credential-confinement#every-party-keeps-its-own-key.
-
-A Snek Centaur Server SHALL, on first start and without any operator action, generate a signing keypair if it has none persisted, persist it, and publish the public half at a stable well-known address on its own domain. It SHALL be able to publish several keys at once, so that rotation is publish-both, switch, drop-the-old, with no exchange with the platform. Generating, persisting, and publishing the key SHALL be invisible in the operator experience — captains are coaches and students, not platform engineers — and if it cannot be made invisible, the platform SHALL instead authenticate servers by a challenge it initiates, because onboarding friction is not worth trading for protocol elegance in an educational product.
-
-#### Scenario: #first-boot-needs-no-operator
-- **WHEN** someone deploys a Snek Centaur Server for the first time
-- **THEN** it is ready to be named as a team's home with no key to generate, copy, paste, or register — the deployment itself is the whole setup
-
-#### Scenario: #ephemeral-storage-self-heals
-- **WHEN** a server is redeployed onto storage that did not preserve its key
-- **THEN** it generates and publishes a new one and resumes operating its teams; nothing on the platform was pinned to the old key, so nothing needs re-registering
-
-#### Scenario: #rotation-is-uncoordinated
-- **WHEN** a server rotates its signing key
-- **THEN** it publishes the new key alongside the old, switches, and later drops the old one — the platform is neither told nor asked, and no team's operation is interrupted
-
 ### Requirement: team-server-management/whitelist-admission
+Depends on: centaur-server-runtime/server-administration-api.
+
 A Snek Centaur Server SHALL decide independently which teams it operates, by whatever policy it holds; that decision is what its answers to game invitations express. The platform SHALL hold no representation of the decision and SHALL offer no approval step. The reference implementation SHALL make it from a whitelist of admitted teams. Whitelisting and being named SHALL be independent and order-independent: a team may name a server before or after that server whitelists it, and neither order is an error. A Cyphid-operated Reference Centaur Server SHALL NOT admit teams automatically.
 
 #### Scenario: #either-order-works
@@ -120,27 +108,6 @@ The platform SHALL expose a query, scoped to the authenticated server's own doma
 - **WHEN** a server reads its inbox
 - **THEN** no team becomes operated by it and no state on the platform changes; admission remains the server's separate act
 
-### Requirement: team-server-management/server-administration-api
-Depends on: global-invariants/issuer-anchored-trust, global-invariants/no-shared-secrets.
-
-The reference implementation SHALL expose an administration API through which an external system admits a team to its whitelist and removes one, and SHALL maintain, as configuration local to the deployment, a set of administrative issuers it trusts, each recorded with the ceiling of capabilities it may confer. It SHALL accept an administrative request bearing a credential from one of those issuers carrying capabilities within that ceiling, enforcing exactly what the credential carries; its capability set SHALL be extensible without a protocol change; and both operations SHALL be idempotent so retries in an automation are safe. A Cyphid-operated Reference Centaur Server SHALL be administered this way.
-
-#### Scenario: #an-issuer-may-mint-narrower-than-itself
-- **WHEN** a registered administrative issuer mints a credential for one automation carrying only the capability to admit a team
-- **THEN** the server enforces exactly that — the automation cannot remove a team — and learns nothing about it; an issuer adding automations needs no configuration change on the server
-
-#### Scenario: #capabilities-beyond-the-ceiling-are-refused
-- **WHEN** a credential from a registered issuer carries a capability outside that issuer's recorded ceiling
-- **THEN** the request is refused; a registration is a ceiling to attenuate downward from, never a licence to self-assess
-
-#### Scenario: #adding-an-already-whitelisted-team-succeeds
-- **WHEN** an automation admits a team the server has already admitted
-- **THEN** the call succeeds unchanged, so a pipeline may retry it freely without special-casing the second attempt
-
-#### Scenario: #the-platform-is-not-in-this-path
-- **WHEN** an external system administers the reference implementation's whitelist
-- **THEN** the exchange is between that system and that server alone; the platform is not called, is not consulted, and holds no record of it
-
 ### Requirement: team-server-management/game-invitations
 When a game starts, the platform SHALL send each participating team's home server a game invitation: one per participating team — even where several teams are homed on the same server — delivered to all servers concurrently, by HTTPS POST to a single well-known path fixed platform-wide on the home domain, never over plain HTTP. An invitation SHALL be a bare notification naming the game and the team, carrying no credential and conferring nothing; the response's status SHALL be the whole answer. The platform SHALL wait a bounded window of ten seconds for each response, treating a server that has not answered within it as not having accepted.
 
@@ -165,6 +132,8 @@ When a game starts, the platform SHALL send each participating team's home serve
 - **THEN** the most it achieves is waking a server that then finds nothing to do: the server verifies by authenticating to the platform itself rather than by verifying the message, so the endpoint needs no signature check and no secret-handling discipline of any kind
 
 ### Requirement: team-server-management/invitation-acceptance
+Depends on: centaur-server-runtime/server-administration-api.
+
 An invited server SHALL answer a game invitation by accepting or declining, in the response's status, and a team SHALL proceed into the game only if its home server accepts. Accepting SHALL be a commitment to operate that team for that game, which the server then does by authenticating for the team and requesting what it needs — the invitation conveys nothing it could act on. A server MAY decline on any policy of its own; the reference implementation SHALL decline for any team absent from its whitelist.
 
 #### Scenario: #acceptance-gates-the-team
@@ -184,7 +153,7 @@ An invited server SHALL answer a game invitation by accepting or declining, in t
 - **THEN** it declines
 
 ### Requirement: team-server-management/shared-hosting
-Depends on: global-invariants/server-trust-boundary.
+Depends on: global-invariants/server-trust-boundary, application-shell/unified-web-application.
 
 The relationship between Centaur Teams and Snek Centaur Servers SHALL be many-to-many over time: several teams may be homed on the same server simultaneously — opponents in one game included, on the terms the Server trust boundary sets — and a team may switch servers between games, but during any one game a team SHALL play from exactly one server, the one it was homed on when the game started. The application SHALL present team-internal surfaces in the context of exactly one specific hosted team, reachable only on that team's home server; platform-wide surfaces SHALL be team-independent and available identically on every server.
 
@@ -204,48 +173,6 @@ The relationship between Centaur Teams and Snek Centaur Servers SHALL be many-to
 - **WHEN** any server's application links into another team's team-internal live surface
 - **THEN** the link resolves to that team's own home server; every other surface it links is served locally, since all servers serve it identically
 
-### Requirement: team-server-management/library-tenant-separation
-Depends on: global-invariants/server-trust-boundary#tenant-isolation-is-best-effort, global-invariants/ephemeral-game-credentials#per-team-credentials-never-merge.
-
-The server library the platform distributes SHALL keep each operated team's credentials and state reachable only by the compute acting for that team, and SHALL offer no ambient client standing in for all of them, so that an operator who wants co-tenants kept apart gets that from the library rather than having to build it. This SHALL remain support for a willing operator and never a promise to the teams: a server's operator can replace or bypass the library entirely.
-
-#### Scenario: #no-ambient-client
-- **WHEN** a server built on the library operates several teams
-- **THEN** the connection management it offers is per team and per game throughout; an implementer wanting one client for all of them would be working against the library rather than with it
-
-#### Scenario: #still-not-a-guarantee
-- **WHEN** a team weighs what being co-hosted costs it
-- **THEN** the answer is unchanged by this requirement — the operator sees everything, a server that does not use the library owes nothing, and nothing here may be presented to a team as protection
-
-### Requirement: team-server-management/reference-heuristics-on-shared-hosting
-
-The reference implementation SHALL run only the heuristic implementations distributed in the reference codebase whenever it operates more than one team, and any Cyphid-operated Reference Centaur Server SHALL operate on those terms. A team wanting its own Drive or Preference implementations SHALL run its own server, on which it is the only tenant.
-
-#### Scenario: #shared-reference-server-refuses-team-code
-- **WHEN** a team asks for its own Drive or Preference implementation on a Cyphid-operated server that operates other teams
-- **THEN** it is not offered: team-supplied code in a process holding other teams' credentials would undo the separation the library provides, and the answer is a server of the team's own — a step the educational progression already anticipates
-
-#### Scenario: #single-tenant-server-runs-anything
-- **WHEN** a team runs a server operating only itself
-- **THEN** it may run whatever heuristics it writes; there is no co-tenant whose separation could be undone
-
-#### Scenario: #other-operators-choose-for-themselves
-- **WHEN** a third party operates a server hosting several teams and runs team-supplied code on it
-- **THEN** nothing in the platform prevents it, and the teams homed there are relying on that operator's judgement — which is what choosing a home server means
-
-### Requirement: team-server-management/no-operator-state
-Depends on: global-invariants/one-contract-many-surfaces#operators-never-proxy-through-the-server, global-invariants/access-follows-identity.
-
-A Snek Centaur Server SHALL hold no user records, no user sessions, and no identity state of any kind, and SHALL authenticate no person. It serves the web application; it does not mediate that application's data access, and the operator's own connections to the platform and to the game's instance are the operator's, opened under the operator's own identity.
-
-#### Scenario: #no-per-server-sign-in
-- **WHEN** a person uses the application served by any server
-- **THEN** they sign in to the platform, not to the server — no server registers an identity-provider client of its own, holds a credential for one, or has any sign-in step a team's operator must be onboarded through
-
-#### Scenario: #serving-the-wrong-visitor-exposes-nothing
-- **WHEN** a server serves the application to someone with no relationship to the teams it operates
-- **THEN** they see exactly what their own identity entitles them to and nothing more — the server was never the gatekeeper, so it has nothing to leak by serving
-
 ### Requirement: team-server-management/reference-server-home
 Depends on: global-invariants/access-follows-identity#reference-deployment-has-no-special-privilege.
 
@@ -260,13 +187,9 @@ Cyphid SHALL operate a Reference Centaur Server that teams not running their own
 - **THEN** it authenticates and is bounded exactly as any other server is; nothing about being Cyphid-operated widens what it may do for the teams it operates
 
 ### Requirement: team-server-management/server-healthcheck
-Depends on: team-management/team-management-view.
+Depends on: team-management/team-management-view, centaur-server-runtime/healthcheck-endpoint.
 
-Every Snek Centaur Server SHALL expose a healthcheck endpoint that answers availability only: callable without any credential, with a minimal response carrying no team-scoped or otherwise sensitive state. The platform SHALL record the latest healthcheck status and its timestamp for each team's home domain, checking on demand — when a team member or a platform surface requests it — with no obligation to poll automatically. The recorded status is what the team's management surface displays.
-
-#### Scenario: #unauthenticated-and-minimal
-- **WHEN** the healthcheck endpoint is called — by the platform or by anyone else
-- **THEN** it answers without any credential and reveals only liveness; extending the response with team-scoped state would change the threat model and is a violation of this contract, not an enrichment of it
+The platform SHALL record the latest availability status and its timestamp for each team's home domain, obtained by calling that domain's own liveness endpoint, checking on demand — when a team member or a platform surface requests it — with no obligation to poll automatically. The recorded status is what the team's management surface displays.
 
 #### Scenario: #on-demand-not-polled
 - **WHEN** no one has requested a check for some time
@@ -276,32 +199,3 @@ Every Snek Centaur Server SHALL expose a healthcheck endpoint that answers avail
 - **WHEN** a team member triggers a health check of their team's home server from a surface that offers it — the pre-game readiness surfaces among them
 - **THEN** the platform calls the server's healthcheck endpoint, records the status and timestamp, and surfaces the result to the requester
 
-### Requirement: team-server-management/unified-web-application
-Depends on: global-invariants/access-follows-identity.
-
-There SHALL be exactly one web application for all platform interactions — its scope spanning both platform-level concerns and team-internal competitive concerns — and every Snek Centaur Server SHALL serve that same application: an open-source client backed by the same platform deployment, with no separate platform application anywhere. Serving the whole platform from interchangeable third-party servers is workable only because access follows identity, which settles what a visitor may read on any of them.
-
-#### Scenario: #no-second-application
-- **WHEN** any platform interaction is sought, platform-wide or team-internal
-- **THEN** it lives in the one unified application every server serves — there is no separate platform application to visit for any of it
-
-#### Scenario: #same-data-any-server
-- **WHEN** a user reaches a platform surface from some server's copy of the application
-- **THEN** the serving server is an interchangeable client: it determines where the application was fetched from and nothing else, since what the user may read is settled by their own identity
-
-### Requirement: team-server-management/forkable-reference-app
-Depends on: global-invariants/security-enforced-outside-the-library#customised-app-changes-no-invariant.
-
-The application SHALL be delivered as a forkable reference implementation repository, separate from the platform's server library: a team customises it by modifying its fork directly — full source ownership, not a bounded extension point — free to modify, replace, or restructure any part of the interface, latitude that is safe to grant only because customising the application changes no invariant. The platform-facing compatibility surface a fork must preserve SHALL be explicitly enumerated and kept stable: the invitation endpoint contract, the published key document, the healthcheck contract, and the published library interfaces the application consumes. A fork preserving the enumerated surface SHALL remain platform-compatible regardless of what else it changes.
-
-#### Scenario: #full-source-ownership
-- **WHEN** a team wants behaviour the reference interface does not offer
-- **THEN** it edits its fork — any component, page, layout, or flow — without requesting an extension point, because the fork itself is the extension point
-
-#### Scenario: #enumerated-surface-is-the-contract
-- **WHEN** a fork diverges arbitrarily from the reference implementation while preserving the enumerated compatibility surface
-- **THEN** the platform interoperates with it exactly as with the reference: invitations are answered, its key resolves, its health is reported, and its teams are operated
-
-#### Scenario: #surface-changes-are-platform-changes
-- **WHEN** the platform needs to alter anything within the enumerated compatibility surface
-- **THEN** that is a deliberate breaking change to every fork, made and communicated as such — never an incidental drift a fork discovers when its teams stop being operated

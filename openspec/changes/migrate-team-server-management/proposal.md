@@ -2,9 +2,9 @@
 
 Fourth change of the final spec-migration train. The "team acquires and
 runs its Snek Centaur Server" story — naming a home server domain, the
-hosting relationship and the consent that establishes it, the server's key
-publication and whitelist, its administration API, the healthcheck, and the
-forkable reference application — has no vocabulary owner today: its
+hosting relationship and the consent that establishes it, the server's own
+admission decision, the invitation that wakes it, and the availability the
+platform records for it — has no vocabulary owner today: its
 substance is scattered across module 02 (nomination, the healthcheck
 endpoint, the many-to-many hosting relationship, the unified app's scope),
 module 03 (how a server comes to act for a team, and the no-secret rule),
@@ -28,6 +28,20 @@ outside the served application). The declaration is an affordance extended
 whenever a citation is warranted, not a fixed allowance.
 
 Deliberate boundaries:
+
+- **What a server *is* is not authored here (added by
+  `mint-centaur-server-runtime`).** This change originally carried seven
+  requirements about the artifact rather than the story — key publication,
+  the administration API, the library's tenant separation, the
+  reference-heuristics policy, the absence of identity state, the liveness
+  endpoint, and the forkable repository with its compatibility surface. Every
+  one of them reads identically for a server that has been named by nobody and
+  admitted nobody, so none of them is part of a team's acquisition of a
+  server; they now live in `centaur-server-runtime`, which this capability
+  declares. `server-healthcheck` keeps its slug and the platform's half of the
+  contract — the recorded status, its timestamp, the on-demand check — while
+  the endpoint itself is `centaur-server-runtime/healthcheck-endpoint`. *There
+  is exactly one web application* moved likewise, to `application-shell`.
 
 - **What a missing operating server means for a game is not authored
   here.** This capability authors homing, admission, and what it takes for
@@ -64,34 +78,30 @@ Deliberate boundaries:
   the scope rule.
 - **The static-host residue is not re-authored.** Module 02's parked
   plain-text residue (visitor data flows through visitors' own
-  connections) is carried by `no-operator-state` and by the
-  global-invariants credential requirements; the unified-app requirement
-  here stays to the binding scope substance — one application, spanning
-  both concerns, served by every server — and cites
+  connections) is carried by `centaur-server-runtime/no-operator-state` and
+  by the global-invariants credential requirements; the unified-app
+  requirement — now `application-shell/unified-web-application` — stays to
+  the binding scope substance (one application, spanning both concerns,
+  served by every server) and cites
   global-invariants/access-follows-identity for the data-sameness half
   instead of restating it.
 
 ## What Changes
 
-- **New capability `team-server-management`** (mint delta, ADDED-only, 17
+- **New capability `team-server-management`** (mint delta, ADDED-only, 10
   requirements): the captain's naming of a home domain and the homing
   record it creates, the naming-to-play gate (no pure-human teams), the
-  two-sided consent that alone lets a server act for a team, automatic
-  keypair generation and publication with the ergonomic obligation that
-  guards it, the server's own admission decision and its order-independence
-  from homing, the homing inbox, the credential-free game-start invitation
-  that wakes a server and the acceptance it answers with, the many-to-many
-  shared-hosting relationship with hosted-team-scoped surfaces, the absence
-  of any user state on a server, the Cyphid-operated Reference Centaur
-  Server as a home for teams without infrastructure, the unauthenticated
-  minimal healthcheck with on-demand recording, the single unified web
-  application every server serves, and the forkable reference app with its
-  enumerated fork-stable compatibility surface. Three requirements bind the
-  implementation Cyphid ships rather than every server, because the platform
-  can neither require nor detect them on a third party's: the administration
-  API with its administrative issuers and idempotent admit/remove
-  operations, the library's per-team credential separation, and
-  reference-heuristics-only on shared hosting.
+  two-sided consent that alone lets a server act for a team, the server's
+  own admission decision and its order-independence from homing, the homing
+  inbox, the credential-free game-start invitation that wakes a server and
+  the acceptance it answers with, the many-to-many shared-hosting
+  relationship with hosted-team-scoped surfaces, the Cyphid-operated Reference Centaur
+  Server as a home for teams without infrastructure, and the platform's
+  on-demand recording of a home domain's availability. The three
+  platform-facing paths (`/.well-known/snek-game-invite`,
+  `/.well-known/snek-server-keys`, `/.well-known/snek-healthcheck`) are named
+  by `centaur-server-runtime`'s fork-compatibility surface; this capability
+  builds the platform's side of the exchanges that use them.
 - **UI mirrors folded**: the lobby healthcheck-ping affordance
   (08-REQ-027g) becomes the #member-triggered-check scenario of the
   healthcheck requirement, phrased surface-generically so this capability
@@ -109,14 +119,61 @@ Deliberate boundaries:
   (folded to `openspec/specs/team-server-management/spec.md` at archive).
 - `openspec/config.yaml` context capability list gains
   `team-server-management` (at archive).
-- Code citations: homing mutations, the key-publication and healthcheck
-  endpoints, the administration API, the per-team-per-game credential
-  handling in the server library, and the reference-app packaging gain
-  `// spec: team-server-management/...` citations when the implementation
-  lands.
+- Code citations: homing mutations, the invitation sender, the on-demand
+  health check, and the per-team-per-game credential handling in the server
+  library gain `// spec: team-server-management/...` citations when the
+  implementation lands. The citations on the server's own endpoints, its
+  packaging and its administration API now name `centaur-server-runtime`.
 
 ## Open Questions
 
-None. The carving, the DAG position, and the boundary rulings above were
-settled with the author, and nothing in re-authoring this story from the
-legacy text surfaced a contradiction or gap needing a fresh decision.
+### 1. Which path the healthcheck lives at, platform-wide — RESOLVED
+
+**Context.** The legacy corpus left it undecided three ways: module 02's
+Design said `GET /healthcheck`, module 05's said `GET
+/.well-known/snek-healthcheck`, and the scaffold served `/healthcheck`. It
+sits inside the fork-stable enumerated surface, so deciding late is a
+breaking change to every fork.
+
+**Decision** (author-delegated to best practice; reasoning and the norms
+consulted in `design.md`, "One well-known family"). `GET
+/.well-known/snek-healthcheck`. The root-path convention (`/health`,
+`/healthz`) exists for self-discoverability by clients that must guess, and
+nothing guesses here — the only caller is the platform, holding a domain a
+captain typed and a contract this capability fixes. What the convention would
+cost is the collision RFC 8615 exists to prevent: a server's origin is a
+*fork's* origin, and `/healthcheck` is the obvious name a fork wants for its
+own operator-facing status page.
+
+### 2. The other two well-known paths, settled in the same pass — RESOLVED
+
+**Context.** Deciding any one of the three late is the same breaking change,
+so all three are fixed together and recorded in the enumerated surface.
+
+**Decision.** One vendor-prefixed family, fixed platform-wide: `POST
+/.well-known/snek-game-invite` (unchanged — modules 03, 05 and 08 all agreed
+on it), `GET /.well-known/snek-server-keys`, and `GET
+/.well-known/snek-healthcheck`. The key document is renamed off the
+scaffold's `/.well-known/jwks.json`: that suffix is unregistered squatting on
+a generic name, it promises an OIDC discovery surface a Centaur Server does
+not publish, and the platform's own OIDC surface already serves a
+`jwks.json` — two documents at one relative path with different trust
+semantics. The surface additionally states the converse, which is what makes
+the fork contract legible: the platform reserves nothing outside the
+`/.well-known/snek-` prefix.
+
+### 3. Naming the literal paths in the spec — RESOLVED (reverses an earlier decision)
+
+**Context.** `design.md` previously held the paths as mechanism and spec'd
+only their stability.
+
+**Decision.** The three literals are named once, in
+`forkable-reference-app`'s enumerated surface, and nowhere else in the
+corpus; the endpoint requirements say only that their path is fixed
+platform-wide. A path change cannot be "a deliberate breaking change, made
+and communicated as such" while the path is a value no reviewer sees in a
+word-diff. In code the same three live as one exported constant.
+
+Everything else — the carving, the DAG position, and the boundary rulings
+above — was settled with the author, and nothing in re-authoring this story
+from the legacy text surfaced a further contradiction or gap.
