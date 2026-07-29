@@ -52,11 +52,14 @@ Deliberate boundaries:
 - **New capability `team-management`** (mint delta, ADDED-only, 8
   requirements): the persistent team record with structural captaincy,
   team creation by any authenticated user (creator becomes captain), the
-  roster of role-less operator members, captain-only mutation authority
+  current-membership-only roster of role-less operator members with no
+  membership timeline of any kind, captain-only mutation authority
   with server-side enforcement, coach designations distinct from the
   roster, the hard mid-game roster freeze (single dedupe of the module 03
-  and module 05 statements), archive-in-place-of-deletion, and the
-  scope-limited Team Management view.
+  and module 05 statements), archive-in-place-of-deletion — with the state
+  "archived while an active participant of a game being played" pinned as
+  unreachable rather than left to be composed out of the archive gate and
+  the freeze — and the scope-limited Team Management view.
 - **UI-mirror requirements folded, enforcement authored once**:
   08-REQ-023d becomes the #non-captain-rejected-at-the-function /
   #captain-only-affordances scenarios of the captain-authority
@@ -100,4 +103,91 @@ Deliberate boundaries:
    - The delta is currently authored per option A (the conservative
      reading that keeps the sibling mint intact); a human decision is
      required before archive.
-   - **Decision (author, 2026-07-24)**: Option B, generalized. The admin role's read-only principle is scoped to the authoritative state of live game runtimes; platform-held state is not principle-barred from admin mutation, with powers granted expressly per requirement. Team unarchive is so granted: archive-not-delete carries the #admin-unarchive-recovers-abandoned-teams scenario, and the sibling's platform-admin-role is re-authored to match (#no-write-path-into-live-games, #powers-are-expressly-granted).
+   - **Decision (author, 2026-07-24)**: Option B, generalized. The admin role's read-only principle is scoped to the authoritative state of live game runtimes; platform-held state is not principle-barred from admin mutation, with powers granted expressly per requirement. Team unarchive is so granted: archive-not-delete carries the #admin-unarchive-recovers-abandoned-teams scenario, and the sibling's platform-admin-role is re-authored to match (#no-write-path-into-live-games, #powers-are-expressly-granted). Both halves are in place.
+
+2. **Does the platform keep historical team membership?**
+   - **Context**: `roster-of-operators` said only "persistent membership
+     records", silent about tense, while the sibling
+     `accounts-and-profiles/player-profile` promises a user's "current
+     **and historical**" team memberships. Either this capability owes a
+     membership timeline, or the profile is promising something no store
+     can answer.
+   - **Decision (author, 2026-07-28)**: no timeline. Historical membership
+     is **derivable from game records** — the participating-team snapshots
+     each launched game keeps — and nothing is minted here. The delta now
+     says so outright: the roster is current membership only, and a removed
+     member leaves no trace on the team
+     (`roster-of-operators#the-roster-is-not-a-history`). The author
+     accepts the consequence that **a player who joined and left a team
+     without ever playing a game for it leaves no trace anywhere**; the
+     limitation and its rationale are recorded in design.md so it reads as
+     a decision rather than an oversight. `player-profile` is owned by
+     another change and must be reworded to promise only what the snapshots
+     can answer.
+
+3. **`roster-freeze` reads game status it cannot declare a dependency on.**
+   - **Context**: the freeze predicate is phrased abstractly ("any game the
+     team is participating in is currently being played") but reads records
+     `game-lifecycle` owns, and this capability declares only
+     `identity-and-authorization` and `global-invariants`. The intended
+     resolution was to add `game-lifecycle` to the Purpose and to
+     `roster-freeze`'s declaration.
+   - **Decision (2026-07-28)**: the edge is **inverted**, not added. The
+     natural direction is a cycle — `team-management → game-lifecycle →
+     team-server-management → team-management`, which the graph check
+     rejects, and all three hops carry real substance, so there is no weak
+     edge to drop. Instead `game-lifecycle` now publishes the fact:
+     `game-lifecycle/competitive-engagement` is the single definition of
+     "this team is competitively engaged right now", derived only from the
+     games that capability owns and readable without knowing games exist.
+     This capability consumes it and declares nothing, which is what
+     removes the need for the edge in either direction.
+   - The abstraction in the requirement stays and is now deliberate rather
+     than vague: the capabilities running the engagements own whether a
+     game is being played and who is in it; this one consumes those facts
+     as freeze sources and resolves none itself. The seam still lives in
+     `tasks.md` (4.1) and is still not lint-checked — publishing gives it
+     one authoritative producer, not a declared edge.
+
+4. **Does an archived team need a rule about the games it is already
+   lined up for?**
+   - **Context**: `archive-not-delete` says an archived team "cannot be
+     enrolled in new games" — a bar on future enrolment that says nothing
+     about enrolments the team already holds. `rooms-and-matchmaking`
+     briefly carried the complement as a start-time condition: a start was
+     refused while any enrolled team was archived.
+   - **Decision (author, 2026-07-28)**: no new requirement here, and the
+     start-time condition is dropped. The author's shape is one
+     prohibition plus one reactive withdrawal. The prohibition — a team
+     enrolled in an active game or an active tournament cannot be archived
+     at all — **is already authored in this capability**:
+     `archive-not-delete` permits archiving only while the roster is not
+     frozen, and `roster-freeze` already freezes a competitively engaged
+     team over an interval that enclosing engagements may lengthen but
+     never shorten, which is what the tournament-wide extension plugs
+     into. The
+     reactive withdrawal — archiving a team removes it from the rooms it
+     is enrolled in, in the archival's own transaction — is authored on
+     the matchmaking capability's enrolment requirement, because the
+     enrolled set is that capability's record; this change's design notes
+     where a reader should look for it, and `tasks.md` (3.7, 6.1) carries
+     the implementation seam, since the archival mutation is this
+     capability's while the enrolment write is not.
+   - **Follow-up decision (author, 2026-07-28, second pass)**: the
+     prohibition stays transitive in its *derivation* but stops being
+     transitive to *read*. The author was explicit that the state "an
+     active participant of a game while simultaneously being archived"
+     must never be reachable, and a rule that consequential should not
+     require composing three requirements to find, so
+     `archive-not-delete` gains one scenario —
+     `#archived-and-playing-is-unreachable` — asserting the composed
+     outcome and deferring to the freeze for the reason. Deliberately a
+     scenario and not a clause: a clause would have to restate what
+     "engaged" means, putting a second definition beside the published one
+     and a second copy of the freeze predicate beside `roster-freeze`'s,
+     which would silently stop matching the moment an enclosing engagement
+     lengthens the interval. No requirement body, no `Depends on:` line,
+     and no other scenario changed. The complementary half is the sibling
+     change's: `rooms-and-matchmaking/room-mode` closes the other route to
+     the same state by making it impossible to enrol a team into a room
+     after that room's game has launched.

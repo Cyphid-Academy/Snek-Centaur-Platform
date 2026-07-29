@@ -47,7 +47,11 @@ Any authenticated caller SHALL be able to create a new Centaur Team. Creation SH
 ### Requirement: team-management/roster-of-operators
 Depends on: global-invariants/transactional-invariant-enforcement.
 
-The platform SHALL maintain persistent membership records associating each human member with their Centaur Team. Every member is an operator; membership SHALL carry no role distinctions of any kind. The captain SHALL themselves be a current member at all times.
+The platform SHALL maintain a persistent membership record for each human **currently** on a Centaur Team's roster, and no more: the roster answers who is on the team now, and the platform keeps no membership timeline — no record of who joined or left a team, or when. Every member is an operator; membership SHALL carry no role distinctions of any kind. The captain SHALL themselves be a current member at all times.
+
+#### Scenario: #the-roster-is-not-a-history
+- **WHEN** a member is removed from a team's roster
+- **THEN** the team retains nothing saying they were ever a member — a reader asking what a team's roster looked like last month has no membership record to consult, only what the team's play left behind elsewhere
 
 #### Scenario: #members-are-peers
 - **WHEN** any two members of a team are compared
@@ -96,7 +100,7 @@ Coach designations SHALL be stored on the team record, distinct from the member 
 ### Requirement: team-management/roster-freeze
 Depends on: identity-and-authorization/roster-snapshot-binding, global-invariants/transactional-invariant-enforcement.
 
-A Centaur Team's roster SHALL be frozen at minimum whenever any game the team is participating in is currently being played; the frozen interval may be held longer by enclosing competitive engagements, never shorter. While frozen, the platform SHALL reject every mutation to the team's competitive composition — member additions, member removals, captaincy transfer, and changes to the team's server nomination. A running game's authorization is already bound by its initialization-time snapshot; the freeze keeps the live team record coherent with the game being played.
+A Centaur Team's roster SHALL be frozen at minimum whenever the team is competitively engaged; the frozen interval may be held longer by enclosing competitive engagements, never shorter. Whether a team is engaged is a fact published by the capability that runs those engagements — this capability reads it as a freeze source, and SHALL NOT assemble an answer of its own out of the records behind it, so the freeze can never disagree with the engagement it exists to protect. While frozen, the platform SHALL reject every mutation to the team's competitive composition — member additions, member removals, captaincy transfer, and changes to the team's server nomination. A running game's authorization is already bound by its initialization-time snapshot; the freeze keeps the live team record coherent with the game being played.
 
 #### Scenario: #hard-rejection-never-deferral
 - **WHEN** a frozen mutation is attempted
@@ -117,7 +121,7 @@ A Centaur Team's roster SHALL be frozen at minimum whenever any game the team is
 ### Requirement: team-management/archive-not-delete
 Depends on: global-invariants/single-convex-deployment, identity-and-authorization/platform-admin-role.
 
-A Centaur Team SHALL never be deleted; no deletion operation exists. The captain MAY instead archive the team — only while its roster is not frozen — after which the team is hidden from default listings and cannot be enrolled in new games, while all live and historical state is preserved: membership records, team-scoped state, historical game records, and attribution. Historical records that reference an archived team SHALL continue to resolve the team's historical identity — one guarantee rather than a per-store cleanup contract only because that state shares a single persistent home. The captain MAY unarchive the team to resume activity, and a platform admin MAY do likewise — an expressly granted administrative power.
+A Centaur Team SHALL never be deleted; no deletion operation exists. The captain MAY instead archive the team — only while its roster is not frozen — after which the team is hidden from default listings and cannot be enrolled in new games, while all live and historical state is preserved: the current membership records, team-scoped state, historical game records, and attribution. Historical records that reference an archived team SHALL continue to resolve the team's historical identity — one guarantee rather than a per-store cleanup contract only because that state shares a single persistent home. The captain MAY unarchive the team to resume activity, and a platform admin MAY do likewise — an expressly granted administrative power.
 
 #### Scenario: #archive-is-the-only-retirement
 - **WHEN** any actor seeks to remove a team from the platform
@@ -134,6 +138,10 @@ A Centaur Team SHALL never be deleted; no deletion operation exists. The captain
 #### Scenario: #archive-blocked-while-frozen
 - **WHEN** the captain attempts to archive the team while its roster is frozen
 - **THEN** the archiving is rejected for as long as the freeze holds
+
+#### Scenario: #archived-and-playing-is-unreachable
+- **WHEN** any archived team is examined against the games it participates in, at any moment and by any route into the archive path
+- **THEN** none of those games is being played: the freeze the archive gate defers to holds for as long as the team is competitively engaged, so "archived while an active participant of a game" is a state the platform cannot reach — not merely one it disallows on request
 
 #### Scenario: #unarchive-resumes-intact
 - **WHEN** the captain unarchives the team
