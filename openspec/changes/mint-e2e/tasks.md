@@ -2,11 +2,12 @@
 
 ## 1. Substrate orchestration
 
-- [ ] 1.1 Add the workspace member holding the harness under `apps/`, with its own agent context recording why it is not under `packages/` and why its test config is not discovered by the root glob (`e2e/hermetic-substrate`)
-- [ ] 1.2 Implement the process fixtures — start, health-wait, stop — for each runtime kind the platform deploys, allocating ports per run and tearing down on pass, fail and interrupt alike (`e2e/hermetic-substrate#teardown-does-not-leak-into-the-next-run`)
-- [ ] 1.3 Add a root script that invokes the harness, and leave it out of the fast battery (`e2e/hermetic-substrate`)
-- [ ] 1.4 Fix the SpacetimeDB module's top-level export that the runtime rejects at publish, and put publishing behind a gate so it cannot regress unobserved (`e2e/hermetic-substrate#real-runtimes-not-doubles`)
-- [ ] 1.5 Record in the root agent context that a new runtime the platform deploys is a runtime the harness must start (`e2e/hermetic-substrate`)
+- [x] 1.1 Add the workspace member holding the harness under `apps/`, with its own agent context recording why it is not under `packages/` and why its test config is not discovered by the root glob (`e2e/hermetic-substrate`)
+- [x] 1.2 Implement the process fixtures — start, health-wait, stop — for each runtime kind the platform deploys, allocating ports per run and tearing down on pass, fail and interrupt alike (`e2e/hermetic-substrate#teardown-does-not-leak-into-the-next-run`)
+- [x] 1.3 Add a root script that invokes the harness, and leave it out of the fast battery (`e2e/hermetic-substrate`)
+- [ ] 1.4 Fix the SpacetimeDB module's top-level export that the runtime rejects at publish (`e2e/hermetic-substrate#real-runtimes-not-doubles`) — the export it names is introduced by migrate-identity-and-authorization and does not exist on this branch, so the fix belongs with that change and is still open there
+- [ ] 1.5 Put publishing the module behind a gate, so its rejection cannot regress unobserved once a scenario is not already publishing it (`e2e/hermetic-substrate#real-runtimes-not-doubles`)
+- [x] 1.6 Record in the root agent context that a new runtime the platform deploys is a runtime the harness must start (`e2e/hermetic-substrate`)
 
 ## 2. Identity substitution
 
@@ -16,8 +17,8 @@
 
 ## 3. Browser layer
 
-- [ ] 3.1 Add the browser driver, resolving the already-present browser rather than downloading one (`e2e/browser-exercised-surfaces`)
-- [ ] 3.2 Implement multi-session support so two identities can be live at once (`e2e/browser-exercised-surfaces#concurrent-operators-are-concurrent-sessions`)
+- [x] 3.1 Add the browser driver, resolving the already-present browser rather than downloading one (`e2e/browser-exercised-surfaces`)
+- [x] 3.2 Implement multi-session support so two identities can be live at once (`e2e/browser-exercised-surfaces#concurrent-operators-are-concurrent-sessions`)
 
 ## 4. Scenarios
 
@@ -27,8 +28,8 @@
 
 ## 5. Validation
 
-- [ ] 5.1 Add `// spec:` citations to the code this change touches, and `// design:` references where a decision's rationale is worth loading before it is reconsidered
-- [ ] 5.2 Run `pnpm spec:check`
+- [x] 5.1 Add `// spec:` citations to the code this change touches, and `// design:` references where a decision's rationale is worth loading before it is reconsidered
+- [x] 5.2 Run `pnpm spec:check`
 
 ## Archive
 

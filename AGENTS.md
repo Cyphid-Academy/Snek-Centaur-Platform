@@ -84,6 +84,10 @@ Code cites identifiers **inline**, as above. The rule that identifiers never app
 
 **Testing**: Vitest. Run `pnpm test` across the workspace. Every package should have at least a smoke test confirming it loads. Both SvelteKit apps are excluded from workspace project discovery — their Vite transform conflicts with `@sveltejs/kit` resolution during a workspace run — so `pnpm test` invokes each as a separate filtered run after the main one. A new app needs adding there or its tests will never run.
 
+**`apps/e2e` is the exception that must stay one.** It is a member under `apps/` for exactly this reason: the discovery glob covers `packages/*` only, so a multi-process suite cannot be dragged into the fast battery by a name. It is invoked by `pnpm e2e` and by nothing in `pnpm verify`. Adding it to the root glob, or to the `test` script's filtered runs, undoes the tier split — `verify` is ~33s deliberately, and the harness starts four processes and a browser. Its own `AGENTS.md` carries the rest.
+
+**A new runtime kind the platform deploys is a runtime the harness must start.** The point of the harness is that a passing run means the real runtimes agreed with each other; a substrate missing one silently narrows what a pass is worth. `apps/e2e/src/runtimes/` holds one module per runtime kind, and `startSubstrate` composes them.
+
 **Pin shared tooling; never `"*"`.** `vitest` and `vite` carry the same explicit caret range in every `package.json` that declares them. `"*"` looks like "inherit the workspace version" and is not: it means *any* version, so the resolution is whatever the lockfile happens to hold. That drifted unnoticed once — one app sat on vitest 2.x while everything else ran 3.x, invisible because its suite was never invoked. When upgrading, bump every declaration in the same commit.
 
 **Apps consume the packages' built `dist/`, not their source.** `packages/*/package.json` export `./dist/index.js`, and `dist/` is gitignored — so a package that has never been built is a *resolve failure* in every consumer, which surfaces as an HTTP 500 from a dev server rather than as a compile error. Every script that needs them (`dev`, `dev:tester`, `test`, `typecheck`, `build`, `smoke`, `stdb:publish`, and each app's own `dev`/`test`/`build` via a `pre*` hook) therefore runs `build:packages` first. That script is `tsc -b` over the root project references, so **a new package that typechecks is a new package this builds** — do not replace it with a hand-listed set, which is what silently broke when the second package arrived. Do not add a separate `pnpm --filter @cyphid/snek-engine build` step to a script, a workflow, or the SessionStart hook — chain `build:packages` instead, so the dependency is expressed once and stays true. (Explicit chaining rather than a `pretest` hook: pnpm does not run npm-style pre/post scripts by default, so such a hook would look correct and silently do nothing.)
@@ -129,6 +133,7 @@ So: **tier 1 over every commit, tier 2 once at the tip.** For a ten-commit branc
 | `pnpm format` | `biome check --write .` |
 | `pnpm test` | Builds the packages, then `vitest run` across the workspace |
 | `pnpm smoke` | Boots each app and checks it serves — the only check that runs the app |
+| `pnpm e2e` | Brings all three runtimes up together and drives them — outside `verify`, see below |
 | `pnpm coverage` | Branch coverage over the engine's resolver |
 | `pnpm build:packages` | `tsc -b` over the workspace packages (their gitignored `dist/`) |
 | `pnpm dev` | Starts the Centaur Server reference app |
