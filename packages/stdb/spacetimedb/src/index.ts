@@ -1,24 +1,10 @@
 // spec: global-invariants/runtime-ownership, global-invariants/one-shared-engine
 // The Team Snek SpacetimeDB module.
 //
-// This is the module project's skeleton, not the game. It exists so the
-// toolchain is real and stays exercised: `spacetime build` bundles this with
-// its node_modules and `pnpm stdb:publish` publishes it, so a broken module
-// setup fails at the point someone can fix it rather than at the point someone
-// first tries to write a reducer.
-//
-// It carries exactly one load-bearing fact beyond "the CLI works": the shared
-// engine runs unmodified inside the instance's V8 isolate. `spacetime build`
-// inlines npm dependencies through rolldown, so BLAKE3 works with no shim, no
-// polyfill and no vendored copy — which is what makes
-// global-invariants/one-shared-engine#no-parallel-implementation achievable for
-// the reducers that arrive with their capability changes.
-//
-// The gameplay tables and the four real reducers — `initialize_game`,
-// `stage_move`, `declare_turn_over`, `resolve_turn` — are deliberately absent.
-// Each encodes rules that migrate-game-lifecycle, migrate-operator-control and
-// migrate-turn-pacing have yet to state, and a table asserts a schema the
-// instance then agrees to. They land with the changes that own them.
+// The module project's skeleton, not the game — see packages/stdb/AGENTS.md.
+// Its one load-bearing fact: the shared engine runs unmodified inside the
+// instance's V8 isolate, because `spacetime build` inlines npm dependencies
+// through rolldown, so BLAKE3 needs no shim, polyfill or vendored copy.
 import { subSeed } from "@cyphid/snek-engine";
 import { schema, t, table } from "spacetimedb/server";
 

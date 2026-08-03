@@ -113,7 +113,3 @@ export interface TeamGameContext {
   readonly boardSeed: string;
   readonly config: GameConfigRecord;
 }
-
-// The component's name and mounting live in `convex/convex.config.ts`, which is
-// what Convex reads. Nothing restates them here: a second spelling of the name
-// (`snek-platform` against the real `snekPlatform`) is a trap, not a convenience.
