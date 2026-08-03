@@ -44,6 +44,6 @@ Keep reducer bodies thin and push anything worth checking into `src/`. The modul
 ## Key files
 
 - `spacetimedb/src/index.ts` — tables and reducers (the module itself)
-- `src/index.ts` — engine re-exports, and constants the published module itself imports
+- `src/index.ts` — engine re-exports (and, in time, the row codecs)
 - `legacy-spec-archive/spec/04-stdb-engine.md` — binding source of truth
 - `docs/external-setup.md` → *Local development* — how to run and drive it
