@@ -78,6 +78,10 @@ Code cites identifiers **inline**, as above. The rule that identifiers never app
 
 **TypeScript**: strict mode throughout. Root `tsconfig.base.json` defines the baseline; each package extends it. Run `pnpm typecheck` to check the whole workspace via `tsc -b`.
 
+**`.svelte` files are checked by `svelte-check`, not `tsc`.** `tsc` does not parse `.svelte` at all — it reads a project's `.ts` and silently skips every component, so an app whose `typecheck` script was `tsc --noEmit` had its entire UI unchecked while the script's name said otherwise. Biome cannot lint them either (`biome.json` ignores `**/*.svelte`). Both SvelteKit apps therefore run `svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --fail-on-warnings`, which covers the app's `.ts` *and* its components in one program under the same `tsconfig.base.json` flags. **A new SvelteKit app copies that script**, or its components are checked by nothing.
+
+`--fail-on-warnings` is deliberate: svelte-check's warning tier is where a11y violations, unused CSS selectors and misused runes land, and a warning nothing fails on is a warning nobody reads. Two consequences worth knowing before writing a component: a binding named `state` makes `$state(…)` parse as a store read of it rather than as the rune, and reading reactive state inside a `$state(…)` initialiser warns unless the intent to capture only the initial value is spelled with `untrack`.
+
 **Linting / formatting**: Biome. Run `pnpm lint` (check) or `pnpm format` (write). No ESLint or Prettier.
 
 `complexity/useLiteralKeys` is **off**, and should stay off: it forbids `env["CONVEX_URL"]` while the TypeScript baseline's `noPropertyAccessFromIndexSignature` forbids `env.CONVEX_URL`. With both on, reading an index signature has no legal spelling short of destructuring, which is a workaround rather than a style. TypeScript wins because it is the one enforcing the safety property.
@@ -98,7 +102,7 @@ Code cites identifiers **inline**, as above. The rule that identifiers never app
 
 The battery is ~33s. Running all of it at every commit of a phase-structured branch costs minutes and answers the same question ten times, so validation is split by **what each density is for**.
 
-**Tier 1 — `pnpm check:commit`, ~2–7s.** Is *this commit* green standing alone? That is a narrow question with a narrow answer: a boundary defect is a commit referencing something that only exists in a later one, and every such defect is **static**. So tier 1 is `tsc -b`, `biome` over the commit's own files, `spec:citations`, the touched change's own validation and freshness, the graph when a declaration moved, and `vitest related` over the changed sources. It runs against **the commit**, not the working tree — it refuses a dirty tree rather than answering a question you did not ask, since the divergence between the two is the bug it exists to catch.
+**Tier 1 — `pnpm check:commit`, ~2–7s.** Is *this commit* green standing alone? That is a narrow question with a narrow answer: a boundary defect is a commit referencing something that only exists in a later one, and every such defect is **static**. So tier 1 is `tsc -b`, `svelte-check` over any app whose `.svelte` sources the commit touched, `biome` over the commit's own files, `spec:citations`, the touched change's own validation and freshness, the graph when a declaration moved, and `vitest related` over the changed sources. It runs against **the commit**, not the working tree — it refuses a dirty tree rather than answering a question you did not ask, since the divergence between the two is the bug it exists to catch.
 
 Scope comes from the diff: any path under `openspec/changes/<name>/` names a change, so a commit carved at a change boundary scopes itself. `--change <name>` (repeatable) adds to that set for a commit that moves responsibilities between changes without touching both folders; a commit touching no change folder skips the four change-scoped gates entirely.
 
@@ -122,7 +126,7 @@ So: **tier 1 over every commit, tier 2 once at the tip.** For a ten-commit branc
 |--------|-------------|
 | `pnpm check:commit` | **Tier 1** — is each commit green standing alone (see above) |
 | `pnpm verify` | **Tier 2** — the full battery, what CI runs |
-| `pnpm typecheck` | `build:packages` plus the two foreign TS regimes and both apps |
+| `pnpm typecheck` | `build:packages` plus the two foreign TS regimes and both apps (the apps via `svelte-check`, which reads their `.svelte` files as well as their `.ts`) |
 | `pnpm typecheck:convex` | Convex component/host files — separate because Convex's generated code is not written for the workspace's strict flags |
 | `pnpm typecheck:stdb-module` | The SpacetimeDB module project, whose tsconfig options SpacetimeDB mandates |
 | `pnpm lint` | `biome check .` |
@@ -140,6 +144,8 @@ So: **tier 1 over every commit, tier 2 once at the tip.** For a ten-commit branc
 | `pnpm build` | Builds all packages |
 
 Three TypeScript regimes coexist, and they are kept apart on purpose: `tsc -b` (the strict composite build, source of truth for `packages/*/src`), the Convex regime, and the SpacetimeDB module regime. The latter two do not extend `tsconfig.base.json` — their code is bundled by their own toolchain rather than emitted by tsc, and neither Convex's generated files nor SpacetimeDB's mandated options survive `exactOptionalPropertyTypes` / `noUncheckedIndexedAccess` / `verbatimModuleSyntax`. Do not try to unify them; add to the right one. `pnpm typecheck` runs all three, and `tsc -b` must run first because it emits `packages/engine/dist`, which the other two resolve through.
+
+The apps are a fourth, and the only one that is not a `tsc` invocation: each extends `tsconfig.base.json` *and* its generated `.svelte-kit/tsconfig.json`, and is checked by `svelte-check` because `tsc` cannot read a `.svelte` file. The same ordering rule binds it — components resolve `@cyphid/snek-engine` through its gitignored `dist/`, so `build:packages` runs first there too.
 
 ## Commit History & Message Grammar
 
