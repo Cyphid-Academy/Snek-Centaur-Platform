@@ -13,9 +13,16 @@
 // The project ships no `.env.example` on purpose (CLAUDE.md → "Secrets and
 // third-party resources"), so `packages/convex-host/src/env.ts` is the contract:
 // it names every missing variable at once and never prints a value.
-import { CONVEX_ENV, STDB_ENV, describeMissing, missingEnv } from "@cyphid/snek-convex-host";
+import { CONVEX_CLIENT_ENV, describeMissing, missingEnv } from "@cyphid/snek-convex-host";
 
-const missing = missingEnv([...CONVEX_ENV, ...STDB_ENV]);
+// Convex only, and only the *client* half of it. A Centaur Server talks to the
+// platform as a client; it does not drive the Convex CLI, and it has no
+// management relationship with the SpacetimeDB host. `STDB_MANAGEMENT_BASE_URL`
+// is the address Convex provisions, warms, and tears instances down at — a
+// Server is handed a per-game instance address at run time and connects with
+// per-team credentials, so naming that variable here would state the wrong
+// runtime boundary and warn in deployments that are in fact correct.
+const missing = missingEnv([...CONVEX_CLIENT_ENV]);
 if (missing.length > 0) {
   console.warn(describeMissing(missing));
 }
