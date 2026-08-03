@@ -29,17 +29,3 @@ export type {
   TurnResolution,
 } from "@cyphid/snek-engine";
 export { itemsByCell } from "@cyphid/snek-engine";
-
-/**
- * Reducer names as published, for callers addressing the instance over the
- * wire. SpacetimeDB derives snake_case reducer names from the module's
- * camelCase exports, so these constants are the authoritative spelling.
- */
-export const REDUCERS = {
-  ping: "ping",
-} as const;
-
-/** Table names as published. */
-export const TABLES = {
-  moduleInfo: "module_info",
-} as const;

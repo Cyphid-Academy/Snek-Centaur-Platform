@@ -3,6 +3,7 @@
 // actually mounts. Registration is derived from the config's own child
 // components, so an unmounted component is an unregistered one.
 import { convexTest } from "convex-test";
+import type { GenericSchema, SchemaDefinition } from "convex/server";
 import { describe, expect, it, vi } from "vitest";
 import { api } from "./_generated/api";
 import schema from "./schema";
@@ -63,13 +64,12 @@ async function withComponents() {
         `convex.config.ts mounts "${name}", which this test cannot register. Add it to \`MOUNTABLE\`.`,
       );
     }
-    const componentSchema = (
+    const componentSchema: SchemaDefinition<GenericSchema, boolean> = (
       entry.dir === "convex-snek-platform"
         ? await import("../../convex-snek-platform/convex/schema.js")
         : await import("../../convex-centaur-state/convex/schema.js")
     ).default;
-    // biome-ignore lint/suspicious/noExplicitAny: convex-test keys registration on the component's own schema type.
-    t.registerComponent(name, componentSchema as any, componentModules[entry.dir] as any);
+    t.registerComponent(name, componentSchema, componentModules[entry.dir]);
   }
   return t;
 }

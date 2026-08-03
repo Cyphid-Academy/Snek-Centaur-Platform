@@ -1,18 +1,6 @@
 {
-  // The deployment's function directory. Same reasoning as the components'
-  // tsconfig.convex.json: Convex bundles these files and its generated code is
-  // not written for the workspace's strict flags, so this is its own regime
-  // rather than part of `tsc -b`. Checked by `pnpm typecheck:convex`.
+  "extends": "../../../tsconfig.convex.base.json",
   "compilerOptions": {
-    "target": "ESNext",
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "lib": ["ES2021", "dom"],
-    "strict": true,
-    "skipLibCheck": true,
-    "allowJs": true,
-    "isolatedModules": true,
-    "noEmit": true,
     // The test file beside these functions uses `import.meta.glob` to hand
     // convex-test the module map the deployment would have bundled; the type
     // for it comes from Vite, which is what runs the suite.
