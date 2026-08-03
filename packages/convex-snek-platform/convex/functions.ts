@@ -4,10 +4,7 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
 
-/**
- * Liveness of this component. Returns its own name rather than a bare `true`,
- * so the answer identifies which component replied.
- */
+/** Liveness of this component. See `platformStatus` in the host. */
 export const status = query({
   args: {},
   returns: v.string(),

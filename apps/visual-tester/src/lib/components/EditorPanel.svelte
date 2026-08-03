@@ -74,15 +74,26 @@ function applySeed(): void {
   store.setSeed(bytes);
 }
 
-function setConfigField(path: string, raw: string): void {
+// The numeric fields of the config, addressed by path. Derived from
+// `GameRuntimeConfig` rather than listed, so a field added to it — or one whose
+// type stops being numeric — is a compile error here rather than a silent no-op.
+type NumericKeys<T> = { [K in keyof T]-?: T[K] extends number ? K : never }[keyof T];
+type TopKey = NumericKeys<Omit<GameRuntimeConfig, "clock">> & string;
+type ClockKey = NumericKeys<GameRuntimeConfig["clock"]> & string;
+type ConfigPath = TopKey | `clock.${ClockKey}`;
+
+// `structuredClone` hands back an object nobody else holds, so dropping
+// `readonly` for the one assignment below writes to nothing shared.
+type Mutable<T> = { -readonly [K in keyof T]: T[K] };
+
+function setConfigField(path: ConfigPath, raw: string): void {
   const value = Number(raw);
   if (!Number.isFinite(value)) return;
-  const next: GameRuntimeConfig = structuredClone(config);
-  if (path.startsWith("clock.")) {
-    (next.clock as unknown as Record<string, number>)[path.slice(6)] = value;
-  } else {
-    (next as unknown as Record<string, number>)[path] = value;
-  }
+  const next: Mutable<Omit<GameRuntimeConfig, "clock">> & {
+    clock: Mutable<GameRuntimeConfig["clock"]>;
+  } = structuredClone(config);
+  if (path.startsWith("clock.")) next.clock[path.slice(6) as ClockKey] = value;
+  else next[path as TopKey] = value;
   store.setConfig(next);
 }
 
@@ -95,7 +106,7 @@ const DIR_LABELS: Record<Direction, string> = {
 
 const FAMILIES: EffectFamily[] = ["invulnerability", "invisibility"];
 
-const configFields = $derived([
+const configFields: { path: ConfigPath; value: number }[] = $derived([
   { path: "maxHealth", value: config.maxHealth },
   { path: "maxTurns", value: config.maxTurns },
   { path: "hazardDamage", value: config.hazardDamage },

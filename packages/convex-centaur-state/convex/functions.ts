@@ -4,7 +4,7 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
 
-/** Liveness of this component. See the twin in convex-snek-platform. */
+/** Liveness of this component. See `platformStatus` in the host. */
 export const status = query({
   args: {},
   returns: v.string(),

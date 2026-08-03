@@ -173,4 +173,4 @@ Both squash and merge-commit are enabled; **rebase-merge stays off** (it drops t
 
 ## Auth Library Note
 
-`convex-host` has a `TODO` comment for Better Auth integration (local install mode, plus the project-owned capability plugin that issues credentials to service principals). Do not integrate it until the first Convex implementation task. See `packages/convex-host/AGENTS.md` for details.
+Better Auth integration (local install mode, plus the project-owned capability plugin that issues credentials to service principals) is deferred to the first Convex implementation task. Do not integrate it before then. See `packages/convex-host/AGENTS.md` for details.

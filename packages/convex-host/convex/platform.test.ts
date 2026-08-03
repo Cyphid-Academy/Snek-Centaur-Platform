@@ -8,11 +8,22 @@ import { describe, expect, it, vi } from "vitest";
 import { api } from "./_generated/api";
 import schema from "./schema";
 
-/** The components the host mounts, and where each one's convex directory is. */
-const MOUNTABLE = [
-  { name: "snekPlatform", dir: "convex-snek-platform" },
-  { name: "centaurState", dir: "convex-centaur-state" },
-] as const;
+type Modules = Record<string, () => Promise<unknown>>;
+
+/** How to bring each mounted component up, by the name it mounts under. */
+const MOUNTABLE: Record<
+  string,
+  { schema: () => Promise<{ default: SchemaDefinition<GenericSchema, boolean> }>; modules: Modules }
+> = {
+  snekPlatform: {
+    schema: () => import("../../convex-snek-platform/convex/schema.js"),
+    modules: import.meta.glob("../../convex-snek-platform/convex/**/*.ts"),
+  },
+  centaurState: {
+    schema: () => import("../../convex-centaur-state/convex/schema.js"),
+    modules: import.meta.glob("../../convex-centaur-state/convex/**/*.ts"),
+  },
+};
 
 // `convex.config.ts` can only be *executed* by the Convex runtime: `app.use()`
 // rejects a component definition carrying no `componentDefinitionPath`, because
@@ -40,12 +51,8 @@ vi.mock("../../convex-centaur-state/convex/convex.config.js", async () =>
 );
 
 const hostModules = import.meta.glob("./**/*.ts");
-const componentModules: Record<string, Record<string, () => Promise<unknown>>> = {
-  "convex-snek-platform": import.meta.glob("../../convex-snek-platform/convex/**/*.ts"),
-  "convex-centaur-state": import.meta.glob("../../convex-centaur-state/convex/**/*.ts"),
-};
 
-/** The component names `convex.config.ts` mounts, in mounting order. */
+/** The component names `convex.config.ts` mounts. */
 async function mountedComponents(): Promise<ReadonlyArray<string>> {
   const app = (await import("./convex.config.js")).default as unknown as {
     _childComponents: ReadonlyArray<readonly [string, ...unknown[]]>;
@@ -56,7 +63,7 @@ async function mountedComponents(): Promise<ReadonlyArray<string>> {
 async function withComponents() {
   const t = convexTest(schema, hostModules);
   for (const name of await mountedComponents()) {
-    const entry = MOUNTABLE.find((c) => c.name === name);
+    const entry = MOUNTABLE[name];
     if (entry === undefined) {
       // A new `app.use(...)` with no entry above. Failing here is the point:
       // skipping it silently would reopen the gap this file exists to close.
@@ -64,12 +71,7 @@ async function withComponents() {
         `convex.config.ts mounts "${name}", which this test cannot register. Add it to \`MOUNTABLE\`.`,
       );
     }
-    const componentSchema: SchemaDefinition<GenericSchema, boolean> = (
-      entry.dir === "convex-snek-platform"
-        ? await import("../../convex-snek-platform/convex/schema.js")
-        : await import("../../convex-centaur-state/convex/schema.js")
-    ).default;
-    t.registerComponent(name, componentSchema, componentModules[entry.dir]);
+    t.registerComponent(name, (await entry.schema()).default, entry.modules);
   }
   return t;
 }
