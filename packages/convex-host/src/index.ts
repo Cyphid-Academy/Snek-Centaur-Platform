@@ -27,18 +27,29 @@ export type {
 } from "@cyphid/convex-centaur-state";
 
 export type { EnvRequirement } from "./env.js";
-export { CONVEX_ENV, STDB_ENV, describeMissing, missingEnv } from "./env.js";
+export {
+  CONVEX_CLI_ENV,
+  CONVEX_CLIENT_ENV,
+  CONVEX_ENV,
+  STDB_ENV,
+  describeMissing,
+  missingEnv,
+} from "./env.js";
 
-/**
- * The deployment's public functions, by the name `convex run` and the client
- * SDK address them. Exported as data so a caller naming one gets a compile
- * error when it is renamed, rather than a runtime "no such function".
- *
- * Only the liveness query so far — the rest are named here as the capability
- * changes that define them land.
- *
- * spec: global-invariants/one-contract-many-surfaces
- */
-export const HOST_FUNCTIONS = {
-  platformStatus: "platform:platformStatus",
-} as const;
+// There is deliberately no hand-written table of function names here.
+//
+// One lived here as `HOST_FUNCTIONS`, holding string literals like
+// `"platform:platformStatus"` and claiming that a caller naming a function
+// would get a compile error if it were renamed. That claim was false: a string
+// literal is not a reference to anything, so renaming `platformStatus` left
+// every consumer compiling and failing at run time with "no such function" —
+// precisely the failure the table said it prevented, now with a second name to
+// keep in sync.
+//
+// The real compile-time reference is the generated `api` object in
+// `convex/_generated/api`, which `tsc` checks against the deployment's actual
+// function surface. Consumers address functions through that, and this package
+// stays what it says it is: the types and the environment contract, without
+// pulling the Convex runtime into every consumer.
+//
+// spec: global-invariants/one-contract-many-surfaces

@@ -22,18 +22,43 @@ export interface EnvRequirement {
   readonly alternatives?: ReadonlyArray<string>;
 }
 
-export const CONVEX_ENV: ReadonlyArray<EnvRequirement> = [
+// What a *client* needs in order to open a connection. `CONVEX_URL` has no
+// alternatives on purpose: `CONVEX_DEPLOY_KEY` and `CONVEX_DEPLOYMENT` address
+// a deployment for the CLI, and neither is a URL a `ConvexClient` can be
+// constructed with. Accepting them here would silence this warning in exactly
+// the setup that later fails to connect — which is the case the report exists
+// to catch.
+export const CONVEX_CLIENT_ENV: ReadonlyArray<EnvRequirement> = [
   {
     name: "CONVEX_URL",
-    why: "the deployment a client connects to",
-    alternatives: ["CONVEX_DEPLOY_KEY", "CONVEX_DEPLOYMENT"],
+    why: "the deployment URL a client connects to",
   },
 ];
+
+// What the Convex *CLI* needs in order to address a deployment (`convex dev`,
+// `convex run`, `convex env`). Either name is genuinely sufficient here, which
+// is why they are alternatives of one another rather than of `CONVEX_URL`.
+export const CONVEX_CLI_ENV: ReadonlyArray<EnvRequirement> = [
+  {
+    name: "CONVEX_DEPLOYMENT",
+    why: "the deployment the Convex CLI acts on",
+    alternatives: ["CONVEX_DEPLOY_KEY"],
+  },
+];
+
+/** Everything the host side of Convex needs: a client connection and CLI access. */
+export const CONVEX_ENV: ReadonlyArray<EnvRequirement> = [...CONVEX_CLIENT_ENV, ...CONVEX_CLI_ENV];
 
 // The name is the one the platform already uses for this value — see
 // docs/external-setup.md and legacy-spec-archive/spec/05-convex-platform.md,
 // where it is the base URL of the STDB host both database provisioning and the
 // warm-up dispatch address. Locally it is the host `pnpm dev:stdb` starts.
+//
+// This is a *Convex* variable. Provisioning, warm-up, and teardown are the
+// deployment's management relationship with the STDB host; a Centaur Server is
+// handed a per-game instance address at run time and connects to that with
+// per-team credentials. It must never require this name — see
+// legacy-spec-archive/spec/05-convex-platform.md §"management credentials".
 export const STDB_ENV: ReadonlyArray<EnvRequirement> = [
   {
     name: "STDB_MANAGEMENT_BASE_URL",
