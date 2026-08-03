@@ -1,17 +1,10 @@
 // spec: global-invariants/no-shared-secrets, global-invariants/credential-confinement
-// The environment contract for reaching this deployment.
+// The environment contract for reaching this deployment: the project ships no
+// `.env.example`, so this code is the authoritative list. See
+// docs/external-setup.md.
 //
-// The project ships no `.env.example` on purpose (CLAUDE.md → "Secrets and
-// third-party resources"): dev credentials live as environment variables in
-// each developer's own cloud environment, not in a file in the repo. That makes
-// *this code* the contract — the authoritative statement of which variables a
-// session needs is the code that reads them, and a missing one has to be named
-// rather than surface later as a confusing connection error.
-//
-// Nothing here throws. A variable is missing until someone actually reaches for
-// the runtime it configures, and a local session that is only running tests, a
-// lint, or the UI should not be stopped by a credential it never uses. Code
-// that does reach for a runtime fails at that point, on its own terms.
+// Nothing here throws — reporting is separate from requiring, so a session only
+// running tests or a lint is not stopped by a credential it never uses.
 
 export interface EnvRequirement {
   /** Primary variable name. */
@@ -49,16 +42,9 @@ export const CONVEX_CLI_ENV: ReadonlyArray<EnvRequirement> = [
 /** Everything the host side of Convex needs: a client connection and CLI access. */
 export const CONVEX_ENV: ReadonlyArray<EnvRequirement> = [...CONVEX_CLIENT_ENV, ...CONVEX_CLI_ENV];
 
-// The name is the one the platform already uses for this value — see
-// docs/external-setup.md and legacy-spec-archive/spec/05-convex-platform.md,
-// where it is the base URL of the STDB host both database provisioning and the
-// warm-up dispatch address. Locally it is the host `pnpm dev:stdb` starts.
-//
-// This is a *Convex* variable. Provisioning, warm-up, and teardown are the
-// deployment's management relationship with the STDB host; a Centaur Server is
-// handed a per-game instance address at run time and connects to that with
-// per-team credentials. It must never require this name — see
-// legacy-spec-archive/spec/05-convex-platform.md §"management credentials".
+// A *Convex* variable: provisioning, warm-up and teardown are the deployment's
+// management relationship with the STDB host. A Centaur Server is handed a
+// per-game instance address at run time and must never require this name.
 export const STDB_ENV: ReadonlyArray<EnvRequirement> = [
   {
     name: "STDB_MANAGEMENT_BASE_URL",
