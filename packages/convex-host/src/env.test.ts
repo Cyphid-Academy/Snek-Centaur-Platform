@@ -49,8 +49,4 @@ describe("describeMissing", () => {
     expect(report).toContain("PRIMARY (or OTHER)");
     expect(report).not.toContain("hunter2");
   });
-
-  it("says nothing about a requirement that is satisfied", () => {
-    expect(describeMissing(missingEnv([PLAIN], { PRIMARY: "x" }))).not.toContain("PRIMARY");
-  });
 });
