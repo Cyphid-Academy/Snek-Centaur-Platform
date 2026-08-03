@@ -25,7 +25,7 @@ This package is `@cyphid/snek-convex-host`: the Convex deployment that mounts bo
 
 The components are imported by **relative path**, not by package name. Convex bundles a component from its `convex.config.ts` source, and resolving that through a pnpm workspace symlink lands the component root outside the package the import was written in.
 
-`convex/` is excluded from `tsc -b` and checked by `convex/tsconfig.json` via `pnpm typecheck:convex`; `src/` stays in the composite build. `src/` exports what the rest of the workspace needs to *talk to* the deployment — record types, the environment contract in `env.ts`, and the function names — without pulling the Convex runtime into every consumer.
+`convex/` is excluded from `tsc -b` and checked by `convex/tsconfig.json` via `pnpm typecheck:convex`; `src/` stays in the composite build. `src/` exports what the rest of the workspace needs to *talk to* the deployment — record types and the environment contract in `env.ts` — without pulling the Convex runtime into every consumer. It carries no hand-written table of function names: functions are addressed through the generated `api` object, which `tsc` checks against the deployment's actual surface.
 
 ## Auth integration (STILL DEFERRED)
 
@@ -43,6 +43,6 @@ When implementing auth, read the `identity-and-authorization` and `team-server-m
 - `convex/convex.config.ts` — mounts both components
 - `convex/platform.ts` — the public function surface
 - `src/env.ts` — the environment contract (this project ships no `.env.example` on purpose)
-- `src/index.ts` — record-type re-exports and the published function names
+- `src/index.ts` — record-type re-exports and the environment contract
 - `legacy-spec-archive/spec/02-platform-architecture.md`
 - `legacy-spec-archive/spec/03-auth-and-identity.md`

@@ -1,10 +1,11 @@
 import { defineConfig } from "vitest/config";
 
-// Root vitest config — runs all package test suites via project discovery.
-// The Svelte app (apps/centaur-server-reference) is intentionally excluded:
-// its Vite transform pipeline conflicts with @sveltejs/kit module resolution
-// during workspace runs. App tests are run in isolation via the app's own
-// `pnpm test` script when needed.
+// Root vitest config — package test suites, by project discovery.
+//
+// The glob covers `packages/*` only. Both SvelteKit apps are excluded because
+// their Vite transform conflicts with @sveltejs/kit resolution during a
+// workspace run, so the root `test` script invokes each as its own filtered
+// run. A new app needs adding there or its tests never run.
 export default defineConfig({
   test: {
     projects: ["packages/*/vitest.config.ts", "scripts/vitest.config.ts"],

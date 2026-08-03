@@ -1,10 +1,7 @@
 {
-  // The Convex regime: component config, schema, functions, and Convex's
-  // generated files. Deliberately does NOT extend tsconfig.base.json — the
-  // generated code is not written for `exactOptionalPropertyTypes`,
-  // `noUncheckedIndexedAccess` or `verbatimModuleSyntax`, and these files are
-  // bundled by Convex rather than emitted by tsc, so they cannot join the
-  // composite build. Checked by `pnpm typecheck:convex`.
+  // The Convex regime — bundled by Convex, not emitted by tsc, so it does not
+  // extend tsconfig.base.json and does not join the composite build. Checked by
+  // `pnpm typecheck:convex`. See AGENTS.md for the three regimes.
   "compilerOptions": {
     "target": "ESNext",
     "module": "ESNext",

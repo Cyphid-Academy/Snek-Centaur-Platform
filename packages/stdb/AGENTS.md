@@ -30,7 +30,7 @@ Concretely: `spacetime build` bundles the module *and everything it imports from
 
 **The package has two halves, on purpose.**
 
-- `src/` is an ordinary workspace package in the strict composite build. It holds the published reducer/table names and, in time, the row codecs mapping the engine's `GameState` to and from table rows. Anything that can be checked under the workspace's real settings belongs here.
+- `src/` is an ordinary workspace package in the strict composite build. It re-exports the engine's types and holds, in time, the row codecs mapping the engine's `GameState` to and from table rows. Anything that can be checked under the workspace's real settings belongs here. It deliberately holds **no** hand-written table of reducer or table names: a string literal is not a reference, so such a table drifts silently on a rename. Real bindings come from `spacetime generate` when a caller needs to address the instance over the wire.
 - `spacetimedb/` is the module project that `spacetime build` owns. Its `tsconfig.json` is SpacetimeDB's, not the workspace's, and it is excluded from `tsc -b`. It is a separate pnpm workspace member (declared in `pnpm-workspace.yaml`) so `spacetimedb` and the engine are installed into it — without that, the bundle fails with `Module not found`.
 
 Keep reducer bodies thin and push anything worth checking into `src/`. The module project's tsconfig is looser than the workspace's, so logic left in `spacetimedb/` is logic checked less carefully.
@@ -44,6 +44,6 @@ Keep reducer bodies thin and push anything worth checking into `src/`. The modul
 ## Key files
 
 - `spacetimedb/src/index.ts` — tables and reducers (the module itself)
-- `src/index.ts` — published reducer/table names and engine re-exports
+- `src/index.ts` — engine re-exports, and constants the published module itself imports
 - `legacy-spec-archive/spec/04-stdb-engine.md` — binding source of truth
 - `docs/external-setup.md` → *Local development* — how to run and drive it
