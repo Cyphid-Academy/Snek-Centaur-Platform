@@ -1,6 +1,7 @@
 <script lang="ts">
 // spec: visual-tester/board-editor — every authorable component of game
 // state is editable here; alive/lastDirection and clocks are read-only.
+import { untrack } from "svelte";
 import { CellType, Direction, ItemType } from "@cyphid/snek-engine";
 import type { CentaurTeamId, EffectFamily, GameRuntimeConfig } from "@cyphid/snek-engine";
 import * as editor from "../editor.js";
@@ -16,18 +17,24 @@ interface Props {
 
 const { store, tool, onToolChange }: Props = $props();
 
-const state = $derived(store.currentState);
+// Named `gameState`, not `state`: a binding called `state` makes `$state(…)`
+// below parse as a store read of it (`$`-prefix syntax) rather than as the
+// rune, which is what a Svelte-aware typecheck reports and what a reader would
+// have to disambiguate too.
+const gameState = $derived(store.currentState);
 const config = $derived(store.session.config);
 
 // Initialize from the live session so these are never blank — even before the
 // sync effects first run (e.g. during hydration), which was surfacing empty
 // seed / board-size fields that blocked editing with no explanation.
-let boardSizeInput = $state(String(store.currentState.board.boardSize));
-let seedInput = $state(bytesToHex(store.session.gameSeed));
+// `untrack` because capturing the *initial* value is the whole intent here;
+// keeping these in step afterwards is the effects' job, below.
+let boardSizeInput = $state(untrack(() => String(store.currentState.board.boardSize)));
+let seedInput = $state(untrack(() => bytesToHex(store.session.gameSeed)));
 let seedError = $state<string | null>(null);
 
 $effect(() => {
-  boardSizeInput = String(state.board.boardSize);
+  boardSizeInput = String(gameState.board.boardSize);
 });
 $effect(() => {
   seedInput = bytesToHex(store.session.gameSeed);
@@ -71,11 +78,10 @@ function setConfigField(path: string, raw: string): void {
   const value = Number(raw);
   if (!Number.isFinite(value)) return;
   const next: GameRuntimeConfig = structuredClone(config);
-  const mutable = next as unknown as Record<string, unknown>;
   if (path.startsWith("clock.")) {
-    (mutable.clock as Record<string, number>)[path.slice(6)] = value;
+    (next.clock as unknown as Record<string, number>)[path.slice(6)] = value;
   } else {
-    (mutable as Record<string, number>)[path] = value;
+    (next as unknown as Record<string, number>)[path] = value;
   }
   store.setConfig(next);
 }
@@ -169,10 +175,10 @@ const configFields = $derived([
   </div>
 
   <h2>Snakes</h2>
-  {#if state.snakes.length === 0}
+  {#if gameState.snakes.length === 0}
     <p class="muted">No snakes. Use the Add Snake tool.</p>
   {/if}
-  {#each state.snakes as snake (snake.snakeId)}
+  {#each gameState.snakes as snake (snake.snakeId)}
     <!-- spec: visual-tester/snake-selection — selection drives expansion:
          the selected snake is the sole open one, and toggling selects. -->
     <details class="snake" open={snake.snakeId === store.selectedSnakeId}>
@@ -275,10 +281,10 @@ const configFields = $derived([
   </div>
 
   <h2>Clocks <span class="muted">(read-only in v1)</span></h2>
-  {#if state.clocks.length === 0}
+  {#if gameState.clocks.length === 0}
     <p class="muted">No team clocks (no snakes on the board).</p>
   {/if}
-  {#each state.clocks as clock (clock.centaurTeamId)}
+  {#each gameState.clocks as clock (clock.centaurTeamId)}
     <p class="muted">
       {clock.centaurTeamId}: budget {clock.budgetMs}ms, per-turn {clock.perTurnMs}ms,
       declared over: {clock.declaredTurnOver ? "yes" : "no"}

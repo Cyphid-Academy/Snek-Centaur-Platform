@@ -66,12 +66,12 @@ function stagedArrow(s: SnakeState): string | null {
   const cy = (head.y + 0.5) * CELL;
   const px = -dy;
   const py = dx; // perpendicular
-  const tip = [cx + dx * CELL * 0.48, cy + dy * CELL * 0.48];
-  const base = [cx + dx * CELL * 0.2, cy + dy * CELL * 0.2];
+  const tipX = cx + dx * CELL * 0.48;
+  const tipY = cy + dy * CELL * 0.48;
+  const baseX = cx + dx * CELL * 0.2;
+  const baseY = cy + dy * CELL * 0.2;
   const w = CELL * 0.17;
-  const p1 = [base[0] + px * w, base[1] + py * w];
-  const p2 = [base[0] - px * w, base[1] - py * w];
-  return `${tip[0]},${tip[1]} ${p1[0]},${p1[1]} ${p2[0]},${p2[1]}`;
+  return `${tipX},${tipY} ${baseX + px * w},${baseY + py * w} ${baseX - px * w},${baseY - py * w}`;
 }
 
 // spec: visual-tester/invalid-state-surfacing — a discontinuous snake is a
