@@ -6,6 +6,7 @@
 //
 // design: the second shape of "Where sign-in happens" — a client that redeems
 // for itself, leaving the Server holding nothing of the human's.
+import type { IssuerRegistration } from "../../convex-snek-platform/convex/schema";
 import { components } from "./_generated/api";
 import { createAuth } from "./auth";
 import { type HandoffMinter, mintHandoff } from "./issuance";
@@ -99,10 +100,14 @@ export const complete = publicHttpAction(
       if (!issuerId || !returnAddress || !challenge) {
         return refusal(400, "the return leg lost its issuer, return address, or challenge");
       }
-      const caller = ctx.caller;
-      if (caller?.kind !== "human") return refusal(401, "a handoff names one authenticated human");
-
-      return await completed(ctx, { userId: caller.userId, issuerId, returnAddress, challenge });
+      // Not anonymously reachable, so a browser arriving here without a session
+      // was refused a 401 by the builder and this handler never ran.
+      return await completed(ctx, {
+        userId: ctx.caller.userId,
+        issuerId,
+        returnAddress,
+        challenge,
+      });
     },
   },
 );
@@ -128,11 +133,18 @@ async function completed(
   }
 }
 
-/** One registered issuer, or `null`. Typed at the call site the same way `issuance.ts` types it. */
+/**
+ * One registered issuer, or `null`.
+ *
+ * Typed from the component's own validator, like every other reader of a
+ * registration: a `runQuery` result can only be typed by annotation here, so an
+ * interface written out by hand would typecheck on both sides of a field rename
+ * and fail at runtime.
+ */
 async function registrationFor(
   ctx: HandoffMinter,
   issuerId: string,
-): Promise<{ returnAddresses: ReadonlyArray<string> } | null> {
+): Promise<IssuerRegistration | null> {
   return await ctx.runQuery(components.snekPlatform.functions.issuer, { issuerId });
 }
 

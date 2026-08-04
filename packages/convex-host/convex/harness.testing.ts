@@ -10,6 +10,7 @@ import type { FunctionReference } from "convex/server";
 import { v } from "convex/values";
 import { base64url } from "jose";
 import { mutation as platformComponentMutation } from "../../convex-snek-platform/convex/_generated/server";
+import { issuerRegistration } from "../../convex-snek-platform/convex/schema";
 import { components } from "./_generated/api";
 import schema from "./schema";
 
@@ -66,12 +67,7 @@ const GAME_STATUS = v.union(v.literal("not-started"), v.literal("playing"), v.li
 
 const seedModule = {
   seedIssuer: platformComponentMutation({
-    args: {
-      issuerId: v.string(),
-      verificationMaterialUrl: v.string(),
-      capabilityCeiling: v.array(v.string()),
-      returnAddresses: v.array(v.string()),
-    },
+    args: issuerRegistration,
     returns: v.null(),
     handler: async (ctx, args) => {
       await ctx.db.insert("trusted_issuers", args);

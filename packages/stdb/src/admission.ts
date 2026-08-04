@@ -29,12 +29,10 @@
 // on this substrate: it is checked before any other claim, because every claim
 // after it is only worth what the signer is worth.
 //
-// The `sub` encoding is written by the platform, in
-// `packages/convex-host/convex/auth/subject.ts`, and read only here. This
-// package must not import Convex, so the grammar is restated rather than
-// shared; keeping the platform side write-only holds the spellings to two
-// rather than four, and `convex/auth/eligibility.test.ts` round-trips the
-// encoder's output through `admit`, so a drift between them fails there.
+// The `sub` grammar is `./subject.ts`'s, shared with the platform that writes
+// it — this file decides what a parsed subject *earns*, and nothing about how
+// one is spelled.
+import { parseGameSubject } from "./subject";
 
 /** The claims of a token whose signature the host has already checked. */
 export interface VerifiedToken {
@@ -158,51 +156,55 @@ export function admit(token: VerifiedToken | undefined, ctx: AdmissionContext): 
   // expiry that bounds nothing at all. The negation fails closed on it.
   if (!(token.exp > ctx.nowSeconds)) return { ok: false, refusal: "expired" };
 
-  const segments = token.sub.split(":");
-  const [role, first, second] = segments;
-  const parts = segments.length;
-  if (!first) return { ok: false, refusal: "malformed-subject" };
-  if (role === "spectator" && parts === 2) return { ok: true, identity: { role, userId: first } };
-  if (role === "operator" && parts === 2) {
-    // An operator's team is not in the subject: the seeded roster snapshot
-    // already keys it by user id. The scenario asks for a human recorded "on a
-    // participating team", which is two facts and not one — so the team the
-    // snapshot names is checked against the participant set rather than assumed
-    // to be in it. Nothing yet writes these two tables together (`initialize_game`
-    // belongs to migrate-game-lifecycle), so a seed that disagreed with itself
-    // would otherwise admit an operator acting for a team this game never
-    // registered.
-    // spec: identity-and-authorization/admission-validation#operator-absent-from-the-snapshot-refused
-    const actsFor = ctx.teamOfMember.get(first);
-    return actsFor && ctx.participantTeamIds.has(actsFor)
-      ? { ok: true, identity: { role, userId: first, actsFor } }
-      : { ok: false, refusal: "not-a-participant" };
+  // Spelling is `subject.ts`'s; what a subject *earns* is this file's. Nothing
+  // below re-reads a delimiter or a segment count, so the grammar cannot drift
+  // between the platform that writes one and the instance that reads one.
+  const subject = parseGameSubject(token.sub);
+  if (!subject) return { ok: false, refusal: "malformed-subject" };
+  switch (subject.role) {
+    case "spectator":
+      return { ok: true, identity: { role: "spectator", userId: subject.userId } };
+    case "operator": {
+      // An operator's team is not in the subject: the seeded roster snapshot
+      // already keys it by user id. The scenario asks for a human recorded "on a
+      // participating team", which is two facts and not one — so the team the
+      // snapshot names is checked against the participant set rather than assumed
+      // to be in it. Nothing yet writes these two tables together (`initialize_game`
+      // belongs to migrate-game-lifecycle), so a seed that disagreed with itself
+      // would otherwise admit an operator acting for a team this game never
+      // registered.
+      // spec: identity-and-authorization/admission-validation#operator-absent-from-the-snapshot-refused
+      const actsFor = ctx.teamOfMember.get(subject.userId);
+      return actsFor && ctx.participantTeamIds.has(actsFor)
+        ? { ok: true, identity: { role: "operator", userId: subject.userId, actsFor } }
+        : { ok: false, refusal: "not-a-participant" };
+    }
+    case "bot":
+      return ctx.participantTeamIds.has(subject.teamId)
+        ? { ok: true, identity: { role: "bot", teamId: subject.teamId, actsFor: subject.teamId } }
+        : { ok: false, refusal: "not-a-participant" };
+    case "coach": {
+      // Both halves, and in this order. A coach token is the one subject binding
+      // a human *and* a team, so checking the team alone would admit any human at
+      // all as coach of any participating team — which is what the snapshot's
+      // coach designations exist to prevent. A coach need not be a *member* of
+      // the team they watch, which is why `teamOfMember` cannot answer this and a
+      // designation of its own is seeded.
+      //
+      // The participation check stays first and separate: a designation for a
+      // team this game never registered earns nothing, and saying so as
+      // `not-a-participant` keeps the two failures legible in the module log.
+      //
+      // spec: identity-and-authorization/coach-tokens
+      // spec: identity-and-authorization/admission-validation#coach-absent-from-the-snapshot-refused
+      if (!ctx.participantTeamIds.has(subject.teamId)) {
+        return { ok: false, refusal: "not-a-participant" };
+      }
+      return ctx.coachTeams.get(subject.userId)?.has(subject.teamId)
+        ? { ok: true, identity: { role: "coach", userId: subject.userId, viewsAs: subject.teamId } }
+        : { ok: false, refusal: "not-a-coach" };
+    }
   }
-  if (role === "bot" && parts === 2) {
-    return ctx.participantTeamIds.has(first)
-      ? { ok: true, identity: { role, teamId: first, actsFor: first } }
-      : { ok: false, refusal: "not-a-participant" };
-  }
-  if (role === "coach" && parts === 3 && second) {
-    // Both halves, and in this order. A coach token is the one subject binding
-    // a human *and* a team, so checking the team alone would admit any human at
-    // all as coach of any participating team — which is what the snapshot's
-    // coach designations exist to prevent. A coach need not be a *member* of
-    // the team they watch, which is why `teamOfMember` cannot answer this and a
-    // designation of its own is seeded.
-    //
-    // The participation check stays first and separate: a designation for a
-    // team this game never registered earns nothing, and saying so as
-    // `not-a-participant` keeps the two failures legible in the module log.
-    //
-    // spec: identity-and-authorization/coach-tokens
-    // spec: identity-and-authorization/admission-validation#coach-absent-from-the-snapshot-refused
-    if (!ctx.participantTeamIds.has(second)) return { ok: false, refusal: "not-a-participant" };
-    return ctx.coachTeams.get(first)?.has(second)
-      ? { ok: true, identity: { role, userId: first, viewsAs: second } }
-      : { ok: false, refusal: "not-a-coach" };
-  }
-  return { ok: false, refusal: "malformed-subject" };
 }
 
 /**

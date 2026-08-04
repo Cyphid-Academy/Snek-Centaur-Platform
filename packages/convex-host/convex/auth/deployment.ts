@@ -45,8 +45,28 @@ const KEY_ID = "platform";
  */
 export const PLATFORM_AUDIENCE = "snek-platform";
 
-/** The issuer this deployment stamps on everything it signs. */
-export const issuer = (): string => process.env["CONVEX_SITE_URL"] ?? "";
+/**
+ * The issuer this deployment stamps on everything it signs.
+ *
+ * Absent configuration throws rather than answering the empty string, which is
+ * the direction this file argues for twice elsewhere and used to break here.
+ * An empty issuer is not a harmless placeholder: it is stamped on every
+ * credential minted, compared against by every verifier, and — since
+ * `assertionAudience()` is this value — it is the audience a Snek Centaur
+ * Server's assertion must name, so an unconfigured deployment would accept an
+ * assertion minted for *any* deployment that was also unconfigured. It also
+ * reaches a game instance's pinned issuer, where an empty string matches
+ * nothing and refuses every connection. Every Convex deployment sets this
+ * variable; a process where it is missing is misconfigured, and saying so at
+ * the first signature is cheaper than any of the above.
+ *
+ * spec: identity-and-authorization/verification-without-shared-secrets
+ */
+export const issuer = (): string => {
+  const siteUrl = process.env["CONVEX_SITE_URL"];
+  if (!siteUrl) throw new Error("CONVEX_SITE_URL is unset: this deployment cannot name itself");
+  return siteUrl;
+};
 
 /**
  * The audience a Snek Centaur Server's assertion must name to be accepted here:

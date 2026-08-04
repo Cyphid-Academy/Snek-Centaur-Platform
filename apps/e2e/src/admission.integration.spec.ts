@@ -68,6 +68,7 @@
 //
 // No Centaur Server and no browser: nothing here is reached from a Server's
 // page, and the fixtures this names are the whole of what it starts.
+import { type GameSubject, encodeGameSubject } from "@cyphid/snek-stdb/subject";
 import { type JWK, SignJWT, decodeJwt, importJWK } from "jose";
 import { expect, test } from "./fixtures";
 import {
@@ -89,6 +90,13 @@ const ANOTHER_GAME = "game-this-instance-is-not";
 
 /** The platform's algorithm — `convex/auth/credential.ts`, restated. */
 const ALG = "ES256";
+
+/**
+ * One subject stands for every role below, deliberately: the issuer pin and the
+ * audience gate both answer before a subject is read, so a second role's token
+ * would traverse the same bytes end to end.
+ */
+const SPECTATOR: GameSubject = { role: "spectator", userId: "u-ada" };
 
 let log: ModuleLog;
 /** The private half of the deployment's signing key, ready to sign with. */
@@ -160,7 +168,7 @@ test("verifies a platform-signed token and refuses it against what it was bound 
   const attempt = await attemptConnection(
     spacetime,
     DATABASE,
-    await platformSigned({ sub: "spectator:u-ada", aud: ANOTHER_GAME }),
+    await platformSigned({ sub: SPECTATOR, aud: ANOTHER_GAME }),
   );
 
   expect(attempt.status).toBe(101);
@@ -189,14 +197,14 @@ test("verifies a platform-signed token and refuses it against what it was bound 
 test("carries the platform's claims through the host's own token exchange", async ({
   spacetime,
 }) => {
-  const platform = await platformSigned({ sub: "spectator:u-ada", aud: ANOTHER_GAME });
+  const platform = await platformSigned({ sub: SPECTATOR, aud: ANOTHER_GAME });
 
   const exchanged = decodeJwt(await exchangedForWebsocketToken(spacetime, platform));
 
   // The three the decision reads, and nothing about the fourth: `exp` is the
   // host's own and deliberately not asserted on.
   expect(exchanged.iss).toBe(issuer);
-  expect(exchanged.sub).toBe("spectator:u-ada");
+  expect(exchanged.sub).toBe(encodeGameSubject(SPECTATOR));
   expect(exchanged.aud).toContain(ANOTHER_GAME);
 });
 
@@ -224,7 +232,7 @@ test("refuses a token signed by a key that is not the platform's, before the mod
   const attempt = await attemptConnection(
     spacetime,
     DATABASE,
-    await platformSigned({ sub: "spectator:u-ada", aud: ANOTHER_GAME }, stranger.privateKey),
+    await platformSigned({ sub: SPECTATOR, aud: ANOTHER_GAME }, stranger.privateKey),
   );
 
   expect(attempt.status).toBe(401);
@@ -237,24 +245,23 @@ test("refuses a token signed by a key that is not the platform's, before the mod
 /**
  * A game access token as the platform signs one.
  *
- * The claim shape is restated here rather than imported: `mint` and
- * `encodeGameSubject` live in `packages/convex-host/convex/`, which this
- * member cannot reach — that package exports its built `src/`, and the Convex
- * function directory is not in it. So this is a second spelling of the grammar
- * `convex/auth/subject.ts` writes and `packages/stdb/src/admission.ts` reads,
- * and it is the one place a drift between the platform's minting and these
- * scenarios could hide. The module reads only `aud`, `sub` and `exp`, so what
- * is restated is small; `cap` is carried because every credential the platform
- * issues has one, and no admission decision reads it.
+ * The *envelope* is restated — `mint` lives in `packages/convex-host/convex/`,
+ * which this member cannot reach, since that package exports its built `src/`
+ * and the Convex function directory is not in it. The *subject* is not: it comes
+ * from `@cyphid/snek-stdb/subject`, the same codec the platform writes with and
+ * the module reads with, so a scenario here cannot quietly encode a subject the
+ * platform would never mint. The module reads only `iss`, `aud`, `sub` and
+ * `exp`; `cap` is carried because every credential the platform issues has one,
+ * and no admission decision reads it.
  */
 function platformSigned(
-  claims: { sub: string; aud: string },
+  claims: { sub: GameSubject; aud: string },
   key: CryptoKey = platformKey,
 ): Promise<string> {
   return new SignJWT({ cap: [] })
     .setProtectedHeader({ alg: ALG })
     .setIssuer(issuer)
-    .setSubject(claims.sub)
+    .setSubject(encodeGameSubject(claims.sub))
     .setAudience(claims.aud)
     .setIssuedAt()
     .setExpirationTime("15m")

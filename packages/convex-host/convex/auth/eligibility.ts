@@ -16,7 +16,7 @@
 // capability owns is decidable without a game record in hand and stays
 // answerable from the initialization snapshot rather than from whatever the
 // team records happen to say now (`roster-snapshot-binding`).
-import type { GameSubject } from "./subject";
+import type { GameSubject } from "@cyphid/snek-stdb/subject";
 
 /**
  * One participating team as the roster snapshot recorded it at game

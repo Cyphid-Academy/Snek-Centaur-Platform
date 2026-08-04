@@ -24,6 +24,7 @@ import {
 } from "./auth/deployment";
 import {
   ANONYMOUS_CAPABILITIES,
+  type CAPABILITIES,
   type Capability,
   HUMANS_ONLY,
   type PrincipalKind,
@@ -37,11 +38,45 @@ import {
  * `principal-kind-gating` requires a function to depart from explicitly, so
  * accepting a Snek Centaur Server or a registered external system is always
  * visible at the declaration site.
+ *
+ * Both parameters are inferred from the literal a function declares, and they
+ * are what makes `ctx.caller` arrive already narrowed — see `AdmittedCaller`.
  */
-export interface PublicFunctionDeclaration {
-  readonly capability: Capability;
-  readonly principals?: ReadonlyArray<PrincipalKind>;
+export interface PublicFunctionDeclaration<
+  C extends Capability = Capability,
+  K extends PrincipalKind = PrincipalKind,
+> {
+  readonly capability: C;
+  readonly principals?: ReadonlyArray<K>;
 }
+
+/**
+ * The capabilities the registry declares anonymously reachable, as a type.
+ *
+ * The same fact `ANONYMOUS_CAPABILITIES` derives at runtime, read off the same
+ * `as const` registry — so the two cannot disagree, and neither is a list.
+ */
+type AnonymousCapability = {
+  [K in Capability]: (typeof CAPABILITIES)[K] extends { anonymous: true } ? K : never;
+}[Capability];
+
+/**
+ * The caller a handler receives, given what its function declared.
+ *
+ * **Both checks `admit` performs are already in this type, so no handler
+ * repeats either.** The kind narrows to what was declared, because a principal
+ * of any other kind was refused before the handler ran; and `null` appears only
+ * where the capability is anonymously reachable, because everywhere else a
+ * caller with no credential could not have reached the function at all. Seven
+ * handlers used to open with a hand-written `if (caller?.kind !== "human")`,
+ * each with its own message and each an opportunity to check the wrong thing —
+ * or, worse, to check nothing and read a field the kind does not have.
+ *
+ * spec: identity-and-authorization/principal-kind-gating
+ */
+export type AdmittedCaller<C extends Capability, K extends PrincipalKind> =
+  | Extract<Principal, { kind: K }>
+  | (C extends AnonymousCapability ? null : never);
 
 /**
  * The caller as a handler may see it: who is calling, by the platform's own
@@ -350,7 +385,9 @@ async function admitCaller(
  * spec: identity-and-authorization/peer-capability-ceiling#the-bound-is-charged-where-the-change-is-made
  * spec: identity-and-authorization/peer-capability-ceiling#attribution-is-user-visible
  */
-const declared = (declaration: PublicFunctionDeclaration) => ({
+const declared = <C extends Capability, K extends PrincipalKind>(
+  declaration: PublicFunctionDeclaration<C, K>,
+) => ({
   args: CREDENTIAL_ARG,
   input: async (ctx: { auth: Auth } & Partial<Writer>, args: { credential?: string }) => {
     const caller = await admit(ctx, args.credential, declaration);
@@ -367,18 +404,30 @@ const declared = (declaration: PublicFunctionDeclaration) => ({
           : undefined,
       );
     }
-    return { ctx: { caller: caller?.principal ?? null }, args: {} };
+    // The cast is where the two runtime checks above become the type below:
+    // `admitCaller` has already refused every kind this function did not
+    // declare, and refused the anonymous caller unless the capability is
+    // anonymously reachable, so what remains is exactly `AdmittedCaller`.
+    // TypeScript cannot see that a value-level `includes` narrowed a union, and
+    // this is the one place the correspondence is asserted rather than repeated
+    // in every handler.
+    return {
+      ctx: { caller: (caller?.principal ?? null) as AdmittedCaller<C, K> },
+      args: {},
+    };
   },
 });
 
 const writes = (ctx: { auth: Auth } & Partial<Writer>): ctx is { auth: Auth } & Writer =>
   ctx.runMutation !== undefined;
 
-export const publicQuery = (declaration: PublicFunctionDeclaration) =>
-  customQuery(query, declared(declaration));
+export const publicQuery = <C extends Capability, K extends PrincipalKind = "human">(
+  declaration: PublicFunctionDeclaration<C, K>,
+) => customQuery(query, declared(declaration));
 
-export const publicMutation = (declaration: PublicFunctionDeclaration) =>
-  customMutation(mutation, declared(declaration));
+export const publicMutation = <C extends Capability, K extends PrincipalKind = "human">(
+  declaration: PublicFunctionDeclaration<C, K>,
+) => customMutation(mutation, declared(declaration));
 
 /**
  * A public action, declaring what reaches it.
@@ -387,8 +436,9 @@ export const publicMutation = (declaration: PublicFunctionDeclaration) =>
  * network, to read the material a service principal publishes at the location
  * its registration records. Nothing else about them differs.
  */
-export const publicAction = (declaration: PublicFunctionDeclaration) =>
-  customAction(action, declared(declaration));
+export const publicAction = <C extends Capability, K extends PrincipalKind = "human">(
+  declaration: PublicFunctionDeclaration<C, K>,
+) => customAction(action, declared(declaration));
 
 /**
  * A publication endpoint: an HTTP route serving one fixed public document.
@@ -433,10 +483,13 @@ export const publishedDocument = (document: () => unknown) =>
  * spec: identity-and-authorization/capability-registry
  * spec: identity-and-authorization/authentication-required
  */
-export const publicHttpAction = (
-  declaration: PublicFunctionDeclaration,
+export const publicHttpAction = <C extends Capability, K extends PrincipalKind = "human">(
+  declaration: PublicFunctionDeclaration<C, K>,
   route: {
-    handler: (ctx: ActionCtx & { caller: Principal | null }, request: Request) => Promise<Response>;
+    handler: (
+      ctx: ActionCtx & { caller: AdmittedCaller<C, K> },
+      request: Request,
+    ) => Promise<Response>;
   },
 ) =>
   httpAction(async (ctx, request) => {
@@ -450,7 +503,10 @@ export const publicHttpAction = (
         headers: { "Cache-Control": "no-store" },
       });
     }
-    return route.handler(Object.assign(ctx, { caller: session?.principal ?? null }), request);
+    return route.handler(
+      Object.assign(ctx, { caller: (session?.principal ?? null) as AdmittedCaller<C, K> }),
+      request,
+    );
   });
 
 /**

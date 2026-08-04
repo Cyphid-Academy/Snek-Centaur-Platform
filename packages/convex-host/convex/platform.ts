@@ -44,7 +44,6 @@ export const attributedActions = publicQuery({ capability: "review-attributed-ac
   returns: v.array(v.object({ issuerId: v.string(), capability: v.string(), at: v.number() })),
   handler: async (ctx) => {
     const caller = ctx.caller;
-    if (caller?.kind !== "human") throw new Error("an account is reviewed by the human it is");
     return ctx.runQuery(components.snekPlatform.functions.actionsTakenFor, {
       userId: caller.userId,
     });

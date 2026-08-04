@@ -48,11 +48,8 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
   const deploymentOrigin = process.env["CONVEX_SITE_URL"];
   return betterAuth({
     // The platform's own origin: sign-in completes here, and the session cookie
-    // is issued for here. Better Auth's cookie defaults are what
-    // `client-credential-custody` requires — httpOnly, so no page script can
-    // read it; secure and same-site, so it travels only to this deployment over
-    // HTTPS — and it is the one credential a reload recovers
-    // (`#the-session-is-the-only-thing-a-reload-recovers`). Every other
+    // is issued for here. It is the one credential a reload recovers
+    // (`#the-session-is-the-only-thing-a-reload-recovers`); every other
     // credential the page needs is obtained afresh under it.
     //
     // Omitted rather than passed as `undefined` when unset: Better Auth's option
@@ -68,6 +65,26 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
     // the one direction this codebase's own doctrine says absent configuration
     // must never fail in.
     trustedOrigins: siteUrl ? [siteUrl] : [],
+    // **Two cookie attributes stated rather than inherited, because the design
+    // rests on them.** `httpOnly` is what `client-credential-custody` asks for
+    // directly — no page script can read the session. `sameSite: "lax"` is
+    // load-bearing for the whole redirect design: the sign-in entry route is
+    // reached by a *top-level cross-origin navigation* from a Server's page, and
+    // the browser sends this cookie on one only under `lax`. Under `strict` the
+    // already-signed-in branch silently stops working — the browser arrives
+    // looking anonymous — and under `none` the cookie rides every cross-site
+    // request there is. Both happen to be Better Auth's defaults today, which is
+    // exactly why they are written down: a default that changes takes a security
+    // property or a whole route with it, and neither failure announces itself.
+    //
+    // `secure` is deliberately *not* pinned. Better Auth derives it from the
+    // deployment's own scheme, so it is on wherever it can be and off on the
+    // loopback http origins the end-to-end harness runs against — where forcing
+    // it would mean no browser stored the cookie at all.
+    //
+    // spec: identity-and-authorization/client-credential-custody
+    // spec: identity-and-authorization/google-sign-in#session-survives-reload
+    advanced: { defaultCookieAttributes: { httpOnly: true, sameSite: "lax" } },
     database: authComponent.adapter(ctx),
     // Google, specifically. `google-sign-in#google-account-specifically` makes
     // the binding deliberate: adding a second provider here is a revision of
