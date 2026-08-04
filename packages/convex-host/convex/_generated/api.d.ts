@@ -14,6 +14,7 @@ import type * as auth_deployment from "../auth/deployment.js";
 import type * as auth_eligibility from "../auth/eligibility.js";
 import type * as auth_subject from "../auth/subject.js";
 import type * as capabilities from "../capabilities.js";
+import type * as crons from "../crons.js";
 import type * as http from "../http.js";
 import type * as issuance from "../issuance.js";
 import type * as platform from "../platform.js";
@@ -34,6 +35,7 @@ declare const fullApi: ApiFromModules<{
   "auth/eligibility": typeof auth_eligibility;
   "auth/subject": typeof auth_subject;
   capabilities: typeof capabilities;
+  crons: typeof crons;
   http: typeof http;
   issuance: typeof issuance;
   platform: typeof platform;
@@ -72,4 +74,5 @@ export declare const components: {
   snekPlatform: import("../../../convex-snek-platform/convex/_generated/component.js").ComponentApi<"snekPlatform">;
   centaurState: import("../../../convex-centaur-state/convex/_generated/component.js").ComponentApi<"centaurState">;
   betterAuth: import("@convex-dev/better-auth/_generated/component.js").ComponentApi<"betterAuth">;
+  rateLimiter: import("@convex-dev/rate-limiter/_generated/component.js").ComponentApi<"rateLimiter">;
 };

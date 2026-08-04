@@ -434,10 +434,16 @@ hollow it out for the next route that wanted the same exemption.
 **Two consequences are accepted rather than solved.** A page's calls now carry
 `act` naming the Server it arrived through, which keeps attribution and the
 call bound live on this path — but that bound is per issuer, so every signed-in
-page on a team's Server shares one window with the Server's own calls. The
+page on a team's Server shares one bucket with the Server's own calls. The
 constants say a per-issuer limit is "a registration column and a second lookup
 on the day one is actually wanted"; this is the first evidence that day is
-coming. And redemption itself is no longer charged against any window, because
+coming. Part of what that day threatened has since been answered by moving the
+counting to `@convex-dev/rate-limiter`: contention on a single issuer's counter
+is now a `shards:` field rather than a rewrite, so the pressure that arrives
+first — many pages' calls landing on one bucket — is absorbed without touching
+the ceiling. What the component does *not* answer is the other half, that a
+busy Server's ceiling is shared with its users' pages at all; that is still a
+registration column when someone wants it. And redemption itself is no longer charged against any window, because
 there is no assertion to identify an issuer by and a failed proof deliberately
 identifies nothing: what bounds it is the verifier's entropy and the
 reference's one-minute life, which is a different argument from the one the

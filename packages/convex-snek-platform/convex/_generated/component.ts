@@ -85,20 +85,16 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         } | null,
         Name
       >;
-      recordSystemCall: FunctionReference<
+      recordAttribution: FunctionReference<
         "mutation",
         "internal",
         {
-          attribution?: {
-            capability: string;
-            expiresAt: number;
-            userId: string;
-          };
+          capability: string;
+          expiresAt: number;
           issuerId: string;
-          limit: number;
-          windowStart: number;
+          userId: string;
         },
-        boolean,
+        null,
         Name
       >;
       redeemHandoff: FunctionReference<

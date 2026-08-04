@@ -107,19 +107,6 @@ export default defineSchema({
   // spec: identity-and-authorization/platform-admin-role#role-effective-without-reload
   platform_admins: defineTable({ userId }).index("by_user", ["userId"]),
 
-  // What one registered system has spent of the fixed window now current: one
-  // row per issuer, rewritten as the window rolls rather than appended to, so
-  // the table is bounded by the registry itself and there is nothing here for
-  // the sweep to walk. `recordSystemCall` reads and rewrites the count in its
-  // own mutation, on the same read-set guard as `accepted_assertions`.
-  // spec: identity-and-authorization/peer-capability-ceiling
-  // spec: global-invariants/transactional-invariant-enforcement#concurrent-mutations-cannot-race-past-a-guard
-  system_call_windows: defineTable({
-    issuerId: v.string(),
-    windowStart: v.number(),
-    calls: v.number(),
-  }).index("by_issuer", ["issuerId"]),
-
   // One action taken on a human's behalf through a registered system. Only the
   // host writes here, and only from a mutation or an action.
   //
