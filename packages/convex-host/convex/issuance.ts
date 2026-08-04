@@ -1,3 +1,4 @@
+import { encodeGameSubject } from "@cyphid/snek-stdb/subject";
 // spec: identity-and-authorization/sole-credential-issuer,
 //       identity-and-authorization/service-principal-assertions,
 //       identity-and-authorization/trusted-issuer-registry,
@@ -14,6 +15,7 @@
 import type { FunctionArgs, FunctionReference, FunctionReturnType } from "convex/server";
 import { v } from "convex/values";
 import { type JWK, base64url, decodeJwt } from "jose";
+import type { IssuerRegistration as Registration } from "../../convex-snek-platform/convex/schema";
 import { components } from "./_generated/api";
 import type { ActionCtx } from "./_generated/server";
 import { type CapabilityEntry, mint, verify } from "./auth/credential";
@@ -25,7 +27,6 @@ import {
   signingKey,
 } from "./auth/deployment";
 import { type TokenRequest, decideGameTokenIssuance } from "./auth/eligibility";
-import { encodeGameSubject } from "./auth/subject";
 import {
   CAPABILITIES,
   type Capability,
@@ -54,14 +55,6 @@ export interface HandoffMinter {
     mutation: M,
     args: FunctionArgs<M>,
   ): Promise<FunctionReturnType<M>>;
-}
-
-/** One registered issuer, as the component's registry hands it over. */
-interface Registration {
-  readonly issuerId: string;
-  readonly verificationMaterialUrl: string;
-  readonly capabilityCeiling: ReadonlyArray<string>;
-  readonly returnAddresses: ReadonlyArray<string>;
 }
 
 /**
@@ -211,9 +204,10 @@ export const beginSignInHandoff = publicMutation({ capability: "begin-sign-in-ha
   args: { issuerId: v.string(), returnAddress: v.string(), challenge: v.string() },
   returns: v.string(),
   handler: async (ctx, args) => {
-    const caller = ctx.caller;
-    if (caller?.kind !== "human") throw new Error("a handoff names one authenticated human");
-    return mintHandoff(ctx, { ...args, userId: caller.userId });
+    // `ctx.caller` is the human already: this capability is not anonymously
+    // reachable and declares no kind but the default, so the builder refused
+    // everything else before the handler ran.
+    return mintHandoff(ctx, { ...args, userId: ctx.caller.userId });
   },
 });
 
@@ -331,7 +325,6 @@ export const issueGameCredential = publicAction({
   returns: v.string(),
   handler: async (ctx, args) => {
     const caller = ctx.caller;
-    if (caller?.kind !== "external-system") throw new Error("no registered system is calling");
     const team: { serverDomain: string | null } | null = await ctx.runQuery(
       components.snekPlatform.functions.team,
       { teamId: args.teamId },
@@ -385,7 +378,6 @@ export const issueGameToken = publicAction({
   returns: v.string(),
   handler: async (ctx, args) => {
     const caller = ctx.caller;
-    if (!caller) throw new Error("a game access token names its holder");
     const game = await gameBeingPlayed(ctx, args.gameId);
     // The admin's implicit coach standing over every team, read from current
     // state so a designation that changed takes effect without a fresh session.

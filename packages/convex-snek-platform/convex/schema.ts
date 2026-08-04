@@ -5,7 +5,7 @@
 //       identity-and-authorization/peer-capability-ceiling
 // The component's schema.
 import { defineSchema, defineTable } from "convex/server";
-import { v } from "convex/values";
+import { type Infer, v } from "convex/values";
 
 /**
  * A human, by the platform's own durable identifier for them.
@@ -35,6 +35,17 @@ export const issuerRegistration = {
   capabilityCeiling: v.array(v.string()),
   returnAddresses: v.array(v.string()),
 };
+
+/**
+ * The same four fields as a type, inferred from the validator above rather than
+ * written out beside it.
+ *
+ * The host reads registrations out of a `runQuery`, whose result it can only
+ * type by annotation — so a hand-written interface there typechecks on both
+ * sides of a field rename and fails at runtime. Inference is what makes the
+ * rename a compile error instead.
+ */
+export type IssuerRegistration = Infer<ReturnType<typeof v.object<typeof issuerRegistration>>>;
 
 /** spec: identity-and-authorization/live-game-issuance */
 export const gameStatus = v.union(

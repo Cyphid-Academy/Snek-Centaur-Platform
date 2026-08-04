@@ -1,3 +1,5 @@
+import { type AdmissionContext, type AdmittedIdentity, admit } from "@cyphid/snek-stdb";
+import { type GameSubject, encodeGameSubject } from "@cyphid/snek-stdb/subject";
 // spec: identity-and-authorization/participant-token-eligibility,
 //       identity-and-authorization/spectator-tokens,
 //       identity-and-authorization/coach-tokens,
@@ -7,13 +9,13 @@
 //       identity-and-authorization/platform-admin-role
 // Who earns a game access token, and what the token's subject then means.
 //
-// The subject tests reach across the package boundary to the parser in
-// `packages/stdb/src/admission.ts` on purpose: the encoding is written on this
-// side and read only on that side, and nothing else fails when one of the two
-// drifts. What the reader does with malformed or unvouched subjects is
-// `admission.test.ts`'s business.
+// The subject tests reach across the package boundary into `@cyphid/snek-stdb`
+// on purpose: the grammar is one codec now, but *what a subject earns* is still
+// decided on two sides — issuance mints from the game record, admission decides
+// from the seeded snapshot — and nothing else fails when those two drift. What
+// the reader does with a malformed or unvouched subject is `admission.test.ts`'s
+// business.
 import { describe, expect, it } from "vitest";
-import { type AdmissionContext, type AdmittedIdentity, admit } from "../../../stdb/src/admission";
 import {
   type GameForIssuance,
   type IssuanceDecision,
@@ -21,7 +23,6 @@ import {
   type TokenRequest,
   decideGameTokenIssuance,
 } from "./eligibility";
-import { type GameSubject, encodeGameSubject } from "./subject";
 
 // One game, two participating teams, frozen at initialization. `dave` matters
 // later: the roster-snapshot tests turn on team records having moved since.

@@ -1,5 +1,14 @@
 // spec: identity-and-authorization/game-token-contents
-// The subject of a game access token: who is being admitted, in which role.
+// The subject of a game access token: who is being admitted, in which role —
+// written and read by one codec.
+//
+// **Here, and reachable as `@cyphid/snek-stdb/subject`, because the two ends of
+// this grammar are in different runtimes.** The platform writes it in Convex,
+// the game instance reads it inside a V8 isolate that must not import Convex,
+// and the end-to-end suite drives both. It used to be spelled three times —
+// encoder, parser, and a restatement in the harness — with nothing but a
+// cross-package test round-trip holding them together. A subpath of its own so
+// that importing the grammar does not drag the engine into a Convex bundle.
 //
 // A game instance derives its identity by hashing the token's issuer and
 // subject, so encoding the role *in* the subject makes the same human arrive
@@ -35,15 +44,31 @@ export type GameSubject =
  * own durable identifiers for what it binds. Colon-delimited because ids never
  * contain a colon, which is what lets the reader recover the role from arity
  * alone.
- *
- * This encoding is written here and read in `packages/stdb/src/admission.ts`,
- * which cannot import Convex and so restates the grammar. The direction is
- * one-way on purpose — the platform only ever *has* a subject before it mints
- * one, so a parser on this side would be a second spelling with no caller, and
- * a second spelling is exactly how the two ends drift apart.
  */
 export function encodeGameSubject(subject: GameSubject): string {
   if (subject.role === "bot") return `bot:${subject.teamId}`;
   if (subject.role === "coach") return `coach:${subject.userId}:${subject.teamId}`;
   return `${subject.role}:${subject.userId}`;
+}
+
+/**
+ * Read a `sub` back, or `null` for anything this grammar does not spell.
+ *
+ * Total over arbitrary input, because this runs at the game instance's trust
+ * boundary: what arrives is whatever a signer chose to put there. Every role's
+ * segment count is exact — "at least three" would silently accept a coach
+ * subject with a trailing segment — and the role is compared case-sensitively,
+ * because it is a token the platform *spelled*, not a word to be recognised.
+ * Refusing rather than guessing is what keeps the grammar a closed agreement
+ * between the writer and the reader.
+ */
+export function parseGameSubject(sub: string): GameSubject | null {
+  const [role, first, second, ...beyond] = sub.split(":");
+  if (!first || beyond.length > 0) return null;
+  if (second === undefined) {
+    if (role === "spectator" || role === "operator") return { role, userId: first };
+    if (role === "bot") return { role, teamId: first };
+    return null;
+  }
+  return role === "coach" && second ? { role, userId: first, teamId: second } : null;
 }

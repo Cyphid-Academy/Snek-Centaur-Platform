@@ -12,7 +12,6 @@ import type * as auth from "../auth.js";
 import type * as auth_credential from "../auth/credential.js";
 import type * as auth_deployment from "../auth/deployment.js";
 import type * as auth_eligibility from "../auth/eligibility.js";
-import type * as auth_subject from "../auth/subject.js";
 import type * as capabilities from "../capabilities.js";
 import type * as crons from "../crons.js";
 import type * as http from "../http.js";
@@ -33,7 +32,6 @@ declare const fullApi: ApiFromModules<{
   "auth/credential": typeof auth_credential;
   "auth/deployment": typeof auth_deployment;
   "auth/eligibility": typeof auth_eligibility;
-  "auth/subject": typeof auth_subject;
   capabilities: typeof capabilities;
   crons: typeof crons;
   http: typeof http;
