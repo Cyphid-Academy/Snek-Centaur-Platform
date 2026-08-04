@@ -5,12 +5,13 @@
   "type": "module",
   "scripts": {
     "test": "playwright test --project=integration --project=chromium",
-    "test:browsers": "playwright test --project=chromium --project=firefox --project=webkit --pass-with-no-tests",
+    "test:browsers": "playwright test --project=chromium --project=firefox --project=webkit",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
     "@types/node": "^25.9.0",
+    "jose": "^6.2.5",
     "typescript": "*"
   }
 }

@@ -35,9 +35,13 @@ instance isolation, one Convex deployment).
 ## Layout
 
 - `src/fixtures.ts` — the one interface a spec imports: `test`, `expect`, and
-  the `runDir`, `spacetime`, `convex` and `centaurServer` fixtures.
+  the `runDir`, `spacetime`, `convex`, `centaurServer`, `identityProvider` and
+  `credentialSigningJwk` fixtures.
 - `src/process.ts` — spawn, capture, poll for readiness, terminate.
 - `src/runtimes/` — one module per runtime kind.
+- `src/identity.ts` — the substituted verification step, and signing a human in.
+- `src/game-instance.ts` — the raw admission surfaces: a client upgrade driven
+  by hand, and the module log a refusal's reason is actually written to.
 - `src/*.integration.spec.ts` — runtime-only specs; no browser is launched.
 - `src/*.browser.spec.ts` — specs driven through a real browser.
 
@@ -52,11 +56,6 @@ pnpm --filter @cyphid/e2e exec playwright test --project=integration
 Four projects over **one worker**, and the worker count is a property of the
 fixtures rather than a tuning choice: a worker owns a whole stack on ports it
 asked the OS for, and a second worker would stand up a second stack beside it.
-
-`e2e:browsers` carries `--pass-with-no-tests` because there is not yet a browser
-spec on every branch: a scenario arrives with the capability whose behaviour it
-checks, so the projects exist before their first spec does. Drop the flag once
-one has landed and this member always has browser specs.
 
 `integration` matches `*.integration.spec.ts` and launches no browser at all.
 `chromium`, `firefox` and `webkit` each match `*.browser.spec.ts` — the same
@@ -147,6 +146,30 @@ jar and storage partition, so two contexts are two humans in a way two tabs are
 not, and Playwright gives each test its own. A wrapper's only remaining job
 would be to let a spec *place* a session, which is the thing a scenario must
 not be able to do.
+
+**A signed-in human costs one substituted step and no more.** `identity.ts`
+publishes a key set of its own over loopback and signs the identity assertion
+Google would have signed; the deployment is pointed at that key set by two
+environment variables the `convex` fixture sets, and a deployment carrying
+neither verifies exactly as it does in production. Everything after
+verification — resolving the account, the linking policy, issuing the session,
+setting the cookie — is the platform's own. Do **not** grow this into a general
+fake provider: the requirement is that one step is substituted, and a second
+substituted step is a passing run that means less.
+
+**Sign-in happens inside a browser context, not beside one.** `signIn(context,
+…)` posts through that context's own request client, which shares the browser's
+cookie jar, so the platform's `Set-Cookie` headers are stored under the
+browser's rules with every attribute intact. Never reconstruct a session and
+place it with `addCookies`: that is cookie *placement*, which the requirement
+leaves to the platform, and a reconstruction drops `Secure`, `Domain` and
+`Expires` and guesses at `SameSite`.
+
+**The deployment's own credentials are generated per run**, in the `convex`
+fixture — the signing key behind every credential the platform issues, the
+session secret, and a client id and secret standing in for the OAuth client.
+Nothing is read from a developer's environment and nothing survives the run, so
+a run holds no secret of anyone's and cannot pass because of one.
 
 **A new runtime the platform deploys is a runtime this member must start.** If
 a fourth runtime kind ever arrives, it belongs in `src/runtimes/` and as a

@@ -15,10 +15,14 @@
 // The browser is *not* here. `browser`, `context` and `page` are Playwright's
 // own fixtures, and a context is already an isolated cookie jar and storage
 // partition per test — which is what a wrapper around them would have been for.
+// `JsonWebKey` from Node's own webcrypto types, not the DOM's: the value here
+// is what `KeyObject.export({ format: "jwk" })` returns.
+import { generateKeyPairSync, randomBytes, type webcrypto } from "node:crypto";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test as base } from "@playwright/test";
+import { type IdentityProvider, startIdentityProvider } from "./identity";
 import { freePort, freePortPair } from "./process";
 import { type CentaurServer, startCentaurServer } from "./runtimes/centaur-server";
 import { type ConvexDeployment, startConvex } from "./runtimes/convex";
@@ -30,7 +34,25 @@ export interface Runtimes {
   spacetime: SpacetimeHost;
   convex: ConvexDeployment;
   centaurServer: CentaurServer;
+  /** Who a scenario signs in as. See `identity.ts`. */
+  identityProvider: IdentityProvider;
+  /**
+   * The private half of the key this run's deployment signs every credential
+   * with — the one whose public half the deployment publishes for itself.
+   *
+   * Exposed rather than merely set, so that a scenario needing a credential the
+   * platform's issuance path cannot yet produce signs with *the deployment's
+   * own key* instead of installing a second one.
+   */
+  credentialSigningJwk: webcrypto.JsonWebKey;
 }
+
+/**
+ * The OAuth client the deployment is configured with, and so the audience the
+ * substitute provider's assertions name. Fixed rather than random: it is not a
+ * secret, and a stable value makes a mismatch legible in a refusal.
+ */
+const OAUTH_CLIENT_ID = "snek-e2e.apps.googleusercontent.test";
 
 export const test = base.extend<Record<never, never>, Runtimes>({
   runDir: [
@@ -61,13 +83,54 @@ export const test = base.extend<Record<never, never>, Runtimes>({
     { scope: "worker" },
   ],
 
+  identityProvider: [
+    // biome-ignore lint/correctness/noEmptyPattern: Playwright reads the pattern
+    async ({}, use) => {
+      const provider = await startIdentityProvider(OAUTH_CLIENT_ID);
+      await use(provider);
+      await provider.stop();
+    },
+    { scope: "worker" },
+  ],
+
+  credentialSigningJwk: [
+    // P-256, because a game's SpacetimeDB instance validates RS256 and ES256
+    // and refuses everything else. A key of another kind here is a deployment
+    // that cannot mint at all. The algorithm note is in
+    // `convex/auth/credential.ts`.
+    // biome-ignore lint/correctness/noEmptyPattern: Playwright reads the pattern
+    async ({}, use) => {
+      const { privateKey } = generateKeyPairSync("ec", { namedCurve: "P-256" });
+      await use(privateKey.export({ format: "jwk" }));
+    },
+    { scope: "worker" },
+  ],
+
   convex: [
-    async ({ runDir }, use) => {
+    async ({ runDir, identityProvider, credentialSigningJwk }, use) => {
       const [port, siteProxyPort] = await freePortPair();
       const dataDir = join(runDir, "convex");
       mkdirSync(dataDir, { recursive: true });
       const deployment = await startConvex({ port, siteProxyPort, dataDir });
-      await deployment.setEnv({ SITE_URL: deployment.siteUrl });
+      // Everything the deployment needs of its environment, in one place. Two
+      // kinds of thing are here and the difference matters:
+      //
+      //   * addresses of what this worker started — the substitute identity
+      //     provider, and the deployment's own site origin;
+      //   * credentials the deployment would otherwise have from an operator,
+      //     generated per run and thrown away with it. Nothing is read from a
+      //     developer's environment, so a run holds no secret of anyone's and
+      //     cannot pass because of one.
+      // spec: identity-and-authorization/substituted-provider-verification
+      await deployment.setEnv({
+        SITE_URL: deployment.siteUrl,
+        CREDENTIAL_SIGNING_JWK: JSON.stringify(credentialSigningJwk),
+        BETTER_AUTH_SECRET: randomBytes(32).toString("hex"),
+        GOOGLE_CLIENT_ID: identityProvider.audience,
+        GOOGLE_CLIENT_SECRET: randomBytes(16).toString("hex"),
+        SUBSTITUTE_IDENTITY_ISSUER: identityProvider.issuer,
+        SUBSTITUTE_IDENTITY_JWKS_URL: identityProvider.jwksUrl,
+      });
       await use(deployment);
       await deployment.stop();
     },
