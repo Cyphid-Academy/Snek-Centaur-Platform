@@ -203,13 +203,111 @@ migrate into one. Issuance is ordinary application code in `convex/issuance.ts`,
 which is where the registry, ceilings, kind gating and attribution already were
 required to live.
 
-**The admin designation is a table of this capability's own.** Better Auth's
+**The admin designation is a table of this capability's own, with an operator
+writer.** It is written through `registry:designateAdmin`, an internal mutation
+beside `registerIssuer` and for the same reason: designating an admin is an
+operator act reached with a deployment admin credential, not over the public
+surface. Without a writer the table had none outside the test harness, so
+`isPlatformAdmin` could only ever answer `false` and every power the role
+confers was unreachable — which is what
+`platform-admin-role#a-deployment-can-designate-its-first-admin` now names. One
+mutation takes a `designated` boolean for both directions, because presence of
+the row *is* the designation and a pair of functions is how one direction ends
+up implemented and the other forgotten.
+
+ Better Auth's
 user table belongs to its component and is not ours to extend, so the
 designation is a `platform_admins` row keyed by user id rather than a field on
 the user record. "Admin designation stays mechanism" below already retires the
 mechanism note-only, so this sits inside what the design left open; the
 observable contract it does fix — effect without reload — holds because the
 membership is read per call rather than carried in a credential.
+
+### The instance pins the issuer, because the host does not
+
+`verification-without-shared-secrets` reads, at a glance, as one check: publish
+the material, and a party that verifies a signature against it has verified the
+platform's signature. On SpacetimeDB 2.7 those are two checks, and only the
+first is the host's.
+
+The host resolves verification material by OIDC discovery **from the `iss`
+inside the token under examination**, and `spacetime start` exposes no
+issuer allow-list — `--jwt-pub-key-path` names the host's own key and nothing
+else. Measured rather than inferred: a loopback server publishing
+`/.well-known/openid-configuration` and a key set of its own gets a token it
+signed accepted by the host, with `hasJWT` true and the claims surfaced to the
+module. So "the signature verified" means "whoever the token pointed at holds
+the key they publish" — a fact about a stranger, over claims the stranger chose,
+including `sub` and `aud`.
+
+The instance therefore pins the platform's issuer itself: `game_binding` carries
+`platformIssuer` beside the game id, seeded by the same write, and `admit()`
+compares it **before any other claim** — because every later claim is a
+statement by whoever signed, and is worth what they are worth. Beside the game
+id rather than in a table of its own, so `initialize_game` cannot seed one and
+forget the other in a direction where forgetting means accepting a stranger.
+
+*If reversed* — leaving the host to be the only judge of provenance — an
+attacker who can publish a discovery document mints admissible tokens for any
+role in any game, and the pre-existing end-to-end scenario would not have caught
+it: it refuses a token signed by an *unpublished* key, which an issuer-agnostic
+host also refuses.
+
+### The runtime's token exchange preserves the binding, and that is a dependency
+
+A browser cannot set an `Authorization` header on a WebSocket upgrade, so a
+browser's connection goes through `spacetimedb/sdk`, which first trades the
+presented token at `/v1/identity/websocket-token` for one the host re-mints
+under its own key. `connect-time-validation` allows either outcome — the
+exchange carries issuer, game binding and subject through unaltered, or the
+credential reaches admission by a path performing no re-issuance — so which one
+holds had to be established rather than assumed.
+
+It is the first: the exchange rewrites only the lifetime, to about a minute, and
+leaves `iss`, `aud` and `sub` as signed. The SDK's default path is therefore
+admissible and no hand-built socket is needed. Because that is a property of the
+host rather than of this design, `apps/e2e/src/admission.integration.spec.ts`
+asserts it: a host release that began re-issuing under its own issuer would
+refuse every browser with `untrusted-issuer`, and the suite is what says so
+first.
+
+### The admin's implicit coach standing has to reach the snapshot
+
+`coach-tokens` grants the platform admin implicit coach standing over every
+team, and issuance reads that standing live so a changed designation takes
+effect without a fresh session. `admission-validation` now requires the instance
+to check the human half of a coach token against its seeded snapshot — without
+which `coach:<anyone>:<any participating team>` was admissible, since only the
+team was ever checked.
+
+The two meet at a seam the instance cannot cross: it honours no platform-side
+role at all, and admin standing is deliberately invisible on the wire, so the
+subject an admin's coach token carries is indistinguishable from a designated
+coach's. The only reconciliation is that the standing be **materialised into the
+snapshot**: `initialize_game` records the admins standing at that moment among
+each participating team's coaches, and the instance then sees an ordinary
+designation and learns nothing of the role. That obligation travels to
+migrate-game-lifecycle with the seed tables, and is written down in
+`packages/stdb/AGENTS.md` and pinned by a scenario in
+`convex/auth/eligibility.test.ts`.
+
+Thereafter `roster-snapshot-binding` governs, as it does for every other
+in-game authorization fact: an admin designated after a game was sealed coaches
+the next game, not that one. *If reversed* — seeding the admin set into the
+instance so the waiver could be honoured live — a platform-side role would be
+readable inside a game runtime, which `platform-admin-role` forbids in the same
+sentence that grants the standing.
+
+### A capability's reach is one field, never a second list
+
+`anonymous-reach` requires the reach of every capability to be read from one
+enumeration. That was true of anonymous reach and false of session reach, which
+was a hand-kept array beside the registry — and it had already disagreed once:
+`begin-sign-in` was missing from it, so the sign-in entry route refused every
+browser carrying a live session and its already-signed-in branch was
+unreachable code. Both are now a `true` flag on the capability, derived by one
+filter, and the requirement was revised to say the rule governs every declared
+class of caller rather than the anonymous one alone.
 
 ### Trust and identity model: Google as a linked credential, not as the identity
 

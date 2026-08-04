@@ -164,6 +164,40 @@ export const redeemHandoff = mutation({
 });
 
 /**
+ * Designate this user a platform admin, or withdraw the designation.
+ *
+ * One mutation for both directions, because presence of the row *is* the
+ * designation: there is no third state, so a pair of functions would be two
+ * spellings of one boolean. Idempotent in both directions, so a deployment
+ * script can be run twice.
+ *
+ * Without this the table had no writer outside the test harness, which meant
+ * `isPlatformAdmin` could only ever answer `false` and every power the role
+ * confers was unreachable in a real deployment. The requirement asks for *some*
+ * means, and the means is the same one an issuer registration takes: an
+ * operator act, reached from the host's internal surface with an admin
+ * credential, never over the public one.
+ *
+ * spec: identity-and-authorization/platform-admin-role#a-deployment-can-designate-its-first-admin
+ * spec: identity-and-authorization/platform-admin-role#role-effective-without-reload
+ */
+export const designateAdmin = mutation({
+  args: { userId: v.string(), designated: v.boolean() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("platform_admins")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .unique();
+    if (args.designated && !existing) {
+      await ctx.db.insert("platform_admins", { userId: args.userId });
+    }
+    if (!args.designated && existing) await ctx.db.delete(existing._id);
+    return null;
+  },
+});
+
+/**
  * Whether this user is a platform admin, asked of current state each time so a
  * designation that changed takes effect without a reload or a fresh session.
  *

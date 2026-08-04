@@ -107,14 +107,6 @@ const seedModule = {
     returns: v.string(),
     handler: async (ctx, args) => await ctx.db.insert("games", args),
   }),
-  seedAdmin: platformComponentMutation({
-    args: { userId: v.string() },
-    returns: v.null(),
-    handler: async (ctx, args) => {
-      await ctx.db.insert("platform_admins", args);
-      return null;
-    },
-  }),
   setGameStatus: platformComponentMutation({
     args: { gameId: v.string(), status: GAME_STATUS },
     returns: v.null(),
@@ -164,7 +156,6 @@ export const platformSeed = (
           },
           string
         >;
-        seedAdmin: SeedMutation<{ userId: string }, null>;
         setGameStatus: SeedMutation<{ gameId: string; status: GameStatus }, null>;
       };
     };

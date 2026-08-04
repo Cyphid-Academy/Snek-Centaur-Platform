@@ -24,7 +24,7 @@
 // as component mutations, validated against the component's schema.
 import { type JWK, SignJWT, decodeJwt, exportJWK, generateKeyPair } from "jose";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { api, components } from "./_generated/api";
+import { api, components, internal } from "./_generated/api";
 import { CREDENTIAL_LIFETIME_SECONDS, verify } from "./auth/credential";
 import { PLATFORM_AUDIENCE } from "./auth/deployment";
 import { challengeFor, platformSeed, seedModules, withComponents } from "./harness.testing";
@@ -598,10 +598,10 @@ describe("the peer capability ceiling", () => {
       // session reaches, plus the forbidden pair, all "registered".
       capabilityCeiling: [
         "issue-game-token",
-        "begin-sign-in-handoff",
         "issue-game-credential",
         "exchange-assertion",
         "redeem-handoff",
+        "begin-sign-in-handoff",
       ],
       returnAddresses: [RETURN_A],
     });
@@ -620,13 +620,19 @@ describe("the peer capability ceiling", () => {
     const capabilities = (await verifyIssued(credential, PLATFORM_AUDIENCE)).cap.map(
       (entry) => entry.capability,
     );
-    expect(capabilities.sort()).toEqual(["begin-sign-in-handoff", "issue-game-token"]);
+    expect(capabilities).toEqual(["issue-game-token"]);
     // Registered on the ceiling, but no session reaches it.
     expect(capabilities).not.toContain("issue-game-credential");
     // Forbidden to every peer whatever its registration says, so the ceiling
-    // never carried them in the first place.
-    expect(capabilities).not.toContain("exchange-assertion");
-    expect(capabilities).not.toContain("redeem-handoff");
+    // never carried them in the first place. `begin-sign-in-handoff` is among
+    // them for what it reaches in *combination*: this credential names a human,
+    // so carrying it would let the Server begin a fresh handoff in that human's
+    // name, redeem it — redemption proves itself and needs no capability — and
+    // renew a credential for them indefinitely, without them.
+    // spec: identity-and-authorization/peer-capability-ceiling#no-chain-reaches-what-one-step-may-not
+    for (const forbidden of ["exchange-assertion", "redeem-handoff", "begin-sign-in-handoff"]) {
+      expect(capabilities).not.toContain(forbidden);
+    }
   });
 });
 
@@ -1087,7 +1093,13 @@ describe("game access tokens", () => {
     },
   ])("issues to $name", async ({ as, admin, role, requestTeam, subject }) => {
     const world = await setup();
-    if (admin) await world.t.mutation(platformSeed.seedAdmin, { userId: as });
+    // Through the deployment's own designation path, not a seed of the suite's:
+    // it is the only writer of that table, so a suite seeding rows behind it
+    // would pass while the designation remained unreachable in production.
+    // spec: identity-and-authorization/platform-admin-role#a-deployment-can-designate-its-first-admin
+    if (admin) {
+      await world.t.mutation(internal.registry.designateAdmin, { userId: as, designated: true });
+    }
 
     const token = await world.t.withIdentity({ subject: as }).action(issuance.issueGameToken, {
       gameId: world.gameId,
@@ -1141,7 +1153,13 @@ describe("game access tokens", () => {
     },
   ])("refuses $name", async ({ as, admin, role, requestTeam, refusal }) => {
     const world = await setup();
-    if (admin) await world.t.mutation(platformSeed.seedAdmin, { userId: as });
+    // Through the deployment's own designation path, not a seed of the suite's:
+    // it is the only writer of that table, so a suite seeding rows behind it
+    // would pass while the designation remained unreachable in production.
+    // spec: identity-and-authorization/platform-admin-role#a-deployment-can-designate-its-first-admin
+    if (admin) {
+      await world.t.mutation(internal.registry.designateAdmin, { userId: as, designated: true });
+    }
     const teamId =
       requestTeam === undefined
         ? undefined
@@ -1252,6 +1270,44 @@ describe("refresh without re-authentication", () => {
         `team:${world.teamA}:${world.gameId}`,
       );
     }
+  });
+
+  // spec: identity-and-authorization/token-lifetime-and-refresh#renewal-re-reads-the-session
+  // spec: identity-and-authorization/peer-capability-ceiling#no-chain-reaches-what-one-step-may-not
+  // **What the Server's half of that refresh may NOT do.** A handoff is the only
+  // path that mints a credential naming a human, so beginning one is the whole
+  // of renewing one — and a credential that could begin a handoff for the human
+  // it names would renew itself forever, outliving the session it came from and
+  // the human's decision to leave. So the redeemed credential cannot reach the
+  // step, and what remains is `ctx.auth` and the sign-in routes' cookie: the
+  // human's own session, read at the moment of the call.
+  it("cannot begin a fresh handoff with the credential a redemption produced", async () => {
+    const { t } = await setup();
+    const verifier = newVerifier();
+    const redeemed = await t.action(issuance.redeemSignInHandoff, {
+      reference: await begunHandoff(t, verifier),
+      verifier,
+    });
+
+    await expect(
+      t.mutation(issuance.beginSignInHandoff, {
+        credential: redeemed,
+        issuerId: SERVER_A,
+        returnAddress: RETURN_A,
+        challenge: await challengeFor(newVerifier()),
+      }),
+    ).rejects.toThrow(/no capability begin-sign-in-handoff/);
+
+    // And the same human's live session still does, so what was refused is the
+    // renewal chain rather than the capability itself.
+    const returnUrl = await t
+      .withIdentity({ subject: OPERATOR_A })
+      .mutation(issuance.beginSignInHandoff, {
+        issuerId: SERVER_A,
+        returnAddress: RETURN_A,
+        challenge: await challengeFor(newVerifier()),
+      });
+    expect(returnUrl).toContain(`${RETURN_A}?handoff=`);
   });
 });
 

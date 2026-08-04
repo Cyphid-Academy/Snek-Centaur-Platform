@@ -31,24 +31,38 @@ const spacetimedb = schema({
     },
   ),
 
-  // The three tables below are everything admission consults, and all of it is
+  // The four tables below are everything admission consults, and all of it is
   // written once, at initialisation, by `initialize_game` — which belongs to
   // migrate-game-lifecycle and is not written here. Until it runs the tables are
-  // empty, no token's audience can match, and the instance admits no one; an
+  // empty, no token's issuer can match, and the instance admits no one; an
   // uninitialised instance being closed rather than open is the safe direction
   // for that gap to fail in.
   //
   // Together they are the whole of the material the instance validates against,
   // so no per-connection call reaches the platform
   // (spec: identity-and-authorization/verification-without-shared-secrets#instance-validates-alone).
-  // The signature itself is checked by the host against the issuer material it
-  // holds from startup, and surfaces here already verified as `ctx.senderAuth`.
+  // The signature itself is checked by the host — against material it resolves
+  // from the issuer the presented token names — and surfaces here already
+  // checked as `ctx.senderAuth`. Which issuer that may be is *this* instance's
+  // question, and `game_binding.platformIssuer` is where it holds the answer.
 
-  /** This game's identifier: the only audience a token may name. Single row. */
+  /**
+   * What this instance was bound to at initialisation, in one row: the platform
+   * that may sign a token, and the game a token may name.
+   *
+   * The issuer sits beside the game id rather than in a table of its own
+   * because they are seeded by the same write and read by the same decision —
+   * and because a second single-row table is a second thing `initialize_game`
+   * can forget, in a direction where forgetting means accepting a stranger.
+   *
+   * spec: identity-and-authorization/verification-without-shared-secrets
+   * spec: identity-and-authorization/audience-bound-tokens
+   */
   game_binding: table(
     { name: "game_binding" },
     {
       key: t.string().primaryKey(),
+      platformIssuer: t.string(),
       gameId: t.string(),
     },
   ),
@@ -61,6 +75,28 @@ const spacetimedb = schema({
     { name: "roster_member" },
     {
       userId: t.string().primaryKey(),
+      teamId: t.string(),
+    },
+  ),
+
+  /**
+   * The roster snapshot's coach designations: which humans coach which
+   * participating team.
+   *
+   * A separate table from `roster_member` rather than a column on it, because
+   * it is a different relation — a coach need not be a member of the team they
+   * coach, and one human may coach several. Keyed by `coachKey(userId, teamId)`
+   * because the pair is what is unique and SpacetimeDB keys one column; the
+   * encoder is exported from `@cyphid/snek-stdb` so `initialize_game` and this
+   * reader cannot spell it differently.
+   *
+   * spec: identity-and-authorization/roster-snapshot-binding
+   */
+  roster_coach: table(
+    { name: "roster_coach" },
+    {
+      key: t.string().primaryKey(),
+      userId: t.string(),
       teamId: t.string(),
     },
   ),
@@ -124,7 +160,11 @@ function claimedToken(jwt: JwtClaims): VerifiedToken | undefined {
   const [aud] = jwt.audience;
   const exp = jwt.fullPayload["exp"];
   return jwt.audience.length === 1 && aud !== undefined && typeof exp === "number"
-    ? { aud, sub: jwt.subject, exp }
+    ? // `iss` is carried rather than dropped, and that is the whole of the
+      // issuer pin reaching the decision: the host resolved its verification
+      // material from this exact value, so discarding it left `admit` unable to
+      // tell the platform's signature from any other resolvable issuer's.
+      { iss: jwt.issuer, aud, sub: jwt.subject, exp }
     : undefined;
 }
 
@@ -154,10 +194,19 @@ export const onConnect = spacetimedb.clientConnected((ctx) => {
   for (const team of ctx.db.participant_team) participantTeamIds.add(team.teamId);
   const teamOfMember = new Map<string, string>();
   for (const member of ctx.db.roster_member) teamOfMember.set(member.userId, member.teamId);
+  const coachTeams = new Map<string, Set<string>>();
+  for (const designation of ctx.db.roster_coach) {
+    const teams = coachTeams.get(designation.userId) ?? new Set<string>();
+    teams.add(designation.teamId);
+    coachTeams.set(designation.userId, teams);
+  }
+  const binding = ctx.db.game_binding.key.find(GAME_BINDING_KEY);
   const context: AdmissionContext = {
-    gameId: ctx.db.game_binding.key.find(GAME_BINDING_KEY)?.gameId ?? "",
+    platformIssuer: binding?.platformIssuer ?? "",
+    gameId: binding?.gameId ?? "",
     participantTeamIds,
     teamOfMember,
+    coachTeams,
     // Timestamps are microseconds since the epoch; the token's `exp` is seconds.
     nowSeconds: Number(ctx.timestamp.toMillis() / 1000n),
   };

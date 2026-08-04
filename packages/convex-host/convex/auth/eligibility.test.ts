@@ -39,19 +39,43 @@ const gameAt = (status: GameForIssuance["status"]): GameForIssuance => ({
 });
 const playing = gameAt("playing");
 
-// The same world as a game instance would be seeded with it, for the
-// cross-package round-trips.
-const seeded: AdmissionContext = {
-  gameId: "g1",
-  participantTeamIds: new Set(["teamA", "teamB"]),
-  teamOfMember: new Map([
-    ["alice", "teamA"],
-    ["dave", "teamA"],
-    ["bob", "teamB"],
-  ]),
-  nowSeconds: 1_000,
-};
-const asToken = (sub: string) => ({ aud: "g1", sub, exp: 2_000 });
+/** What the platform stamps on what it signs, as this file's instance pins it. */
+const PLATFORM_ISSUER = "https://platform.example";
+
+/**
+ * The same world as a game instance would be seeded with it, for the
+ * cross-package round-trips — *derived from the very snapshot issuance decides
+ * from*, rather than restated beside it.
+ *
+ * Derived because the two sides are one fact seen twice: `roster-snapshot-binding`
+ * requires the instance's seed to be the snapshot, and a hand-written seed
+ * agreeing with it today is a seed that can quietly stop agreeing. It is what
+ * `initialize_game` will do for real when migrate-game-lifecycle lands, written
+ * here as the one place both shapes are already in scope.
+ *
+ * spec: identity-and-authorization/roster-snapshot-binding
+ */
+function seedFrom(game: GameForIssuance): AdmissionContext {
+  const teamOfMember = new Map<string, string>();
+  const coachTeams = new Map<string, Set<string>>();
+  for (const team of game.roster) {
+    for (const userId of team.memberUserIds) teamOfMember.set(userId, team.teamId);
+    for (const userId of team.coachUserIds) {
+      coachTeams.set(userId, (coachTeams.get(userId) ?? new Set()).add(team.teamId));
+    }
+  }
+  return {
+    platformIssuer: PLATFORM_ISSUER,
+    gameId: game.gameId,
+    participantTeamIds: new Set(game.roster.map((team) => team.teamId)),
+    teamOfMember,
+    coachTeams,
+    nowSeconds: 1_000,
+  };
+}
+
+const seeded: AdmissionContext = seedFrom(playing);
+const asToken = (sub: string) => ({ iss: PLATFORM_ISSUER, aud: "g1", sub, exp: 2_000 });
 
 /** Narrow a decision to its subject, failing loudly on an unexpected refusal. */
 function granted(decision: IssuanceDecision): GameSubject {
@@ -72,7 +96,6 @@ describe("the subject issuance mints is the subject admission understands", () =
   const pipeline: ReadonlyArray<{
     name: string;
     request: TokenRequest;
-    admin?: boolean;
     identity: AdmittedIdentity;
   }> = [
     {
@@ -95,26 +118,52 @@ describe("the subject issuance mints is the subject admission understands", () =
       request: { role: "bot", credentialTeamId: "teamB", credentialGameId: "g1" },
       identity: { role: "bot", teamId: "teamB", actsFor: "teamB" },
     },
-    {
-      // spec: identity-and-authorization/platform-admin-role#implicit-coach-everywhere
-      // spec: identity-and-authorization/role-bound-privileges#captaincy-invisible-in-game
-      // The waiver exists only at issuance: the subject it mints is
-      // indistinguishable from a designated coach's, so nothing of admin
-      // standing survives onto the wire for the instance to honour.
-      name: "an admin's implicit coach",
-      request: { role: "coach", userId: "stranger", teamId: "teamB" },
-      admin: true,
-      identity: { role: "coach", userId: "stranger", viewsAs: "teamB" },
-    },
   ];
 
   it.each(pipeline)(
     "carries a $name from issuance through admission intact",
-    ({ request, admin, identity }) => {
-      const subject = granted(decideGameTokenIssuance(playing, request, admin));
+    ({ request, identity }) => {
+      const subject = granted(decideGameTokenIssuance(playing, request));
       expect(admit(asToken(encodeGameSubject(subject)), seeded)).toEqual({ ok: true, identity });
     },
   );
+
+  it("mints an admin's implicit coach token that only the snapshot can get admitted", () => {
+    // spec: identity-and-authorization/platform-admin-role#implicit-coach-everywhere
+    // spec: identity-and-authorization/role-bound-privileges#captaincy-invisible-in-game
+    // spec: identity-and-authorization/admission-validation#coach-absent-from-the-snapshot-refused
+    // **The seam the waiver has to cross, and cannot cross by itself.** Admin
+    // standing is read live at issuance and is deliberately invisible on the
+    // wire — the subject below is indistinguishable from a designated coach's —
+    // so the instance, which honours no platform-side role, has nothing to go on
+    // but its snapshot. A waiver the snapshot does not also carry therefore
+    // mints a token refused at the door.
+    //
+    // Which fixes the obligation `initialize_game` inherits with
+    // migrate-game-lifecycle: the snapshot it takes records the admins standing
+    // at that moment among each team's coaches, and thereafter
+    // `roster-snapshot-binding` is what governs — an admin designated after a
+    // game was sealed coaches the next game, not this one.
+    const subject = granted(
+      decideGameTokenIssuance(
+        playing,
+        { role: "coach", userId: "stranger", teamId: "teamB" },
+        true,
+      ),
+    );
+    expect(encodeGameSubject(subject)).toBe("coach:stranger:teamB");
+
+    const presented = asToken(encodeGameSubject(subject));
+    expect(admit(presented, seeded)).toEqual({ ok: false, refusal: "not-a-coach" });
+    const withAdminRecorded = seedFrom({
+      ...playing,
+      roster: [teamA, { ...teamB, coachUserIds: ["stranger"] }],
+    });
+    expect(admit(presented, withAdminRecorded)).toEqual({
+      ok: true,
+      identity: { role: "coach", userId: "stranger", viewsAs: "teamB" },
+    });
+  });
 
   it("puts no team on the wire for an operator or spectator", () => {
     // spec: identity-and-authorization/game-token-contents
