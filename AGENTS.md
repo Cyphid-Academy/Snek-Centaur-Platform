@@ -114,7 +114,7 @@ pnpm check:commit origin/main..HEAD     # every commit on the branch
 pnpm check:commit --no-tests            # static gates only, ~1.5s
 ```
 
-**Tier 2 — `pnpm verify`, the full battery.** Is the *code* right? Lint, typecheck, both suites, `smoke`, `spec:check`. Run it at the tip before pushing. **CI runs the same named scripts** — its jobs are `pnpm verify` decomposed for wall-clock, never their own inlined steps. That is not a style preference: the `test` job once carried an inline build step local `pnpm test` did not have, and it was red for a week while every local check agreed the branch was fine.
+**Tier 2 — `pnpm verify`, the full battery.** Is the *code* right? Lint, `check:public-surface`, typecheck, both suites, `smoke`, `spec:check`. Run it at the tip before pushing. **CI runs the same named scripts** — its jobs are `pnpm verify` decomposed for wall-clock, never their own inlined steps. That is not a style preference: the `test` job once carried an inline build step local `pnpm test` did not have, and it was red for a week while every local check agreed the branch was fine.
 
 The division follows from what discriminates. On the branch that motivated this, four boundary defects were caught — a `tasks.md` citing a scenario renamed in a later commit (twice, one of which forced a commit reorder), a type field added without its construction sites, and a section renumbering. Every one fell to a static gate costing under 1.5s combined. The two test suites — half the battery's wall clock — caught none of them; they caught *semantic* errors, which is tier 2's job.
 
@@ -128,6 +128,7 @@ So: **tier 1 over every commit, tier 2 once at the tip.** For a ten-commit branc
 |--------|-------------|
 | `pnpm check:commit` | **Tier 1** — is each commit green standing alone (see above) |
 | `pnpm verify` | **Tier 2** — the full battery, what CI runs |
+| `pnpm check:public-surface` | Capability-declaration totality for the Convex host — the one check `typecheck` cannot stand in for (see `packages/convex-host/AGENTS.md`) |
 | `pnpm typecheck` | `build:packages` plus the two foreign TS regimes and both apps (the apps via `svelte-check`, which reads their `.svelte` files as well as their `.ts`) |
 | `pnpm typecheck:convex` | Convex component/host files — separate because Convex's generated code is not written for the workspace's strict flags |
 | `pnpm typecheck:stdb-module` | The SpacetimeDB module project, whose tsconfig options SpacetimeDB mandates |
