@@ -5,6 +5,7 @@
     "rootDir": "src",
     "tsBuildInfoFile": "dist/.tsbuildinfo"
   },
+  "references": [{ "path": "../game-configuration" }],
   "include": ["src"],
   "exclude": ["node_modules", "dist"]
 }

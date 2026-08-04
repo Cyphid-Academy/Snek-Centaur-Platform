@@ -6,6 +6,24 @@
 // `convex/schema.ts` are the compile-time half of a contract whose runtime half
 // is a validator, and the two are changed together. The rest are still a typed
 // skeleton for tables their own capability changes have yet to define.
+//
+// **A skeleton may forward-declare a table; it may not re-declare a type
+// somebody else owns.** A `GameConfigRecord` here did exactly that, and had
+// already drifted from `@cyphid/snek-game-configuration`'s `GameConfig` on
+// nearly every field — `hazardPercent` for `hazardPercentage`, a boolean where
+// fertile ground is a density and a clustering, one potion rate where the
+// engine declares two, three flat timer fields where there is a four-field
+// `clock`, and `maxHealth`, `maxTurns` and `hazardDamage` absent altogether.
+// Nothing could catch it: this package depended on neither authority, so no
+// compiler saw both shapes, and `@cyphid/centaur-server-lib` re-exported the
+// wrong one to bot authors as the public SDK.
+//
+// So the authority is imported. `game-configuration` owns the generation half
+// and mirrors the engine's runtime half by reference, which is what
+// `global-invariants/engine-mirrors-are-guarded` asks of a mirror — and the
+// cheapest way to satisfy an invariant about mirrors is to hold no mirror.
+// spec: global-invariants/engine-mirrors-are-guarded
+import type { GameConfig } from "@cyphid/snek-game-configuration";
 
 // ---------------------------------------------------------------------------
 // Table record types
@@ -147,20 +165,8 @@ export interface RoomRecord {
   readonly name: string;
   readonly enrolledTeamIds: ReadonlyArray<string>;
   readonly currentGameId: string | null;
-  readonly config: GameConfigRecord;
+  readonly config: GameConfig;
   readonly createdAt: number;
-}
-
-export interface GameConfigRecord {
-  readonly boardSize: string;
-  readonly snakesPerTeam: number;
-  readonly hazardPercent: number;
-  readonly fertileGround: boolean;
-  readonly foodSpawnRate: number;
-  readonly potionSpawnRate: number;
-  readonly chessTimerBudgetMs: number;
-  readonly chessTimerIncrementMs: number;
-  readonly chessTimerMaxMs: number;
 }
 
 export type GameStatus = "not-started" | "playing" | "finished";
@@ -245,5 +251,5 @@ export interface TeamGameContext {
   readonly teamId: string;
   readonly stdbInstanceUrl: string;
   readonly boardSeed: string;
-  readonly config: GameConfigRecord;
+  readonly config: GameConfig;
 }
