@@ -55,6 +55,8 @@
       ".upm",
       ".config",
       "attached_assets",
+      "test-results",
+      "playwright-report",
       "spec",
       "informal-spec",
       "**/*.svelte"
