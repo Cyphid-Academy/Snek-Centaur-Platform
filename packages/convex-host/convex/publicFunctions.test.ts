@@ -20,7 +20,7 @@
 import { anyApi } from "convex/server";
 import { type JWK, SignJWT, decodeJwt, exportJWK, generateKeyPair } from "jose";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { api } from "./_generated/api";
+import { api, components } from "./_generated/api";
 import { type CapabilityEntry, mint } from "./auth/credential";
 import { PLATFORM_AUDIENCE, type PlatformPrincipal, encodePrincipal } from "./auth/deployment";
 import {
@@ -30,7 +30,12 @@ import {
   GAME_CREDENTIAL_CAPABILITIES,
 } from "./capabilities";
 import { type Harness, challengeFor, inPlatformComponent, withComponents } from "./harness.testing";
-import { CALLS_PER_WINDOW, CALL_WINDOW_MS } from "./publicFunctions";
+import {
+  ATTRIBUTION_RETENTION_MS,
+  CALLS_PER_WINDOW,
+  CALL_WINDOW_MS,
+  rateLimiter,
+} from "./publicFunctions";
 
 const ALG = "ES256";
 const ISSUER = "https://platform.example";
@@ -600,11 +605,11 @@ describe("audience binding at the platform's door", () => {
 
 describe("a registered system's call rate is bounded", () => {
   // spec: identity-and-authorization/peer-capability-ceiling
-  // The window is a fixed one, so the whole suite runs at a fixed instant
-  // inside a single window: what is under test is the count, and a test that
-  // straddled a rollover would be measuring the clock instead.
+  // The bucket refills with the clock, so the whole suite runs at a fixed
+  // instant: what is under test is the boundary, and a case whose bucket
+  // refilled while it ran would be measuring the clock instead. That the refill
+  // itself is correct is the limiter's own business and is not tested here.
   const NOW = Date.UTC(2026, 0, 1, 12, 0, 30);
-  const WINDOW_START = Math.floor(NOW / CALL_WINDOW_MS) * CALL_WINDOW_MS;
 
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ["Date"] });
@@ -614,15 +619,9 @@ describe("a registered system's call rate is bounded", () => {
     vi.useRealTimers();
   });
 
-  /** The Server's window, already this far spent when the call under test arrives. */
+  /** The Server's bucket, already this far spent when the call under test arrives. */
   const alreadySpent = (t: Harness, calls: number) =>
-    inPlatformComponent(t, (ctx) =>
-      ctx.db.insert("system_call_windows", {
-        issuerId: SERVER_ID,
-        windowStart: WINDOW_START,
-        calls,
-      }),
-    );
+    t.run((ctx) => rateLimiter.limit(ctx, "systemCall", { key: SERVER_ID, count: calls }));
 
   /** A call the Server makes with its own credential, on a team it really operates. */
   const systemCall = async (t: Harness) => {
@@ -640,7 +639,7 @@ describe("a registered system's call rate is bounded", () => {
   // spec: identity-and-authorization/peer-capability-ceiling
   // The boundary, from both sides of one call. The same request, the same
   // credential, the same handler — the only difference is what the system has
-  // already spent of this window, so the refusal is the bound and nothing else.
+  // already spent, so the refusal is the bound and nothing else.
   it("admits the call that fits in the window and refuses the one past it", async () => {
     const under = await withComponents();
     await alreadySpent(under, CALLS_PER_WINDOW - 1);
@@ -648,9 +647,24 @@ describe("a registered system's call rate is bounded", () => {
 
     const over = await withComponents();
     await alreadySpent(over, CALLS_PER_WINDOW);
-    await expect((await systemCall(over))()).rejects.toThrow(
-      new RegExp(`${SERVER_ID} is over its bound of ${CALLS_PER_WINDOW} calls per 60s`),
-    );
+    // On the data rather than the message: what a refused operator can actually
+    // read in production is a `ConvexError`'s payload, so asserting the payload
+    // is asserting the thing that reaches them.
+    // On the data rather than the message, and on every field of it: what a
+    // refused operator can read in production is a `ConvexError`'s payload, and
+    // what makes the refusal actionable is that it names whose bound was hit,
+    // what the bound is, and when to come back. Whether the bucket's arithmetic
+    // is right is the limiter's business, not this suite's — that it reaches
+    // the caller at all is ours.
+    await expect((await systemCall(over))()).rejects.toMatchObject({
+      data: {
+        kind: "call-bound-exceeded",
+        issuerId: SERVER_ID,
+        limit: CALLS_PER_WINDOW,
+        windowMs: CALL_WINDOW_MS,
+        retryAfter: expect.any(Number),
+      },
+    });
   });
 
   // spec: identity-and-authorization/peer-capability-ceiling
@@ -671,7 +685,7 @@ describe("a registered system's call rate is bounded", () => {
       (outcome): outcome is PromiseRejectedResult => outcome.status === "rejected",
     );
     expect(rejected).toHaveLength(1);
-    expect(String(rejected[0]?.reason)).toMatch(/over its bound/);
+    expect(rejected[0]?.reason).toMatchObject({ data: { kind: "call-bound-exceeded" } });
   });
 
   // spec: identity-and-authorization/peer-capability-ceiling
@@ -689,7 +703,7 @@ describe("a registered system's call rate is bounded", () => {
         assertion: await signedAssertion(),
         capabilities: [],
       }),
-    ).rejects.toThrow(/over its bound/);
+    ).rejects.toMatchObject({ data: { kind: "call-bound-exceeded", issuerId: SERVER_ID } });
   });
 });
 
@@ -767,5 +781,37 @@ describe("attribution is user-visible", () => {
     expect(
       await t.withIdentity({ subject: "user-42" }).query(api.platform.attributedActions, {}),
     ).toHaveLength(1);
+  });
+
+  // spec: identity-and-authorization/peer-capability-ceiling#attribution-is-user-visible
+  // The other end of "kept to be reviewed": a record outlives its usefulness
+  // once nobody will review the action it describes, and past that point
+  // retaining it is only a durable account of who acted through whom. The
+  // deployment's cron is what calls this; what is under test here is that the
+  // record is reachable by the sweep at all, on the retention it was written
+  // with — a table nothing sweeps grows one row per credentialed call forever.
+  it("keeps an attribution record for its retention and no longer", async () => {
+    const t = await withComponents();
+    await registerServer(t, ["issue-game-token"]);
+    const teamId = await seedTeam(t);
+    const gameId = await seedPlayingGame(t, [teamId]);
+    const credential = await actingForHuman(t, "user-42");
+    const takenAt = Date.now();
+    await t.action(anyApi.issuance.issueGameToken, { credential, gameId, role: "spectator" });
+
+    const asUser = t.withIdentity({ subject: "user-42" });
+    // A minute either side of the retention, rather than a millisecond: the
+    // record's own expiry is stamped when the row is written, a moment after
+    // `takenAt` is read here, and what this case is about is the retention and
+    // not the width of that gap.
+    await t.mutation(components.snekPlatform.functions.sweepExpired, {
+      now: takenAt + ATTRIBUTION_RETENTION_MS - 60_000,
+    });
+    expect(await asUser.query(api.platform.attributedActions, {})).toHaveLength(1);
+
+    await t.mutation(components.snekPlatform.functions.sweepExpired, {
+      now: takenAt + ATTRIBUTION_RETENTION_MS + 60_000,
+    });
+    expect(await asUser.query(api.platform.attributedActions, {})).toEqual([]);
   });
 });

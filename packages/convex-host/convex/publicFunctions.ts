@@ -7,9 +7,10 @@
 // `query`/`mutation`/`action`: `scripts/check-public-surface.mjs` fails the
 // build on any other file that does, and on any exported handler that did not
 // go through a builder here.
+import { RateLimiter, type RunMutationCtx } from "@convex-dev/rate-limiter";
 import { customAction, customMutation, customQuery } from "convex-helpers/server/customFunctions";
-import type { Auth, FunctionArgs, FunctionReference, FunctionReturnType } from "convex/server";
-import { v } from "convex/values";
+import type { Auth } from "convex/server";
+import { ConvexError, v } from "convex/values";
 import { components } from "./_generated/api";
 import type { ActionCtx } from "./_generated/server";
 import { action, httpAction, mutation, query } from "./_generated/server";
@@ -79,8 +80,7 @@ export interface ResolvedCaller {
 }
 
 /**
- * The bound on a registered system's calls: how many, over how long a fixed
- * window.
+ * The bound on a registered system's calls: how many, over how long.
  *
  * Constants rather than a column of the issuer's registration, on cost. The
  * assertion path holds a registration already, but the credentialed path —
@@ -96,26 +96,82 @@ export const CALL_WINDOW_MS = 60_000;
 export const CALLS_PER_WINDOW = 600;
 
 /**
+ * The bound itself, kept by `@convex-dev/rate-limiter`.
+ *
+ * A token bucket rather than a fixed window, which is the whole reason the
+ * counting moved out of our own component: a fixed window admits its full
+ * allowance in the last instant of one window and again in the first instant of
+ * the next, so the burst a ceiling exists to bound is exactly the one it lets
+ * through. A bucket refilling at `rate` per `period` cannot be gamed that way,
+ * and `capacity` defaults to `rate`, so an issuer that has been quiet starts
+ * able to spend a full window's worth and no more.
+ *
+ * Deliberately unsharded. Sharding divides the capacity and spends a randomly
+ * chosen shard, which buys write throughput by making the ceiling approximate —
+ * a call can be refused while capacity sits in another shard. That is a poor
+ * trade for a bound whose entire job is to say exactly what a compromised peer
+ * may do, so the default of one shard stands until contention is something we
+ * have measured rather than imagined. The lever is `shards:` on this object.
+ *
+ * Exported for the suite beside this file, which spends a bucket down to its
+ * last token to test the boundary from both sides. Through this object rather
+ * than one of its own, so the fixture and the code under test cannot disagree
+ * about what the bound is — and through the limiter at all rather than by
+ * seeding a row, which is a thing the counting component no longer lets anyone
+ * outside it do.
+ *
+ * spec: identity-and-authorization/peer-capability-ceiling
+ */
+export const rateLimiter = new RateLimiter(components.rateLimiter, {
+  systemCall: { kind: "token bucket", rate: CALLS_PER_WINDOW, period: CALL_WINDOW_MS },
+});
+
+/**
+ * What a refused call tells the party that has to act on it.
+ *
+ * A `ConvexError` rather than a bare `Error`, which is the difference between
+ * the operator of that system reading this and reading nothing: a production
+ * deployment reveals a thrown `Error`'s message to no caller, so the refusal
+ * that named an issuer and its bound in prose named them only in the logs.
+ * `retryAfter` is the question an operator asks next and the one a bare count
+ * could never answer.
+ *
+ * spec: identity-and-authorization/peer-capability-ceiling
+ */
+export interface CallBoundExceeded {
+  readonly kind: "call-bound-exceeded";
+  readonly issuerId: string;
+  readonly limit: number;
+  readonly windowMs: number;
+  readonly retryAfter: number;
+}
+
+/**
  * How long an attribution record is kept. It exists to be reviewed, and a
  * record past the point anyone will review it is only a durable account of who
  * acted through whom.
  *
+ * Exported for the suite beside this file, so the case that walks a record up
+ * to its expiry and past it is asking about the retention this states rather
+ * than about a number of its own that happens to agree today.
+ *
  * spec: identity-and-authorization/peer-capability-ceiling#attribution-is-user-visible
  */
-const ATTRIBUTION_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
+export const ATTRIBUTION_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
 
 /**
  * A context that can write — a mutation's or an action's, never a query's.
  * Spelled structurally because the one function below is reached from both, and
  * because a query context failing to satisfy it is exactly the distinction the
  * recording turns on.
+ *
+ * The rate limiter's own `RunMutationCtx` rather than a hand-rolled twin of it,
+ * which is the same two-method shape this file used to spell for itself. It
+ * carries `runQuery` as well, not because anything here reads but because that
+ * is what the limiter asks for; `writes()` below still turns on `runMutation`
+ * alone, which remains the honest test of the distinction.
  */
-interface Writer {
-  runMutation<M extends FunctionReference<"mutation", "internal">>(
-    mutation: M,
-    args: FunctionArgs<M>,
-  ): Promise<FunctionReturnType<M>>;
-}
+type Writer = RunMutationCtx;
 
 /**
  * Charge one call to a registered system's window, refusing when the window is
@@ -127,31 +183,45 @@ interface Writer {
  * or it presents a signed assertion, which `issuance.ts` authenticates directly
  * — that path holds no credential yet, so nothing downstream would ever see it.
  *
- * The check and the increment are one component mutation on purpose; see
- * `recordSystemCall` there for why a bound cannot be checked anywhere else.
+ * `limit` reads and spends the bucket in a single component mutation, which is
+ * what lets the bound be charged where the change is made: two calls arriving
+ * together cannot both pass a count neither has settled, because there is no
+ * moment between the read and the write for the other to occupy.
+ *
+ * The attribution is written afterwards and only on the admitting path, so a
+ * refused call still leaves no record of an action nobody took. From a mutation
+ * the two are the caller's own transaction and roll back together; from an
+ * action they are two transactions, as every component call from an action
+ * already is.
  *
  * spec: identity-and-authorization/peer-capability-ceiling
+ * spec: global-invariants/transactional-invariant-enforcement#concurrent-mutations-cannot-race-past-a-guard
  */
 export async function boundSystemCall(
   ctx: Writer,
   issuerId: string,
   attribution?: { userId: string; capability: Capability },
 ): Promise<void> {
-  const within = await ctx.runMutation(components.snekPlatform.functions.recordSystemCall, {
-    issuerId,
-    windowStart: Math.floor(Date.now() / CALL_WINDOW_MS) * CALL_WINDOW_MS,
-    limit: CALLS_PER_WINDOW,
-    ...(attribution && {
-      attribution: { ...attribution, expiresAt: Date.now() + ATTRIBUTION_RETENTION_MS },
-    }),
-  });
-  // Naming both is what makes the refusal actionable by the party that has to
-  // act on it: the operator of that system, who otherwise learns only that
-  // something of theirs was refused.
-  if (!within) {
-    throw new Error(
-      `${issuerId} is over its bound of ${CALLS_PER_WINDOW} calls per ${CALL_WINDOW_MS / 1000}s`,
-    );
+  const { ok, retryAfter } = await rateLimiter.limit(ctx, "systemCall", { key: issuerId });
+  // Thrown here rather than by the limiter's own `throws`, which names the
+  // limit but not the issuer: naming both is what makes the refusal actionable
+  // by the party that has to act on it — the operator of that system, who
+  // otherwise learns only that something of theirs was refused.
+  if (!ok) {
+    throw new ConvexError({
+      kind: "call-bound-exceeded",
+      issuerId,
+      limit: CALLS_PER_WINDOW,
+      windowMs: CALL_WINDOW_MS,
+      retryAfter,
+    } satisfies CallBoundExceeded);
+  }
+  if (attribution) {
+    await ctx.runMutation(components.snekPlatform.functions.recordAttribution, {
+      issuerId,
+      ...attribution,
+      expiresAt: Date.now() + ATTRIBUTION_RETENTION_MS,
+    });
   }
 }
 

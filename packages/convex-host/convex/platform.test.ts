@@ -2,6 +2,7 @@
 // The host's public surface, exercised with the components `convex.config.ts`
 // actually mounts. Registration is derived from the config's own child
 // components, so an unmounted component is an unregistered one.
+import rateLimiterTest from "@convex-dev/rate-limiter/test";
 import { convexTest } from "convex-test";
 import type { GenericSchema, SchemaDefinition } from "convex/server";
 import { describe, expect, it, vi } from "vitest";
@@ -23,6 +24,13 @@ const MOUNTABLE: Record<
   centaurState: {
     schema: () => import("../../convex-centaur-state/convex/schema.js"),
     modules: centaurModules,
+  },
+  // A published component that is nonetheless registrable, unlike `betterAuth`
+  // below: it ships its own `register` helper, whose module glob is written
+  // inside the package and so resolves where one of ours could not reach.
+  rateLimiter: {
+    schema: async () => ({ default: rateLimiterTest.schema }),
+    modules: rateLimiterTest.modules as Modules,
   },
 };
 
@@ -50,9 +58,12 @@ vi.mock("../../convex-snek-platform/convex/convex.config.js", async () =>
 vi.mock("../../convex-centaur-state/convex/convex.config.js", async () =>
   asImported(await vi.importActual("../../convex-centaur-state/convex/convex.config.js")),
 );
-// The published component mounts by package name, and is rewritten the same way.
+// The published components mount by package name, and are rewritten the same way.
 vi.mock("@convex-dev/better-auth/convex.config.js", async () =>
   asImported(await vi.importActual("@convex-dev/better-auth/convex.config.js")),
+);
+vi.mock("@convex-dev/rate-limiter/convex.config.js", async () =>
+  asImported(await vi.importActual("@convex-dev/rate-limiter/convex.config.js")),
 );
 
 /**
@@ -104,7 +115,12 @@ describe("component mounting", () => {
     // `platformStatus` below proves the two it reaches through are mounted and
     // working. This is the only assertion covering `betterAuth`, which these
     // tests do not bring up but the deployment does.
-    expect(await mountedComponents()).toEqual(["snekPlatform", "centaurState", "betterAuth"]);
+    expect(await mountedComponents()).toEqual([
+      "snekPlatform",
+      "centaurState",
+      "betterAuth",
+      "rateLimiter",
+    ]);
   });
 });
 

@@ -227,49 +227,32 @@ export const team = query({
 });
 
 /**
- * Charge one call to a registered system's current window, answering `false`
- * when that window is already spent — and, where the call was taken on a
- * human's behalf, write the attribution in the same transaction.
+ * Write down that a registered system took an action on a human's behalf.
  *
- * One mutation, for two reasons that happen to coincide. The count is read and
- * written here rather than checked by the host and incremented afterwards, so a
- * concurrent call cannot pass a bound the other has already reached. And the
- * attribution row is written only on the branch that admits, so a refused call
- * leaves no record of an action nobody took.
+ * Here rather than beside the bound that admitted the call, which the host now
+ * charges against a rate-limiter component of its own: what that component
+ * counts is calls, and this is not a count but a record a human is later shown.
+ * The two were one mutation while both were ours, and the host still calls this
+ * one only on the path that admits — a refused call leaves no record of an
+ * action nobody took.
  *
- * The window and the limit arrive as arguments: what a bound *is* belongs
- * beside the enforcement that applies it, and this component states no rule.
+ * `expiresAt` arrives as an argument rather than being computed here: how long
+ * a record is worth keeping is a policy of the platform that shows it, and this
+ * component states no policy. `sweepExpired` below acts on the answer.
  *
- * spec: identity-and-authorization/peer-capability-ceiling
- * spec: global-invariants/transactional-invariant-enforcement#concurrent-mutations-cannot-race-past-a-guard
+ * spec: identity-and-authorization/peer-capability-ceiling#attribution-is-user-visible
  */
-export const recordSystemCall = mutation({
+export const recordAttribution = mutation({
   args: {
     issuerId: v.string(),
-    windowStart: v.number(),
-    limit: v.number(),
-    attribution: v.optional(
-      v.object({ userId: v.string(), capability: v.string(), expiresAt: v.number() }),
-    ),
+    userId: v.string(),
+    capability: v.string(),
+    expiresAt: v.number(),
   },
-  returns: v.boolean(),
+  returns: v.null(),
   handler: async (ctx, args) => {
-    const row = await ctx.db
-      .query("system_call_windows")
-      .withIndex("by_issuer", (q) => q.eq("issuerId", args.issuerId))
-      .unique();
-    const window = { issuerId: args.issuerId, windowStart: args.windowStart, calls: 1 };
-    if (!row) await ctx.db.insert("system_call_windows", window);
-    // A window the host has since rolled past: the row is the issuer's, not the
-    // window's, so the new window replaces the old in place and no row for a
-    // window nobody will ask about again is ever left behind.
-    else if (row.windowStart !== args.windowStart) await ctx.db.patch(row._id, window);
-    else if (row.calls >= args.limit) return false;
-    else await ctx.db.patch(row._id, { calls: row.calls + 1 });
-    if (args.attribution) {
-      await ctx.db.insert("system_actions", { issuerId: args.issuerId, ...args.attribution });
-    }
-    return true;
+    await ctx.db.insert("system_actions", args);
+    return null;
   },
 });
 

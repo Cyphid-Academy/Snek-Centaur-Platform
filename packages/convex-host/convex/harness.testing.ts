@@ -4,6 +4,7 @@
 //
 // The double-dotted filename keeps it out of both the Convex bundle and
 // vitest's `convex/**/*.{test,spec}.ts` collection.
+import { register as registerRateLimiter } from "@convex-dev/rate-limiter/test";
 import { convexTest } from "convex-test";
 import type { FunctionReference } from "convex/server";
 import { v } from "convex/values";
@@ -31,7 +32,7 @@ export interface HarnessOptions {
   register?: (t: Harness) => void;
 }
 
-/** The host deployment with `snekPlatform` and `centaurState` registered. */
+/** The host deployment with `snekPlatform`, `centaurState` and `rateLimiter` registered. */
 export async function withComponents({
   platformExtras,
   register,
@@ -45,6 +46,11 @@ export async function withComponents({
     platformExtras ? { ...platformModules, ...platformExtras } : platformModules,
   );
   t.registerComponent("centaurState", centaurSchema, centaurModules);
+  // Through the component's own helper rather than a module glob of our own: a
+  // published component's sources sit behind a pnpm symlink that `import.meta.glob`
+  // will not follow, and the helper's glob is written relative to a file inside
+  // the package, where it resolves.
+  registerRateLimiter(t);
   register?.(t);
   return t;
 }
