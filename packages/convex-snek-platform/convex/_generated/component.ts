@@ -51,6 +51,13 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         null,
         Name
       >;
+      designateAdmin: FunctionReference<
+        "mutation",
+        "internal",
+        { designated: boolean; userId: string },
+        null,
+        Name
+      >;
       gameForIssuance: FunctionReference<
         "query",
         "internal",

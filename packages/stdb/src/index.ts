@@ -51,3 +51,20 @@ export { itemsByCell } from "@cyphid/snek-engine";
  * spec: identity-and-authorization/admission-validation
  */
 export const GAME_BINDING_KEY = "game";
+
+/**
+ * The primary key of one `roster_coach` row: the (human, team) pair that is
+ * what a coach designation actually is.
+ *
+ * Here for the same reason `GAME_BINDING_KEY` is — the module may export
+ * nothing but tables and reducers, so a constant or a helper it needs is one it
+ * imports. And here rather than spelled at each end because `initialize_game`
+ * (migrate-game-lifecycle) writes these rows and `onConnect` reads them: two
+ * spellings of a composite key is how a designation quietly stops matching.
+ *
+ * Colon-delimited, on the same standing fact the subject grammar rests on —
+ * platform ids contain no colon.
+ *
+ * spec: identity-and-authorization/roster-snapshot-binding
+ */
+export const coachKey = (userId: string, teamId: string): string => `${userId}:${teamId}`;

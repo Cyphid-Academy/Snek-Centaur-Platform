@@ -9,12 +9,25 @@
 // then writes only on `ok`. A function that could refuse *and* write would put
 // the guarantee back into the ordering of statements in a reducer body.
 //
-// Everything it consults is seeded at initialisation — the game's own id and
-// its roster snapshot — so a hermetic instance answers admission alone, with no
-// per-connection external call (`verification-without-shared-secrets#instance-validates-alone`).
-// Signature verification is the host's, against the platform's published
-// material obtained at startup; a token the host could not verify arrives here
+// Everything it consults is seeded at initialisation — the platform's issuer,
+// the game's own id and its roster snapshot — so a hermetic instance answers
+// admission alone, with no per-connection external call
+// (`verification-without-shared-secrets#instance-validates-alone`).
+// Signature verification is the host's, against material it resolved from the
+// issuer the token itself names; a token the host could not verify arrives here
 // as `undefined`, which is the same refusal as any other.
+//
+// **A verified signature is not yet a signature of the platform's, and the two
+// checks are separate here because the runtime cannot join them.** SpacetimeDB
+// resolves verification material by OIDC discovery from the presented token's
+// own `iss`, and 2.7 offers no way to bind a host to one issuer — so a token
+// signed by *any* issuer publishing a resolvable key set arrives with
+// `hasJWT` true and its signature checked. What that establishes is only that
+// whoever signed it holds the key they publish, which is a fact about a
+// stranger. The pin below is therefore the whole of
+// `verification-without-shared-secrets#a-valid-signature-from-a-stranger-is-refused`
+// on this substrate: it is checked before any other claim, because every claim
+// after it is only worth what the signer is worth.
 //
 // The `sub` encoding is written by the platform, in
 // `packages/convex-host/convex/auth/subject.ts`, and read only here. This
@@ -23,8 +36,15 @@
 // rather than four, and `convex/auth/eligibility.test.ts` round-trips the
 // encoder's output through `admit`, so a drift between them fails there.
 
-/** The claims of a token the host has already verified. */
+/** The claims of a token whose signature the host has already checked. */
 export interface VerifiedToken {
+  /**
+   * Who signed it, as the token itself declares. Checked against the seeded
+   * platform issuer before anything else: the host resolved a key set from
+   * *this* value, so it is the claim that says whether the verified signature
+   * was the platform's at all.
+   */
+  readonly iss: string;
   /** The game the token grants admission to; nothing else is a valid audience. */
   readonly aud: string;
   readonly sub: string;
@@ -34,11 +54,29 @@ export interface VerifiedToken {
 
 /** State seeded at initialisation, and the connection-time clock. */
 export interface AdmissionContext {
+  /**
+   * The one issuer this instance accepts credentials from, pinned at
+   * initialisation and never resolved from a presented token.
+   *
+   * spec: identity-and-authorization/verification-without-shared-secrets
+   */
+  readonly platformIssuer: string;
   readonly gameId: string;
   /** Centaur Teams registered as participants of this game. */
   readonly participantTeamIds: ReadonlySet<string>;
   /** Roster snapshot, member user id to their participating team. */
   readonly teamOfMember: ReadonlyMap<string, string>;
+  /**
+   * Roster snapshot, human to the participating teams they are a designated
+   * coach of.
+   *
+   * Separate from `teamOfMember` because a coach need not be a member of the
+   * team they coach, and may coach more than one — so it is neither the same
+   * relation nor a function of it.
+   *
+   * spec: identity-and-authorization/roster-snapshot-binding
+   */
+  readonly coachTeams: ReadonlyMap<string, ReadonlySet<string>>;
   readonly nowSeconds: number;
 }
 
@@ -62,10 +100,12 @@ export type AdmittedIdentity =
 
 export type AdmissionRefusal =
   | "unverified"
+  | "untrusted-issuer"
   | "wrong-game"
   | "expired"
   | "malformed-subject"
-  | "not-a-participant";
+  | "not-a-participant"
+  | "not-a-coach";
 
 export type Admission =
   | { readonly ok: true; readonly identity: AdmittedIdentity }
@@ -86,8 +126,27 @@ export type Admission =
  */
 export function admit(token: VerifiedToken | undefined, ctx: AdmissionContext): Admission {
   if (!token) return { ok: false, refusal: "unverified" };
-  // The audience binding is checked before anything else about the token is
-  // considered — spec: identity-and-authorization/audience-bound-tokens#wrong-audience-refused.
+  // Before every other claim, because every other claim is a statement by
+  // whoever signed this and is worth exactly what they are. The host verified a
+  // signature against material it fetched from the location *this token* named,
+  // so a stranger who publishes a resolvable key set arrives here with a
+  // perfectly valid signature over claims of their own choosing; only the pin
+  // tells that apart from the platform's.
+  //
+  // `!ctx.platformIssuer` is the uninitialised instance, whose seed tables are
+  // empty and whose pin is therefore the empty string — refused explicitly, for
+  // the same reason as the empty game binding below, since a token claiming no
+  // issuer would otherwise *match* it.
+  //
+  // spec: identity-and-authorization/verification-without-shared-secrets#a-valid-signature-from-a-stranger-is-refused
+  // spec: identity-and-authorization/admission-validation
+  if (!ctx.platformIssuer || token.iss !== ctx.platformIssuer) {
+    return { ok: false, refusal: "untrusted-issuer" };
+  }
+  // The audience binding is checked before anything the token *says about its
+  // holder* — spec: identity-and-authorization/audience-bound-tokens#wrong-audience-refused.
+  // Only the issuer pin precedes it, and that is not a claim about the holder
+  // but about whether the signature means anything here at all.
   // `!ctx.gameId` is the uninitialised instance, whose seed tables are empty and
   // whose binding is therefore the empty string. Without it a token naming the
   // empty audience would *match* that empty binding, and an instance with no
@@ -125,11 +184,23 @@ export function admit(token: VerifiedToken | undefined, ctx: AdmissionContext): 
       : { ok: false, refusal: "not-a-participant" };
   }
   if (role === "coach" && parts === 3 && second) {
-    // A coach need not be a member of the team they watch, so only the team's
-    // participation is checkable here — spec: identity-and-authorization/coach-tokens.
-    return ctx.participantTeamIds.has(second)
+    // Both halves, and in this order. A coach token is the one subject binding
+    // a human *and* a team, so checking the team alone would admit any human at
+    // all as coach of any participating team — which is what the snapshot's
+    // coach designations exist to prevent. A coach need not be a *member* of
+    // the team they watch, which is why `teamOfMember` cannot answer this and a
+    // designation of its own is seeded.
+    //
+    // The participation check stays first and separate: a designation for a
+    // team this game never registered earns nothing, and saying so as
+    // `not-a-participant` keeps the two failures legible in the module log.
+    //
+    // spec: identity-and-authorization/coach-tokens
+    // spec: identity-and-authorization/admission-validation#coach-absent-from-the-snapshot-refused
+    if (!ctx.participantTeamIds.has(second)) return { ok: false, refusal: "not-a-participant" };
+    return ctx.coachTeams.get(first)?.has(second)
       ? { ok: true, identity: { role, userId: first, viewsAs: second } }
-      : { ok: false, refusal: "not-a-participant" };
+      : { ok: false, refusal: "not-a-coach" };
   }
   return { ok: false, refusal: "malformed-subject" };
 }

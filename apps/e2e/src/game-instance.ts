@@ -15,8 +15,10 @@
 // raw socket gives, and never the host's status. And its `openWebSocket`
 // reaches the socket by exchanging the presented token at
 // `/v1/identity/websocket-token` first, which re-mints it under the host's own
-// key with a fresh sixty-second lifetime: the token the module would then see
-// is not the token the platform signed.
+// key with a fresh sixty-second lifetime. That exchange is the browser's path
+// and is asserted on directly through `exchangedForWebsocketToken` below,
+// rather than being reasoned around: it preserves the claims admission decides
+// on, and only the header path lets a scenario choose a lifetime of its own.
 import { execFile } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { request } from "node:http";
@@ -136,6 +138,33 @@ export function attemptConnection(
     attempt.on("error", reject);
     attempt.end();
   });
+}
+
+/**
+ * Trade `token` at the host's `/v1/identity/websocket-token`, and answer with
+ * the token the host mints in its place.
+ *
+ * This is the exchange the SpacetimeDB SDK performs before every connection,
+ * and so the exchange a browser's connection goes through — a browser cannot
+ * set an `Authorization` header on a WebSocket upgrade, which is the only way
+ * around it. `connect-time-validation#re-issuance-preserves-the-binding` makes
+ * what happens to the claims here something the platform has to know rather
+ * than assume, and no unit test can say: the re-minting is the host's.
+ *
+ * spec: identity-and-authorization/connect-time-validation#re-issuance-preserves-the-binding
+ */
+export async function exchangedForWebsocketToken(
+  host: Pick<SpacetimeHost, "url">,
+  token: string,
+): Promise<string> {
+  const response = await fetch(new URL("/v1/identity/websocket-token", host.url), {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    throw new Error(`token exchange refused: ${response.status} ${await response.text()}`);
+  }
+  return (await response.json()).token as string;
 }
 
 /**

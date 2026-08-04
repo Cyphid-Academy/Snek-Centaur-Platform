@@ -18,26 +18,43 @@ import {
 
 const GAME = "game-1";
 const OTHER_GAME = "game-2";
+const PLATFORM = "https://platform.example";
+/**
+ * A stranger who publishes a key set the host can resolve, and whose signatures
+ * therefore verify. Everything about a token of theirs is well-formed; the only
+ * thing wrong with it is who signed it.
+ */
+const STRANGER = "https://stranger.example";
 const NOW = 1_700_000_000;
 const LIFETIME = 15 * 60;
 
-/** Seeded state: two participating teams, alice and bob on the roster. */
+/**
+ * Seeded state: the platform pinned, two participating teams, alice and bob on
+ * the roster, and carol designated a coach of team-a without being on any team.
+ */
 function seededContext(overrides: Partial<AdmissionContext> = {}): AdmissionContext {
   return {
+    platformIssuer: PLATFORM,
     gameId: GAME,
     participantTeamIds: new Set(["team-a", "team-b"]),
     teamOfMember: new Map([
       ["alice", "team-a"],
       ["bob", "team-b"],
     ]),
+    coachTeams: new Map([
+      ["carol", new Set(["team-a"])],
+      // A team id in the human slot, so the coach case below that swaps the two
+      // segments is refused by position rather than by carol's absence.
+      ["team-b", new Set(["team-a"])],
+    ]),
     nowSeconds: NOW,
     ...overrides,
   };
 }
 
-/** A token the host verified, with a still-valid expiry unless overridden. */
+/** A token the host checked the signature of, valid unless overridden. */
 function token(sub: string, overrides: Partial<VerifiedToken> = {}): VerifiedToken {
-  return { aud: GAME, sub, exp: NOW + LIFETIME, ...overrides };
+  return { iss: PLATFORM, aud: GAME, sub, exp: NOW + LIFETIME, ...overrides };
 }
 
 beforeEach(() => {
@@ -124,6 +141,25 @@ const refusalCases: ReadonlyArray<{
     refusal: "unverified",
   },
   {
+    // **The check the old suite could not make.** The token below is signed,
+    // and the host verified it — against the key set the *stranger* publishes,
+    // resolved from the `iss` the stranger themselves chose. Every other claim
+    // is exactly what an admissible operator's would be. An issuer-agnostic
+    // instance admits it; only the pin refuses it, and it refuses on the issuer
+    // rather than on anything the stranger wrote about alice.
+    // spec: identity-and-authorization/verification-without-shared-secrets#a-valid-signature-from-a-stranger-is-refused
+    name: "a token from an issuer that publishes resolvable material of its own",
+    token: token("operator:alice", { iss: STRANGER }),
+    refusal: "untrusted-issuer",
+  },
+  {
+    // A `startsWith` in either direction hands an attacker an issuer of their
+    // own choosing under the platform's name.
+    name: "a token whose issuer extends the pinned one",
+    token: token("operator:alice", { iss: `${PLATFORM}.attacker.example` }),
+    refusal: "untrusted-issuer",
+  },
+  {
     // spec: identity-and-authorization/game-token-contents#token-names-its-game
     name: "a token issued for a different game",
     token: token("operator:alice", { aud: OTHER_GAME }),
@@ -178,9 +214,36 @@ const refusalCases: ReadonlyArray<{
     refusal: "not-a-participant",
   },
   {
+    // Participation is checked before the designation, so a designation for a
+    // team this game never registered is not a way in either.
     name: "a coach token viewing a team not registered to this game",
     token: token("coach:carol:team-z"),
     refusal: "not-a-participant",
+  },
+  {
+    // spec: identity-and-authorization/admission-validation#coach-absent-from-the-snapshot-refused
+    // The half the instance used to skip entirely. Every other fact about this
+    // token is right — the role parses, the team participates, the expiry is
+    // ahead — and dave is simply not a coach of it. Without the designation
+    // check, `coach:<anyone>:<any participating team>` was admissible.
+    name: "a coach token naming a human the snapshot records as no coach at all",
+    token: token("coach:dave:team-a"),
+    refusal: "not-a-coach",
+  },
+  {
+    // Designated for team-a and asking for team-b: a designation is per team,
+    // so holding one is not standing over the whole roster.
+    name: "a coach token for a participating team the named human does not coach",
+    token: token("coach:carol:team-b"),
+    refusal: "not-a-coach",
+  },
+  {
+    // A roster *member* is not thereby a coach: the two relations are seeded
+    // separately, and reading one for the other would make every operator a
+    // coach of their own team.
+    name: "a coach token naming a roster member who holds no coach designation",
+    token: token("coach:alice:team-a"),
+    refusal: "not-a-coach",
   },
   {
     // spec: identity-and-authorization/admission-validation#operator-absent-from-the-snapshot-refused
@@ -283,7 +346,7 @@ describe("each admission check refuses independently", () => {
     });
   });
 
-  it("checks the game binding before anything else about the token", () => {
+  it("checks the game binding before anything the token says about its holder", () => {
     // Wrong on every axis at once, and refused on the audience alone.
     // spec: identity-and-authorization/audience-bound-tokens#wrong-audience-refused
     const everythingWrong = token("nonsense", { aud: OTHER_GAME, exp: NOW - LIFETIME });
@@ -293,10 +356,51 @@ describe("each admission check refuses independently", () => {
     });
   });
 
+  it("checks the issuer before the game binding, and so before every other claim", () => {
+    // The same token that is refused `wrong-game` above, now also from a
+    // stranger. The refusal moves to the issuer, which is the ordering the
+    // requirement fixes: what a token says is a statement by whoever signed it,
+    // so "who signed this" is answered before any of it is read.
+    //
+    // Asserted as a *change of answer* rather than as an isolated fact, because
+    // an implementation that checked the issuer last would satisfy the isolated
+    // case and fail this one.
+    // spec: identity-and-authorization/verification-without-shared-secrets#a-valid-signature-from-a-stranger-is-refused
+    // spec: identity-and-authorization/admission-validation
+    const fromAStranger = token("nonsense", {
+      iss: STRANGER,
+      aud: OTHER_GAME,
+      exp: NOW - LIFETIME,
+    });
+    expect(admit(fromAStranger, seededContext())).toEqual({
+      ok: false,
+      refusal: "untrusted-issuer",
+    });
+  });
+
   // Seeds no well-behaved writer produces: nothing anywhere enforces that the
   // game's two seeded tables agree, so these are the refusals that must hold
   // when the surrounding assumptions do not.
   it.each([
+    {
+      // The uninitialised instance's pin is "" for the same reason its game
+      // binding is, and fails in the same direction: a token claiming no issuer
+      // would *match* an empty pin by plain equality, so emptiness is refused
+      // explicitly rather than left to the accident that no real token spells
+      // it. This is the one that decides whether an instance that has not been
+      // initialised yet is closed or wide open.
+      // spec: identity-and-authorization/verification-without-shared-secrets#a-valid-signature-from-a-stranger-is-refused
+      name: "an uninitialised instance, even by a token naming no issuer",
+      ctx: { platformIssuer: "" },
+      token: token("operator:alice", { iss: "" }),
+      refusal: "untrusted-issuer" as AdmissionRefusal,
+    },
+    {
+      name: "an uninitialised instance presented a genuinely platform-signed token",
+      ctx: { platformIssuer: "" },
+      token: token("operator:alice"),
+      refusal: "untrusted-issuer" as AdmissionRefusal,
+    },
     {
       // The connection hook seeds `gameId` as "" until `initialize_game` runs.
       // A token naming the empty audience would *match* that empty binding by
@@ -345,7 +449,13 @@ describe("rejection happens before any state could be touched", () => {
   const adversarialInputs: ReadonlyArray<VerifiedToken | undefined> = [
     ...refusalCases.map((c) => c.token),
     ...malformedSubjects.map((c) => token(c.sub)),
-    { aud: GAME, sub: "operator:alice", exp: NOW + LIFETIME, extra: {} } as VerifiedToken,
+    {
+      iss: PLATFORM,
+      aud: GAME,
+      sub: "operator:alice",
+      exp: NOW + LIFETIME,
+      extra: {},
+    } as VerifiedToken,
   ];
 
   it("returns a decision for every adversarial input and never throws", () => {
@@ -367,10 +477,13 @@ describe("rejection happens before any state could be touched", () => {
     const ctx = seededContext();
     const teamsBefore = [...ctx.participantTeamIds];
     const rosterBefore = [...ctx.teamOfMember];
+    const coachesBefore = [...ctx.coachTeams].map(([user, teams]) => [user, [...teams]]);
     for (const input of adversarialInputs) admit(input, ctx);
     admit(token("operator:alice"), ctx);
+    admit(token("coach:carol:team-a"), ctx);
     expect([...ctx.participantTeamIds]).toEqual(teamsBefore);
     expect([...ctx.teamOfMember]).toEqual(rosterBefore);
+    expect([...ctx.coachTeams].map(([user, teams]) => [user, [...teams]])).toEqual(coachesBefore);
   });
 });
 

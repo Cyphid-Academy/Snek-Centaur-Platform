@@ -4,29 +4,39 @@
 
 /**
  * Every capability the deployment recognises: what holding it reaches, and
- * whether it is reachable by a caller presenting no platform credential.
+ * which classes of caller reach it.
  *
  * A capability is a bare verb identifier — it names an action, so reading a
  * credential's claim tells you what its holder can go and do without consulting
  * a table of names.
  *
- * Reach lives here, on the capability, rather than in a second list beside this
- * one. A separate list is a thing that can disagree with the registry; a field
- * cannot. Omitting `anonymous` is what "credentialed" means, so a capability
- * added without a thought about reach is not anonymously reachable — the
- * default denies, and widening reach is always a visible edit
- * (`anonymous-reach#credentialed-by-default`). Every entry that does declare it
- * cites the scenario that justifies it, and `scripts/check-public-surface.mjs`
- * fails the build on one that does not.
+ * **Reach lives here, on the capability, rather than in a list beside this
+ * one** — and that is true of `session` exactly as it is of `anonymous`. A
+ * separate list is a thing that can disagree with the registry; a field cannot.
+ * The session list was once separate, and it did disagree: `begin-sign-in` was
+ * missing from it, so the sign-in entry route refused every browser carrying a
+ * live session and its already-signed-in branch was unreachable code. Omitting a
+ * flag is what "not reachable that way" means, so a capability added without a
+ * thought about reach is reachable by neither — the default denies, and widening
+ * reach is always a visible edit (`anonymous-reach#credentialed-by-default`).
+ * Every entry that does declare one cites the scenario that justifies it, and
+ * `scripts/check-public-surface.mjs` fails the build on one that does not.
  *
  * spec: identity-and-authorization/anonymous-reach
+ * spec: identity-and-authorization/anonymous-reach#session-reach-is-declared-with-the-capability
  */
 export const CAPABILITIES = {
   // spec: identity-and-authorization/anonymous-reach#liveness-exposes-no-principal
   "read-platform-status": {
     reaches: "Liveness of the deployment and of its component mounting.",
     anonymous: true,
+    session: true,
   },
+  // The bootstrap pair, reachable without a credential because the proof is in
+  // the call itself. Neither is a session's: a caller who has a session is
+  // precisely the one who need not prove itself with an assertion or a
+  // reference, and the two ends of a handoff are held by different parties —
+  // the human starts one, the Server redeems it.
   // spec: identity-and-authorization/anonymous-reach#assertion-exchange-proves-itself
   "exchange-assertion": {
     reaches: "Exchange a signed client assertion for a platform credential.",
@@ -38,27 +48,35 @@ export const CAPABILITIES = {
     anonymous: true,
   },
   // The sign-in entry route, and the one capability here reached by navigation
-  // rather than by a function call: a browser with no session arrives at it,
-  // which is why it can require none. It decides only whether the naming Server
-  // and the return address it asks for are registered — both already public in
-  // the registry — and hands off to the provider.
+  // rather than by a function call. It is *not* one of the bootstrap pair, and
+  // reading it as one is the mistake that made the route refuse the very caller
+  // its already-signed-in branch exists for: anonymous reach is what it needs to
+  // serve a browser that has never signed in, and it is reached again, at the
+  // same address, by a browser that has — answering that one without a provider
+  // is the whole of what makes a reload silent. Reachable anonymously says who
+  // may reach it *without* a credential, never who may not reach it with one.
+  // spec: identity-and-authorization/google-sign-in#session-survives-reload
   // spec: identity-and-authorization/anonymous-reach#sign-in-entry-exposes-no-principal
   "begin-sign-in": {
     reaches: "Begin a sign-in that returns the browser to a registered Server.",
     anonymous: true,
+    session: true,
   },
   "begin-sign-in-handoff": {
     reaches: "Mint a handoff reference returning this human to a registered Server.",
+    session: true,
   },
   "issue-game-credential": {
     reaches: "Obtain a Snek Centaur Server's per-team, per-game credential.",
   },
   "issue-game-token": {
     reaches: "Obtain a game access token — operator, bot, spectator, or coach.",
+    session: true,
   },
   // spec: identity-and-authorization/peer-capability-ceiling#attribution-is-user-visible
   "review-attributed-actions": {
     reaches: "The actions taken on this human's own account through a registered system.",
+    session: true,
   },
   // Named ahead of the functions it reaches, which is the one departure from
   // "not a forecast" and is forced: `game-credential-scope` fixes that a game
@@ -71,8 +89,22 @@ export const CAPABILITIES = {
 export type Capability = keyof typeof CAPABILITIES;
 
 /**
- * What a caller presenting no platform credential may reach, read off the
- * registry rather than restated.
+ * The capabilities declaring `field`, read off the registry rather than
+ * restated beside it.
+ *
+ * Compared against `true` on the value, not tested for the key's presence.
+ * `field in entry` reads the same until somebody writes `anonymous: false` —
+ * the most natural spelling of "not anonymous" — and silently declares the
+ * capability reachable. The default this registry promises is denial, so the
+ * one spelling that grants must be the one that says `true`.
+ */
+const declaring = (field: "anonymous" | "session"): ReadonlyArray<Capability> =>
+  Object.entries(CAPABILITIES)
+    .filter(([, entry]) => (entry as Record<string, unknown>)[field] === true)
+    .map(([name]) => name as Capability);
+
+/**
+ * What a caller presenting no platform credential may reach.
  *
  * It is a claim like any other, which is what keeps the reachability check
  * total: the enforcement site reads one claim whether or not a credential
@@ -82,48 +114,20 @@ export type Capability = keyof typeof CAPABILITIES;
  * spec: identity-and-authorization/anonymous-reach
  * spec: identity-and-authorization/authentication-required#unauthenticated-refused
  */
-export const ANONYMOUS_CAPABILITIES: ReadonlyArray<Capability> = Object.entries(CAPABILITIES)
-  // On the value, not on the key's presence. `"anonymous" in entry` reads the
-  // same until somebody writes `anonymous: false` — the most natural spelling
-  // of "not anonymous" — and silently declares the capability anonymously
-  // reachable. The default this registry promises is denial, so the one
-  // spelling that grants must be the one that says `true`.
-  .filter(([, entry]) => (entry as { anonymous?: boolean }).anonymous === true)
-  .map(([name]) => name as Capability);
+export const ANONYMOUS_CAPABILITIES: ReadonlyArray<Capability> = declaring("anonymous");
 
 /**
- * What a signed-in human's session reaches. It is a claim like any other, so
- * the enforcement site reads one list whoever is calling and there is no
- * "authenticated therefore allowed" branch anywhere.
+ * What a signed-in human's session reaches — derived the same way and for the
+ * same reason, so the two classes of reach are one enumeration rather than a
+ * registry and a list that can drift apart.
  *
- * The bootstrap *pair* is deliberately absent: a caller who has a session is
- * precisely the one who does not need to prove itself with an assertion or a
- * reference. `begin-sign-in-handoff` is here and its counterpart
- * `redeem-handoff` is not, because those are the two ends of the same handoff
- * and they are held by different parties — the human starts one, the Server
- * redeems it.
- *
- * `begin-sign-in` is *not* one of that pair, and reading it as one is the
- * mistake that made the sign-in entry route refuse the very caller its
- * already-signed-in branch exists for. Anonymous reach is what that route needs
- * to serve a browser that has never signed in; it is reached *again*, at the
- * same address, by a browser that has — and answering that one without a
- * provider is the whole of what makes a reload silent
- * (`google-sign-in#session-survives-reload`). A capability being anonymously
- * reachable says who may reach it without a credential, never who may not reach
- * it with one.
+ * It is a claim like any other, so the enforcement site reads one list whoever
+ * is calling and there is no "authenticated therefore allowed" branch anywhere.
  *
  * spec: identity-and-authorization/authentication-required
- * spec: identity-and-authorization/google-sign-in#session-survives-reload
+ * spec: identity-and-authorization/anonymous-reach#session-reach-is-declared-with-the-capability
  */
-export const SESSION_CAPABILITIES: ReadonlyArray<Capability> = [
-  "read-platform-status",
-  "begin-sign-in",
-  "begin-sign-in-handoff",
-  "issue-game-token",
-  // spec: identity-and-authorization/peer-capability-ceiling#attribution-is-user-visible
-  "review-attributed-actions",
-];
+export const SESSION_CAPABILITIES: ReadonlyArray<Capability> = declaring("session");
 
 /**
  * The two capabilities a per-team game credential grants, and the reason they
@@ -142,21 +146,37 @@ export const GAME_CREDENTIAL_CAPABILITIES: ReadonlyArray<Capability> = [
  * Capabilities no external system's ceiling may include, whatever its
  * registration records and whatever the human it acts for could do directly.
  *
- * Both entries mint a credential — an assertion exchange mints one for the
- * presenting system, a handoff redemption mints one naming a human — so a
- * ceiling containing either would let a compromised peer manufacture authority
- * instead of merely spending the authority it was given. That is the exclusion
- * `peer-capability-ceiling` names ("issue credentials for a human"), and it is
- * the only control that shrinks what a compromised peer can do rather than
- * shortening how long it can do it. Nothing in today's surface destroys
- * platform state or changes authentication configuration; when such a function
- * lands, its capability belongs on this list.
+ * Each entry mints a credential, or completes a chain that does — an assertion
+ * exchange mints one for the presenting system, a handoff redemption mints one
+ * naming a human, and beginning a handoff is the step that makes a redemption
+ * possible at all. So a ceiling containing any of them would let a compromised
+ * peer manufacture authority instead of merely spending the authority it was
+ * given. That is the exclusion `peer-capability-ceiling` names ("issue
+ * credentials for a human"), and it is the only control that shrinks what a
+ * compromised peer can do rather than shortening how long it can do it.
+ *
+ * **`begin-sign-in-handoff` is here because the exclusion is read against what
+ * a capability reaches in combination, never against one step alone.** By
+ * itself it mints no credential: it mints an opaque reference. But the
+ * credential a Server holds after a redemption *names the human*, and a
+ * credential naming a human that carried `begin-sign-in-handoff` would let the
+ * Server begin a fresh handoff in that human's name, redeem it — redemption
+ * proves itself and needs no capability — and hold a new credential for them.
+ * Repeat, and the fifteen-minute lifetime bounds nothing: the Server renews a
+ * human's credential indefinitely, without the human, which is precisely the
+ * operation every step was excluded to prevent. A human's *own session* still
+ * reaches it, and must; a ceiling is what may be conferred on a peer.
+ *
+ * Nothing in today's surface destroys platform state or changes authentication
+ * configuration; when such a function lands, its capability belongs here.
  *
  * spec: identity-and-authorization/peer-capability-ceiling#ceiling-sits-below-the-user
+ * spec: identity-and-authorization/peer-capability-ceiling#no-chain-reaches-what-one-step-may-not
  */
 export const PEER_FORBIDDEN_CAPABILITIES: ReadonlyArray<Capability> = [
   "exchange-assertion",
   "redeem-handoff",
+  "begin-sign-in-handoff",
 ];
 
 /**

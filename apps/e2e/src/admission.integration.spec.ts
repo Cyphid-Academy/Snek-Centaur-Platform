@@ -18,13 +18,13 @@
 // **The contrast is the assertion.** No single refusal here means much on its
 // own, because an instance with empty seed tables refuses everything: nothing
 // writes `game_binding` until `initialize_game` arrives with
-// migrate-game-lifecycle, so `ctx.gameId` is `""` and every token in the world
-// is `wrong-game`. What carries the requirement is that different presentations
-// are refused *differently, in different places, by different parties*. A
-// connection carrying nothing is passed through by the host and refused by the
-// module; a platform-signed token is passed through and refused with a
-// different word — reaching the module at all is the marker for "the host
-// fetched the platform's document and verified a signature it did not
+// migrate-game-lifecycle, so the instance's pinned issuer is `""` and every
+// token in the world is `untrusted-issuer`. What carries the requirement is that
+// different presentations are refused *differently, in different places, by
+// different parties*. A connection carrying nothing is passed through by the
+// host and refused by the module; a platform-signed token is passed through and
+// refused with a different word — reaching the module at all is the marker for
+// "the host fetched the platform's document and verified a signature it did not
 // produce"; and the same claims under a key the platform never published are
 // refused by the host itself, before the module, which is the half that tells
 // verification from transport. All three stay legible after the seed tables
@@ -47,8 +47,8 @@
 //   * The audience comparison itself, and every admission success. Both need
 //     an instance bound to a game and seeded with a roster, and the only
 //     writer of those tables is `initialize_game`. Until it exists,
-//     `wrong-game` is the blanket refusal of an unbound instance, and the one
-//     scenario below that reads it says so.
+//     `untrusted-issuer` is the blanket refusal of an unbound instance, and the
+//     scenarios below that read it say so.
 //   * `admission-validation#reject-before-touching-state`. The obvious form of
 //     it is to read `admitted_connection` and find nothing, and no caller can:
 //     every read path — `/sql`, a subscription, the SDK — opens a client
@@ -68,9 +68,14 @@
 //
 // No Centaur Server and no browser: nothing here is reached from a Server's
 // page, and the fixtures this names are the whole of what it starts.
-import { type JWK, SignJWT, importJWK } from "jose";
+import { type JWK, SignJWT, decodeJwt, importJWK } from "jose";
 import { expect, test } from "./fixtures";
-import { type ModuleLog, attemptConnection, moduleLog } from "./game-instance";
+import {
+  type ModuleLog,
+  attemptConnection,
+  exchangedForWebsocketToken,
+  moduleLog,
+} from "./game-instance";
 
 /** This run's game, as a database name. One instance is one game. */
 const DATABASE = "snek-e2e-admission";
@@ -140,14 +145,14 @@ test("refuses a connection presenting no credential at all", async ({ spacetime 
 // successes, which need an initialised game; what the subject spells here is
 // not part of what this asserts.
 //
-// **What it does not yet establish.** `wrong-game` has two sufficient causes
-// today and the log cannot separate them — the instance has no game id at all
-// (`initialize_game`, migrate-game-lifecycle), and the token names a game that
-// is not this one. So this is the reachability, not yet the audience
-// comparison. Both readings refuse identically, which is why the assertion
-// survives initialisation unchanged: once the instance is bound to a game, the
-// same token for `ANOTHER_GAME` is refused for the narrower reason as well.
-test("verifies a platform-signed token and refuses it on the game it names", async ({
+// **What it does not yet establish.** `untrusted-issuer` has two sufficient
+// causes today and the log cannot separate them — the instance holds no pinned
+// issuer at all (`initialize_game`, migrate-game-lifecycle), and the token's
+// issuer is not it. So this is the reachability, not yet the issuer comparison.
+// Both readings refuse identically, which is why the assertion survives
+// initialisation unchanged: once the instance is bound, a token from any other
+// issuer is refused for the narrower reason as well.
+test("verifies a platform-signed token and refuses it against what it was bound to", async ({
   spacetime,
 }) => {
   const mark = await log.mark();
@@ -159,7 +164,40 @@ test("verifies a platform-signed token and refuses it on the game it names", asy
   );
 
   expect(attempt.status).toBe(101);
-  expect((await log.after(mark)).join("\n")).toContain("admission refused: wrong-game");
+  expect((await log.after(mark)).join("\n")).toContain("admission refused: untrusted-issuer");
+});
+
+// spec: identity-and-authorization/connect-time-validation#re-issuance-preserves-the-binding
+// **The only assertion here about the path a browser actually takes.** Every
+// other scenario in this file presents its credential on the upgrade's
+// `Authorization` header, which Node can do and a browser cannot: a browser
+// connects through `spacetimedb/sdk`, which first trades the presented token at
+// `/v1/identity/websocket-token` for one the host re-mints under its own key.
+// The requirement is satisfiable two ways — that exchange carries issuer, game
+// binding and subject through unaltered, or the platform credential reaches
+// admission by a path that performs no re-issuance — and which way holds is a
+// fact about this host rather than a thing to reason out.
+//
+// It is the first: the exchange rewrites only the lifetime, shortening it to
+// about a minute, and leaves `iss`, `aud` and `sub` exactly as the platform
+// signed them. So the SDK's default path is admissible and a browser needs no
+// hand-built socket. That is a *dependency* of this design rather than a
+// property of it, which is the whole reason it is pinned: should a host release
+// begin re-issuing under its own issuer, admission would refuse every browser
+// in the world with `untrusted-issuer`, and this scenario is what says so
+// before the game does.
+test("carries the platform's claims through the host's own token exchange", async ({
+  spacetime,
+}) => {
+  const platform = await platformSigned({ sub: "spectator:u-ada", aud: ANOTHER_GAME });
+
+  const exchanged = decodeJwt(await exchangedForWebsocketToken(spacetime, platform));
+
+  // The three the decision reads, and nothing about the fourth: `exp` is the
+  // host's own and deliberately not asserted on.
+  expect(exchanged.iss).toBe(issuer);
+  expect(exchanged.sub).toBe("spectator:u-ada");
+  expect(exchanged.aud).toContain(ANOTHER_GAME);
 });
 
 // spec: identity-and-authorization/verification-without-shared-secrets#instance-validates-alone
