@@ -180,6 +180,17 @@ export async function freePortPair(): Promise<[number, number]> {
 }
 
 /**
+ * Bind `server` to an ephemeral loopback port and answer with the origin a
+ * fetch or a browser can be pointed at.
+ *
+ * For a server this process runs itself, rather than one it spawned — the port
+ * is never released, so there is no window for anything else to take it.
+ */
+export async function loopbackOrigin(server: Server): Promise<string> {
+  return `http://127.0.0.1:${await listen(server)}`;
+}
+
+/**
  * Bind to an ephemeral loopback port and answer with the port itself.
  *
  * Narrows `address()` rather than asserting it: the `string` case is a Unix
