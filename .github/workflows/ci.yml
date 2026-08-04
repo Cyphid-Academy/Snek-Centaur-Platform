@@ -26,6 +26,27 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
 
+  # Capability-declaration totality for the Convex host. `typecheck` cannot
+  # stand in for it: the public builders make an omitted declaration a type
+  # error only for code that imports them, so a file importing Convex's own
+  # `query` builds a public function declaring nothing and typechecks clean.
+  # `capability-registry#unregistered-function-fails-the-build` says the build
+  # fails on that, and this job is where "the build" means CI.
+  check-public-surface:
+    name: check-public-surface
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check:public-surface
+
   typecheck:
     name: typecheck
     runs-on: ubuntu-latest
