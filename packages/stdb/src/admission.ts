@@ -17,17 +17,11 @@
 // issuer the token itself names; a token the host could not verify arrives here
 // as `undefined`, which is the same refusal as any other.
 //
-// **A verified signature is not yet a signature of the platform's, and the two
-// checks are separate here because the runtime cannot join them.** SpacetimeDB
-// resolves verification material by OIDC discovery from the presented token's
-// own `iss`, and 2.7 offers no way to bind a host to one issuer — so a token
-// signed by *any* issuer publishing a resolvable key set arrives with
-// `hasJWT` true and its signature checked. What that establishes is only that
-// whoever signed it holds the key they publish, which is a fact about a
-// stranger. The pin below is therefore the whole of
-// `verification-without-shared-secrets#a-valid-signature-from-a-stranger-is-refused`
-// on this substrate: it is checked before any other claim, because every claim
-// after it is only worth what the signer is worth.
+// **A verified signature is not yet a signature of the platform's**, because
+// the host resolves verification material from the `iss` the presented token
+// itself names — so the pin below is what tells the platform's signature from
+// any other resolvable issuer's. Why the host cannot do this is
+// `packages/stdb/AGENTS.md`.
 //
 // The `sub` grammar is `./subject.ts`'s, shared with the platform that writes
 // it — this file decides what a parsed subject *earns*, and nothing about how
@@ -125,16 +119,11 @@ export type Admission =
 export function admit(token: VerifiedToken | undefined, ctx: AdmissionContext): Admission {
   if (!token) return { ok: false, refusal: "unverified" };
   // Before every other claim, because every other claim is a statement by
-  // whoever signed this and is worth exactly what they are. The host verified a
-  // signature against material it fetched from the location *this token* named,
-  // so a stranger who publishes a resolvable key set arrives here with a
-  // perfectly valid signature over claims of their own choosing; only the pin
-  // tells that apart from the platform's.
+  // whoever signed this and is worth exactly what they are.
   //
-  // `!ctx.platformIssuer` is the uninitialised instance, whose seed tables are
-  // empty and whose pin is therefore the empty string — refused explicitly, for
-  // the same reason as the empty game binding below, since a token claiming no
-  // issuer would otherwise *match* it.
+  // `!ctx.platformIssuer` is the uninitialised instance, whose pin is the empty
+  // string — refused explicitly, for the same reason as the empty game binding
+  // below, since a token claiming no issuer would otherwise *match* it.
   //
   // spec: identity-and-authorization/verification-without-shared-secrets#a-valid-signature-from-a-stranger-is-refused
   // spec: identity-and-authorization/admission-validation
