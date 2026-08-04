@@ -33,14 +33,18 @@ The component name in `convex/convex.config.ts` is **camelCase** (`snekPlatform`
 
 The interfaces in `src/index.ts` and the validators in `convex/schema.ts` are two halves of one contract — compile-time and runtime. Change them together.
 
-**`convex/schema.ts` is empty, and that is the rule, not a gap.** A `defineTable` is not a note about intended state; it is a schema the deployment agrees to and validates every write against. Each table therefore arrives with the capability change that fixes its fields — `users` with `migrate-accounts-and-profiles`, `games` with `migrate-game-lifecycle` — never in advance. The same goes for `functions.ts`, which holds only the liveness query the host's `platformStatus` calls through: a function here decides a rule, and those rules are the open changes' to state.
+**A table arrives with the capability change that fixes its fields, never in advance.** A `defineTable` is not a note about intended state; it is a schema the deployment agrees to and validates every write against. `convex/schema.ts` was empty until `migrate-identity-and-authorization` landed, and what it holds now is exactly that change's own records — `trusted_issuers`, `accepted_assertions`, `sign_in_handoffs`, `platform_admins`, and the `system_call_windows` / `system_actions` pair behind a registered system's call bound and the attribution a user is shown — plus a deliberately partial `games` and `centaur_teams` carrying **only the fields identity reads** (`status`, `roster`, `serverDomain`). Those two are commented as owned elsewhere: `migrate-game-lifecycle` and `migrate-team-management` grow them, they do not replace them, and no behaviour on top of them belongs here yet. `users` still does not exist; it arrives with `migrate-accounts-and-profiles`.
+
+The same discipline governs `functions.ts`. Its functions are thin — read an index, write a row — and carry **no authorization logic**: a rule about who may call something is the host's, stated at the public function. The two single-use guards (`claimAssertionId`, `redeemHandoff`) read their index and write in the *same* mutation on purpose, so the read joins the transaction's read set and a concurrent claim invalidates one of the two rather than both succeeding. `recordSystemCall` is the same shape for the same reason, over a count instead of a uniqueness — and it writes the attribution row on the admitting branch only, so a refused call leaves no record of an action nobody took.
+
+Better Auth's tables are **not** here. They live in that component's own component, mounted alongside this one by the host.
 
 `convex/_generated/` is **committed**: CI has no deploy key and `pnpm typecheck` must not depend on regenerating it. Re-run `pnpm dev:convex` after a schema or signature change and commit the result.
 
 ## Key files
 
 - `src/index.ts` — hand-authored record interfaces (the compile-time contract)
-- `convex/schema.ts` — table definitions (the runtime contract; empty until the changes that own the tables land)
-- `convex/functions.ts` — the component's function surface, reachable only via the host
+- `convex/schema.ts` — table definitions (the runtime contract; a table lands with the change that fixes its fields)
+- `convex/functions.ts` — the component's function surface, reachable only via the host, and carrying no authorization rule of its own
 - `legacy-spec-archive/spec/05-convex-platform.md` — binding source of truth
 - `legacy-spec-archive/spec/03-auth-and-identity.md` — auth and identity context

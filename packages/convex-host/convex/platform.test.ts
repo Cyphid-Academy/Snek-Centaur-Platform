@@ -6,6 +6,7 @@ import { convexTest } from "convex-test";
 import type { GenericSchema, SchemaDefinition } from "convex/server";
 import { describe, expect, it, vi } from "vitest";
 import { api } from "./_generated/api";
+import { centaurModules, hostModules, platformModules } from "./harness.testing";
 import schema from "./schema";
 
 type Modules = Record<string, () => Promise<unknown>>;
@@ -17,11 +18,11 @@ const MOUNTABLE: Record<
 > = {
   snekPlatform: {
     schema: () => import("../../convex-snek-platform/convex/schema.js"),
-    modules: import.meta.glob("../../convex-snek-platform/convex/**/*.ts"),
+    modules: platformModules,
   },
   centaurState: {
     schema: () => import("../../convex-centaur-state/convex/schema.js"),
-    modules: import.meta.glob("../../convex-centaur-state/convex/**/*.ts"),
+    modules: centaurModules,
   },
 };
 
@@ -49,8 +50,29 @@ vi.mock("../../convex-snek-platform/convex/convex.config.js", async () =>
 vi.mock("../../convex-centaur-state/convex/convex.config.js", async () =>
   asImported(await vi.importActual("../../convex-centaur-state/convex/convex.config.js")),
 );
+// The published component mounts by package name, and is rewritten the same way.
+vi.mock("@convex-dev/better-auth/convex.config.js", async () =>
+  asImported(await vi.importActual("@convex-dev/better-auth/convex.config.js")),
+);
 
-const hostModules = import.meta.glob("./**/*.ts");
+/**
+ * Components that mount in production but are not brought up for these tests,
+ * and why.
+ *
+ * Being on this list is a decision, not an omission: an `app.use(...)` for
+ * anything *not* named here fails `withComponents` rather than being skipped,
+ * which is the whole point of deriving registration from the config. Removing a
+ * mount is still caught either way — the mounting assertion below names all
+ * three.
+ */
+const mountedButNotRegistered: Record<string, string> = {
+  // A published component, whose schema and function modules live under
+  // `node_modules` behind a pnpm symlink — out of reach of the `import.meta.glob`
+  // that hands convex-test a module map. Nothing here calls through it: it is
+  // the sign-in substrate, reached exclusively via `auth.ts`, and the rules
+  // that matter about it are covered by the sign-in suites.
+  betterAuth: "published component; sign-in substrate, covered by the signIn suites",
+};
 
 /** The component names `convex.config.ts` mounts. */
 async function mountedComponents(): Promise<ReadonlyArray<string>> {
@@ -63,12 +85,13 @@ async function mountedComponents(): Promise<ReadonlyArray<string>> {
 async function withComponents() {
   const t = convexTest(schema, hostModules);
   for (const name of await mountedComponents()) {
+    if (name in mountedButNotRegistered) continue;
     const entry = MOUNTABLE[name];
     if (entry === undefined) {
       // A new `app.use(...)` with no entry above. Failing here is the point:
       // skipping it silently would reopen the gap this file exists to close.
       throw new Error(
-        `convex.config.ts mounts "${name}", which this test cannot register. Add it to \`MOUNTABLE\`.`,
+        `convex.config.ts mounts "${name}", which this test cannot register. Add it to \`MOUNTABLE\`, or to \`mountedButNotRegistered\` with the reason.`,
       );
     }
     t.registerComponent(name, (await entry.schema()).default, entry.modules);
@@ -76,13 +99,21 @@ async function withComponents() {
   return t;
 }
 
+describe("component mounting", () => {
+  it("mounts every component the deployment needs, under their own names", async () => {
+    // `platformStatus` below proves the two it reaches through are mounted and
+    // working. This is the only assertion covering `betterAuth`, which these
+    // tests do not bring up but the deployment does.
+    expect(await mountedComponents()).toEqual(["snekPlatform", "centaurState", "betterAuth"]);
+  });
+});
+
 describe("platformStatus", () => {
   it("answers through both components, each naming itself", async () => {
     const t = await withComponents();
 
-    // Both component schemas are empty until the changes that own their tables
-    // land; the names are unobtainable except by calling through each component,
-    // so this pins that the call path is real while the tables are absent.
+    // The names are unobtainable except by calling through each component, so a
+    // mounting that resolved to the wrong one is visible rather than green.
     expect(await t.query(api.platform.platformStatus, {})).toEqual({
       ok: true,
       components: ["snekPlatform", "centaurState"],

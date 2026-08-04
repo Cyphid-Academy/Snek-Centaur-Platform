@@ -26,6 +26,31 @@ export const CONVEX_CLIENT_ENV: ReadonlyArray<EnvRequirement> = [
     name: "CONVEX_URL",
     why: "the deployment URL a client connects to",
   },
+  // Set automatically inside a deployment, and named anyway: the contract is
+  // the code that reads it, and both sign-in and credential issuance do.
+  {
+    name: "CONVEX_SITE_URL",
+    why: "this deployment's HTTP origin — sign-in, and the issuer it signs credentials with",
+  },
+  {
+    name: "SITE_URL",
+    why: "the platform web app's origin, the only origin sign-in redirects are trusted to",
+  },
+  { name: "GOOGLE_CLIENT_ID", why: "the single Cyphid OAuth client humans sign in through" },
+  { name: "GOOGLE_CLIENT_SECRET", why: "that OAuth client's secret" },
+  {
+    name: "BETTER_AUTH_SECRET",
+    why: "read by better-auth itself; without it sessions cannot be signed",
+  },
+  // The private half exists here and only here — a Convex deployment
+  // environment variable, read by `convex/auth/deployment.ts` and by nothing
+  // else. The public half is derived from it and served at the well-known
+  // addresses, so rotation is this one variable and nothing downstream.
+  // spec: global-invariants/credential-confinement#signing-keys-never-leave-convex
+  {
+    name: "CREDENTIAL_SIGNING_JWK",
+    why: "the P-256 private JWK every credential the platform issues is signed with",
+  },
 ];
 
 // What the Convex *CLI* needs in order to address a deployment (`convex dev`,

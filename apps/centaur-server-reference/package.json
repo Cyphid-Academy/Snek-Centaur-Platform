@@ -15,7 +15,8 @@
   },
   "dependencies": {
     "@cyphid/snek-centaur-server-lib": "workspace:*",
-    "@cyphid/snek-convex-host": "workspace:*"
+    "@cyphid/snek-convex-host": "workspace:*",
+    "convex": "^1.42.3"
   },
   "devDependencies": {
     "@sveltejs/adapter-node": "^5.5.7",

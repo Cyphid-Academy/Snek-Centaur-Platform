@@ -7,6 +7,10 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./api": {
+      "import": "./convex/_generated/api.js",
+      "types": "./convex/_generated/api.d.ts"
     }
   },
   "main": "./dist/index.js",
@@ -18,9 +22,13 @@
     "codegen": "convex codegen"
   },
   "dependencies": {
+    "@convex-dev/better-auth": "^0.12.5",
     "@cyphid/convex-centaur-state": "workspace:*",
     "@cyphid/convex-snek-platform": "workspace:*",
-    "convex": "^1.42.3"
+    "better-auth": "^1.6.25",
+    "convex": "^1.42.3",
+    "convex-helpers": "^0.1.120",
+    "jose": "^6.2.5"
   },
   "devDependencies": {
     "@edge-runtime/vm": "^5.0.0",

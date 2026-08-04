@@ -21,6 +21,19 @@ export type {
   GameRecord,
 } from "@cyphid/convex-snek-platform";
 
+// Credential custody: the assertion a Server signs to prove who it is, the
+// proactive renewal schedule, and the memory-only hold on what it earns.
+export {
+  type CredentialHandle,
+  type GameScope,
+  type Redeem,
+  type Renewal,
+  type ServerIdentity,
+  holdGameCredential,
+  renewalAction,
+  signAssertion,
+} from "./credentials";
+
 export type {
   DriveRecord,
   CentaurActionRecord,
