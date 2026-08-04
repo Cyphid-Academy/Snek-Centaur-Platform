@@ -15,6 +15,7 @@
     "typescript": "*"
   },
   "dependencies": {
+    "@cyphid/snek-centaur-server-lib": "workspace:*",
     "@cyphid/snek-stdb": "workspace:*"
   }
 }

@@ -3,10 +3,14 @@
 // Teams use this library to build their Centaur Server implementation.
 // This is a typed skeleton — implementation deferred.
 
+import type { GameState, SnakeId } from "@cyphid/snek-engine";
+
 export type {
   Direction,
   GameState,
   SnakeState,
+  SnakeId,
+  CentaurTeamId,
   Board,
   Item,
   ItemsByCell,
@@ -143,8 +147,21 @@ export interface TeamWhitelist {
 // spec: bot-framework/heuristic-vocabulary
 // ---------------------------------------------------------------------------
 
+/**
+ * What a Drive is aimed at.
+ *
+ * `snakeId` is the engine's own branded `SnakeId`, not a string — as it is
+ * everywhere below. It used to be a string, and that made the whole framework
+ * unusable as written: every one of these functions is handed a `GameState`
+ * whose snakes carry a branded *number*, so a bot author could not compare the
+ * id they were given against a single snake in the state they were given
+ * without casting their way out of the type system the brand exists to provide.
+ *
+ * spec: bot-framework/heuristic-vocabulary
+ * spec: global-invariants/engine-mirrors-are-guarded
+ */
 export type Target =
-  | { readonly kind: "Snake"; readonly snakeId: string }
+  | { readonly kind: "Snake"; readonly snakeId: SnakeId }
   | { readonly kind: "Cell"; readonly x: number; readonly y: number };
 
 export interface Drive<T extends Target = Target> {
@@ -155,17 +172,17 @@ export interface Drive<T extends Target = Target> {
    * Reward function over simulated board configurations.
    * @throws Error("not implemented")
    */
-  reward(state: import("@cyphid/snek-engine").GameState, snakeId: string): number;
+  reward(state: GameState, snakeId: SnakeId): number;
   /**
    * Distance function in author-defined terms (not necessarily grid distance).
    * @throws Error("not implemented")
    */
-  distance(state: import("@cyphid/snek-engine").GameState, snakeId: string): number;
+  distance(state: GameState, snakeId: SnakeId): number;
   /**
    * Returns true when this Drive's goal is satisfied.
    * @throws Error("not implemented")
    */
-  isSatisfied(state: import("@cyphid/snek-engine").GameState, snakeId: string): boolean;
+  isSatisfied(state: GameState, snakeId: SnakeId): boolean;
 }
 
 export interface Preference {
@@ -175,11 +192,11 @@ export interface Preference {
    * Scalar heuristic over board state, independent of any specific target.
    * @throws Error("not implemented")
    */
-  evaluate(state: import("@cyphid/snek-engine").GameState, snakeId: string): number;
+  evaluate(state: GameState, snakeId: SnakeId): number;
 }
 
 export interface Portfolio {
-  readonly snakeId: string;
+  readonly snakeId: SnakeId;
   readonly drives: ReadonlyArray<Drive>;
   readonly preferences: ReadonlyArray<Preference>;
 }

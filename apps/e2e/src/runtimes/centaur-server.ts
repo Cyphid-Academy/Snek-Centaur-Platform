@@ -1,3 +1,4 @@
+import { WELL_KNOWN_PATHS } from "@cyphid/snek-centaur-server-lib";
 // spec: global-invariants/runtime-ownership
 // A Snek Centaur Server, as a team actually runs one.
 //
@@ -50,8 +51,11 @@ export async function startCentaurServer(options: CentaurServerOptions): Promise
   return {
     ...server,
     url,
+    // From the constant the library publishes, not typed out again: these are
+    // the addresses the platform genuinely calls, so a harness spelling its own
+    // copy could go on passing against a surface that had moved.
     // spec: centaur-server-runtime/forkable-reference-app#enumerated-surface-is-the-contract
-    keysUrl: `${url}/.well-known/snek-server-keys`,
-    healthcheckUrl: `${url}/.well-known/snek-healthcheck`,
+    keysUrl: `${url}${WELL_KNOWN_PATHS.serverKeys}`,
+    healthcheckUrl: `${url}${WELL_KNOWN_PATHS.healthcheck}`,
   };
 }

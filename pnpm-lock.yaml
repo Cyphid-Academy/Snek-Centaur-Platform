@@ -77,6 +77,9 @@ importers:
 
   apps/e2e:
     dependencies:
+      '@cyphid/snek-centaur-server-lib':
+        specifier: workspace:*
+        version: link:../../packages/centaur-server-lib
       '@cyphid/snek-stdb':
         specifier: workspace:*
         version: link:../../packages/stdb
@@ -220,6 +223,9 @@ importers:
 
   packages/convex-snek-platform:
     dependencies:
+      '@cyphid/snek-game-configuration':
+        specifier: workspace:*
+        version: link:../game-configuration
       convex:
         specifier: ^1.42.3
         version: 1.42.3
