@@ -170,7 +170,7 @@ A Snek Centaur Server SHALL NOT authenticate a human itself. Where a human's ide
 - **THEN** the credential is returned in that exchange to the redeeming party and relayed onward to nobody — a party that redeems on a human's behalf holds a credential it may use, never one it may pass along
 
 ### Requirement: identity-and-authorization/capability-claim-structure
-Every credential the platform issues SHALL carry the capabilities it confers as a structured claim — a sequence of entries rather than an unstructured string — and enforcement SHALL read that structure from the first line of enforcement code written. An entry SHALL name one capability as a bare verb identifier and carry nothing else; the claim is a sequence so that constraining an entry later is a change to minting alone, and no entry carries a constraint today. Where a service principal obtained a credential to act with, the credential SHALL also name that principal.
+Every credential the platform issues SHALL carry the capabilities it confers as a structured claim — a sequence of entries rather than an unstructured string — and enforcement SHALL read that structure from the first line of enforcement code written. An entry SHALL name one capability as a bare verb identifier and carry nothing else; the claim is a sequence so that constraining an entry later is a change to minting alone, and no entry carries a constraint today. Where a service principal obtained a credential to act with, the credential SHALL also name that principal — except a game access token, which SHALL NOT carry it, because a game instance authorises on role and team alone and no platform-side distinction travels into one.
 
 #### Scenario: #structured-from-the-first-token
 - **WHEN** an enforcement site reads a credential's capabilities
@@ -182,7 +182,7 @@ Every credential the platform issues SHALL carry the capabilities it confers as 
 
 #### Scenario: #acting-principal-is-recorded
 - **WHEN** an action is taken under a credential a service principal obtained
-- **THEN** the platform can name that principal afterwards, because the credential carried it and the record kept it
+- **THEN** the platform can name that principal afterwards, because the record kept it — and, for every credential but a game access token, because the credential carried it too
 
 ### Requirement: identity-and-authorization/capability-registry
 Every function the platform exposes publicly SHALL declare the capability that reaches it, explicitly and never derived from where its code lives, and the declaration SHALL be total: a public function with no declared capability SHALL fail the build. A capability SHALL grant reachability only — the function's own authorization decision runs regardless of how broadly the caller was scoped.
@@ -206,7 +206,7 @@ Every function the platform exposes publicly SHALL declare the capability that r
 ### Requirement: identity-and-authorization/anonymous-reach
 Depends on: global-invariants/authenticated-unambiguous-identity#no-anonymous-mutation-path.
 
-A capability SHALL be reachable by a caller presenting no platform credential only where what it exposes is specific to no principal, or where the call carries its own proof of who is making it — a proof that does not depend on a credential the platform issued. Anonymous reach SHALL be a declared property of a capability, recorded in the same place the capabilities themselves are, so that the reach of every capability is read from one enumeration rather than assembled from a second list that could disagree with it. A capability that declares no reach SHALL NOT be anonymously reachable. Exactly four capabilities are anonymously reachable: reading the platform's liveness, exchanging a signed assertion for a credential, redeeming a sign-in handoff reference, and beginning a sign-in. Adding a fifth is a revision of this requirement, never a change to code alone.
+A capability SHALL be reachable by a caller presenting no platform credential only where what it exposes is specific to no principal, or where the call carries its own proof of who is making it — a proof that does not depend on a credential the platform issued. Anonymous reach SHALL be a declared property of a capability, recorded in the same place the capabilities themselves are, so that the reach of every capability is read from one enumeration rather than assembled from a second list that could disagree with it. A capability that declares no reach SHALL NOT be anonymously reachable. The same rule SHALL govern every other class of caller whose reach is declared — in particular, the capabilities a human's session confers SHALL be declared on the capability itself and never assembled as a separate list. Exactly four capabilities are anonymously reachable: reading the platform's liveness, exchanging a signed assertion for a credential, redeeming a sign-in handoff reference, and beginning a sign-in. Adding a fifth is a revision of this requirement, never a change to code alone.
 
 #### Scenario: #liveness-exposes-no-principal
 - **WHEN** an unauthenticated caller reads the platform's liveness
@@ -223,6 +223,10 @@ A capability SHALL be reachable by a caller presenting no platform credential on
 #### Scenario: #sign-in-entry-exposes-no-principal
 - **WHEN** a browser that has never signed in asks the platform to begin a sign-in on a Server's behalf
 - **THEN** the call is reachable without a credential, because it is what a caller who has none arrives at first; the entry decides only whether the naming Server and the address it asks to be returned to are registered, which the registry already holds in public, and answers every caller alike because there is no caller yet for the answer to be specific to
+
+#### Scenario: #session-reach-is-declared-with-the-capability
+- **WHEN** the capabilities a human's session confers are determined
+- **THEN** they are read from the capability enumeration itself; a list maintained beside it is not a permitted implementation, for the reason it is not one here — a second list is a thing that can disagree, and a field is not
 
 #### Scenario: #credentialed-by-default
 - **WHEN** a capability is added without declaring its reach
@@ -252,7 +256,13 @@ Every public function SHALL declare which kinds of principal it accepts, and SHA
 ### Requirement: identity-and-authorization/peer-capability-ceiling
 Depends on: global-invariants/issuer-anchored-trust#ceiling-is-checked-at-the-resource.
 
-No external system's ceiling SHALL include operations that destroy platform state, issue credentials for a human, or change authentication configuration, regardless of what a user that system acts for could do directly. The platform SHALL additionally bound the rate at which each registered system changes platform state, charging that bound in the same transaction as the change it admits, and SHALL be able to show a user which actions on their behalf were taken through which system.
+No external system's ceiling SHALL include operations that destroy platform state, issue credentials for a human, or change authentication configuration, regardless of what a user that system acts for could do directly. The exclusion SHALL be read against what a capability reaches in combination with the others the same principal may hold, never against a single step in isolation: a capability that begins an exchange another completes is excluded with the one that completes it.
+
+The platform SHALL additionally bound the rate at which each registered system changes platform state, charging that bound in the same transaction as the change it admits, and SHALL be able to show a user which actions on their behalf were taken through which system.
+
+#### Scenario: #no-chain-reaches-what-one-step-may-not
+- **WHEN** a registered system holds only capabilities its ceiling permits
+- **THEN** no sequence of them obtains or renews a credential naming a human — otherwise the ceiling bounds each step while permitting the outcome every step was excluded to prevent
 
 #### Scenario: #ceiling-sits-below-the-user
 - **WHEN** an external system acts for a user who could perform an excluded operation themselves
@@ -273,11 +283,15 @@ No external system's ceiling SHALL include operations that destroy platform stat
 ### Requirement: identity-and-authorization/verification-without-shared-secrets
 Depends on: global-invariants/game-instance-hermeticity, global-invariants/no-shared-secrets.
 
-The platform SHALL publish, at stable well-known addresses, the verification material for the credentials it signs — sufficient for a game's SpacetimeDB instance, a Snek Centaur Server, or any other party to validate them entirely on its own. Self-sufficient validation is what a hermetic instance requires.
+The platform SHALL publish, at stable well-known addresses, the verification material for the credentials it signs — sufficient for a game's SpacetimeDB instance, a Snek Centaur Server, or any other party to validate them entirely on its own. Self-sufficient validation is what a hermetic instance requires. A validating party SHALL pin the issuer that material belongs to alongside the material itself, and SHALL resolve verification material only from what it already holds — never from a location the credential under examination names.
 
 #### Scenario: #instance-validates-alone
 - **WHEN** a game's instance validates an access token
 - **THEN** it does so using only the published verification material it obtained at startup, consulting nothing else and no one else
+
+#### Scenario: #a-valid-signature-from-a-stranger-is-refused
+- **WHEN** a token names an issuer other than the pinned one, and that issuer publishes resolvable verification material of its own
+- **THEN** it is refused on the issuer alone: a signature that verifies against material the token led the validator to is not a signature the platform made, so verifying a signature and knowing who signed it are two checks and not one
 
 #### Scenario: #same-material-platform-wide
 - **WHEN** a new game instance comes into existence
@@ -310,7 +324,7 @@ Every game access token SHALL be signed by the platform and SHALL carry, at mini
 ### Requirement: identity-and-authorization/connect-time-validation
 Depends on: global-invariants/game-instance-hermeticity.
 
-A game's SpacetimeDB instance SHALL validate a connection's access token exactly once, at connection time; the role and team association established then SHALL persist for the lifetime of that connection without re-validation. Once-only validation is the form validation must take in a hermetic instance, which makes no per-connection external call.
+A game's SpacetimeDB instance SHALL validate a connection's access token exactly once, at connection time; the role and team association established then SHALL persist for the lifetime of that connection without re-validation. Once-only validation is the form validation must take in a hermetic instance, which makes no per-connection external call. Where the instance's runtime re-issues a presented credential as part of establishing the connection, the claims admission decides on SHALL be those the platform signed — issuer, game binding and subject carried through that exchange unaltered — or the platform credential SHALL reach admission by a path that performs no re-issuance.
 
 #### Scenario: #expiry-never-disconnects
 - **WHEN** an admitted connection's access token passes its expiry mid-game
@@ -320,10 +334,14 @@ A game's SpacetimeDB instance SHALL validate a connection's access token exactly
 - **WHEN** a client reconnects after an interruption
 - **THEN** it presents a currently valid token and is validated afresh, exactly like a first connection
 
+#### Scenario: #re-issuance-preserves-the-binding
+- **WHEN** a connection is established through a runtime exchange that re-signs the presented credential under the runtime's own key
+- **THEN** admission decides on the issuer, game binding and subject of the platform-issued credential; an exchange that does not carry them through admits nobody, because the claims reaching the decision would be the runtime's own rather than the platform's
+
 ### Requirement: identity-and-authorization/admission-validation
 Depends on: global-invariants/game-instance-hermeticity#seeded-once-never-refreshed, global-invariants/authenticated-unambiguous-identity#instance-team-ids-resolve-uniquely.
 
-At connection time the game's instance SHALL reject any connection whose token fails signature verification, names a different game, is past its expiry, binds a team that is not registered as a participant of this game, or — where the token names an operator and so binds no team — names a human the seeded roster snapshot does not record on a participating team. Every one of those checks is answerable from state seeded at initialisation, and the participant check is decidable because a team identifier in a game's records denotes exactly one persistent team record. Rejection SHALL happen before any game state is touched: the client is disconnected and no admission or attribution record is written. Gameplay mutations SHALL be accepted only from admitted connections.
+At connection time the game's instance SHALL reject any connection whose token names an issuer other than the platform issuer it was seeded with, fails signature verification against that issuer's pinned material, names a different game, is past its expiry, binds a team that is not registered as a participant of this game, names a coach the seeded roster snapshot does not record as a coach of the team the token binds, or — where the token names an operator and so binds no team — names a human the seeded roster snapshot does not record on a participating team. Every one of those checks is answerable from state seeded at initialisation, and the participant check is decidable because a team identifier in a game's records denotes exactly one persistent team record. Rejection SHALL happen before any game state is touched: the client is disconnected and no admission or attribution record is written. Gameplay mutations SHALL be accepted only from admitted connections.
 
 #### Scenario: #reject-before-touching-state
 - **WHEN** a connection fails any admission check
@@ -336,6 +354,10 @@ At connection time the game's instance SHALL reject any connection whose token f
 #### Scenario: #operator-absent-from-the-snapshot-refused
 - **WHEN** a structurally valid operator token names a human the seeded roster snapshot does not record on a participating team
 - **THEN** the connection is rejected — this is the operator's form of the participant check, and it is the only form there is for that role, because an operator token binds no team for the team check to fire on
+
+#### Scenario: #coach-absent-from-the-snapshot-refused
+- **WHEN** a structurally valid coach token names a human the seeded roster snapshot does not record as a coach of the team it binds
+- **THEN** the connection is rejected — a coach token binds a human and a team, so the instance checks both halves against the snapshot; checking the team alone would admit any human as coach of any participating team
 
 #### Scenario: #unadmitted-mutations-rejected
 - **WHEN** a connection that was never admitted attempts move staging, turn declaration, or any other gameplay mutation
@@ -403,7 +425,7 @@ The platform SHALL issue a coach access token to an authenticated human who is a
 ### Requirement: identity-and-authorization/token-lifetime-and-refresh
 Depends on: global-invariants/state-confined-to-owning-runtime#game-instance-holds-only-its-games-state.
 
-Every credential the platform issues SHALL expire fifteen minutes after issuance, and a holder SHALL be able to obtain a replacement without re-authenticating from scratch, so long as its underlying session or registration is still valid. Holders SHALL renew ahead of expiry on their own schedule, never in reaction to a refusal. Short lifetimes are what make a self-contained credential's revocation delay tolerable; the boundary that ends access after a game is the instance's decommissioning, not expiry.
+Every credential the platform issues SHALL expire fifteen minutes after issuance, and a holder SHALL be able to obtain a replacement without re-authenticating from scratch, so long as its underlying session or registration is still valid. A credential naming a human SHALL be renewable only while that human's own session is live, re-read at each renewal rather than inherited from the credential being replaced. Holders SHALL renew ahead of expiry on their own schedule, never in reaction to a refusal. Short lifetimes are what make a self-contained credential's revocation delay tolerable; the boundary that ends access after a game is the instance's decommissioning, not expiry.
 
 #### Scenario: #refresh-without-reauth
 - **WHEN** a holder needs a fresh credential during a long game — to reconnect after an interruption, or simply because the last one is ageing
@@ -412,6 +434,10 @@ Every credential the platform issues SHALL expire fifteen minutes after issuance
 #### Scenario: #renewal-is-proactive-never-reactive
 - **WHEN** a holder's credential approaches expiry during a live game
 - **THEN** it is replaced before it lapses; discovering the expiry from a refused call is a violation, because the game's clock keeps running while that call is retried and a lost turn is a real cost
+
+#### Scenario: #renewal-re-reads-the-session
+- **WHEN** a holder renews a credential naming a human whose session has since ended
+- **THEN** renewal is refused, whatever the holder's own registration still permits — a human's absence ends what is minted in their name, rather than being outlived by it
 
 #### Scenario: #renewal-failure-is-quiet-until-it-bites
 - **WHEN** renewal fails because the platform is briefly unreachable, while the credential in hand is still valid
@@ -454,7 +480,7 @@ The platform SHALL issue game access tokens only for a game currently being play
 ### Requirement: identity-and-authorization/roster-snapshot-binding
 Depends on: global-invariants/game-instance-hermeticity#seeded-once-never-refreshed.
 
-Authorization for a game SHALL be bound by the roster snapshot taken when the game is initialized: which humans may obtain operator tokens, and which Centaur Team identities participate. The snapshot SHALL bind for the entire game — the in-game authorization state of a running game SHALL never change in response to later mutations of team records, on the instance side because it is seeded once and never refreshed and on the platform side because issuance is answered from the snapshot.
+Authorization for a game SHALL be bound by the roster snapshot taken when the game is initialized: which humans may obtain operator tokens, which humans are designated coaches of each participating team, and which Centaur Team identities participate. The snapshot SHALL bind for the entire game — the in-game authorization state of a running game SHALL never change in response to later mutations of team records, on the instance side because it is seeded once and never refreshed and on the platform side because issuance is answered from the snapshot.
 
 #### Scenario: #running-game-reads-only-the-snapshot
 - **WHEN** any team-record change occurs while one of the team's games is running
@@ -464,6 +490,10 @@ Authorization for a game SHALL be bound by the roster snapshot taken when the ga
 Depends on: global-invariants/team-granularity-authorization, global-invariants/one-contract-many-surfaces#every-surface-hits-the-same-invariants, global-invariants/client-truthfulness#enablement-derives-from-server-state.
 
 The platform SHALL support an **admin** role as a platform-level designation on the user record — never per-team and never per-server. An admin SHALL be able to read everything: browse all Centaur Teams, see all games across all teams, watch any replay, and hold implicit coach standing for every team's live games. Toward the authoritative state of a live game's runtime the role SHALL be read-only as a matter of principle, conferring no write path into a live game — a game instance honours no platform-side role at all. Over platform-held state the role is not barred in principle from mutation: the administrative powers an admin holds are exactly those granted expressly by requirement, and every expressly granted power remains subject to the same invariants that bind any other actor.
+
+#### Scenario: #a-deployment-can-designate-its-first-admin
+- **WHEN** a deployment holds no admin designation yet
+- **THEN** it affords some means of designating one without a pre-existing admin — which means is mechanism, but a deployment that can never hold an admin grants none of the read breadth this role exists for
 
 #### Scenario: #admin-reads-across-all-teams
 - **WHEN** an admin browses teams, game history, or replays
