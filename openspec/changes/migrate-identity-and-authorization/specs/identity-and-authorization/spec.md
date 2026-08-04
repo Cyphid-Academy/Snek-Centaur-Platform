@@ -50,6 +50,23 @@ Humans SHALL sign in exclusively with a Google account, and the platform SHALL m
 - **WHEN** a user signs out
 - **THEN** the session is terminated and client-held session tokens are revoked; nothing retained by the client continues to authenticate
 
+### Requirement: identity-and-authorization/substituted-provider-verification
+Depends on: global-invariants/no-shared-secrets.
+
+A deployment SHALL verify a human's provider assertion against the identity provider's own published material, and SHALL substitute other verification material for it only where that deployment's configuration explicitly names a substitute issuer and where it publishes its keys. The substitution SHALL reach the verification step alone: resolving the account, applying the linking policy, issuing the session, placing it in the client's custody, and every authorization decision taken afterwards SHALL be the platform's ordinary behaviour, indistinguishable from a sign-in the provider verified.
+
+#### Scenario: #absence-of-configuration-is-production-behaviour
+- **WHEN** a deployment carries no configuration naming a substitute
+- **THEN** it verifies exactly as it does in production, and an assertion signed by anything else is refused as unverifiable — the production path is what runs when nothing has been switched on, rather than something a deployment must remember to switch off
+
+#### Scenario: #only-the-verification-step-is-substituted
+- **WHEN** a human whose assertion was verified against a configured substitute acts on the platform
+- **THEN** the account they act as was created and linked by the platform's own rules under its own policy, and the session they hold was issued and stored by the platform's own mechanism
+
+#### Scenario: #substituted-subjects-carry-no-privilege
+- **WHEN** such a human is authorized for anything
+- **THEN** the decision reads their identity exactly as it reads any other human's — how an assertion was verified settles who someone is, never what they may do
+
 ### Requirement: identity-and-authorization/linked-provider-credentials
 Depends on: global-invariants/durable-identity-references, global-invariants/transactional-invariant-enforcement#concurrent-mutations-cannot-race-past-a-guard.
 
@@ -117,7 +134,7 @@ A non-human principal SHALL authenticate to the platform by presenting a short-l
 ### Requirement: identity-and-authorization/trusted-issuer-registry
 Depends on: global-invariants/issuer-anchored-trust.
 
-The platform SHALL hold a registry of the issuers it trusts — its own deployment and zero or more registered external systems — each recorded with an issuer identifier, the location at which that issuer publishes its verification material, and the ceiling of capabilities it may confer. The registry SHALL hold no secret for any issuer. A request for capabilities outside the requesting issuer's ceiling SHALL be refused with the excess named, never quietly narrowed to the permitted subset.
+The platform SHALL hold a registry of the issuers it trusts — its own deployment and zero or more registered external systems — each recorded with an issuer identifier, the location at which that issuer publishes its verification material, the ceiling of capabilities it may confer, and, for a principal humans are returned to after signing in, the addresses at which it may receive them. The registry SHALL hold no secret for any issuer. A request for capabilities outside the requesting issuer's ceiling SHALL be refused with the excess named, never quietly narrowed to the permitted subset.
 
 #### Scenario: #excess-fails-loudly
 - **WHEN** a caller requests more capability than its issuer's ceiling allows
@@ -125,11 +142,32 @@ The platform SHALL hold a registry of the issuers it trusts — its own deployme
 
 #### Scenario: #registry-holds-no-secret
 - **WHEN** an issuer is registered
-- **THEN** everything recorded is public — an identifier, where its material is published, and a ceiling; the record has no field a secret could occupy
+- **THEN** everything recorded is public — an identifier, where its material is published, a ceiling, and any addresses humans may be returned to; the record has no field a secret could occupy
 
 #### Scenario: #the-set-is-never-assumed-singular
 - **WHEN** any code resolves the issuer of a presented credential
 - **THEN** it resolves against the registry as a set, so registering a second issuer requires no change to how credentials are validated
+
+### Requirement: identity-and-authorization/sign-in-handoff
+Depends on: global-invariants/credential-confinement, global-invariants/issuer-anchored-trust#recognition-is-not-authorization.
+
+A Snek Centaur Server SHALL NOT authenticate a human itself. Where a human's identity must reach a Server application, the platform SHALL complete the sign-in at its own origin and return the browser to that Server carrying a handoff reference: an opaque value naming one authenticated human and one registered Server, accepted once, expiring on the redirect it exists to survive rather than on a credential's lifetime, and conferring nothing on its own. The platform SHALL return a browser only to an address that Server's registration records, and SHALL issue the resulting credential only to the party that redeems the reference and proves itself the party it was minted for.
+
+#### Scenario: #server-never-holds-the-provider-exchange
+- **WHEN** a human signs in to use a Server application
+- **THEN** the provider's authorization code and the platform's session credential stay at the platform's origin; the Server sees neither, and what a handoff reference can be exchanged for is bounded by that Server's registered ceiling
+
+#### Scenario: #reference-is-accepted-once
+- **WHEN** a handoff reference is presented a second time, whatever its remaining lifetime
+- **THEN** it is refused — a value that travelled in a URL is assumed to have been seen, so its defence is that redeeming it takes something the URL did not carry
+
+#### Scenario: #return-address-is-registered-not-requested
+- **WHEN** a sign-in names a return address the requesting Server's registration does not record
+- **THEN** the platform refuses to redirect there; taking the target from the request would make the platform a trusted-looking bounce to anywhere and hand the reference to whoever asked for it
+
+#### Scenario: #the-redeemer-keeps-what-it-earns
+- **WHEN** a handoff reference is redeemed
+- **THEN** the credential is returned in that exchange to the redeeming party and relayed onward to nobody — a party that redeems on a human's behalf holds a credential it may use, never one it may pass along
 
 ### Requirement: identity-and-authorization/capability-claim-structure
 Every credential the platform issues SHALL carry the capabilities it confers as a structured claim — a sequence of entries rather than an unstructured string — and enforcement SHALL read that structure from the first line of enforcement code written. An entry SHALL name one capability as a bare verb identifier and carry nothing else; the claim is a sequence so that constraining an entry later is a change to minting alone, and no entry carries a constraint today. Where a service principal obtained a credential to act with, the credential SHALL also name that principal.
@@ -165,6 +203,35 @@ Every function the platform exposes publicly SHALL declare the capability that r
 - **WHEN** a grant names an individual function rather than a capability group
 - **THEN** the grant is recorded as unstable, so renaming that function is knowable in advance as a breaking change for whoever holds it
 
+### Requirement: identity-and-authorization/anonymous-reach
+Depends on: global-invariants/authenticated-unambiguous-identity#no-anonymous-mutation-path.
+
+A capability SHALL be reachable by a caller presenting no platform credential only where what it exposes is specific to no principal, or where the call carries its own proof of who is making it — a proof that does not depend on a credential the platform issued. Anonymous reach SHALL be a declared property of a capability, recorded in the same place the capabilities themselves are, so that the reach of every capability is read from one enumeration rather than assembled from a second list that could disagree with it. A capability that declares no reach SHALL NOT be anonymously reachable. Exactly four capabilities are anonymously reachable: reading the platform's liveness, exchanging a signed assertion for a credential, redeeming a sign-in handoff reference, and beginning a sign-in. Adding a fifth is a revision of this requirement, never a change to code alone.
+
+#### Scenario: #liveness-exposes-no-principal
+- **WHEN** an unauthenticated caller reads the platform's liveness
+- **THEN** it is answered, because the answer is the same for everyone and names nobody — there is no principal-specific state for a credential to protect
+
+#### Scenario: #assertion-exchange-proves-itself
+- **WHEN** a non-human principal presents a signed assertion in order to obtain its first credential
+- **THEN** the call is reachable without a credential, because requiring one would be circular; what stands in for it is the signature over the assertion, checked against the material that principal's registration records
+
+#### Scenario: #handoff-redemption-proves-itself
+- **WHEN** a party redeems a sign-in handoff reference
+- **THEN** the call is reachable without a credential, because the credential is what redemption exists to obtain; what stands in for it is the reference together with proof of being the party it was minted for
+
+#### Scenario: #sign-in-entry-exposes-no-principal
+- **WHEN** a browser that has never signed in asks the platform to begin a sign-in on a Server's behalf
+- **THEN** the call is reachable without a credential, because it is what a caller who has none arrives at first; the entry decides only whether the naming Server and the address it asks to be returned to are registered, which the registry already holds in public, and answers every caller alike because there is no caller yet for the answer to be specific to
+
+#### Scenario: #credentialed-by-default
+- **WHEN** a capability is added without declaring its reach
+- **THEN** it is not anonymously reachable — the default is the safe one, so forgetting to think about reach denies access rather than granting it, and widening reach is always a visible act
+
+#### Scenario: #anonymous-caller-has-no-kind
+- **WHEN** a caller presenting no credential reaches an anonymously reachable capability
+- **THEN** no check of principal kind is applied to it, because it is not a principal at all: what it may reach was settled entirely by the capability's declared reach, and there is no identity for a kind to be a property of
+
 ### Requirement: identity-and-authorization/principal-kind-gating
 Depends on: global-invariants/authenticated-unambiguous-identity#identity-kind-is-decidable.
 
@@ -185,7 +252,7 @@ Every public function SHALL declare which kinds of principal it accepts, and SHA
 ### Requirement: identity-and-authorization/peer-capability-ceiling
 Depends on: global-invariants/issuer-anchored-trust#ceiling-is-checked-at-the-resource.
 
-No external system's ceiling SHALL include operations that destroy platform state, issue credentials for a human, or change authentication configuration, regardless of what a user that system acts for could do directly. The platform SHALL additionally bound each registered system's call rate, and SHALL be able to show a user which actions on their behalf were taken through which system.
+No external system's ceiling SHALL include operations that destroy platform state, issue credentials for a human, or change authentication configuration, regardless of what a user that system acts for could do directly. The platform SHALL additionally bound the rate at which each registered system changes platform state, charging that bound in the same transaction as the change it admits, and SHALL be able to show a user which actions on their behalf were taken through which system.
 
 #### Scenario: #ceiling-sits-below-the-user
 - **WHEN** an external system acts for a user who could perform an excluded operation themselves
@@ -194,6 +261,14 @@ No external system's ceiling SHALL include operations that destroy platform stat
 #### Scenario: #attribution-is-user-visible
 - **WHEN** a user reviews the actions taken on their account
 - **THEN** those taken through an external system are identified as such, and by which system
+
+#### Scenario: #the-bound-is-charged-where-the-change-is-made
+- **WHEN** a registered system makes a call that changes platform state
+- **THEN** the bound is checked and spent in the transaction performing the change, so a system cannot exceed it by issuing calls faster than the count settles — a bound checked anywhere else is one two concurrent calls can both pass
+
+#### Scenario: #read-volume-is-bounded-outside-the-capability-system
+- **WHEN** a registered system issues reads that change nothing
+- **THEN** its volume is bounded by the deployment's own request limits rather than by this ceiling, and no per-system count is charged for them — charging one would make every read a write, which costs more in contention and latency than the load it is meant to contain, and read protection therefore belongs at the deployment edge where it does not sit inside a transaction
 
 ### Requirement: identity-and-authorization/verification-without-shared-secrets
 Depends on: global-invariants/game-instance-hermeticity, global-invariants/no-shared-secrets.
@@ -222,7 +297,7 @@ Every credential the platform issues SHALL name the exact resource it may be use
 ### Requirement: identity-and-authorization/game-token-contents
 Depends on: global-invariants/authenticated-unambiguous-identity#identity-kind-is-decidable, global-invariants/durable-identity-references#derived-identities-inherit-durability.
 
-Every game access token SHALL be signed by the platform and SHALL carry, at minimum: the specific game it grants admission to, a subject naming the holder by the platform's own durable identifier for it and encoding the holder's role (operator, bot, spectator, or coach) with its identity binding — the acting human for operators, the Centaur Team for bots, and for coaches both the human and the team whose view the token grants; spectator tokens carry no team binding — and an expiry beyond which the token is not accepted. The subject is what makes the admitted identity's kind and role decidable inside the instance, and the instance SHALL decide them from the identity it derived rather than by reading any other claim, whatever claim access its runtime affords.
+Every game access token SHALL be signed by the platform and SHALL carry, at minimum: the specific game it grants admission to, a subject naming the holder by the platform's own durable identifier for it and encoding the holder's role (operator, bot, spectator, or coach) with its identity binding — the acting human for operators, the Centaur Team for bots, and for coaches both the human and the team whose view the token grants; spectator tokens carry no team binding — and an expiry beyond which the token is not accepted. An operator token SHALL bind the acting human and no team: the team an operator acts for is derived at admission from the roster snapshot the instance was seeded with, which keeps that snapshot the single source of truth for who plays for whom and leaves no second statement of it to disagree. The subject is what makes the admitted identity's kind and role decidable inside the instance, and the instance SHALL decide them from the identity it derived rather than by reading any other claim, whatever claim access its runtime affords.
 
 #### Scenario: #token-names-its-game
 - **WHEN** an access token issued for one game is presented to a different game's instance
@@ -248,7 +323,7 @@ A game's SpacetimeDB instance SHALL validate a connection's access token exactly
 ### Requirement: identity-and-authorization/admission-validation
 Depends on: global-invariants/game-instance-hermeticity#seeded-once-never-refreshed, global-invariants/authenticated-unambiguous-identity#instance-team-ids-resolve-uniquely.
 
-At connection time the game's instance SHALL reject any connection whose token fails signature verification, names a different game, is past its expiry, or binds a team that is not registered as a participant of this game. Every one of those checks is answerable from state seeded at initialisation, and the participant check is decidable because a team identifier in a game's records denotes exactly one persistent team record. Rejection SHALL happen before any game state is touched: the client is disconnected and no admission or attribution record is written. Gameplay mutations SHALL be accepted only from admitted connections.
+At connection time the game's instance SHALL reject any connection whose token fails signature verification, names a different game, is past its expiry, binds a team that is not registered as a participant of this game, or — where the token names an operator and so binds no team — names a human the seeded roster snapshot does not record on a participating team. Every one of those checks is answerable from state seeded at initialisation, and the participant check is decidable because a team identifier in a game's records denotes exactly one persistent team record. Rejection SHALL happen before any game state is touched: the client is disconnected and no admission or attribution record is written. Gameplay mutations SHALL be accepted only from admitted connections.
 
 #### Scenario: #reject-before-touching-state
 - **WHEN** a connection fails any admission check
@@ -258,6 +333,10 @@ At connection time the game's instance SHALL reject any connection whose token f
 - **WHEN** a structurally valid token binds a team that is not a registered participant of this game
 - **THEN** the connection is rejected
 
+#### Scenario: #operator-absent-from-the-snapshot-refused
+- **WHEN** a structurally valid operator token names a human the seeded roster snapshot does not record on a participating team
+- **THEN** the connection is rejected — this is the operator's form of the participant check, and it is the only form there is for that role, because an operator token binds no team for the team check to fire on
+
 #### Scenario: #unadmitted-mutations-rejected
 - **WHEN** a connection that was never admitted attempts move staging, turn declaration, or any other gameplay mutation
 - **THEN** the operation is rejected
@@ -265,7 +344,7 @@ At connection time the game's instance SHALL reject any connection whose token f
 ### Requirement: identity-and-authorization/role-bound-privileges
 Depends on: global-invariants/team-granularity-authorization.
 
-A connection's privileges within a game SHALL derive solely from its validated role and team binding — the only granularity the instance authorises at. Operator and bot connections may mutate only on behalf of their bound team; spectator and coach connections SHALL be refused by every state-mutating operation; and no distinction held outside the token — captaincy, admin standing, or any other platform-side role — SHALL grant a connection privileges within the game beyond its token's role.
+A connection's privileges within a game SHALL derive solely from its validated role and team binding — the only granularity the instance authorises at. For a bot or coach connection the bound team is the one its token names; for an operator connection the bound team is the one the seeded roster snapshot records the admitted human as playing for, derived at admission and never read from the token. Operator and bot connections may mutate only on behalf of their bound team; spectator and coach connections SHALL be refused by every state-mutating operation; and no distinction held outside the token — captaincy, admin standing, or any other platform-side role — SHALL grant a connection privileges within the game beyond its token's role.
 
 #### Scenario: #spectator-and-coach-never-mutate
 - **WHEN** a spectator or coach connection invokes any state-mutating operation

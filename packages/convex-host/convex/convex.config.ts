@@ -1,5 +1,6 @@
 // spec: global-invariants/single-convex-deployment
-// The platform's one Convex deployment; both components mount here.
+// The platform's one Convex deployment; all three components mount here.
+import betterAuth from "@convex-dev/better-auth/convex.config.js";
 import { defineApp } from "convex/server";
 // Relative, not by package name: Convex bundles a component from its
 // `convex.config.ts` source, and a pnpm workspace symlink moves the component
@@ -10,5 +11,12 @@ import snekPlatform from "../../convex-snek-platform/convex/convex.config.js";
 const app = defineApp();
 app.use(snekPlatform);
 app.use(centaurState);
+// spec: identity-and-authorization/google-sign-in
+// Mounted from the published package rather than installed locally: the
+// component's tables live on its own side of the boundary either way, so a
+// local install would only let us edit a generated schema we have no reason to
+// edit. Its user, session, and account tables are the sign-in substrate and are
+// reached exclusively through `auth.ts` — the host still owns no tables.
+app.use(betterAuth);
 
 export default app;

@@ -19,9 +19,10 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@cyphid/snek-engine": "workspace:*",
+    "@cyphid/convex-centaur-state": "workspace:*",
     "@cyphid/convex-snek-platform": "workspace:*",
-    "@cyphid/convex-centaur-state": "workspace:*"
+    "@cyphid/snek-engine": "workspace:*",
+    "jose": "^6.2.5"
   },
   "devDependencies": {
     "typescript": "*",

@@ -7,7 +7,16 @@
     "node": "^20.19.0 || >=22.12.0"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["@biomejs/biome", "@fission-ai/openspec", "esbuild"]
+    "onlyBuiltDependencies": ["@biomejs/biome", "@fission-ai/openspec", "esbuild"],
+    "packageExtensions": {
+      "@convex-dev/better-auth": {
+        "peerDependenciesMeta": {
+          "react": {
+            "optional": true
+          }
+        }
+      }
+    }
   },
   "scripts": {
     "build:packages": "tsc -b",
@@ -22,7 +31,8 @@
     "e2e": "pnpm build:packages && pnpm --filter @cyphid/e2e test",
     "e2e:browsers": "pnpm build:packages && pnpm --filter @cyphid/e2e test:browsers",
     "check:commit": "node scripts/check-commit.mjs",
-    "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm smoke && pnpm spec:check",
+    "check:public-surface": "node scripts/check-public-surface.mjs",
+    "verify": "pnpm lint && pnpm check:public-surface && pnpm typecheck && pnpm test && pnpm smoke && pnpm spec:check",
     "dev": "pnpm build:packages && pnpm --filter @cyphid/centaur-server-reference dev",
     "dev:tester": "pnpm build:packages && pnpm --filter @cyphid/visual-tester dev",
     "dev:convex": "pnpm --filter @cyphid/snek-convex-host exec convex dev",
