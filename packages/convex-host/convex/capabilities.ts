@@ -157,15 +157,12 @@ export const GAME_CREDENTIAL_CAPABILITIES: ReadonlyArray<Capability> = [
  *
  * **`begin-sign-in-handoff` is here because the exclusion is read against what
  * a capability reaches in combination, never against one step alone.** By
- * itself it mints no credential: it mints an opaque reference. But the
- * credential a Server holds after a redemption *names the human*, and a
- * credential naming a human that carried `begin-sign-in-handoff` would let the
- * Server begin a fresh handoff in that human's name, redeem it — redemption
- * proves itself and needs no capability — and hold a new credential for them.
- * Repeat, and the fifteen-minute lifetime bounds nothing: the Server renews a
- * human's credential indefinitely, without the human, which is precisely the
- * operation every step was excluded to prevent. A human's *own session* still
- * reaches it, and must; a ceiling is what may be conferred on a peer.
+ * itself it mints only an opaque reference. But a credential naming a human
+ * that carried it would let the Server begin a fresh handoff in that human's
+ * name, redeem it — redemption proves itself and needs no capability — and hold
+ * a new credential for them; repeat, and the fifteen-minute lifetime bounds
+ * nothing. A human's *own session* still reaches it, and must; a ceiling is
+ * what may be conferred on a peer.
  *
  * Nothing in today's surface destroys platform state or changes authentication
  * configuration; when such a function lands, its capability belongs here.
