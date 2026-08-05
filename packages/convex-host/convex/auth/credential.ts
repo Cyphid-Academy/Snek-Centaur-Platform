@@ -97,7 +97,11 @@ export async function verify(
 ): Promise<CredentialPayload> {
   // On the *unverified* payload, deliberately. Trusting an unverified claim
   // here is sound because this check can only refuse: a forged `aud` buys an
-  // attacker nothing but the verification below.
+  // attacker nothing but the verification below. Stricter than jose's own
+  // matcher on purpose — a credential this deployment mints names exactly one
+  // audience, so one naming several is refused at every audience it lists.
+  // Peer assertions are NOT verified here (see `issuance.ts`), so RFC 7523's
+  // array-`aud` allowance is not this check's concern.
   if (decodeJwt(token).aud !== audience) {
     throw new Error("credential names a different audience");
   }

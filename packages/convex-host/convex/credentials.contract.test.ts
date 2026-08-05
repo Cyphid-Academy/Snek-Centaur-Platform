@@ -13,6 +13,7 @@ import { type ServerIdentity, signAssertion } from "../../centaur-server-lib/src
 import { api } from "./_generated/api";
 import { PLATFORM_AUDIENCE, assertionAudience } from "./auth/deployment";
 import { platformSeed, seedModules, withComponents } from "./harness.testing";
+import { forgetPublishedMaterial } from "./issuance";
 
 const ISSUER = "https://issuance-under-test.example";
 const SERVER = "server-under-contract.example";
@@ -50,10 +51,16 @@ beforeAll(async () => {
 
 beforeEach(() => {
   // The Server publishes its public half at the location its registration
-  // records, and the platform fetches it from there.
-  vi.stubGlobal("fetch", async (url: string | URL) => ({
-    json: async () => ({ keys: String(url) === JWKS ? [serverJwk] : [] }),
-  }));
+  // records, and the platform fetches it from there — afresh per test, the
+  // cache emptied so no test reads through another's.
+  forgetPublishedMaterial();
+  vi.stubGlobal(
+    "fetch",
+    async (url: string | URL) =>
+      new Response(JSON.stringify({ keys: String(url) === JWKS ? [serverJwk] : [] }), {
+        status: 200,
+      }),
+  );
 });
 
 const issuance = api.issuance;

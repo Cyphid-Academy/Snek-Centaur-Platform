@@ -58,6 +58,10 @@ export async function startProcess(spec: ProcessSpec): Promise<Process> {
     cwd: spec.cwd ?? repoRoot(),
     env: { ...process.env, ...spec.env },
     stdio: ["ignore", "pipe", "pipe"],
+    // Its own process group, so stopping can signal the whole tree: several
+    // commands here are runners (`pnpm … exec vite`) whose real server is a
+    // grandchild, and a SIGTERM to the runner alone leaves that running.
+    detached: true,
   });
 
   let log = "";
@@ -113,10 +117,24 @@ export async function startProcess(spec: ProcessSpec): Promise<Process> {
 async function terminate(child: ChildProcess): Promise<void> {
   if (child.exitCode !== null || child.signalCode !== null) return;
   const exited = new Promise<void>((resolve) => child.once("exit", () => resolve()));
-  child.kill("SIGTERM");
+  signalGroup(child, "SIGTERM");
   const timedOut = Symbol("timed out");
   if ((await Promise.race([exited, sleep(TERM_GRACE_MS, timedOut)])) === timedOut) {
-    child.kill("SIGKILL");
+    signalGroup(child, "SIGKILL");
+  }
+}
+
+/**
+ * Signal the child's whole process group — it leads one, see `detached` at the
+ * spawn — so grandchildren go with it. Falls back to the child alone if the
+ * group cannot be signalled (it may already be gone, which is success here).
+ */
+function signalGroup(child: ChildProcess, signal: NodeJS.Signals): void {
+  if (child.pid === undefined) return;
+  try {
+    process.kill(-child.pid, signal);
+  } catch {
+    child.kill(signal);
   }
 }
 

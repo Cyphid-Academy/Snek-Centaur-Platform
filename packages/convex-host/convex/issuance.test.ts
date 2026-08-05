@@ -28,6 +28,7 @@ import { api, components, internal } from "./_generated/api";
 import { CREDENTIAL_LIFETIME_SECONDS, verify } from "./auth/credential";
 import { PLATFORM_AUDIENCE } from "./auth/deployment";
 import { challengeFor, platformSeed, seedModules, withComponents } from "./harness.testing";
+import { forgetPublishedMaterial } from "./issuance";
 
 const ALG = "ES256";
 const ISSUER = "https://issuance-under-test.example";
@@ -98,9 +99,12 @@ beforeEach(() => {
   served.set(JWKS_A, [serverAJwk]);
   served.set(JWKS_B, [serverBJwk]);
   served.set(JWKS_C, [serverCJwk]);
+  // Each test starts with nothing cached, so *its* serving map is the one the
+  // exchange reads and the `fetched` bookkeeping above starts from zero.
+  forgetPublishedMaterial();
   vi.stubGlobal("fetch", async (url: string | URL) => {
     fetched.push(String(url));
-    return { json: async () => ({ keys: served.get(String(url)) ?? [] }) };
+    return new Response(JSON.stringify({ keys: served.get(String(url)) ?? [] }), { status: 200 });
   });
 });
 
@@ -147,7 +151,7 @@ async function setup() {
 function signAssertion(overrides?: {
   key?: CryptoKey;
   iss?: string;
-  aud?: string;
+  aud?: string | string[];
   jti?: string;
   omitJti?: boolean;
   expOffsetSeconds?: number;
@@ -321,6 +325,13 @@ describe("exchanging a signed assertion for a credential", () => {
   // A rotation as the requirement scripts it: publish the new key beside the
   // old, switch, then retire the old — three exchanges across the three
   // states, with the registration row never touched and no other call made.
+  //
+  // Published material is *cached* between exchanges, and a signature the
+  // cached keys refuse triggers one re-read only outside the cache's cooldown
+  // — the bound that keeps refusals from becoming outbound traffic. So the
+  // clock steps past the cooldown between stages, as a real rotation's stages
+  // sit apart in time; only `Date` is faked, since the exchange still awaits
+  // real work.
   it("accepts a rotated key with no change to the registration and no exchange with the platform", async () => {
     const { t } = await setup();
     const exchange = async (key: CryptoKey) =>
@@ -329,18 +340,50 @@ describe("exchanging a signed assertion for a credential", () => {
         capabilities: [],
       });
 
+    vi.useFakeTimers({ now: Date.now(), toFake: ["Date"] });
     await expect(exchange(serverAKey)).resolves.toBeDefined();
 
     served.set(JWKS_A, [serverAJwk, rotatedJwk]);
+    vi.setSystemTime(Date.now() + 31_000);
     await expect(exchange(rotatedKey)).resolves.toBeDefined();
 
     served.set(JWKS_A, [rotatedJwk]);
+    vi.setSystemTime(Date.now() + 31_000);
     await expect(exchange(rotatedKey)).resolves.toBeDefined();
     // The registration recorded before the rotation still answers unchanged.
     const registration = await t.query(components.snekPlatform.functions.issuer, {
       issuerId: SERVER_A,
     });
     expect(registration?.verificationMaterialUrl).toBe(JWKS_A);
+  });
+
+  // spec: identity-and-authorization/service-principal-assertions
+  // Interop the exchange must not narrow. RFC 7523 permits the audience as a
+  // one-element array, and several JWT libraries emit exactly that; which
+  // algorithm a Server signs with is likewise its own choice, not one the
+  // platform's ES256 signing key imposes on peers.
+  it("accepts an assertion whose audience is a one-element array", async () => {
+    const { t } = await setup();
+
+    await expect(
+      t.action(issuance.exchangeAssertion, {
+        assertion: await signAssertion({ aud: [ISSUER] }),
+        capabilities: [],
+      }),
+    ).resolves.toBeDefined();
+  });
+
+  it("accepts an assertion signed with an RS256 key a peer publishes", async () => {
+    const { t } = await setup();
+    const rsa = await generateKeyPair("RS256", { extractable: true });
+    served.set(JWKS_A, [await exportJWK(rsa.publicKey)]);
+
+    await expect(
+      t.action(issuance.exchangeAssertion, {
+        assertion: await signAssertion({ key: rsa.privateKey, header: { alg: "RS256" } }),
+        capabilities: [],
+      }),
+    ).resolves.toBeDefined();
   });
 
   // spec: identity-and-authorization/service-principal-assertions
