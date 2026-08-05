@@ -21,7 +21,7 @@ import { anyApi } from "convex/server";
 import { type JWK, SignJWT, decodeJwt, exportJWK, generateKeyPair } from "jose";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, components } from "./_generated/api";
-import { type CapabilityEntry, mint } from "./auth/credential";
+import { type CapabilityEntry, type CredentialSigner, mint } from "./auth/credential";
 import { PLATFORM_AUDIENCE, type PlatformPrincipal, encodePrincipal } from "./auth/deployment";
 import {
   ANONYMOUS_CAPABILITIES,
@@ -29,7 +29,13 @@ import {
   type Capability,
   GAME_CREDENTIAL_CAPABILITIES,
 } from "./capabilities";
-import { type Harness, challengeFor, inPlatformComponent, withComponents } from "./harness.testing";
+import {
+  type Harness,
+  challengeFor,
+  inPlatformComponent,
+  seedDeploymentKey,
+  withComponents,
+} from "./harness.testing";
 import {
   ATTRIBUTION_RETENTION_MS,
   CALLS_PER_WINDOW,
@@ -37,7 +43,7 @@ import {
   rateLimiter,
 } from "./publicFunctions";
 
-const ALG = "ES256";
+const ALG = "RS256";
 const ISSUER = "https://platform.example";
 // A registered Snek Centaur Server: its issuer id, where it publishes its
 // verification material, and where signed-in humans may be returned to.
@@ -51,17 +57,32 @@ const RETURN_ADDRESS = "https://server.example/auth/callback";
 // view rather than the proof.
 const VERIFIER = "verifier-for-the-gate-tests";
 
-// The deployment's signing key, supplied through the environment exactly as the
-// Convex runtime supplies it, and a Server's own keypair — a different key,
+// The deployment's keypair as this suite plays it — published into the key
+// store by `harness()` below — and a Server's own keypair, a different key,
 // because a Server proves itself with material it published, never ours.
 let deploymentKey: CryptoKey;
+let deploymentJwks: { publicJwk: JWK; privateJwk: JWK };
 let serverKey: CryptoKey;
 let serverPublicJwk: JWK;
+
+/** Signs as the deployment, with the key `harness()` publishes. */
+const signCredential: CredentialSigner = (payload) =>
+  new SignJWT({ ...payload }).setProtectedHeader({ alg: ALG }).sign(deploymentKey);
+
+/** The shared harness, with this suite's public key seeded as a published deployment key. */
+async function harness(): Promise<Harness> {
+  const t = await withComponents();
+  await seedDeploymentKey(t, deploymentJwks);
+  return t;
+}
 
 beforeAll(async () => {
   const deployment = await generateKeyPair(ALG, { extractable: true });
   deploymentKey = deployment.privateKey;
-  process.env["CREDENTIAL_SIGNING_JWK"] = JSON.stringify(await exportJWK(deployment.privateKey));
+  deploymentJwks = {
+    publicJwk: await exportJWK(deployment.publicKey),
+    privateJwk: await exportJWK(deployment.privateKey),
+  };
   process.env["CONVEX_SITE_URL"] = ISSUER;
 
   const server = await generateKeyPair(ALG, { extractable: true });
@@ -126,7 +147,7 @@ const credentialFor = (
   capabilities: ReadonlyArray<Capability>,
   act?: string,
 ) =>
-  mint(deploymentKey, ISSUER, {
+  mint(signCredential, ISSUER, {
     subject: encodePrincipal(principal),
     audience: PLATFORM_AUDIENCE,
     cap: entries(capabilities),
@@ -183,7 +204,7 @@ describe("the ordered pair: capability first, kind second", () => {
   ])(
     "refuses $caller at a humans-only function despite it holding the capability",
     async ({ principal, kind }) => {
-      const t = await withComponents();
+      const t = await harness();
       const credential = await credentialFor(principal, ["begin-sign-in-handoff"]);
 
       await expect(
@@ -202,7 +223,7 @@ describe("the ordered pair: capability first, kind second", () => {
   // `issueGameCredential` declares external systems alone, so a human carrying
   // the capability is refused there on kind.
   it("refuses a human credential where only the external-system kind is declared", async () => {
-    const t = await withComponents();
+    const t = await harness();
     const credential = await credentialFor(HUMAN, ["issue-game-credential"]);
 
     await expect(
@@ -216,7 +237,7 @@ describe("the ordered pair: capability first, kind second", () => {
   // session is answered through the same gate. Service reach is a declaration
   // a function makes, never a consequence of the caller's claim.
   it("refuses a service principal at a function that declares nothing, which a human reaches", async () => {
-    const t = await withComponents();
+    const t = await harness();
     const credential = await credentialFor(SYSTEM, ["read-platform-status"]);
 
     await expect(t.query(api.platform.platformStatus, { credential })).rejects.toThrow(
@@ -231,7 +252,7 @@ describe("the ordered pair: capability first, kind second", () => {
   // The pair's other refusal: a caller of exactly the declared kind gets
   // nowhere without the capability, so acceptance of kind never implies reach.
   it("refuses the declared kind when its claim lacks the capability", async () => {
-    const t = await withComponents();
+    const t = await harness();
     const credential = await credentialFor(SYSTEM, ["issue-game-token"]);
 
     await expect(
@@ -244,7 +265,7 @@ describe("the ordered pair: capability first, kind second", () => {
   // refusal names the missing capability, never the barred kind, so capability
   // was decided first and kind after — not merged, not reversed.
   it("refuses on capability when a caller fails both checks", async () => {
-    const t = await withComponents();
+    const t = await harness();
     const credential = await credentialFor(HUMAN, []);
 
     const message = await refusalOf(
@@ -261,7 +282,7 @@ describe("the ordered pair: capability first, kind second", () => {
   // to completion, minting the credential scoped exactly as the requirement
   // fixes — one team, one game, the two capabilities, the acting Server named.
   it("admits the declared service kind carrying the declared capability, end to end", async () => {
-    const t = await withComponents();
+    const t = await harness();
     const teamId = await seedTeam(t);
     const gameId = await seedPlayingGame(t, [teamId]);
     const credential = await credentialFor(SYSTEM, ["issue-game-credential"]);
@@ -288,7 +309,7 @@ describe("the ordered pair: capability first, kind second", () => {
   // human-subject credential — is still refused when it presents *its own*
   // system credential. Widening a declaration to a third kind must fail here.
   it("refuses an external system's own credential at issueGameToken despite the capability", async () => {
-    const t = await withComponents();
+    const t = await harness();
     const teamId = await seedTeam(t);
     const gameId = await seedPlayingGame(t, [teamId]);
     const credential = await credentialFor(SYSTEM, ["issue-game-token"]);
@@ -303,7 +324,7 @@ describe("the ordered pair: capability first, kind second", () => {
   // centaur-team principal, so a game credential earns its bot token there —
   // proving the declaration is what admits, not a second hardcoded default.
   it("admits a centaur-team principal where that kind is declared", async () => {
-    const t = await withComponents();
+    const t = await harness();
     const teamId = await seedTeam(t);
     const gameId = await seedPlayingGame(t, [teamId]);
     const credential = await credentialFor(team(teamId, gameId), GAME_CREDENTIAL_CAPABILITIES);
@@ -328,7 +349,7 @@ describe("reachability is not authorization", () => {
   // operate. (A handler could not read the capability even if it wanted to:
   // `Principal`, the whole of what a handler is given, has no field for one.)
   it("still refuses an authorized-looking caller the handler's own check rejects", async () => {
-    const t = await withComponents();
+    const t = await harness();
     const teamId = await seedTeam(t, "somebody-else.example");
     const gameId = await seedPlayingGame(t, [teamId]);
     const credential = await credentialFor(SYSTEM, ["issue-game-credential"]);
@@ -342,7 +363,7 @@ describe("reachability is not authorization", () => {
 describe("anonymous reach", () => {
   // spec: identity-and-authorization/anonymous-reach#liveness-exposes-no-principal
   it("answers liveness to a caller presenting nothing at all", async () => {
-    const t = await withComponents();
+    const t = await harness();
 
     await expect(t.query(api.platform.platformStatus, {})).resolves.toEqual({
       ok: true,
@@ -355,7 +376,7 @@ describe("anonymous reach", () => {
   // stood in for one is the signature over the assertion, checked against the
   // material this principal's registration records.
   it("exchanges a signed assertion for a first credential with no prior credential", async () => {
-    const t = await withComponents();
+    const t = await harness();
     await registerServer(t);
 
     const issued = (await t.action(anyApi.issuance.exchangeAssertion, {
@@ -377,7 +398,7 @@ describe("anonymous reach", () => {
   // to when the handoff was begun, which is attribution surviving the whole
   // handoff.
   it("redeems a handoff with no credential, yielding a credential naming the signed-in user", async () => {
-    const t = await withComponents();
+    const t = await harness();
     await registerServer(t);
     const url = (await t
       .withIdentity({ subject: "user-42" })
@@ -406,7 +427,7 @@ describe("anonymous reach", () => {
   // The refusal is the control: the pass is the absence of the check applying,
   // not the absence of checking.
   it("applies no kind check to the anonymous caller where a credentialed service kind is refused", async () => {
-    const t = await withComponents();
+    const t = await harness();
     await registerServer(t);
     const credential = await credentialFor(SYSTEM, ["exchange-assertion"]);
 
@@ -479,7 +500,7 @@ describe("credentialed by default", () => {
       // whatever then happens in the handler, the refusal is never the gate's.
       // (Their full anonymous positives are asserted in "anonymous reach".)
       it(`lets an anonymous caller through the gate for ${capability}`, async () => {
-        const message = await refusalOf(probe(await withComponents()));
+        const message = await refusalOf(probe(await harness()));
 
         expect(message ?? "").not.toMatch(/no capability/);
       });
@@ -488,7 +509,7 @@ describe("credentialed by default", () => {
     // spec: identity-and-authorization/anonymous-reach#credentialed-by-default
     // spec: identity-and-authorization/authentication-required#unauthenticated-refused
     it(`refuses an anonymous caller at the gate for ${capability}`, async () => {
-      const message = await refusalOf(probe(await withComponents()));
+      const message = await refusalOf(probe(await harness()));
 
       expect(message).toMatch(new RegExp(`no capability ${capability} in the caller's claim`));
     });
@@ -505,7 +526,7 @@ describe("no anonymous mutation path", () => {
   // writing a handoff attributed to the caller's resolved user record, which is
   // the anchor every action is attributed to.
   it("refuses the anonymous caller the very mutation a session commits", async () => {
-    const t = await withComponents();
+    const t = await harness();
     await registerServer(t);
     const args = {
       issuerId: SERVER_ID,
@@ -558,7 +579,7 @@ describe("a session's claim stops at the bootstrap pair", () => {
           .action(anyApi.issuance.exchangeAssertion, { assertion: "not-a-jwt", capabilities: [] }),
     },
   ])("refuses a signed-in session $end, on capability", async ({ capability, call }) => {
-    const t = await withComponents();
+    const t = await harness();
     await registerServer(t);
 
     await expect(call(t)).rejects.toThrow(
@@ -584,7 +605,7 @@ describe("audience binding at the platform's door", () => {
   // beside it is accepted through the same argument, so the refusal is the
   // binding and not the presentation channel.
   it("refuses a freshly issued game access token presented back at the platform", async () => {
-    const t = await withComponents();
+    const t = await harness();
     const teamId = await seedTeam(t);
     const gameId = await seedPlayingGame(t, [teamId]);
     const gameToken = (await t
@@ -641,11 +662,11 @@ describe("a registered system's call rate is bounded", () => {
   // credential, the same handler — the only difference is what the system has
   // already spent, so the refusal is the bound and nothing else.
   it("admits the call that fits in the window and refuses the one past it", async () => {
-    const under = await withComponents();
+    const under = await harness();
     await alreadySpent(under, CALLS_PER_WINDOW - 1);
     await expect((await systemCall(under))()).resolves.toBeDefined();
 
-    const over = await withComponents();
+    const over = await harness();
     await alreadySpent(over, CALLS_PER_WINDOW);
     // On the data rather than the message: what a refused operator can actually
     // read in production is a `ConvexError`'s payload, so asserting the payload
@@ -674,7 +695,7 @@ describe("a registered system's call rate is bounded", () => {
   // let both through — the component's single mutation must admit exactly one,
   // whichever order they land in.
   it("admits exactly one of two concurrent calls with one call left in the window", async () => {
-    const t = await withComponents();
+    const t = await harness();
     await alreadySpent(t, CALLS_PER_WINDOW - 1);
     const call = await systemCall(t);
 
@@ -694,7 +715,7 @@ describe("a registered system's call rate is bounded", () => {
   // only watched credentialed calls would leave the way credentials are
   // obtained unbounded.
   it("bounds an assertion exchange, which presents no credential to bound", async () => {
-    const t = await withComponents();
+    const t = await harness();
     await registerServer(t);
     await alreadySpent(t, CALLS_PER_WINDOW);
 
@@ -731,7 +752,7 @@ describe("attribution is user-visible", () => {
   // human — with nothing but their own session — is shown that it happened and
   // which system it came through.
   it("shows a user the action a system took on their behalf, and which system", async () => {
-    const t = await withComponents();
+    const t = await harness();
     await registerServer(t, ["issue-game-token"]);
     const teamId = await seedTeam(t);
     const gameId = await seedPlayingGame(t, [teamId]);
@@ -753,7 +774,7 @@ describe("attribution is user-visible", () => {
   // system. Attribution marks what came through a system, so a record with no
   // system to name would say something false about how the action was taken.
   it("attributes nothing to a system when the human acted directly", async () => {
-    const t = await withComponents();
+    const t = await harness();
     const teamId = await seedTeam(t);
     const gameId = await seedPlayingGame(t, [teamId]);
     const asUser = t.withIdentity({ subject: "user-42" });
@@ -768,7 +789,7 @@ describe("attribution is user-visible", () => {
   // argument, so whose records come back is the caller's credential and there
   // is nothing to pass to ask for someone else's.
   it("shows each user their own records and no one else's", async () => {
-    const t = await withComponents();
+    const t = await harness();
     await registerServer(t, ["issue-game-token"]);
     const teamId = await seedTeam(t);
     const gameId = await seedPlayingGame(t, [teamId]);
@@ -791,7 +812,7 @@ describe("attribution is user-visible", () => {
   // record is reachable by the sweep at all, on the retention it was written
   // with — a table nothing sweeps grows one row per credentialed call forever.
   it("keeps an attribution record for its retention and no longer", async () => {
-    const t = await withComponents();
+    const t = await harness();
     await registerServer(t, ["issue-game-token"]);
     const teamId = await seedTeam(t);
     const gameId = await seedPlayingGame(t, [teamId]);

@@ -10,8 +10,8 @@
 // cookie, so nothing the client retains keeps authenticating.
 import { httpRouter } from "convex/server";
 import { authComponent, createAuth } from "./auth";
-import { publishedMaterial } from "./auth/deployment";
-import { publishedDocument } from "./publicFunctions";
+import { issuer } from "./auth/deployment";
+import { publishedDocument, publishedKeySet } from "./publicFunctions";
 import { begin, complete } from "./signIn";
 
 const http = httpRouter();
@@ -42,15 +42,19 @@ http.route({
   path: "/.well-known/openid-configuration",
   method: "GET",
   handler: publishedDocument(() => ({
-    issuer: publishedMaterial().issuer,
-    jwks_uri: `${publishedMaterial().issuer}/.well-known/jwks.json`,
+    issuer: issuer(),
+    jwks_uri: `${issuer()}/.well-known/jwks.json`,
   })),
 });
 
+// The key set that document points at, served by Better Auth's `jwt` plugin
+// from the same store everything is signed with — here at the root well-known
+// address rather than the plugin's own `/api/auth/jwks`, because a game
+// instance resolves it from the issuer and consults nothing else.
 http.route({
   path: "/.well-known/jwks.json",
   method: "GET",
-  handler: publishedDocument(() => ({ keys: [publishedMaterial().publicJwk] })),
+  handler: publishedKeySet(),
 });
 
 // The browser's way in, and the only two addresses on this surface a human

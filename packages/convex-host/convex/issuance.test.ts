@@ -25,9 +25,16 @@
 import { type JWK, SignJWT, decodeJwt, exportJWK, generateKeyPair } from "jose";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, components, internal } from "./_generated/api";
-import { CREDENTIAL_LIFETIME_SECONDS, verify } from "./auth/credential";
+import { CREDENTIAL_LIFETIME_SECONDS } from "./auth/credential";
 import { PLATFORM_AUDIENCE } from "./auth/deployment";
-import { challengeFor, platformSeed, seedModules, withComponents } from "./harness.testing";
+import {
+  type Harness,
+  challengeFor,
+  platformSeed,
+  seedModules,
+  verifyIssued as verifyAgainstServed,
+  withComponents,
+} from "./harness.testing";
 import { forgetPublishedMaterial } from "./issuance";
 
 const ALG = "ES256";
@@ -50,7 +57,6 @@ const COACH_A = "coach-of-team-a";
 const OUTSIDER = "human-on-no-roster";
 const ADMIN = "platform-admin";
 
-let deploymentJwk: JWK;
 let serverAKey: CryptoKey;
 let serverAJwk: JWK;
 let serverBKey: CryptoKey;
@@ -63,10 +69,9 @@ let rotatedKey: CryptoKey;
 let rotatedJwk: JWK;
 
 beforeAll(async () => {
-  const [deployment, a, b, c, stranger, rotated] = await Promise.all(
-    Array.from({ length: 6 }, () => generateKeyPair(ALG, { extractable: true })),
+  const [a, b, c, stranger, rotated] = await Promise.all(
+    Array.from({ length: 5 }, () => generateKeyPair(ALG, { extractable: true })),
   );
-  deploymentJwk = await exportJWK(deployment.publicKey);
   serverAKey = a.privateKey;
   serverAJwk = await exportJWK(a.publicKey);
   serverBKey = b.privateKey;
@@ -78,9 +83,9 @@ beforeAll(async () => {
   rotatedKey = rotated.privateKey;
   rotatedJwk = await exportJWK(rotated.publicKey);
 
-  // The deployment's signing identity, exactly as the Convex runtime supplies
-  // it: issuance reads both from the environment at every call.
-  process.env["CREDENTIAL_SIGNING_JWK"] = JSON.stringify(await exportJWK(deployment.privateKey));
+  // The deployment's identity, exactly as the Convex runtime supplies it. Its
+  // signing key is not provisioned at all: the store starts empty and the
+  // first mint generates one, which is the production arrangement.
   process.env["CONVEX_SITE_URL"] = ISSUER;
 });
 
@@ -122,6 +127,7 @@ const issuance = api.issuance;
  */
 async function setup() {
   const t = await withComponents({ platformExtras: seedModules });
+  current = t;
 
   await t.mutation(platformSeed.seedIssuer, {
     issuerId: SERVER_A,
@@ -168,9 +174,16 @@ function signAssertion(overrides?: {
   return jwt.sign(overrides?.key ?? serverAKey);
 }
 
-/** Verify a credential this suite's deployment minted, at the given audience. */
+/** The harness the running test built last — set by `setup()`, so `verifyIssued` below needs no threading. */
+let current: Harness;
+
+/**
+ * Verify a credential this suite's deployment minted, at the given audience —
+ * against the keys the deployment actually serves at its well-known address,
+ * which is where every real validating party gets them.
+ */
 const verifyIssued = (token: string, audience: string) =>
-  verify(token, { issuer: ISSUER, publicJwk: deploymentJwk }, audience);
+  verifyAgainstServed(current, token, { issuer: ISSUER, audience });
 
 /**
  * A fresh PKCE verifier, as the page that begins a sign-in would make one.
@@ -1379,7 +1392,11 @@ describe("what the platform's own seam accepts as a credential", () => {
         gameId: world.gameId,
         credential: forged,
       }),
-    ).rejects.toThrow(/signature verification failed/);
+      // Refused before the signature is even compared: the Server signs ES256,
+      // and the credential verifier's allowlist holds the platform's own
+      // algorithm alone. A Server that adopted RS256 would fall through to the
+      // signature refusal instead — either way, provenance, not shape.
+    ).rejects.toThrow(/Header Parameter value not allowed|signature verification failed/);
     await expect(earnGameCredential(world)).resolves.toBeDefined();
   });
 });

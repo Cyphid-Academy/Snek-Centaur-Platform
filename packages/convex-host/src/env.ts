@@ -38,18 +38,15 @@ export const CONVEX_CLIENT_ENV: ReadonlyArray<EnvRequirement> = [
   },
   { name: "GOOGLE_CLIENT_ID", why: "the single Cyphid OAuth client humans sign in through" },
   { name: "GOOGLE_CLIENT_SECRET", why: "that OAuth client's secret" },
-  {
-    name: "BETTER_AUTH_SECRET",
-    why: "read by better-auth itself; without it sessions cannot be signed",
-  },
-  // The private half exists here and only here — a Convex deployment
-  // environment variable, read by `convex/auth/deployment.ts` and by nothing
-  // else. The public half is derived from it and served at the well-known
-  // addresses, so rotation is this one variable and nothing downstream.
+  // The one secret behind everything the deployment signs. Sessions are signed
+  // with it directly; the credential-signing key is generated *inside* the
+  // deployment on first use and stored encrypted under this secret
+  // (`convex/auth/deployment.ts`), so no signing key is ever provisioned from
+  // outside and no second variable exists to rotate.
   // spec: global-invariants/credential-confinement#signing-keys-never-leave-convex
   {
-    name: "CREDENTIAL_SIGNING_JWK",
-    why: "the P-256 private JWK every credential the platform issues is signed with",
+    name: "BETTER_AUTH_SECRET",
+    why: "read by better-auth; signs sessions and encrypts the stored credential-signing key",
   },
 ];
 

@@ -3,26 +3,29 @@
 //       identity-and-authorization/capability-claim-structure,
 //       identity-and-authorization/token-lifetime-and-refresh,
 //       identity-and-authorization/verification-without-shared-secrets
-// The one signing primitive behind every credential this deployment issues.
+// The claim shape behind every credential this deployment issues, and the one
+// verifier for them.
 //
-// ES256 (ECDSA on P-256) is the algorithm, and the choice is forced from
-// outside rather than preferred. A game's SpacetimeDB instance validates these
-// tokens itself off the published document, and that runtime's validator
-// accepts RS256 and ES256 and refuses everything else (`InvalidAlgorithm`) —
-// EdDSA among the refused.
+// The signing key itself lives with Better Auth's `jwt` plugin — see
+// `deployment.ts`, whose `deploymentSigner`/`deploymentKeys` are the two
+// halves this module's `mint` and `verify` are handed. What stays here is what
+// no library owns: which claims a credential carries, for how long, and what a
+// presented one must satisfy.
 //
-// ES256 rather than RS256 because `publishedMaterial()` derives the public
-// document from the signing JWK by dropping `d`. For P-256 that is the entire
-// private component; for RSA it would leave `p`, `q`, `dp`, `dq` and `qi`
-// behind, and the platform would serve its own signing key at a well-known
-// address.
-//
-// Changing it touches this file and the deployment's publication
-// (`deployment.ts`), which must agree.
-import { type JWK, type JWTPayload, SignJWT, decodeJwt, importJWK, jwtVerify } from "jose";
+// RS256 is the algorithm, and the choice is forced from two sides rather than
+// preferred: the key store is shared with the session JWTs and is
+// single-algorithm, and `@convex-dev/better-auth` accepts only RS256 for the
+// `customJwt` provider that store serves — while a game's SpacetimeDB instance
+// validates these tokens itself off the published document with a validator
+// that accepts RS256 and ES256 and refuses everything else
+// (`InvalidAlgorithm`), EdDSA among the refused. The two constraints meet at
+// RS256. Changing it touches this constant and the plugin configuration in
+// `deployment.ts`, which must agree.
+import { type JWTPayload, type JWTVerifyGetKey, decodeJwt, jwtVerify } from "jose";
 import type { Capability } from "../capabilities";
 
-const ALG = "ES256";
+export const CREDENTIAL_ALG = "RS256";
+const ALG = CREDENTIAL_ALG;
 
 /**
  * Fifteen minutes, in seconds. Exported so a holder can renew ahead of expiry.
@@ -54,15 +57,20 @@ export interface CredentialPayload extends JWTPayload {
 }
 
 /**
- * What the well-known publication endpoint serves, and what a game instance is
- * seeded with at startup.
- *
- * spec: identity-and-authorization/verification-without-shared-secrets
+ * The registered and platform claims `mint` assembles, as the signer receives
+ * them — complete, so the signer adds a header and a signature and decides
+ * nothing.
  */
-export interface PublishedMaterial {
-  readonly issuer: string;
-  readonly publicJwk: JWK;
+export interface CredentialClaims extends JWTPayload {
+  readonly cap: ReadonlyArray<CapabilityEntry>;
+  readonly act?: string;
 }
+
+/**
+ * Signs an assembled claim set with the deployment's key. The production one
+ * is `deployment.ts`'s `deploymentSigner`; a unit test may supply its own.
+ */
+export type CredentialSigner = (payload: CredentialClaims) => Promise<string>;
 
 /**
  * Mint a credential. `audience` is the one resource it may be used at, and
@@ -71,29 +79,34 @@ export interface PublishedMaterial {
  * spec: identity-and-authorization/sole-credential-issuer
  */
 export function mint(
-  signingKey: CryptoKey,
+  sign: CredentialSigner,
   issuer: string,
   claims: { subject: string; audience: string; cap: ReadonlyArray<CapabilityEntry>; act?: string },
 ): Promise<string> {
-  return new SignJWT({ cap: claims.cap, act: claims.act })
-    .setProtectedHeader({ alg: ALG })
-    .setIssuer(issuer)
-    .setSubject(claims.subject)
-    .setAudience(claims.audience)
-    .setIssuedAt()
-    .setExpirationTime(`${CREDENTIAL_LIFETIME_SECONDS}s`)
-    .sign(signingKey);
+  const now = Math.floor(Date.now() / 1000);
+  return sign({
+    cap: claims.cap,
+    // Omitted rather than `undefined`: the claim either exists or does not.
+    ...(claims.act === undefined ? {} : { act: claims.act }),
+    iss: issuer,
+    sub: claims.subject,
+    aud: claims.audience,
+    iat: now,
+    // spec: identity-and-authorization/token-lifetime-and-refresh
+    exp: now + CREDENTIAL_LIFETIME_SECONDS,
+  });
 }
 
 /**
- * Verify a credential presented at `audience`, using published material alone.
+ * Verify a credential presented at `expected.audience`, using published
+ * verification keys alone.
  *
  * spec: identity-and-authorization/audience-bound-tokens#wrong-audience-refused
  */
 export async function verify(
   token: string,
-  material: PublishedMaterial,
-  audience: string,
+  keys: JWTVerifyGetKey,
+  expected: { issuer: string; audience: string },
 ): Promise<CredentialPayload> {
   // On the *unverified* payload, deliberately. Trusting an unverified claim
   // here is sound because this check can only refuse: a forged `aud` buys an
@@ -102,14 +115,13 @@ export async function verify(
   // audience, so one naming several is refused at every audience it lists.
   // Peer assertions are NOT verified here (see `issuance.ts`), so RFC 7523's
   // array-`aud` allowance is not this check's concern.
-  if (decodeJwt(token).aud !== audience) {
+  if (decodeJwt(token).aud !== expected.audience) {
     throw new Error("credential names a different audience");
   }
-  const key = await importJWK(material.publicJwk, ALG);
-  const { payload } = await jwtVerify(token, key, {
+  const { payload } = await jwtVerify(token, keys, {
     algorithms: [ALG],
-    issuer: material.issuer,
-    audience,
+    issuer: expected.issuer,
+    audience: expected.audience,
     // `exp` is *required*, not merely checked when offered: jose checks a claim
     // only where it is present, so a credential that declines to say when it
     // dies would otherwise verify forever. `iss` and `aud` need no entry — the

@@ -44,7 +44,7 @@ The components are imported by **relative path**, not by package name. Convex bu
 
 **The host still owns no tables, and auth did not change that.** Better Auth's tables live in its own Convex component; the records this capability owns (`trusted_issuers`, `accepted_assertions`, `sign_in_handoffs`, `platform_admins`, `system_actions`) are tables of `convex-snek-platform`, and the registered-system call counters are `@convex-dev/rate-limiter`'s. `convex/schema.ts` stays empty. The open question this file used to record — whether auth tables breach the no-tables rule — is settled in the negative and needs no amendment.
 
-**Before any of it runs**, an operator must generate `CREDENTIAL_SIGNING_JWK` and set it, along with the Google client and `BETTER_AUTH_SECRET`; `src/env.ts` names every variable and what it is for. No code generates the signing key — a key the deployment mints for itself is a key it can silently lose.
+**Before any of it runs**, an operator must set the Google client and `BETTER_AUTH_SECRET`; `src/env.ts` names every variable and what it is for. The credential-signing key is *not* among them: the deployment generates one for itself on first use and holds it in Better Auth's key store, encrypted under `BETTER_AUTH_SECRET` — so no signing key is ever provisioned from outside, and losing the secret is the one way to lose the key.
 
 ## How a browser on a Server's origin authenticates
 
