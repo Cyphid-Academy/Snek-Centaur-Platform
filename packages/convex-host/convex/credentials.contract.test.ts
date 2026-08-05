@@ -44,8 +44,8 @@ beforeAll(async () => {
   };
   serverJwk = await exportJWK(own.publicKey);
 
-  const deployment = await generateKeyPair("ES256", { extractable: true });
-  process.env["CREDENTIAL_SIGNING_JWK"] = JSON.stringify(await exportJWK(deployment.privateKey));
+  // The platform's own signing key is not provisioned: the store starts empty
+  // and the first exchange generates one, exactly as a deployment does.
   process.env["CONVEX_SITE_URL"] = ISSUER;
 });
 

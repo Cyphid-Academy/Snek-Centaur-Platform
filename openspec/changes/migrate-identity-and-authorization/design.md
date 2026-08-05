@@ -187,21 +187,38 @@ and settles it in the negative: auth tables do not breach the host's "owns no
 tables" rule, because they are the auth component's. `convex/schema.ts` stays
 empty and needs no amendment.
 
-**The platform mints and verifies its own credentials, with `jose`.** The
-section above assigns key management, signing and publication of verification
-material to the library. Better Auth's token endpoint cannot carry them: it is
-bound to the caller's own session and hardcodes its audience, and a credential
-of ours names a Centaur Team as its subject and one game instance as its
-audience. So `auth/credential.ts` signs and verifies, `auth/deployment.ts` holds
-the signing key and publishes the material at the well-known addresses, and the
-library's role narrows to human authentication — the Google exchange and the
-session cookie — which is the one thing it does that nothing here wants to own.
+**The platform assembles and verifies its own credentials; the key belongs to
+the library.** The section above assigns key management, signing and
+publication of verification material to the library. Better Auth's token
+endpoint cannot carry the *minting*: it is bound to the caller's own session
+and hardcodes its audience, and a credential of ours names a Centaur Team as
+its subject and one game instance as its audience. So `auth/credential.ts`
+assembles claims and verifies presented credentials, and the library's role in
+*that* narrows to nothing.
 
-The boundary that section calls load-bearing is unchanged, and is now enforced
-by construction rather than by discipline: there is no plugin, so no policy can
-migrate into one. Issuance is ordinary application code in `convex/issuance.ts`,
-which is where the registry, ceilings, kind gating and attribution already were
-required to live.
+This departure was first taken more broadly than its justification: an early
+revision also moved key custody and publication into our own code —
+`CREDENTIAL_SIGNING_JWK`, an operator-provisioned environment variable, and a
+hand-derived public document behind the well-known routes, including a
+hand-written allow-list stripping the private JWK fields. The session-bound
+argument above never covered that half, and it has been returned to the
+library: `@convex-dev/better-auth`'s `convex()` plugin already embeds Better
+Auth's `jwt` plugin — one key store in the auth component's `jwks` table, one
+algorithm, publication at `/api/auth/convex/jwks` — and `auth/deployment.ts`
+now signs through that store (`deploymentSigner`) and reads verification keys
+back off the same served document (`deploymentKeys`). The well-known routes
+proxy the plugin's endpoint. The key is generated inside the deployment on
+first use and provisioned by nobody, which is also the stronger reading of
+`credential-confinement#every-party-keeps-its-own-key`; the algorithm is RS256
+because the shared store is single-algorithm and the `customJwt` provider
+accepts RS256 alone, while a game instance's validator accepts RS256 and
+ES256 — the constraints from both sides meet.
+
+The boundary that section calls load-bearing is unchanged, and is still
+enforced by construction rather than by discipline: there is no plugin *of
+ours*, so no policy can migrate into one. Issuance is ordinary application
+code in `convex/issuance.ts`, which is where the registry, ceilings, kind
+gating and attribution already were required to live.
 
 **The admin designation is a table of this capability's own, with an operator
 writer.** It is written through `registry:designateAdmin`, an internal mutation
@@ -500,6 +517,27 @@ for a credential is "the reference together with proof of being the party it
 was minted for". A verifier the page keeps and a challenge the reference is
 bound to is such a proof. `#the-redeemer-keeps-what-it-earns` was written so
 either shape satisfies it, and it does.
+
+**Better Auth's `oidc-provider` plugin was examined for this flow and
+declined, on the artifact and on the registry.** The earlier rejection of the
+built-in provider was argued for machine-to-machine issuance, and the flow
+actually built is browser-shaped — a redirect chain, a registered return
+address, a single-use code, PKCE — so the question deserved re-asking rather
+than inheriting that answer. Re-asked, it fails on two hard mismatches. The
+artifact: the plugin's token endpoint answers an authorization code with an
+*opaque random access token* rowed in its own table (an `id_token` only under
+`openid` scope, and describing the session user), and what redemption must
+yield here is a platform credential — capability entries intersected with the
+Server's ceiling, an `act` naming the Server, an audience of ours — which no
+hook of the plugin's mints. The registry: the plugin resolves clients from its
+`oauthApplication` table or a static `trustedClients` list, and Servers are
+registered in `trusted_issuers` with their return addresses; adopting it means
+either dual registration — one row per Server in each table, drifting — or
+abandoning the registry requirement's own shape. Either way the bespoke
+minting survives *behind* the plugin, so adoption would add a layer, not
+replace one. The handoff therefore stays application code; what it shares
+with OAuth (S256, single-use-by-delete, allow-listed return) is convention,
+not machinery worth importing at that price.
 
 **Removing the assertion path is a security property, not tidying.** The return
 leg puts the reference in the address bar of the Server's own page, so the

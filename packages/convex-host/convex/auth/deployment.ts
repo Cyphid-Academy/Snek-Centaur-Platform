@@ -4,29 +4,23 @@
 // Who this deployment is when it signs, and how it names the party it signs
 // for.
 //
-// The signing key arrives as a deployment environment variable and is read
-// nowhere else — `global-invariants/credential-confinement#signing-keys-never-leave-convex`.
-// The published material is derived from that same variable, so the two cannot
-// drift and a rotation is one variable.
-import { type JWK, importJWK } from "jose";
-import type { PublishedMaterial } from "./credential";
-
-const ALG = "ES256";
-
-/**
- * The name the published key set gives this deployment's one signing key.
- *
- * A `kid` is not optional in practice, whatever the JWK specification says: a
- * SpacetimeDB instance discards an entire key set whose entry carries none
- * (`KeyError(MissingKeyId)`), so a document without one is a document no game
- * instance can validate against.
- *
- * Constant rather than derived, because a `kid` disambiguates among keys
- * published *together* and this platform never publishes two. The name
- * identifies the role, which does not change, rather than the key material,
- * which may.
- */
-const KEY_ID = "platform";
+// Key custody is Better Auth's `jwt` plugin, not an environment variable: the
+// signing key is generated inside the deployment on first use — never
+// provisioned from outside, which is the direction
+// `global-invariants/credential-confinement#every-party-keeps-its-own-key`
+// asks for — held encrypted in the auth component's `jwks` table, and
+// published from that same store, so signing and publication cannot drift.
+// What is deliberately NOT the plugin's is minting: its token endpoint is
+// bound to the caller's own session and hardcodes its audience, so it cannot
+// express a token whose subject is a Centaur Team and whose audience is one
+// game instance. `auth/credential.ts` assembles the claims; the signer below
+// carries them to the plugin's stored key.
+import type { GenericCtx } from "@convex-dev/better-auth";
+import { type JwtOptions, signJWT } from "better-auth/plugins/jwt";
+import { type JWK, createLocalJWKSet } from "jose";
+import type { DataModel } from "../_generated/dataModel";
+import { createAuth } from "../auth";
+import { CREDENTIAL_ALG as ALG, type CredentialSigner } from "./credential";
 
 /**
  * The audience of every credential *this deployment mints* for its own function
@@ -34,7 +28,7 @@ const KEY_ID = "platform";
  *
  * A constant rather than the deployment URL, and the reasoning does **not**
  * carry to assertions (see `assertionAudience` below). A credential minted here
- * is verified against `publishedMaterial()` — this deployment's own `iss` and
+ * is verified against `deploymentKeys()` — this deployment's own `iss` and
  * its own signing key — so a credential from another deployment is refused on
  * issuer and key before its audience is ever compared. The audience is a second
  * fence behind a first one that already holds, and making it a constant means a
@@ -102,47 +96,71 @@ export const issuer = (): string => {
  */
 export const assertionAudience = (): string => issuer();
 
-const signingJwk = (): JWK => JSON.parse(process.env["CREDENTIAL_SIGNING_JWK"] ?? "{}") as JWK;
-
-export const signingKey = async (): Promise<CryptoKey> =>
-  (await importJWK(signingJwk(), ALG)) as CryptoKey;
-
 /**
- * Every field of a JWK that is safe to publish, across the key kinds a JWK can
- * be — `kty` and `crv` naming it, `x`/`y` for an elliptic curve key, `n`/`e`
- * for RSA.
+ * The `jwt`-plugin options the credential signer runs under. They restate what
+ * `@convex-dev/better-auth`'s `convex()` plugin configures its embedded `jwt`
+ * instance with, because the two share one `jwks` table and that table is
+ * single-algorithm: `alg` is not a stored column, so every reader patches it
+ * in from configuration, and a second configuration would be a second answer.
  *
- * **An allow-list, because the deny-list version of this is a trap.** Deriving
- * the public document by dropping `d` is correct for P-256, where `d` is the
- * whole private component, and catastrophic for RSA, where `p`, `q`, `dp`, `dq`
- * and `qi` remain — the signing key served at a well-known address under other
- * names. Since RS256 is the other algorithm a game instance accepts, and
- * therefore the obvious thing to reach for if this one ever has to change, the
- * failure is one edit away at all times. Naming what may go out rather than
- * what may not means a key kind this list has never heard of publishes too
- * little rather than too much.
+ * RS256, therefore, is not chosen here — it is fixed by the `customJwt`
+ * provider in `auth.config.ts`, which `@convex-dev/better-auth` accepts with
+ * RS256 alone. A game's SpacetimeDB instance accepts RS256 and ES256 and
+ * refuses everything else, so the constraint from below and the constraint
+ * from above happen to meet.
+ *
+ * The `adapter` override mirrors `@convex-dev/better-auth`'s own, comment and
+ * all ("remove when date parsing for jwks adapter is fixed upstream"): rows
+ * come back with numeric dates and the plugin sorts by `createdAt.getTime()`.
  */
-const PUBLIC_JWK_FIELDS = ["kty", "crv", "x", "y", "n", "e"] as const;
+const CREDENTIAL_KEYS: JwtOptions = {
+  jwks: { keyPairConfig: { alg: ALG } },
+  adapter: {
+    getJwks: async (ctx) => {
+      const keys = await ctx.context.adapter.findMany<{ createdAt: number; expiresAt?: number }>({
+        model: "jwks",
+        sortBy: { field: "createdAt", direction: "desc" },
+      });
+      return keys.map((key) => ({
+        ...key,
+        createdAt: new Date(key.createdAt),
+        ...(key.expiresAt ? { expiresAt: new Date(key.expiresAt) } : {}),
+      })) as unknown as ReturnType<NonNullable<NonNullable<JwtOptions["adapter"]>["getJwks"]>>;
+    },
+  },
+};
 
 /**
- * What anyone validating this platform's credentials needs, and all they need.
- * Derived here rather than at the publication site so that no caller can serve
- * the wrong half by omission.
+ * Sign a credential payload with the deployment's stored key, generating one
+ * inside the deployment on first use. The same store and the same algorithm
+ * sign the session JWTs, so what is signed with is always what
+ * `/api/auth/convex/jwks` — and the well-known address that proxies it —
+ * publishes.
  *
- * `alg` and `kid` are stated here rather than taken from the signing variable,
- * so that a key provisioned without either still publishes a document a game
- * instance can use.
- *
- * spec: identity-and-authorization/verification-without-shared-secrets#same-material-platform-wide
  * spec: global-invariants/credential-confinement#signing-keys-never-leave-convex
+ * spec: identity-and-authorization/verification-without-shared-secrets#same-material-platform-wide
  */
-export function publishedMaterial(): PublishedMaterial {
-  const signing = signingJwk();
-  const publicJwk: JWK = { alg: ALG, kid: KEY_ID };
-  for (const field of PUBLIC_JWK_FIELDS) {
-    if (signing[field] !== undefined) publicJwk[field] = signing[field];
-  }
-  return { issuer: issuer(), publicJwk };
+export async function deploymentSigner(ctx: GenericCtx<DataModel>): Promise<CredentialSigner> {
+  const context = await createAuth(ctx).$context;
+  // The cast narrows honestly: `signJWT` reads `ctx.context` alone — adapter,
+  // secret, options — and never the endpoint half of the type it declares.
+  return (payload) =>
+    signJWT({ context } as unknown as Parameters<typeof signJWT>[0], {
+      options: CREDENTIAL_KEYS,
+      payload: { ...payload },
+    });
+}
+
+/**
+ * The deployment's published verification keys, as a jose key resolver — read
+ * through the same endpoint that publishes them, so verification can never
+ * disagree with publication.
+ */
+export async function deploymentKeys(
+  ctx: GenericCtx<DataModel>,
+): Promise<ReturnType<typeof createLocalJWKSet>> {
+  const served = (await createAuth(ctx).api.getJwks()) as { keys: JWK[] };
+  return createLocalJWKSet(served);
 }
 
 /**

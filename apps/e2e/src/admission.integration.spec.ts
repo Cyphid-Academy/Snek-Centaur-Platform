@@ -7,9 +7,9 @@
 // at two well-known addresses; a game's instance must fetch that material and
 // validate on it entirely alone, because a hermetic instance has nobody to ask.
 // Every part of that arrangement is checked somewhere cheaper — `admit()` is a
-// unit-tested pure function, the publication routes and the published
-// document's shape have their tests beside `publishedMaterial()`, the module
-// loads in `stack.integration.spec.ts` — and none of those establish that the
+// unit-tested pure function, the publication routes and the served document's
+// shape have their tests in `http.test.ts`, the module loads in
+// `stack.integration.spec.ts` — and none of those establish that the
 // two ends fit. They are two runtimes, one signing and one verifying, and the
 // fit between them is exactly what this member is for: it cost the platform an
 // algorithm nothing on its own side objected to, and a missing `kid`, both of
@@ -30,17 +30,22 @@
 // verification from transport. All three stay legible after the seed tables
 // acquire a writer.
 //
-// **The token is signed with the deployment's own key, and issuance is not
-// exercised.** `issuance:issueGameToken` cannot be reached yet — it requires a
-// game in `playing` status and no function anywhere writes one, which is
-// migrate-game-lifecycle's again — so the credential here is minted from the
-// `credentialSigningJwk` fixture, the very key the deployment holds and
-// publishes the public half of. What stays real is the platform's publication
-// and the host's verification of it, and those are the whole of the
-// requirement cited. What is skipped is who may *have* such a token: the
-// eligibility decision, the caller's session, the roster check. Nothing here
-// establishes anything about entitlement, and no assertion below is phrased as
-// though it did.
+// **The credential is earned, never minted here.** `issuance:issueGameToken`
+// cannot be reached yet — it requires a game in `playing` status and no
+// function anywhere writes one, which is migrate-game-lifecycle's again — so
+// what is presented below is a *platform credential*, earned through the real
+// path a registered system takes: an issuer registered by the operator route,
+// publishing its keys over a socket this process serves, exchanging a signed
+// assertion (the published library's own `signAssertion`) for a credential the
+// deployment signs with the key it generated for itself and holds in its own
+// store. The deployment's private key is held by nobody else — including this
+// harness — which is precisely the arrangement under test. What is skipped is
+// only the game-token shape of subject and audience: the module refuses on the
+// issuer pin before reading either, so the same bytes traverse end to end.
+// What is also skipped is who may have a *game* token — the eligibility
+// decision, the caller's session, the roster check. Nothing here establishes
+// anything about entitlement, and no assertion below is phrased as though it
+// did.
 //
 // **What a scenario here cannot reach yet, recorded rather than stubbed:**
 //
@@ -68,8 +73,9 @@
 //
 // No Centaur Server and no browser: nothing here is reached from a Server's
 // page, and the fixtures this names are the whole of what it starts.
-import { type GameSubject, encodeGameSubject } from "@cyphid/snek-stdb/subject";
-import { type JWK, SignJWT, decodeJwt, importJWK } from "jose";
+import { type Server, createServer } from "node:http";
+import { signAssertion } from "@cyphid/snek-centaur-server-lib";
+import { SignJWT, decodeJwt, decodeProtectedHeader, exportJWK, generateKeyPair } from "jose";
 import { expect, test } from "./fixtures";
 import {
   type ModuleLog,
@@ -77,40 +83,26 @@ import {
   exchangedForWebsocketToken,
   moduleLog,
 } from "./game-instance";
+import { loopbackOrigin } from "./process";
 
 /** This run's game, as a database name. One instance is one game. */
 const DATABASE = "snek-e2e-admission";
 
-/**
- * A game id this instance is certainly not bound to. It stays certain after
- * `initialize_game` lands: whatever id a game is initialised with, it is one
- * this constant does not spell.
- */
-const ANOTHER_GAME = "game-this-instance-is-not";
-
-/** The platform's algorithm — `convex/auth/credential.ts`, restated. */
-const ALG = "ES256";
-
-/**
- * One subject stands for every role below, deliberately: the issuer pin and the
- * audience gate both answer before a subject is read, so a second role's token
- * would traverse the same bytes end to end.
- */
-const SPECTATOR: GameSubject = { role: "spectator", userId: "u-ada" };
-
 let log: ModuleLog;
-/** The private half of the deployment's signing key, ready to sign with. */
-let platformKey: CryptoKey;
 /** What the deployment says it is, taken from the document it publishes. */
 let issuer: string;
+/** A platform credential, earned through registration and assertion exchange. */
+let credential: string;
+/** The registered principal's key-set listener, held for teardown. */
+let keySetServer: Server;
 
-// A worker-scoped hook, so the module is published and the deployment's
-// identity read once for the file rather than once per scenario. The fixtures
-// it names are built here and torn down after the last test in the worker.
-test.beforeAll(async ({ spacetime, convex, credentialSigningJwk }) => {
+// A worker-scoped hook, so the module is published, the deployment's identity
+// read, and the credential earned once for the file rather than once per
+// scenario. The fixtures it names are built here and torn down after the last
+// test in the worker.
+test.beforeAll(async ({ spacetime, convex }) => {
   await spacetime.publish(DATABASE);
   log = await moduleLog(spacetime, DATABASE);
-  platformKey = (await importJWK(credentialSigningJwk as JWK, ALG)) as CryptoKey;
 
   // Named rather than taken off an `any`: `fetch` answers `unknown` from
   // `.json()`, which is the honest type for a document this test did not write.
@@ -118,7 +110,36 @@ test.beforeAll(async ({ spacetime, convex, credentialSigningJwk }) => {
     await fetch(`${convex.siteUrl}/.well-known/openid-configuration`)
   ).json()) as { issuer: string };
   issuer = discovery.issuer;
+
+  // A registered system, complete: its own keypair, its published key set
+  // (genuinely fetched by the deployment across a socket), its registration
+  // through the operator route, and an assertion signed by the published
+  // library. The credential this earns is signed by the deployment's own
+  // stored key — the key nobody outside the deployment holds.
+  const own = await generateKeyPair("ES256", { extractable: true });
+  const publicJwk = await exportJWK(own.publicKey);
+  keySetServer = createServer((_request, response) => {
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(JSON.stringify({ keys: [publicJwk] }));
+  });
+  const principal = await loopbackOrigin(keySetServer);
+  await convex.run("registry:registerIssuer", {
+    issuerId: principal,
+    verificationMaterialUrl: `${principal}/keys.json`,
+    capabilityCeiling: [],
+    returnAddresses: [],
+  });
+  credential = (await convex.run("issuance:exchangeAssertion", {
+    assertion: await signAssertion({
+      signingKey: own.privateKey,
+      domain: principal,
+      issuanceEndpoint: issuer,
+    }),
+    capabilities: [],
+  })) as string;
 });
+
+test.afterAll(() => new Promise<void>((resolve) => keySetServer.close(() => resolve())));
 
 // spec: identity-and-authorization/sole-credential-issuer#no-alternative-admission
 // The floor, and the other half of the contrasts below: a connection
@@ -165,11 +186,7 @@ test("verifies a platform-signed token and refuses it against what it was bound 
 }) => {
   const mark = await log.mark();
 
-  const attempt = await attemptConnection(
-    spacetime,
-    DATABASE,
-    await platformSigned({ sub: SPECTATOR, aud: ANOTHER_GAME }),
-  );
+  const attempt = await attemptConnection(spacetime, DATABASE, credential);
 
   expect(attempt.status).toBe(101);
   expect((await log.after(mark)).join("\n")).toContain("admission refused: untrusted-issuer");
@@ -197,43 +214,45 @@ test("verifies a platform-signed token and refuses it against what it was bound 
 test("carries the platform's claims through the host's own token exchange", async ({
   spacetime,
 }) => {
-  const platform = await platformSigned({ sub: SPECTATOR, aud: ANOTHER_GAME });
+  const minted = decodeJwt(credential);
 
-  const exchanged = decodeJwt(await exchangedForWebsocketToken(spacetime, platform));
+  const exchanged = decodeJwt(await exchangedForWebsocketToken(spacetime, credential));
 
   // The three the decision reads, and nothing about the fourth: `exp` is the
   // host's own and deliberately not asserted on.
   expect(exchanged.iss).toBe(issuer);
-  expect(exchanged.sub).toBe(encodeGameSubject(SPECTATOR));
-  expect(exchanged.aud).toContain(ANOTHER_GAME);
+  expect(exchanged.sub).toBe(minted.sub);
+  expect(exchanged.aud).toContain(minted.aud);
 });
 
 // spec: identity-and-authorization/verification-without-shared-secrets#instance-validates-alone
 // spec: identity-and-authorization/admission-validation
-// The signature, isolated. Every claim is identical to the token the module
-// refused as `wrong-game` above — same issuer, same subject, same audience,
-// same algorithm — and only the key differs. This one does not reach the module
-// at all: the host refuses it itself, and says so, because the key that signed
-// it is not the key the platform published.
+// The signature, isolated. Every claim and every header field is identical to
+// the credential the module refused as `untrusted-issuer` above — same issuer,
+// same subject, same audience, same algorithm, same `kid` — and only the key
+// differs. This one does not reach the module at all: the host refuses it
+// itself, and says so, because the key that signed it is not the key the
+// platform published.
 //
 // This is the assertion that a host merely *pretending* to verify would fail,
-// and the one `wrong-game` on its own cannot make: a host that accepted any
-// signature would have produced `wrong-game` there just the same. The pair is
-// what establishes verification rather than transport.
+// and the one `untrusted-issuer` on its own cannot make: a host that accepted
+// any signature would have produced `untrusted-issuer` there just the same.
+// The pair is what establishes verification rather than transport.
 test("refuses a token signed by a key that is not the platform's, before the module runs", async ({
   spacetime,
 }) => {
-  const stranger = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, [
-    "sign",
-    "verify",
-  ]);
+  // The earned credential's claims and header, byte for byte — algorithm and
+  // `kid` included, so the host resolves the very key the platform published —
+  // re-signed by a key that is not the platform's. Only the signature differs.
+  const header = decodeProtectedHeader(credential);
+  const stranger = await generateKeyPair(header.alg as "RS256", { extractable: true });
+  const claims = decodeJwt(credential);
+  const forged = await new SignJWT({ ...claims })
+    .setProtectedHeader({ ...header, alg: header.alg as "RS256" })
+    .sign(stranger.privateKey);
   const mark = await log.mark();
 
-  const attempt = await attemptConnection(
-    spacetime,
-    DATABASE,
-    await platformSigned({ sub: SPECTATOR, aud: ANOTHER_GAME }, stranger.privateKey),
-  );
+  const attempt = await attemptConnection(spacetime, DATABASE, forged);
 
   expect(attempt.status).toBe(401);
   expect(attempt.reason).toContain("InvalidSignature");
@@ -241,29 +260,3 @@ test("refuses a token signed by a key that is not the platform's, before the mod
   // decision to read, and nothing was asked of the instance's state.
   expect(await log.after(mark)).toEqual([]);
 });
-
-/**
- * A game access token as the platform signs one.
- *
- * The *envelope* is restated — `mint` lives in `packages/convex-host/convex/`,
- * which this member cannot reach, since that package exports its built `src/`
- * and the Convex function directory is not in it. The *subject* is not: it comes
- * from `@cyphid/snek-stdb/subject`, the same codec the platform writes with and
- * the module reads with, so a scenario here cannot quietly encode a subject the
- * platform would never mint. The module reads only `iss`, `aud`, `sub` and
- * `exp`; `cap` is carried because every credential the platform issues has one,
- * and no admission decision reads it.
- */
-function platformSigned(
-  claims: { sub: GameSubject; aud: string },
-  key: CryptoKey = platformKey,
-): Promise<string> {
-  return new SignJWT({ cap: [] })
-    .setProtectedHeader({ alg: ALG })
-    .setIssuer(issuer)
-    .setSubject(encodeGameSubject(claims.sub))
-    .setAudience(claims.aud)
-    .setIssuedAt()
-    .setExpirationTime("15m")
-    .sign(key);
-}

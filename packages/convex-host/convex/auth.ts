@@ -104,6 +104,11 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
     // account belongs to is settled by Google's immutable subject alone
     // (`linked-provider-credentials#no-auto-linking-by-email`).
     account: { accountLinking: { enabled: false } },
+    // `convex()` embeds Better Auth's `jwt` plugin: one key store, one
+    // algorithm (RS256, fixed by the `customJwt` provider in `auth.config.ts`),
+    // serving `/api/auth/convex/jwks`. That same store signs every credential
+    // the platform mints — `auth/deployment.ts` is where that arrangement, and
+    // why the plugin's own session-bound minting is not used, are recorded.
     plugins: [convex({ authConfig })],
   });
 };

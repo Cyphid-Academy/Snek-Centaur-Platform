@@ -4,14 +4,16 @@
 //
 // The double-dotted filename keeps it out of both the Convex bundle and
 // vitest's `convex/**/*.{test,spec}.ts` collection.
+import betterAuthTest from "@convex-dev/better-auth/test";
 import { register as registerRateLimiter } from "@convex-dev/rate-limiter/test";
 import { convexTest } from "convex-test";
 import type { FunctionReference } from "convex/server";
 import { v } from "convex/values";
-import { base64url } from "jose";
+import { type JWK, base64url, createLocalJWKSet } from "jose";
 import { mutation as platformComponentMutation } from "../../convex-snek-platform/convex/_generated/server";
 import { issuerRegistration } from "../../convex-snek-platform/convex/schema";
 import { components } from "./_generated/api";
+import { type CredentialPayload, verify } from "./auth/credential";
 import schema from "./schema";
 
 export const hostModules = import.meta.glob("./**/*.ts");
@@ -33,13 +35,17 @@ export interface HarnessOptions {
   register?: (t: Harness) => void;
 }
 
-/** The host deployment with `snekPlatform`, `centaurState` and `rateLimiter` registered. */
+/** The host deployment with `snekPlatform`, `centaurState`, `rateLimiter` and `betterAuth` registered. */
 export async function withComponents({
   platformExtras,
   register,
 }: HarnessOptions = {}): Promise<Harness> {
   const platformSchema = (await import("../../convex-snek-platform/convex/schema.js")).default;
   const centaurSchema = (await import("../../convex-centaur-state/convex/schema.js")).default;
+  // The signing key the deployment generates for itself is stored encrypted
+  // under this secret, so every suite that mints needs one set — a value, not
+  // a real secret, exactly as a developer's dev deployment holds one.
+  process.env["BETTER_AUTH_SECRET"] ??= "a-secret-long-enough-for-better-auth-validation";
   const t = hostHarness();
   t.registerComponent(
     "snekPlatform",
@@ -47,13 +53,38 @@ export async function withComponents({
     platformExtras ? { ...platformModules, ...platformExtras } : platformModules,
   );
   t.registerComponent("centaurState", centaurSchema, centaurModules);
-  // Through the component's own helper rather than a module glob of our own: a
+  // Through the components' own helpers rather than module globs of our own: a
   // published component's sources sit behind a pnpm symlink that `import.meta.glob`
-  // will not follow, and the helper's glob is written relative to a file inside
-  // the package, where it resolves.
+  // will not follow, and the helpers' globs are written relative to a file inside
+  // each package, where they resolve. `betterAuth` is core here, not sign-in
+  // plumbing: the deployment's credential-signing key lives in its `jwks`
+  // table, so minting and verifying both read through it.
   registerRateLimiter(t);
+  betterAuthTest.register(t as never, "betterAuth");
   register?.(t);
   return t;
+}
+
+/**
+ * The deployment's published verification keys, exactly as a validating party
+ * obtains them: fetched from the well-known address the platform serves.
+ */
+export async function publishedKeys(t: Harness): Promise<ReturnType<typeof createLocalJWKSet>> {
+  const served = await (await t.fetch("/.well-known/jwks.json")).json();
+  return createLocalJWKSet(served);
+}
+
+/**
+ * Verify a credential the harnessed deployment minted, at `audience`, against
+ * the keys it actually publishes — so what these suites assert is the full
+ * arrangement a game instance or a Server relies on, not a mirror of it.
+ */
+export async function verifyIssued(
+  t: Harness,
+  token: string,
+  expected: { issuer: string; audience: string },
+): Promise<CredentialPayload> {
+  return verify(token, await publishedKeys(t), expected);
 }
 
 // ---------------------------------------------------------------------------
@@ -168,13 +199,43 @@ export interface ComponentDb {
 }
 
 // convex-test exposes `runInComponent` at runtime without declaring it in its
-// types, and the component's tables have no other path — they are unreachable
+// types, and a component's tables have no other path — they are unreachable
 // from the host's `t.run`, which is the same isolation these tests rely on.
-export const inPlatformComponent = <T>(t: Harness, fn: (ctx: { db: ComponentDb }) => Promise<T>) =>
+export const inComponent = <T>(
+  t: Harness,
+  component: string,
+  fn: (ctx: { db: ComponentDb }) => Promise<T>,
+) =>
   (t as unknown as { runInComponent: (path: string, f: typeof fn) => Promise<T> }).runInComponent(
-    "snekPlatform",
+    component,
     fn,
   );
+
+export const inPlatformComponent = <T>(t: Harness, fn: (ctx: { db: ComponentDb }) => Promise<T>) =>
+  inComponent(t, "snekPlatform", fn);
+
+/**
+ * Publish a keypair as the deployment's, stored exactly the way the `jwt`
+ * plugin stores one — for suites that hold a keypair of their own and need
+ * both halves of the arrangement: the seam accepting what the suite signed,
+ * and the deployment's own minting signing with a key the suite can name.
+ */
+export const seedDeploymentKey = async (
+  t: Harness,
+  keypair: { publicJwk: JWK; privateJwk: JWK },
+): Promise<void> => {
+  const { symmetricEncrypt } = await import("better-auth/crypto");
+  const privateKey = JSON.stringify(
+    await symmetricEncrypt({
+      key: process.env["BETTER_AUTH_SECRET"] ?? "",
+      data: JSON.stringify(keypair.privateJwk),
+    }),
+  );
+  const publicKey = JSON.stringify(keypair.publicJwk);
+  await inComponent(t, "betterAuth", async (ctx) => {
+    await ctx.db.insert("jwks", { publicKey, privateKey, createdAt: Date.now() });
+  });
+};
 
 /**
  * The challenge a PKCE verifier answers to, computed the way the page that

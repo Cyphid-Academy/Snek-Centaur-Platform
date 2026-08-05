@@ -22,9 +22,9 @@ import { type CapabilityEntry, mint } from "./auth/credential";
 import {
   PLATFORM_AUDIENCE,
   assertionAudience,
+  deploymentSigner,
   encodePrincipal,
   issuer,
-  signingKey,
 } from "./auth/deployment";
 import { type TokenRequest, decideGameTokenIssuance } from "./auth/eligibility";
 import {
@@ -250,7 +250,7 @@ export const exchangeAssertion = publicAction({ capability: "exchange-assertion"
   returns: v.string(),
   handler: async (ctx, args) => {
     const registration = await authenticatedPrincipal(ctx, args.assertion);
-    return mint(await signingKey(), issuer(), {
+    return mint(await deploymentSigner(ctx), issuer(), {
       subject: encodePrincipal({ kind: "external-system", issuerId: registration.issuerId }),
       audience: PLATFORM_AUDIENCE,
       cap: granted(registration, args.capabilities),
@@ -360,7 +360,7 @@ export const redeemSignInHandoff = publicAction({ capability: "redeem-handoff" }
       { issuerId: handoff.issuerId },
     );
     if (!registration) throw new Error(`no registration for issuer ${handoff.issuerId}`);
-    return mint(await signingKey(), issuer(), {
+    return mint(await deploymentSigner(ctx), issuer(), {
       subject: encodePrincipal({ kind: "human", userId: handoff.userId }),
       audience: PLATFORM_AUDIENCE,
       // Bounded twice over: by that Server's registered ceiling
@@ -416,7 +416,7 @@ export const issueGameCredential = publicAction({
     if (!game.roster.some((participant) => participant.teamId === args.teamId)) {
       throw new Error(`team ${args.teamId} is not a participant of game ${args.gameId}`);
     }
-    return mint(await signingKey(), issuer(), {
+    return mint(await deploymentSigner(ctx), issuer(), {
       subject: encodePrincipal({ kind: "centaur-team", teamId: args.teamId, gameId: game.gameId }),
       audience: PLATFORM_AUDIENCE,
       cap: entries(GAME_CREDENTIAL_CAPABILITIES),
@@ -469,7 +469,7 @@ export const issueGameToken = publicAction({
       }));
     const decision = decideGameTokenIssuance(game, tokenRequest(caller, args), isAdmin);
     if (!decision.ok) throw new Error(`no token issued: ${decision.refusal}`);
-    return mint(await signingKey(), issuer(), {
+    return mint(await deploymentSigner(ctx), issuer(), {
       subject: encodeGameSubject(decision.subject),
       audience: game.gameId,
       cap: [],

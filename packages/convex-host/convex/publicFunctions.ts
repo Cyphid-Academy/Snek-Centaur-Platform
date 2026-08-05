@@ -7,11 +7,12 @@
 // `query`/`mutation`/`action`: `scripts/check-public-surface.mjs` fails the
 // build on any other file that does, and on any exported handler that did not
 // go through a builder here.
+import type { GenericCtx } from "@convex-dev/better-auth";
 import { RateLimiter, type RunMutationCtx } from "@convex-dev/rate-limiter";
 import { customAction, customMutation, customQuery } from "convex-helpers/server/customFunctions";
-import type { Auth } from "convex/server";
 import { ConvexError, v } from "convex/values";
 import { components } from "./_generated/api";
+import type { DataModel } from "./_generated/dataModel";
 import type { ActionCtx } from "./_generated/server";
 import { action, httpAction, mutation, query } from "./_generated/server";
 import { createAuth } from "./auth";
@@ -20,7 +21,8 @@ import {
   PLATFORM_AUDIENCE,
   type PlatformPrincipal,
   decodePrincipal,
-  publishedMaterial,
+  deploymentKeys,
+  issuer,
 } from "./auth/deployment";
 import {
   ANONYMOUS_CAPABILITIES,
@@ -296,11 +298,14 @@ const CREDENTIAL_ARG = { credential: v.optional(v.string()) };
  * spec: identity-and-authorization/linked-provider-credentials#the-linkage-is-the-only-lookup
  */
 export async function resolveCaller(
-  ctx: { auth: Auth },
+  ctx: GenericCtx<DataModel>,
   credential?: string,
 ): Promise<ResolvedCaller | null> {
   if (credential) {
-    const payload = await verify(credential, publishedMaterial(), PLATFORM_AUDIENCE);
+    const payload = await verify(credential, await deploymentKeys(ctx), {
+      issuer: issuer(),
+      audience: PLATFORM_AUDIENCE,
+    });
     const principal = decodePrincipal(payload.sub);
     if (!principal) throw new Error("credential names no principal this platform recognises");
     // Entries, never a string this code splits — so constraining an entry later
@@ -336,7 +341,7 @@ export async function resolveCaller(
  * `#service-reach-is-declared-never-inferred`). Both must pass.
  */
 async function admit(
-  ctx: { auth: Auth },
+  ctx: GenericCtx<DataModel>,
   credential: string | undefined,
   declaration: PublicFunctionDeclaration,
 ): Promise<ResolvedCaller | null> {
@@ -389,7 +394,7 @@ const declared = <C extends Capability, K extends PrincipalKind>(
   declaration: PublicFunctionDeclaration<C, K>,
 ) => ({
   args: CREDENTIAL_ARG,
-  input: async (ctx: { auth: Auth } & Partial<Writer>, args: { credential?: string }) => {
+  input: async (ctx: GenericCtx<DataModel> & Partial<Writer>, args: { credential?: string }) => {
     const caller = await admit(ctx, args.credential, declaration);
     if (caller?.actingSystem && writes(ctx)) {
       // Attribution names a human or nobody: a system acting as itself, or for
@@ -418,8 +423,9 @@ const declared = <C extends Capability, K extends PrincipalKind>(
   },
 });
 
-const writes = (ctx: { auth: Auth } & Partial<Writer>): ctx is { auth: Auth } & Writer =>
-  ctx.runMutation !== undefined;
+const writes = (
+  ctx: GenericCtx<DataModel> & Partial<Writer>,
+): ctx is GenericCtx<DataModel> & Writer => ctx.runMutation !== undefined;
 
 export const publicQuery = <C extends Capability, K extends PrincipalKind = "human">(
   declaration: PublicFunctionDeclaration<C, K>,
@@ -454,6 +460,22 @@ export const publicAction = <C extends Capability, K extends PrincipalKind = "hu
  */
 export const publishedDocument = (document: () => unknown) =>
   httpAction(async () => Response.json(document()));
+
+/**
+ * The published key-set endpoint: `publishedDocument`'s one sibling, for the
+ * document that is not fixed. The keys live where Better Auth's `jwt` plugin
+ * keeps them (`auth/deployment.ts`), so serving them takes the context the
+ * plugin reads through — and the body below is the plugin's own endpoint, not
+ * a handler of ours, so the route still cannot read a caller or reach anything
+ * beyond the material it publishes. The plugin creates the deployment's key on
+ * the first read of an empty store, so this address is never a 404 that a game
+ * instance's startup trips over.
+ *
+ * spec: identity-and-authorization/verification-without-shared-secrets
+ * spec: identity-and-authorization/verification-without-shared-secrets#same-material-platform-wide
+ */
+export const publishedKeySet = () =>
+  httpAction(async (ctx) => Response.json(await createAuth(ctx).api.getJwks()));
 
 /**
  * A public HTTP route a browser navigates to, declaring what reaches it.

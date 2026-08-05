@@ -3,20 +3,23 @@
 //       identity-and-authorization/capability-claim-structure,
 //       identity-and-authorization/token-lifetime-and-refresh,
 //       identity-and-authorization/verification-without-shared-secrets
-// The signing primitive, attacked from every side a credential can arrive from.
+// The claim assembly and the verifier, attacked from every side a credential
+// can arrive from. What signs here is a suite-local signer over a fresh
+// keypair — the production signer is the `jwt` plugin's stored key, whose
+// publication `http.test.ts` pins — because nothing in these tests depends on
+// which key signs, only on which key *verifies*.
 //
 // Keys are generated fresh per run rather than fixed: a fixture keypair in the
-// repo would be a private key in the repo, and nothing in these tests depends
-// on which key signs — only on which key *verifies*.
-import type { Auth } from "convex/server";
-import { type JWK, SignJWT, decodeJwt, exportJWK, generateKeyPair } from "jose";
+// repo would be a private key in the repo.
+import { type JWK, SignJWT, createLocalJWKSet, decodeJwt, exportJWK, generateKeyPair } from "jose";
 import { beforeAll, describe, expect, it } from "vitest";
 import { type Capability, SESSION_CAPABILITIES } from "../capabilities";
+import { seedDeploymentKey, withComponents } from "../harness.testing";
 import { resolveCaller } from "../publicFunctions";
 import {
   CREDENTIAL_LIFETIME_SECONDS,
   type CapabilityEntry,
-  type PublishedMaterial,
+  type CredentialSigner,
   mint,
   verify,
 } from "./credential";
@@ -25,52 +28,45 @@ import {
   type PlatformPrincipal,
   decodePrincipal,
   encodePrincipal,
-  publishedMaterial,
 } from "./deployment";
 
-const ALG = "ES256";
+const ALG = "RS256";
 const ISSUER = "https://platform.example";
 const GAME_AUDIENCE = "game-g1";
 const CAP: ReadonlyArray<CapabilityEntry> = [{ capability: "issue-game-token" }];
 
-/**
- * The algorithms a SpacetimeDB host will validate a token with — consumer
- * knowledge, not observable from this side. See the `credential.ts` header.
- */
-const HOST_ACCEPTED_ALGORITHMS = ["RS256", "ES256"];
-
-/**
- * Every field the published document is allowed to carry, stated here
- * independently of the list `deployment.ts` derives it with. Two spellings that
- * must agree is the point: a private field added to that list is a field this
- * one has never heard of, and the assertion below fails rather than the leak
- * shipping.
- */
-const PUBLISHABLE_JWK_FIELDS = ["kty", "crv", "x", "y", "n", "e", "alg", "kid"];
-
-// The deployment's keypair and the material it publishes, plus a second,
-// equally well-formed keypair that is NOT the deployment's — the difference
-// between them is the whole of what asymmetric verification establishes.
+// The deployment's keypair as this suite plays it, plus a second, equally
+// well-formed keypair that is NOT the deployment's — the difference between
+// them is the whole of what asymmetric verification establishes.
 let signingKey: CryptoKey;
-let material: PublishedMaterial;
+let publicJwk: JWK;
+let privateJwk: JWK;
+/** The published key set, as `verify` consumes one. */
+let keys: ReturnType<typeof createLocalJWKSet>;
 let strangerKey: CryptoKey;
-/** The deployment's own signing JWK, for the one case that swaps it out and back. */
-let deploymentJwk: JWK;
+
+/** What `verify` must hold a presented credential to. */
+const at = (audience: string) => ({ issuer: ISSUER, audience });
 
 beforeAll(async () => {
   const deployment = await generateKeyPair(ALG, { extractable: true });
   signingKey = deployment.privateKey;
-  deploymentJwk = await exportJWK(deployment.privateKey);
-  material = { issuer: ISSUER, publicJwk: await exportJWK(deployment.publicKey) };
+  publicJwk = await exportJWK(deployment.publicKey);
+  privateJwk = await exportJWK(deployment.privateKey);
+  keys = createLocalJWKSet({ keys: [publicJwk] });
   const stranger = await generateKeyPair(ALG, { extractable: true });
   strangerKey = stranger.privateKey;
 
-  // `resolveCaller` reads the deployment's key and issuer from the environment,
-  // exactly as the Convex runtime supplies them; the seam tests below exercise
-  // the same env-derived path production runs.
-  process.env["CREDENTIAL_SIGNING_JWK"] = JSON.stringify(deploymentJwk);
+  // `resolveCaller` reads the deployment's issuer from the environment,
+  // exactly as the Convex runtime supplies it.
   process.env["CONVEX_SITE_URL"] = ISSUER;
 });
+
+/** A signer over `key`, shaped as `deployment.ts` supplies the production one. */
+const signerFor =
+  (key: CryptoKey): CredentialSigner =>
+  (payload) =>
+    new SignJWT({ ...payload }).setProtectedHeader({ alg: ALG }).sign(key);
 
 const mintPlatformToken = (overrides?: {
   subject?: string;
@@ -80,7 +76,7 @@ const mintPlatformToken = (overrides?: {
   key?: CryptoKey;
   issuer?: string;
 }) =>
-  mint(overrides?.key ?? signingKey, overrides?.issuer ?? ISSUER, {
+  mint(signerFor(overrides?.key ?? signingKey), overrides?.issuer ?? ISSUER, {
     subject: overrides?.subject ?? "user:u1",
     audience: overrides?.audience ?? PLATFORM_AUDIENCE,
     cap: overrides?.cap ?? CAP,
@@ -142,8 +138,8 @@ describe("minting and verification", () => {
   it("verifies a credential the deployment minted, returning its claims intact", async () => {
     const obtained = await verify(
       await mintPlatformToken({ act: "server.example" }),
-      material,
-      PLATFORM_AUDIENCE,
+      keys,
+      at(PLATFORM_AUDIENCE),
     );
 
     expect(obtained.sub).toBe("user:u1");
@@ -151,7 +147,7 @@ describe("minting and verification", () => {
     expect(obtained.cap).toEqual([{ capability: "issue-game-token" }]);
     expect(obtained.act).toBe("server.example");
 
-    const direct = await verify(await mintPlatformToken(), material, PLATFORM_AUDIENCE);
+    const direct = await verify(await mintPlatformToken(), keys, at(PLATFORM_AUDIENCE));
     expect(direct.act).toBeUndefined();
   });
 
@@ -159,7 +155,7 @@ describe("minting and verification", () => {
   it("refuses a token signed by a different key, however well-formed", async () => {
     const forged = await mintPlatformToken({ key: strangerKey });
 
-    await expect(verify(forged, material, PLATFORM_AUDIENCE)).rejects.toThrow(
+    await expect(verify(forged, keys, at(PLATFORM_AUDIENCE))).rejects.toThrow(
       /signature verification failed/,
     );
   });
@@ -168,7 +164,7 @@ describe("minting and verification", () => {
   it("refuses a token whose issuer claim is not the published issuer", async () => {
     const token = await mintPlatformToken({ issuer: "https://elsewhere.example" });
 
-    await expect(verify(token, material, PLATFORM_AUDIENCE)).rejects.toThrow(/"iss" claim/);
+    await expect(verify(token, keys, at(PLATFORM_AUDIENCE))).rejects.toThrow(/"iss" claim/);
   });
 });
 
@@ -194,12 +190,12 @@ describe("audience binding", () => {
   ])("refuses $case", async ({ mintFor, presentedAt }) => {
     const token = await mintPlatformToken({ audience: mintFor });
 
-    await expect(verify(token, material, presentedAt)).rejects.toThrow(
+    await expect(verify(token, keys, at(presentedAt))).rejects.toThrow(
       /names a different audience/,
     );
     // The same token at its own audience verifies — so the refusal above is
     // the binding, not a verifier that refuses everything.
-    await expect(verify(token, material, mintFor)).resolves.toBeDefined();
+    await expect(verify(token, keys, at(mintFor))).resolves.toBeDefined();
   });
 
   // spec: identity-and-authorization/audience-bound-tokens#wrong-audience-refused
@@ -209,10 +205,10 @@ describe("audience binding", () => {
   it("refuses the audience before the signature is ever considered", async () => {
     const broken = withBrokenSignature(await mintPlatformToken({ audience: GAME_AUDIENCE }));
 
-    await expect(verify(broken, material, PLATFORM_AUDIENCE)).rejects.toThrow(
+    await expect(verify(broken, keys, at(PLATFORM_AUDIENCE))).rejects.toThrow(
       /names a different audience/,
     );
-    await expect(verify(broken, material, GAME_AUDIENCE)).rejects.toThrow(
+    await expect(verify(broken, keys, at(GAME_AUDIENCE))).rejects.toThrow(
       /signature verification failed/,
     );
   });
@@ -234,10 +230,10 @@ describe("audience binding", () => {
       .setExpirationTime(now + CREDENTIAL_LIFETIME_SECONDS)
       .sign(signingKey);
 
-    await expect(verify(twoFaced, material, PLATFORM_AUDIENCE)).rejects.toThrow(
+    await expect(verify(twoFaced, keys, at(PLATFORM_AUDIENCE))).rejects.toThrow(
       /names a different audience/,
     );
-    await expect(verify(twoFaced, material, GAME_AUDIENCE)).rejects.toThrow(
+    await expect(verify(twoFaced, keys, at(GAME_AUDIENCE))).rejects.toThrow(
       /names a different audience/,
     );
   });
@@ -274,7 +270,7 @@ describe("lifetime", () => {
       exp: now + offset,
     });
 
-    const verified = verify(token, material, PLATFORM_AUDIENCE);
+    const verified = verify(token, keys, at(PLATFORM_AUDIENCE));
     if (accepted) await expect(verified).resolves.toBeDefined();
     else await expect(verified).rejects.toThrow(/"exp" claim timestamp check failed/);
   });
@@ -293,7 +289,7 @@ describe("lifetime", () => {
       .setIssuedAt()
       .sign(signingKey);
 
-    await expect(verify(eternal, material, PLATFORM_AUDIENCE)).rejects.toThrow(/exp/);
+    await expect(verify(eternal, keys, at(PLATFORM_AUDIENCE))).rejects.toThrow(/exp/);
   });
 });
 
@@ -315,8 +311,8 @@ describe("capability claim structure", () => {
       act: "server-b.example",
     });
 
-    const capA = (await verify(serverA, material, PLATFORM_AUDIENCE)).cap;
-    const capB = (await verify(serverB, material, PLATFORM_AUDIENCE)).cap;
+    const capA = (await verify(serverA, keys, at(PLATFORM_AUDIENCE))).cap;
+    const capB = (await verify(serverB, keys, at(PLATFORM_AUDIENCE))).cap;
     expect(capA).toEqual(capB);
     for (const entry of capA) {
       expect(Object.keys(entry)).toEqual(["capability"]);
@@ -331,65 +327,14 @@ describe("verification without shared secrets", () => {
   it("verifies tokens for any audience against the one published material", async () => {
     const gameToken = await mintPlatformToken({ audience: GAME_AUDIENCE, cap: [] });
 
-    await expect(verify(gameToken, material, GAME_AUDIENCE)).resolves.toBeDefined();
+    await expect(verify(gameToken, keys, at(GAME_AUDIENCE))).resolves.toBeDefined();
   });
 
-  // spec: identity-and-authorization/verification-without-shared-secrets#instance-validates-alone
-  // The production derivation, not a hand-built fixture. Both halves matter:
-  // without the second, a function that dropped the *public* half too would
-  // pass; without the first, one that dropped nothing would.
-  it("publishes material stripped of the private component that still verifies", async () => {
-    const published = publishedMaterial();
-
-    expect(published.publicJwk.d).toBeUndefined();
-    await expect(
-      verify(await mintPlatformToken(), published, PLATFORM_AUDIENCE),
-    ).resolves.toBeDefined();
-  });
-
-  // spec: identity-and-authorization/verification-without-shared-secrets#instance-validates-alone
-  // The published key's shape, checked against what its one hermetic consumer
-  // will accept. A SpacetimeDB host discards an entire key set whose entry
-  // carries no `kid` (`KeyError(MissingKeyId)`) and refuses every algorithm
-  // outside RS256/ES256 (`InvalidAlgorithm`) — both established by running one,
-  // in `apps/e2e`. `http.test.ts` cannot hold this: the routes are pinned to
-  // `publishedMaterial()`'s own output, so a shape defect passes straight
-  // through.
-  //
-  // Asserted as an allow-list rather than a sweep for known-private names. A
-  // sweep passes whenever the *test's* key happens to be one whose private
-  // component is spelled `d`, so it would stay green through the migration it
-  // exists to guard — a P-256 key says nothing about what an RSA one would
-  // publish.
-  //
-  // spec: global-invariants/credential-confinement#signing-keys-never-leave-convex
-  it("publishes a key in the one shape a game instance accepts, and nothing else at all", () => {
-    const key = publishedMaterial().publicJwk;
-
-    expect(key.kid).toEqual(expect.any(String));
-    expect(HOST_ACCEPTED_ALGORITHMS).toContain(key.alg);
-    expect(Object.keys(key).sort()).toEqual(
-      Object.keys(key)
-        .filter((field) => PUBLISHABLE_JWK_FIELDS.includes(field))
-        .sort(),
-    );
-  });
-
-  // spec: global-invariants/credential-confinement#signing-keys-never-leave-convex
-  // RS256 is the only other algorithm a game instance accepts, so it is what
-  // anyone reaching for a change would reach for. An RSA signing key must
-  // publish `n` and `e` and nothing else — never `p`, `q`, `dp`, `dq` or `qi`,
-  // from which the signing key is reconstructible.
-  it("would publish nothing private from an RSA key either", async () => {
-    const { privateKey } = await generateKeyPair("RS256", { extractable: true });
-    process.env["CREDENTIAL_SIGNING_JWK"] = JSON.stringify(await exportJWK(privateKey));
-
-    const key = publishedMaterial().publicJwk;
-
-    expect(Object.keys(key).sort()).toEqual(["alg", "e", "kid", "kty", "n"]);
-
-    process.env["CREDENTIAL_SIGNING_JWK"] = JSON.stringify(deploymentJwk);
-  });
+  // What the published document itself must look like — kid on every key, an
+  // algorithm a game instance accepts, no private component — is asserted in
+  // `http.test.ts`, against the document the deployment actually serves:
+  // publication is the `jwt` plugin's, so the served bytes are the only
+  // derivation there is to check.
 });
 
 describe("forgery", () => {
@@ -420,7 +365,7 @@ describe("forgery", () => {
     // The tampered token still *decodes* — the alteration took. Only the
     // signature stands between it and acceptance.
     expect(decodeJwt(tampered)).toBeDefined();
-    await expect(verify(tampered, material, PLATFORM_AUDIENCE)).rejects.toThrow(
+    await expect(verify(tampered, keys, at(PLATFORM_AUDIENCE))).rejects.toThrow(
       /signature verification failed/,
     );
   });
@@ -442,7 +387,7 @@ describe("forgery", () => {
       }),
     );
 
-    await expect(verify(`${header}.${payload}.`, material, PLATFORM_AUDIENCE)).rejects.toThrow();
+    await expect(verify(`${header}.${payload}.`, keys, at(PLATFORM_AUDIENCE))).rejects.toThrow();
   });
 
   // spec: identity-and-authorization/verification-without-shared-secrets
@@ -451,7 +396,7 @@ describe("forgery", () => {
   // become a shared secret anyone could sign with.
   it("refuses a token HMAC-signed with the published public material as the secret", async () => {
     const now = Math.floor(Date.now() / 1000);
-    const secret = new TextEncoder().encode(JSON.stringify(material.publicJwk));
+    const secret = new TextEncoder().encode(JSON.stringify(publicJwk));
     const confused = await new SignJWT({ cap: CAP })
       .setProtectedHeader({ alg: "HS256" })
       .setIssuer(ISSUER)
@@ -461,7 +406,7 @@ describe("forgery", () => {
       .setExpirationTime(now + CREDENTIAL_LIFETIME_SECONDS)
       .sign(secret);
 
-    await expect(verify(confused, material, PLATFORM_AUDIENCE)).rejects.toThrow();
+    await expect(verify(confused, keys, at(PLATFORM_AUDIENCE))).rejects.toThrow();
   });
 
   // spec: identity-and-authorization/sole-credential-issuer
@@ -478,28 +423,46 @@ describe("forgery", () => {
     },
     { case: "the empty string", token: "" },
   ])("refuses $case", async ({ token }) => {
-    await expect(verify(token, material, PLATFORM_AUDIENCE)).rejects.toThrow();
+    await expect(verify(token, keys, at(PLATFORM_AUDIENCE))).rejects.toThrow();
   });
 });
 
 describe("the platform's own enforcement seam", () => {
-  const anonymousAuth: { auth: Auth } = { auth: { getUserIdentity: async () => null } };
-
-  /** A caller Convex resolved a session for, as the runtime hands it over. */
-  const sessionAuthFor = (subject: string): { auth: Auth } => ({
-    auth: {
-      getUserIdentity: async () => ({
-        tokenIdentifier: `${ISSUER}|${subject}`,
-        issuer: ISSUER,
-        subject,
-      }),
-    },
-  });
+  // The seam reads the deployment's published keys through the component
+  // store, so it is exercised on a real harness with this suite's own public
+  // key seeded as a published one — which is what lets every adversarial
+  // token below be signed by a key the seam accepts, or deliberately not.
+  async function seam() {
+    const t = await withComponents();
+    await seedDeploymentKey(t, { publicJwk, privateJwk });
+    return {
+      resolve: (credential?: string) => t.run(async (ctx) => resolveCaller(ctx, credential)),
+      // A caller Convex resolved a session for, exactly as the runtime hands
+      // it over — composed onto the real context, whose store the credential
+      // path still reads.
+      resolveWithSession: (subject: string, credential?: string) =>
+        t.run(async (ctx) =>
+          resolveCaller(
+            {
+              ...ctx,
+              auth: {
+                getUserIdentity: async () => ({
+                  tokenIdentifier: `${ISSUER}|${subject}`,
+                  issuer: ISSUER,
+                  subject,
+                }),
+              },
+            },
+            credential,
+          ),
+        ),
+    };
+  }
 
   // spec: identity-and-authorization/authentication-required#user-record-anchors-authorization
   // The positive path through the seam every refusal below diverges from.
   it("resolves a platform credential to its principal and capabilities", async () => {
-    const caller = await resolveCaller(anonymousAuth, await mintPlatformToken());
+    const caller = await (await seam()).resolve(await mintPlatformToken());
 
     expect(caller).toEqual({
       principal: { kind: "human", userId: "u1" },
@@ -516,7 +479,7 @@ describe("the platform's own enforcement seam", () => {
   ])("refuses a correctly signed credential whose cap claim is $case", async ({ cap }) => {
     const token = await craft({ payload: cap === undefined ? {} : { cap }, sub: "user:u1" });
 
-    await expect(resolveCaller(anonymousAuth, token)).rejects.toThrow();
+    await expect((await seam()).resolve(token)).rejects.toThrow();
   });
 
   // spec: identity-and-authorization/identity-kinds
@@ -532,7 +495,7 @@ describe("the platform's own enforcement seam", () => {
   ])("refuses a correctly signed credential carrying $case", async ({ sub }) => {
     const token = await craft({ payload: { cap: CAP }, sub });
 
-    await expect(resolveCaller(anonymousAuth, token)).rejects.toThrow(
+    await expect((await seam()).resolve(token)).rejects.toThrow(
       /no principal this platform recognises/,
     );
   });
@@ -569,7 +532,7 @@ describe("the platform's own enforcement seam", () => {
         ),
     },
   ])("refuses $case at the seam", async ({ token }) => {
-    await expect(resolveCaller(anonymousAuth, await token())).rejects.toThrow();
+    await expect((await seam()).resolve(await token())).rejects.toThrow();
   });
 
   // spec: identity-and-authorization/capability-claim-structure#structured-from-the-first-token
@@ -584,7 +547,7 @@ describe("the platform's own enforcement seam", () => {
       sub: "user:u1",
     });
 
-    const conferred = await resolveCaller(anonymousAuth, token).then(
+    const conferred = await (await seam()).resolve(token).then(
       (caller) => caller?.capabilities ?? [],
       () => [], // outright refusal confers nothing too — either outcome is sound
     );
@@ -599,14 +562,14 @@ describe("the platform's own enforcement seam", () => {
   it("refuses a correctly signed credential whose subject is not a string", async () => {
     const token = await craft({ payload: { cap: CAP, sub: 123 } });
 
-    await expect(resolveCaller(anonymousAuth, token)).rejects.toThrow();
+    await expect((await seam()).resolve(token)).rejects.toThrow();
   });
 
   // spec: identity-and-authorization/authentication-required#unauthenticated-refused
   // The anonymous caller (whom `admit` then holds to ANONYMOUS_CAPABILITIES),
   // never a principal and never a crash inside the verifier.
   it("resolves an empty credential string to the anonymous caller", async () => {
-    await expect(resolveCaller(anonymousAuth, "")).resolves.toBeNull();
+    await expect((await seam()).resolve("")).resolves.toBeNull();
   });
 
   // spec: identity-and-authorization/authentication-required#user-record-anchors-authorization
@@ -615,9 +578,7 @@ describe("the platform's own enforcement seam", () => {
   // linkage) holds exactly the session claim — in particular none of the
   // bootstrap capabilities a session-holder has no business re-proving.
   it("resolves a Convex-authenticated session to a human principal with the session claim", async () => {
-    const sessionAuth = sessionAuthFor("u9");
-
-    await expect(resolveCaller(sessionAuth, undefined)).resolves.toEqual({
+    await expect((await seam()).resolveWithSession("u9", undefined)).resolves.toEqual({
       principal: { kind: "human", userId: "u9" },
       capabilities: SESSION_CAPABILITIES,
     });
@@ -628,14 +589,13 @@ describe("the platform's own enforcement seam", () => {
   // credential, the credential decides who is calling — never quietly
   // inheriting the browser session's identity or its broader claim.
   it("resolves the credential, not the ambient session, when both are present", async () => {
-    const sessionAuth = sessionAuthFor("session-human");
     const credential = await mintPlatformToken({
       subject: "team:t1:g1",
       cap: [{ capability: "issue-game-token" }],
       act: "server.example",
     });
 
-    await expect(resolveCaller(sessionAuth, credential)).resolves.toEqual({
+    await expect((await seam()).resolveWithSession("session-human", credential)).resolves.toEqual({
       principal: { kind: "centaur-team", teamId: "t1", gameId: "g1" },
       capabilities: ["issue-game-token"],
       actingSystem: "server.example",

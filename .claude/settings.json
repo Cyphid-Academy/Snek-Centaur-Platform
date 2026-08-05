@@ -1,4 +1,7 @@
 {
+  "env": {
+    "PLAYWRIGHT_CHROMIUM_EXECUTABLE": "/opt/pw-browsers/chromium"
+  },
   "hooks": {
     "SessionStart": [
       {
