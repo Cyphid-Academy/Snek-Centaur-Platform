@@ -7,8 +7,9 @@
 // alike. What is left is the part Playwright does not do — spawning, capturing
 // what the process said, and deciding it is ready.
 import { type ChildProcess, spawn } from "node:child_process";
-import { type Server, createServer } from "node:net";
+import type { Server } from "node:net";
 import { setTimeout as sleep } from "node:timers/promises";
+import getPort from "get-port";
 
 /** A running child process a fixture is responsible for. */
 export interface Process {
@@ -163,38 +164,24 @@ function isOk(status: number): boolean {
 }
 
 /**
- * Reserve a port the OS says is free.
+ * Reserve a port the OS says is free — `get-port`, which also locks a returned
+ * port against being handed out again for a while, so two reservations cannot
+ * collide the way two bare binds to `:0` can.
  *
- * None of the runtimes' documented defaults (3000, 3210/3211, 5000) is used:
- * those are where a developer's own `pnpm dev:*` processes are, and a run that
- * claimed them would either fail to start or succeed by writing to the
+ * None of the runtimes' documented defaults (3000, 3210/3211, 5000) is asked
+ * for: those are where a developer's own `pnpm dev:*` processes are, and a run
+ * that claimed them would either fail to start or succeed by writing to the
  * developer's deployment.
  *
  * The port is released before the child binds it, so the window is a race this
  * only narrows. The alternative — holding the socket and passing the descriptor
  * — is not something these runtimes accept.
  */
-export async function freePort(): Promise<number> {
-  const server = createServer();
-  const port = await listen(server);
-  await new Promise<void>((resolve, reject) =>
-    server.close((error) => (error ? reject(error) : resolve())),
-  );
-  return port;
-}
+export const freePort = (): Promise<number> => getPort();
 
-/**
- * Reserve two distinct free ports.
- *
- * Sequential rather than concurrent, and checked: two binds to `:0` at once can
- * be handed the same port, and a duplicate surfaces much later as one runtime
- * failing to bind.
- */
+/** Reserve two distinct free ports — distinct by `get-port`'s own lock. */
 export async function freePortPair(): Promise<[number, number]> {
-  const first = await freePort();
-  let second = await freePort();
-  while (second === first) second = await freePort();
-  return [first, second];
+  return [await getPort(), await getPort()];
 }
 
 /**

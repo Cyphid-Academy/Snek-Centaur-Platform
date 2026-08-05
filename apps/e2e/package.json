@@ -11,6 +11,7 @@
   "devDependencies": {
     "@playwright/test": "^1.62.1",
     "@types/node": "^25.9.0",
+    "get-port": "^7.2.0",
     "jose": "^6.2.5",
     "typescript": "*"
   },

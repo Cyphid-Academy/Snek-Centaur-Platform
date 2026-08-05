@@ -33,7 +33,9 @@ import {
   type Harness,
   challengeFor,
   inPlatformComponent,
+  platformSeed,
   seedDeploymentKey,
+  seedModules,
   withComponents,
 } from "./harness.testing";
 import {
@@ -71,7 +73,7 @@ const signCredential: CredentialSigner = (payload) =>
 
 /** The shared harness, with this suite's public key seeded as a published deployment key. */
 async function harness(): Promise<Harness> {
-  const t = await withComponents();
+  const t = await withComponents({ platformExtras: seedModules });
   await seedDeploymentKey(t, deploymentJwks);
   return t;
 }
@@ -101,37 +103,35 @@ afterAll(() => {
   vi.unstubAllGlobals();
 });
 
+// Through the component's own seed mutations rather than raw inserts, so what
+// a test stands the world up with is a row the component's schema validated.
 const registerServer = (
   t: Harness,
   capabilityCeiling: ReadonlyArray<Capability> = ["issue-game-credential"],
 ) =>
-  inPlatformComponent(t, (ctx) =>
-    ctx.db.insert("trusted_issuers", {
-      issuerId: SERVER_ID,
-      verificationMaterialUrl: JWKS_URL,
-      capabilityCeiling: [...capabilityCeiling],
-      returnAddresses: [RETURN_ADDRESS],
-    }),
-  );
+  t.mutation(platformSeed.seedIssuer, {
+    issuerId: SERVER_ID,
+    verificationMaterialUrl: JWKS_URL,
+    capabilityCeiling: [...capabilityCeiling],
+    returnAddresses: [RETURN_ADDRESS],
+  });
 
 const seedTeam = (t: Harness, serverDomain: string | null = SERVER_ID) =>
-  inPlatformComponent(t, (ctx) => ctx.db.insert("centaur_teams", { serverDomain }));
+  t.mutation(platformSeed.seedTeam, { serverDomain });
 
 const seedPlayingGame = (
   t: Harness,
   teamIds: ReadonlyArray<string>,
   memberUserIds: ReadonlyArray<string> = [],
 ) =>
-  inPlatformComponent(t, (ctx) =>
-    ctx.db.insert("games", {
-      status: "playing",
-      roster: teamIds.map((teamId) => ({
-        teamId,
-        memberUserIds: [...memberUserIds],
-        coachUserIds: [],
-      })),
-    }),
-  );
+  t.mutation(platformSeed.seedGame, {
+    status: "playing",
+    roster: teamIds.map((teamId) => ({
+      teamId,
+      memberUserIds: [...memberUserIds],
+      coachUserIds: [],
+    })),
+  });
 
 const entries = (capabilities: ReadonlyArray<Capability>): ReadonlyArray<CapabilityEntry> =>
   capabilities.map((capability) => ({ capability }));
