@@ -139,4 +139,28 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         Name
       >;
     };
+    seeding: {
+      seedGame: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          gameId?: string;
+          roster: Array<{
+            coachUserIds: Array<string>;
+            memberUserIds: Array<string>;
+            teamId: string;
+          }>;
+          status: "not-started" | "playing" | "finished";
+        },
+        string,
+        Name
+      >;
+      seedTeam: FunctionReference<
+        "mutation",
+        "internal",
+        { serverDomain: string | null; teamId?: string },
+        string,
+        Name
+      >;
+    };
   };
