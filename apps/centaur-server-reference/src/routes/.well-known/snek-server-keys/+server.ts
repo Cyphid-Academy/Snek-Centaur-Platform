@@ -14,15 +14,16 @@
 // breaking change to every fork.
 // spec: centaur-server-runtime/forkable-reference-app#enumerated-surface-is-the-contract
 //
-// Implementation is deferred — this stub publishes an empty key set.
+// The keys are `serverKeys()`'s: generated and persisted on first boot with no
+// operator action, public half only.
+// spec: centaur-server-runtime/server-key-publication#first-boot-needs-no-operator
 
+import { serverKeys } from "$lib/server/serverKeys";
 import type { RequestHandler } from "@sveltejs/kit";
 
 export const GET: RequestHandler = async () => {
-  // TODO: publish the keys held by centaur-server-lib's key store, which
-  // generates and persists one on first boot with no operator action.
-  // spec: centaur-server-runtime/server-key-publication#first-boot-needs-no-operator
-  return new Response(JSON.stringify({ keys: [] }), {
+  const { publishedKeySet } = await serverKeys();
+  return new Response(JSON.stringify(publishedKeySet), {
     status: 200,
     headers: { "Content-Type": "application/json" },
   });
