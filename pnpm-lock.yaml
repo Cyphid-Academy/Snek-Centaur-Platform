@@ -90,6 +90,9 @@ importers:
       '@types/node':
         specifier: ^25.9.0
         version: 25.9.0
+      get-port:
+        specifier: ^7.2.0
+        version: 7.2.0
       jose:
         specifier: ^6.2.5
         version: 6.2.8
@@ -1617,6 +1620,10 @@ packages:
   get-east-asian-width@1.6.0:
     resolution: {integrity: sha512-QRbvDIbx6YklUe6RxeTeleMR0yv3cYH6PsPZHcnVn7xv7zO1BHN8r0XETu8n6Ye3Q+ahtSarc3WgtNWmehIBfA==}
     engines: {node: '>=18'}
+
+  get-port@7.2.0:
+    resolution: {integrity: sha512-afP4W205ONCuMoPBqcR6PSXnzX35KTcJygfJfcp+QY+uwm3p20p1YczWXhlICIzGMCxYBQcySEcOgsJcrkyobg==}
+    engines: {node: '>=16'}
 
   glob-parent@5.1.2:
     resolution: {integrity: sha512-AOIgSQCepiJYwP3ARnGx+5VnTu2HBYdzbGP45eLw1vr3zB3vZLeyed1sC9hnbcOc9/SrMyM5RPQrkGz4aS9Zow==}
@@ -3348,6 +3355,8 @@ snapshots:
   function-bind@1.1.2: {}
 
   get-east-asian-width@1.6.0: {}
+
+  get-port@7.2.0: {}
 
   glob-parent@5.1.2:
     dependencies:
