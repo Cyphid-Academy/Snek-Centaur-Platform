@@ -92,7 +92,10 @@ async function challenge(verifier: string): Promise<string> {
 }
 
 function base64url(bytes: Uint8Array): string {
-  return btoa(String.fromCharCode(...bytes))
+  // Byte by byte, never `String.fromCharCode(...bytes)`: spreading puts every
+  // byte on the argument stack, which overflows on inputs a lot smaller than
+  // "large" — fine at 32 bytes, a trap for the next reuse.
+  return btoa(Array.from(bytes, (byte) => String.fromCharCode(byte)).join(""))
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
     .replace(/=+$/, "");

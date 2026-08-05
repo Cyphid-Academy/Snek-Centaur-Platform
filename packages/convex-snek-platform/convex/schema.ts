@@ -67,6 +67,19 @@ export const participantSnapshot = v.object({
   coachUserIds: v.array(userId),
 });
 
+/**
+ * The snapshot as a type, inferred for the same reason as `IssuerRegistration`
+ * — and read-only, because every consumer holds a snapshot to decide from,
+ * never to change.
+ */
+export type ParticipantSnapshot = {
+  readonly [K in keyof Infer<typeof participantSnapshot>]: Infer<
+    typeof participantSnapshot
+  >[K] extends Array<infer Element>
+    ? ReadonlyArray<Element>
+    : Infer<typeof participantSnapshot>[K];
+};
+
 export default defineSchema({
   // spec: identity-and-authorization/trusted-issuer-registry
   trusted_issuers: defineTable(issuerRegistration).index("by_issuer", ["issuerId"]),

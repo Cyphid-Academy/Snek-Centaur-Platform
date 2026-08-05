@@ -6,10 +6,8 @@
 //
 // design: the second shape of "Where sign-in happens" — a client that redeems
 // for itself, leaving the Server holding nothing of the human's.
-import type { IssuerRegistration } from "../../convex-snek-platform/convex/schema";
-import { components } from "./_generated/api";
 import { createAuth } from "./auth";
-import { type HandoffMinter, mintHandoff } from "./issuance";
+import { type HandoffMinter, mintHandoff, registrationFor } from "./issuance";
 import { publicHttpAction } from "./publicFunctions";
 
 /** Where Better Auth is told to send the browser once Google has answered. */
@@ -131,21 +129,6 @@ async function completed(
     // fault rather than this deployment's.
     return refusal(403, refused instanceof Error ? refused.message : "refused");
   }
-}
-
-/**
- * One registered issuer, or `null`.
- *
- * Typed from the component's own validator, like every other reader of a
- * registration: a `runQuery` result can only be typed by annotation here, so an
- * interface written out by hand would typecheck on both sides of a field rename
- * and fail at runtime.
- */
-async function registrationFor(
-  ctx: HandoffMinter,
-  issuerId: string,
-): Promise<IssuerRegistration | null> {
-  return await ctx.runQuery(components.snekPlatform.functions.issuer, { issuerId });
 }
 
 /**

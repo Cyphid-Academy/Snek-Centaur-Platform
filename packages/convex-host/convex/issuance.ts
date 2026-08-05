@@ -58,6 +58,28 @@ export interface HandoffMinter {
 }
 
 /**
+ * One registered issuer, or `null`.
+ *
+ * Typed from the component's own validator, like every other reader of a
+ * registration: a `runQuery` result can only be typed by annotation here, so an
+ * interface written out by hand would typecheck on both sides of a field rename
+ * and fail at runtime.
+ */
+export async function registrationFor(
+  ctx: HandoffMinter,
+  issuerId: string,
+): Promise<Registration | null> {
+  return await ctx.runQuery(components.snekPlatform.functions.issuer, { issuerId });
+}
+
+/** The registration, or the one refusal every path gives an unregistered issuer. */
+async function requiredRegistration(ctx: HandoffMinter, issuerId: string): Promise<Registration> {
+  const registration = await registrationFor(ctx, issuerId);
+  if (!registration) throw new Error(`no registration for issuer ${issuerId}`);
+  return registration;
+}
+
+/**
  * Authenticate a non-human principal from the assertion it signed, and answer
  * with its registration.
  *
@@ -66,11 +88,7 @@ export interface HandoffMinter {
  */
 async function authenticatedPrincipal(ctx: ActionCtx, assertion: string): Promise<Registration> {
   const claimedIssuer = decodeJwt(assertion).iss ?? "";
-  const registration: Registration | null = await ctx.runQuery(
-    components.snekPlatform.functions.issuer,
-    { issuerId: claimedIssuer },
-  );
-  if (!registration) throw new Error(`no registration for issuer ${claimedIssuer}`);
+  const registration = await requiredRegistration(ctx, claimedIssuer);
 
   // spec: identity-and-authorization/service-principal-assertions#rotation-needs-no-coordination
   const payload = await verifiedAssertion(
@@ -307,11 +325,7 @@ export async function mintHandoff(
   ctx: HandoffMinter,
   args: { userId: string; issuerId: string; returnAddress: string; challenge: string },
 ): Promise<string> {
-  const registration: Registration | null = await ctx.runQuery(
-    components.snekPlatform.functions.issuer,
-    { issuerId: args.issuerId },
-  );
-  if (!registration) throw new Error(`no registration for issuer ${args.issuerId}`);
+  const registration = await requiredRegistration(ctx, args.issuerId);
   if (!registration.returnAddresses.includes(args.returnAddress)) {
     throw new Error(`${args.returnAddress} is not a return address this issuer registered`);
   }
@@ -355,11 +369,7 @@ export const redeemSignInHandoff = publicAction({ capability: "redeem-handoff" }
     // reference whether it exists.
     if (!handoff) throw new Error("no such handoff reference");
     if (handoff.expiresAt <= Date.now()) throw new Error("handoff reference has expired");
-    const registration: Registration | null = await ctx.runQuery(
-      components.snekPlatform.functions.issuer,
-      { issuerId: handoff.issuerId },
-    );
-    if (!registration) throw new Error(`no registration for issuer ${handoff.issuerId}`);
+    const registration = await requiredRegistration(ctx, handoff.issuerId);
     return mint(await deploymentSigner(ctx), issuer(), {
       subject: encodePrincipal({ kind: "human", userId: handoff.userId }),
       audience: PLATFORM_AUDIENCE,
