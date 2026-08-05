@@ -29,27 +29,62 @@ export const PORTS = {
 const REPLIT_EXTERNAL = { convex: 3002, convexSite: 3003, stdb: 3001, app: 80 };
 
 /**
+ * Which Convex the demo targets.
+ *
+ * A `CONVEX_DEPLOY_KEY` in the environment (on Replit: a Secret) selects the
+ * **hosted** deployment it belongs to — the repo's own provisioning strategy,
+ * a personal least-privilege dev deployment — and the stack then runs no
+ * backend of its own. Without one, the stack runs the pinned self-hosted
+ * backend locally. `SNEK_DEMO_CONVEX=local` forces local even when a key is
+ * set.
+ */
+export function platformTarget() {
+  const deployKey = process.env["CONVEX_DEPLOY_KEY"];
+  if (!deployKey || process.env["SNEK_DEMO_CONVEX"] === "local") return { kind: "local" };
+  // A deployment-scoped key is `dev:<name>|…` (or `prod:<name>|…`); the name
+  // pins the deployment's addresses. A key shaped any other way still drives
+  // the CLI, but the addresses then come from what the push writes back —
+  // see `capturedDeploymentUrl`.
+  const named = /^(?:dev|prod):([a-z0-9-]+)\|/.exec(deployKey);
+  const url = named ? `https://${named[1]}.convex.cloud` : undefined;
+  return {
+    kind: "hosted",
+    deployKey,
+    ...(url ? { convexUrl: url, siteUrl: url.replace(".convex.cloud", ".convex.site") } : {}),
+  };
+}
+
+/**
  * The origins browsers and tokens use. On Replit these must be the external
  * addresses: the deployment's own origin is its token issuer (`iss`), Better
  * Auth's base URL, and the base of Google's redirect URI — none of which a
- * browser or Google can reach at loopback.
+ * browser or Google can reach at loopback. A hosted deployment brings its own
+ * two addresses, stable and TLS-terminated, whatever the machine.
  */
-export function origins() {
+export function origins(target = platformTarget()) {
   const domain = process.env["REPLIT_DEV_DOMAIN"];
-  if (domain) {
-    const at = (port) => (port === 80 ? `https://${domain}` : `https://${domain}:${port}`);
+  const at = (port) => (port === 80 ? `https://${domain}` : `https://${domain}:${port}`);
+  const local = {
+    stdbUrl: domain ? at(REPLIT_EXTERNAL.stdb) : `http://127.0.0.1:${PORTS.stdb}`,
+    appOrigin: domain ? at(REPLIT_EXTERNAL.app) : `http://127.0.0.1:${PORTS.app}`,
+  };
+  if (target.kind === "hosted") {
+    const convexUrl = target.convexUrl ?? capturedDeploymentUrl();
+    if (!convexUrl) {
+      throw new Error(
+        "the deploy key names no deployment and no push has recorded one yet — run `pnpm demo` first",
+      );
+    }
     return {
-      convexUrl: at(REPLIT_EXTERNAL.convex),
-      convexSiteUrl: at(REPLIT_EXTERNAL.convexSite),
-      stdbUrl: at(REPLIT_EXTERNAL.stdb),
-      appOrigin: at(REPLIT_EXTERNAL.app),
+      ...local,
+      convexUrl,
+      convexSiteUrl: convexUrl.replace(".convex.cloud", ".convex.site"),
     };
   }
   return {
-    convexUrl: `http://127.0.0.1:${PORTS.convex}`,
-    convexSiteUrl: `http://127.0.0.1:${PORTS.convexSite}`,
-    stdbUrl: `http://127.0.0.1:${PORTS.stdb}`,
-    appOrigin: `http://127.0.0.1:${PORTS.app}`,
+    ...local,
+    convexUrl: domain ? at(REPLIT_EXTERNAL.convex) : `http://127.0.0.1:${PORTS.convex}`,
+    convexSiteUrl: domain ? at(REPLIT_EXTERNAL.convexSite) : `http://127.0.0.1:${PORTS.convexSite}`,
   };
 }
 
@@ -117,17 +152,32 @@ export function adminKey(binary) {
 }
 
 /**
- * Run the Convex CLI against the demo deployment. The CLI reads its target
- * from an env file, and writes the deployment it targeted back to
+ * Where the last hosted push recorded its deployment, for keys that do not
+ * name one themselves. The CLI writes the deployment it targeted to
+ * `packages/convex-host/.env.local`; `convexCli` captures the value before
+ * restoring that file and persists it under `.demo/`.
+ */
+export function capturedDeploymentUrl() {
+  const path = join(demoDir, "deployment-url");
+  return existsSync(path) ? readFileSync(path, "utf8").trim() : undefined;
+}
+
+/**
+ * Run the Convex CLI against the demo's deployment — hosted, via the deploy
+ * key in `auth`, or the local self-hosted backend, via its admin key. Either
+ * way the CLI writes the deployment it targeted back to
  * `packages/convex-host/.env.local` — a developer's own file, snapshotted and
  * restored around every invocation (the end-to-end harness does the same).
  */
-export function convexCli(args, adminKeyValue, opts = {}) {
+export function convexCli(args, auth, opts = {}) {
   mkdirSync(demoDir, { recursive: true });
+  const hosted = typeof auth === "object" && auth !== null && auth.kind === "hosted";
   const envFile = join(demoDir, "convex.env");
   writeFileSync(
     envFile,
-    `CONVEX_SELF_HOSTED_URL=http://127.0.0.1:${PORTS.convex}\nCONVEX_SELF_HOSTED_ADMIN_KEY=${adminKeyValue}\n`,
+    hosted
+      ? `CONVEX_DEPLOY_KEY=${auth.deployKey}\n`
+      : `CONVEX_SELF_HOSTED_URL=http://127.0.0.1:${PORTS.convex}\nCONVEX_SELF_HOSTED_ADMIN_KEY=${auth}\n`,
   );
   const envLocal = join(repoRoot, "packages/convex-host/.env.local");
   const before = existsSync(envLocal) ? readFileSync(envLocal, "utf8") : undefined;
@@ -146,17 +196,31 @@ export function convexCli(args, adminKeyValue, opts = {}) {
       ?.toString()
       .trim();
   } finally {
+    if (hosted && existsSync(envLocal)) {
+      const url = /^CONVEX_URL=(.+)$/m.exec(readFileSync(envLocal, "utf8"))?.[1]?.trim();
+      if (url) writeFileSync(join(demoDir, "deployment-url"), url);
+    }
     if (before === undefined) rmSync(envLocal, { force: true });
     else writeFileSync(envLocal, before);
   }
 }
 
 /** `convex run` returning the function's parsed answer. */
-export function convexRun(functionName, args, adminKeyValue) {
-  const printed = convexCli(["run", functionName, JSON.stringify(args ?? {})], adminKeyValue, {
+export function convexRun(functionName, args, auth) {
+  const printed = convexCli(["run", functionName, JSON.stringify(args ?? {})], auth, {
     quiet: true,
   });
   return printed === "" || printed === undefined ? undefined : JSON.parse(printed);
+}
+
+/** One deployment environment variable's value, or `undefined` where unset. */
+export function convexEnvGet(name, auth) {
+  try {
+    const printed = convexCli(["env", "get", name], auth, { quiet: true });
+    return printed === "" || printed === undefined ? undefined : printed;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Spawn a long-running child in its own process group, logging through a prefix. */
@@ -223,7 +287,7 @@ export function writeWorld(world) {
  * one, with the given humans on team Alpha's roster. Ids are stable across
  * runs — previously seeded records are rewritten in place.
  */
-export function seedWorld(adminKeyValue, appOrigin, { member, coach, admin } = {}) {
+export function seedWorld(auth, appOrigin, { member, coach, admin } = {}) {
   const existing = readWorld();
   const stillThere =
     existing &&
@@ -233,7 +297,7 @@ export function seedWorld(adminKeyValue, appOrigin, { member, coach, admin } = {
         teamIds: existing.teams.map((team) => team.teamId),
         gameIds: existing.games.map((game) => game.gameId),
       },
-      adminKeyValue,
+      auth,
     );
   const previous = stillThere ? existing : { teams: [], games: [], admins: [] };
   const teamId = (label) => previous.teams.find((team) => team.label === label)?.teamId;
@@ -242,12 +306,12 @@ export function seedWorld(adminKeyValue, appOrigin, { member, coach, admin } = {
   const alpha = convexRun(
     "registrySeeding:seedTeam",
     { ...(teamId("Alpha") ? { teamId: teamId("Alpha") } : {}), serverDomain: appOrigin },
-    adminKeyValue,
+    auth,
   );
   const beta = convexRun(
     "registrySeeding:seedTeam",
     { ...(teamId("Beta") ? { teamId: teamId("Beta") } : {}), serverDomain: null },
-    adminKeyValue,
+    auth,
   );
 
   const roster = [
@@ -265,7 +329,7 @@ export function seedWorld(adminKeyValue, appOrigin, { member, coach, admin } = {
       status: "playing",
       roster,
     },
-    adminKeyValue,
+    auth,
   );
   const finished = convexRun(
     "registrySeeding:seedGame",
@@ -274,12 +338,12 @@ export function seedWorld(adminKeyValue, appOrigin, { member, coach, admin } = {
       status: "finished",
       roster,
     },
-    adminKeyValue,
+    auth,
   );
 
   const admins = new Set(previous.admins ?? []);
   if (admin) {
-    convexRun("registry:designateAdmin", { userId: admin, designated: true }, adminKeyValue);
+    convexRun("registry:designateAdmin", { userId: admin, designated: true }, auth);
     admins.add(admin);
   }
 

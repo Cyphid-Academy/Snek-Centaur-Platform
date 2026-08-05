@@ -1,15 +1,34 @@
 # Identity & Authorization demo
 
-`pnpm demo` stands the platform's three runtimes up on one machine — the
-self-hosted Convex deployment, a SpacetimeDB host with the game module
-published, and the reference Snek Centaur Server app — and runs the documented
-operator acts against them (issuer registration, world seeding). The result is
-the `identity-and-authorization` capability running end to end, driven from a
+`pnpm demo` stands the platform's three runtimes up together — the Convex
+deployment, a SpacetimeDB host with the game module published, and the
+reference Snek Centaur Server app — and runs the documented operator acts
+against them (issuer registration, world seeding). The result is the
+`identity-and-authorization` capability running end to end, driven from a
 browser at the app's **`/console`** page.
 
 On Replit this is the Run button (`Identity Demo` workflow). Anywhere else:
-`pnpm demo` from the repo root (needs `spacetime` on `PATH`; the Convex backend
-binary is fetched once into `~/.cache/convex/binaries`).
+`pnpm demo` from the repo root (needs `spacetime` on `PATH`).
+
+## Hosted or local Convex
+
+The stack targets whichever Convex the environment names:
+
+- **Hosted (recommended on Replit)** — set a `CONVEX_DEPLOY_KEY` Secret (a
+  personal **dev** deployment's key, per the repo's provisioning strategy in
+  `CLAUDE.md`). The stack runs no backend of its own: functions are pushed to
+  your deployment exactly as `pnpm dev:convex` would, and the platform origin
+  is the deployment's stable `https://<name>.convex.site` — so the Google
+  redirect URI is registered once and survives restarts, and the Convex
+  dashboard shows the live tables. One caveat: the deployment fetches this
+  app's published keys over the public internet, so the service-principal
+  panels need the app origin to be publicly reachable — a running Replit
+  workspace is; a laptop's loopback is not (everything browser-driven still
+  works there).
+- **Local** — with no deploy key, the pinned self-hosted backend runs on ports
+  3210/3211 (the same binary the end-to-end harness drives, fetched once into
+  `~/.cache/convex/binaries`), and its data persists in `.demo/`.
+  `SNEK_DEMO_CONVEX=local` forces this mode even when a key is set.
 
 ## One-time setup: Google
 
@@ -24,8 +43,9 @@ for humans, so without a Google client nothing can sign in.
      key store is encrypted under it, so changing it discards the key.
 3. Add the callback address the stack prints at startup to the client's
    **Authorized redirect URIs**:
-   - Replit: `https://<your-repl-domain>:3003/api/auth/callback/google`
-   - locally: `http://127.0.0.1:3211/api/auth/callback/google`
+   - hosted Convex: `https://<deployment-name>.convex.site/api/auth/callback/google`
+   - local Convex on Replit: `https://<your-repl-domain>:3003/api/auth/callback/google`
+   - local Convex locally: `http://127.0.0.1:3211/api/auth/callback/google`
 
 Open the app **in its own browser tab** (on Replit: the "open in new tab"
 button on the webview). Google refuses to complete sign-in inside an iframe,
