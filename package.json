@@ -33,6 +33,8 @@
     "check:commit": "node scripts/check-commit.mjs",
     "check:public-surface": "node scripts/check-public-surface.mjs",
     "verify": "pnpm lint && pnpm check:public-surface && pnpm typecheck && pnpm test && pnpm smoke && pnpm spec:check",
+    "demo": "pnpm build:packages && node scripts/demo-stack/run.mjs",
+    "demo:seed": "node scripts/demo-stack/seed.mjs",
     "dev": "pnpm build:packages && pnpm --filter @cyphid/centaur-server-reference dev",
     "dev:tester": "pnpm build:packages && pnpm --filter @cyphid/visual-tester dev",
     "dev:convex": "pnpm --filter @cyphid/snek-convex-host exec convex dev",

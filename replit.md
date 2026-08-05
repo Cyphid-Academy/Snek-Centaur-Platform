@@ -22,9 +22,20 @@ This is a pnpm monorepo. The default workflow runs `pnpm dev` which starts the C
 
 **Package manager**: pnpm is pre-installed via Nix (`pnpm@10.26.1`); no `corepack enable` needed here. Always use `pnpm add / install / remove` — not npm or yarn.
 
+## Identity demo (the Run button)
+
+The Run button is the **Identity Demo** workflow: `pnpm demo` stands up the
+self-hosted Convex deployment (ports 3210/3211, external 3002/3003), the
+SpacetimeDB host (3000, external 3001) with the game module published, and the
+reference app (5000, external 80), then registers the app as a trusted issuer
+and seeds the demo world. Setup (Google secrets, the callback URI, the seeding
+commands) is in `docs/identity-demo.md`. Open the app in a new tab — Google
+will not complete sign-in inside the preview iframe. Demo state persists in
+the gitignored `.demo/`.
+
 ## Workflow
 
-The primary workflow (`Start application`) runs:
+The development workflow (`Start application`) runs:
 ```
 pnpm --filter @cyphid/centaur-server-reference dev
 ```
