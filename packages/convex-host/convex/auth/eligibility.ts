@@ -17,19 +17,12 @@
 // answerable from the initialization snapshot rather than from whatever the
 // team records happen to say now (`roster-snapshot-binding`).
 import type { GameSubject } from "@cyphid/snek-stdb/subject";
+// The snapshot shape is the component schema's, inferred from its validator —
+// one spelling, so a roster field renamed there fails to compile here rather
+// than silently ceasing to match.
+import type { ParticipantSnapshot } from "../../../convex-snek-platform/convex/schema";
 
-/**
- * One participating team as the roster snapshot recorded it at game
- * initialization. This is the shape the game-lifecycle change must supply when
- * it owns snapshot creation and storage, and the coach designations come from
- * team-management; both are named here as the minimum this decision needs, not
- * as a claim on those tables.
- */
-export interface ParticipantSnapshot {
-  readonly teamId: string;
-  readonly memberUserIds: ReadonlyArray<string>;
-  readonly coachUserIds: ReadonlyArray<string>;
-}
+export type { ParticipantSnapshot };
 
 /**
  * The target game as issuance sees it: its identity, its status read *now*,

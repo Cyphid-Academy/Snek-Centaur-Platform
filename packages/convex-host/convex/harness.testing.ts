@@ -11,7 +11,11 @@ import type { FunctionReference } from "convex/server";
 import { v } from "convex/values";
 import { type JWK, base64url, createLocalJWKSet } from "jose";
 import { mutation as platformComponentMutation } from "../../convex-snek-platform/convex/_generated/server";
-import { issuerRegistration } from "../../convex-snek-platform/convex/schema";
+import {
+  gameStatus,
+  issuerRegistration,
+  participantSnapshot,
+} from "../../convex-snek-platform/convex/schema";
 import { components } from "./_generated/api";
 import { type CredentialPayload, verify } from "./auth/credential";
 import schema from "./schema";
@@ -94,8 +98,6 @@ export async function verifyIssued(
 // schema, exactly as the eventual owning changes' mutations will.
 // ---------------------------------------------------------------------------
 
-const GAME_STATUS = v.union(v.literal("not-started"), v.literal("playing"), v.literal("finished"));
-
 const seedModule = {
   seedIssuer: platformComponentMutation({
     args: issuerRegistration,
@@ -120,22 +122,15 @@ const seedModule = {
     returns: v.string(),
     handler: async (ctx, args) => await ctx.db.insert("centaur_teams", args),
   }),
+  // The status and snapshot validators are the schema's own, so a seeded game
+  // is one the schema accepts by construction.
   seedGame: platformComponentMutation({
-    args: {
-      status: GAME_STATUS,
-      roster: v.array(
-        v.object({
-          teamId: v.string(),
-          memberUserIds: v.array(v.string()),
-          coachUserIds: v.array(v.string()),
-        }),
-      ),
-    },
+    args: { status: gameStatus, roster: v.array(participantSnapshot) },
     returns: v.string(),
     handler: async (ctx, args) => await ctx.db.insert("games", args),
   }),
   setGameStatus: platformComponentMutation({
-    args: { gameId: v.string(), status: GAME_STATUS },
+    args: { gameId: v.string(), status: gameStatus },
     returns: v.null(),
     handler: async (ctx, args) => {
       const id = ctx.db.normalizeId("games", args.gameId);
