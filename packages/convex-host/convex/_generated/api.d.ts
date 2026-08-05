@@ -19,6 +19,7 @@ import type * as issuance from "../issuance.js";
 import type * as platform from "../platform.js";
 import type * as publicFunctions from "../publicFunctions.js";
 import type * as registry from "../registry.js";
+import type * as registrySeeding from "../registrySeeding.js";
 import type * as signIn from "../signIn.js";
 
 import type {
@@ -39,6 +40,7 @@ declare const fullApi: ApiFromModules<{
   platform: typeof platform;
   publicFunctions: typeof publicFunctions;
   registry: typeof registry;
+  registrySeeding: typeof registrySeeding;
   signIn: typeof signIn;
 }>;
 

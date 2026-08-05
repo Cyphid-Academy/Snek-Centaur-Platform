@@ -9,6 +9,7 @@
  */
 
 import type * as functions from "../functions.js";
+import type * as seeding from "../seeding.js";
 
 import type {
   ApiFromModules,
@@ -19,6 +20,7 @@ import { anyApi, componentsGeneric } from "convex/server";
 
 const fullApi: ApiFromModules<{
   functions: typeof functions;
+  seeding: typeof seeding;
 }> = anyApi as any;
 
 /**
