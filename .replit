@@ -7,7 +7,26 @@ path = "scripts/post-merge.sh"
 timeoutMs = 30000
 
 [workflows]
-runButton = "Project"
+runButton = "Identity Demo"
+
+# The identity demo stack: the self-hosted Convex deployment, the SpacetimeDB
+# host with the game module published, and the reference app — plus the
+# operator acts (issuer registration, world seeding) run against them. Sign-in
+# is the real Google flow; it needs GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET
+# (and ideally BETTER_AUTH_SECRET) as Secrets, and the callback address the
+# script prints registered on the Google client. Open the app in a new tab —
+# Google refuses to sign anyone in inside the preview iframe.
+[[workflows.workflow]]
+name = "Identity Demo"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm demo"
+waitForPort = 5000
 
 [[workflows.workflow]]
 name = "Project"
@@ -109,6 +128,14 @@ outputType = "console"
 [[ports]]
 localPort = 3000
 externalPort = 3001
+
+[[ports]]
+localPort = 3210
+externalPort = 3002
+
+[[ports]]
+localPort = 3211
+externalPort = 3003
 
 [[ports]]
 localPort = 5000

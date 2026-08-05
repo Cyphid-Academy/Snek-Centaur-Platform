@@ -26,6 +26,12 @@ convex/.env.local
 # SpacetimeDB
 .stdb/
 
+# Identity demo stack state (pnpm demo)
+.demo/
+
+# Centaur Server local data (signing key)
+.data/
+
 # Vitest
 .vitest-cache/
 coverage/

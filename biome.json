@@ -50,6 +50,8 @@
       ".local",
       ".convex",
       ".stdb",
+      ".demo",
+      ".data",
       ".agents",
       ".cache",
       ".upm",
