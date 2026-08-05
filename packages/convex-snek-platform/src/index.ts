@@ -2,10 +2,14 @@
 // Convex Component: snek-platform
 // Owns platform-wide tables: users, rooms, games, replays, api_keys, webhooks.
 //
-// Two kinds of interface live here now. The ones whose table exists in
-// `convex/schema.ts` are the compile-time half of a contract whose runtime half
-// is a validator, and the two are changed together. The rest are still a typed
-// skeleton for tables their own capability changes have yet to define.
+// What lives here: typed skeletons for tables their own capability changes
+// have yet to define, and the cross-package shapes a consumer reads. A table
+// `convex/schema.ts` already owns appears here **not at all** — its type is
+// `Infer<>` of its validator, exported from `convex/schema.ts` itself, so a
+// field rename is a compile error rather than a drift. A set of interfaces
+// here once restated seven such tables; one had already dropped the
+// security-critical `challenge` field and another described a table that was
+// never created, which is the drift the rule below exists to prevent.
 //
 // **A skeleton may forward-declare a table; it may not re-declare a type
 // somebody else owns.** A `GameConfigRecord` here did exactly that, and had
@@ -50,113 +54,17 @@ import type { GameConfig } from "@cyphid/snek-game-configuration";
 // `email` stays, as a profile attribute for display, notification, and
 // inviting someone who has no account yet — never an identity key and never a
 // join key.
-// The admin designation is not a column here: it is `PlatformAdminRecord`
-// below. A boolean on the user record would be a second place the designation
-// could be read from, and the one a session or a minted credential would end up
-// copying — which is exactly what `#role-effective-without-reload` forbids.
+// The admin designation is not a column here: it is the `platform_admins`
+// table in `convex/schema.ts`. A boolean on the user record would be a second
+// place the designation could be read from, and the one a session or a minted
+// credential would end up copying — which is exactly what
+// `#role-effective-without-reload` forbids.
 // spec: identity-and-authorization/platform-admin-role
 export interface UserRecord {
   readonly _id: string;
   readonly email: string;
   readonly displayName: string;
   readonly createdAt: number;
-}
-
-/**
- * A Centaur Team as this change defined it: a platform-assigned `_id`, which is
- * the team's identity, and the domain of the server operating it, which is an
- * attribute recorded for attribution. Re-homing patches the domain and leaves
- * the `_id` — and every reference to it — alone.
- *
- * migrate-team-management adds name, captaincy and membership; this change
- * wrote only the field it reads.
- *
- * spec: identity-and-authorization/identity-kinds#server-domain-is-not-identity
- */
-export interface CentaurTeamRecord {
-  readonly _id: string;
-  readonly serverDomain: string | null;
-}
-
-/**
- * A registered issuer, and everything the platform holds about one. Every field
- * is public: there is nowhere here a secret could go.
- *
- * spec: identity-and-authorization/trusted-issuer-registry#registry-holds-no-secret
- */
-export interface TrustedIssuerRecord {
-  readonly _id: string;
-  readonly issuerId: string;
-  readonly verificationMaterialUrl: string;
-  readonly capabilityCeiling: ReadonlyArray<string>;
-  readonly returnAddresses: ReadonlyArray<string>;
-}
-
-/**
- * An assertion identifier already accepted. Expired on the assertion's own
- * lifetime — past it the record defends nothing.
- *
- * spec: identity-and-authorization/service-principal-assertions#replayed-assertion-refused
- */
-export interface AcceptedAssertionRecord {
-  readonly _id: string;
-  readonly assertionId: string;
-  readonly expiresAt: number;
-}
-
-/**
- * A sign-in handoff reference: one authenticated human, one registered Server,
- * and nothing else — it confers no capability of its own.
- *
- * spec: identity-and-authorization/sign-in-handoff
- */
-export interface SignInHandoffRecord {
-  readonly _id: string;
-  readonly reference: string;
-  readonly userId: string;
-  readonly issuerId: string;
-  readonly expiresAt: number;
-}
-
-/**
- * The platform admin designation — platform-level, so the record names a user
- * and nothing else. There is no team or server field to make it per-team.
- *
- * spec: identity-and-authorization/platform-admin-role
- */
-export interface PlatformAdminRecord {
-  readonly _id: string;
-  readonly userId: string;
-}
-
-/**
- * What one registered system has spent of the fixed window now current. One
- * row per issuer, rewritten as the window rolls, so the bound needs no history
- * and this table needs no sweep.
- *
- * spec: identity-and-authorization/peer-capability-ceiling
- */
-export interface SystemCallWindowRecord {
-  readonly _id: string;
-  readonly issuerId: string;
-  readonly windowStart: number;
-  readonly calls: number;
-}
-
-/**
- * One action taken on a human's behalf through a registered system: whose
- * account, which system, and — as the capability the called function declared —
- * what was done. Written for mutations and actions alone, which are the actions
- * there are to show.
- *
- * spec: identity-and-authorization/peer-capability-ceiling#attribution-is-user-visible
- */
-export interface SystemActionRecord {
-  readonly _id: string;
-  readonly userId: string;
-  readonly issuerId: string;
-  readonly capability: string;
-  readonly expiresAt: number;
 }
 
 export interface RoomRecord {

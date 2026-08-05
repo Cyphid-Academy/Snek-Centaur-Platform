@@ -14,11 +14,11 @@ import { encodeGameSubject } from "@cyphid/snek-stdb/subject";
 // network.
 import type { FunctionArgs, FunctionReference, FunctionReturnType } from "convex/server";
 import { v } from "convex/values";
-import { type JWK, base64url, decodeJwt } from "jose";
+import { base64url, createRemoteJWKSet, decodeJwt, errors, jwtVerify } from "jose";
 import type { IssuerRegistration as Registration } from "../../convex-snek-platform/convex/schema";
 import { components } from "./_generated/api";
 import type { ActionCtx } from "./_generated/server";
-import { type CapabilityEntry, mint, verify } from "./auth/credential";
+import { type CapabilityEntry, mint } from "./auth/credential";
 import {
   PLATFORM_AUDIENCE,
   assertionAudience,
@@ -73,10 +73,11 @@ async function authenticatedPrincipal(ctx: ActionCtx, assertion: string): Promis
   if (!registration) throw new Error(`no registration for issuer ${claimedIssuer}`);
 
   // spec: identity-and-authorization/service-principal-assertions#rotation-needs-no-coordination
-  const published = (await (await fetch(registration.verificationMaterialUrl)).json()) as {
-    keys?: ReadonlyArray<JWK>;
-  };
-  const payload = await verifiedAgainstAnyKey(assertion, claimedIssuer, published.keys ?? []);
+  const payload = await verifiedAssertion(
+    assertion,
+    claimedIssuer,
+    publishedKeySet(registration.verificationMaterialUrl),
+  );
 
   // Charged after the signature is checked, deliberately: charging on the
   // claimed issuer alone would let anyone holding no key at all exhaust a real
@@ -97,28 +98,107 @@ async function authenticatedPrincipal(ctx: ActionCtx, assertion: string): Promis
 }
 
 /**
- * Try the assertion against each key the principal publishes. Several are
- * expected during a rotation, and trying them is cheaper than requiring the
- * assertion's `kid` to be present and correct.
- *
- * Audience and expiry are `verify`'s. The audience is `assertionAudience()` —
- * *this deployment*, not the platform at large — for the reason recorded on
- * `assertionAudience` in `auth/deployment.ts`.
+ * What a peer may sign an assertion with. Wider than the platform's own `ALG`
+ * on purpose: which algorithm a registered Server uses is its decision, not a
+ * constraint this deployment's signing choice should leak onto it.
  */
-async function verifiedAgainstAnyKey(
+const ASSERTION_ALGS = ["ES256", "RS256"];
+
+/**
+ * One remote key set per published location, held across calls. `jose` owns
+ * the fetch: it times out, matches `kid` where one is offered, and — the
+ * property the bare `fetch` this replaced lacked — caches, so an
+ * unauthenticated caller can no longer turn every exchange attempt into
+ * outbound traffic toward a registered issuer's URL.
+ */
+const remoteKeySets = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
+
+function publishedKeySet(url: string): ReturnType<typeof createRemoteJWKSet> {
+  let keys = remoteKeySets.get(url);
+  if (!keys) {
+    keys = createRemoteJWKSet(new URL(url));
+    remoteKeySets.set(url, keys);
+  }
+  return keys;
+}
+
+/**
+ * Forget every published key set fetched so far. A testing hook: production
+ * needs no equivalent, because rotation is covered by the bounded reload below
+ * and staleness by the cache's own expiry.
+ */
+export function forgetPublishedMaterial(): void {
+  remoteKeySets.clear();
+}
+
+/**
+ * Verify the assertion against what the principal publishes. The audience is
+ * `assertionAudience()` — *this deployment*, not the platform at large — for
+ * the reason recorded on `assertionAudience` in `auth/deployment.ts`.
+ *
+ * A signature no cached key validates may be signed by a key published since
+ * the material was last read — the rotation `#rotation-needs-no-coordination`
+ * scripts, arriving with no `kid` to miss the cache on. One reload covers it,
+ * gated on the set's cooldown so refusals cannot be turned into unbounded
+ * outbound traffic.
+ */
+async function verifiedAssertion(
   assertion: string,
   claimedIssuer: string,
-  keys: ReadonlyArray<JWK>,
+  keys: ReturnType<typeof createRemoteJWKSet>,
 ) {
-  for (const publicJwk of keys) {
-    try {
-      return await verify(assertion, { issuer: claimedIssuer, publicJwk }, assertionAudience());
-    } catch {
-      // Wrong key of a set that may hold several; a genuinely bad assertion
-      // falls out of the loop below.
+  try {
+    return await assertionAgainst(keys, assertion, claimedIssuer);
+  } catch (refusal) {
+    const unmatched =
+      refusal instanceof errors.JWSSignatureVerificationFailed ||
+      refusal instanceof errors.JWKSNoMatchingKey;
+    if (unmatched && !keys.coolingDown) {
+      await keys.reload();
+      try {
+        return await assertionAgainst(keys, assertion, claimedIssuer);
+      } catch {
+        // The refusal below is the answer either way.
+      }
     }
+    // One answer for every cryptographic refusal, as before this client used a
+    // library: what precisely failed is not owed to a caller who could not
+    // sign.
+    throw new Error("assertion is not signed by any key this principal publishes");
   }
-  throw new Error("assertion is not signed by any key this principal publishes");
+}
+
+/** One verification attempt, trying every candidate where several keys match. */
+async function assertionAgainst(
+  keys: ReturnType<typeof createRemoteJWKSet>,
+  assertion: string,
+  claimedIssuer: string,
+) {
+  const options = {
+    issuer: claimedIssuer,
+    audience: assertionAudience(),
+    algorithms: ASSERTION_ALGS,
+    // Required, not merely checked when offered — a credential that declines
+    // to say when it dies would otherwise verify forever.
+    requiredClaims: ["exp"],
+  };
+  try {
+    return (await jwtVerify(assertion, keys, options)).payload;
+  } catch (error) {
+    // Several kid-less keys of the right shape: jose hands back the
+    // candidates rather than guessing, and trying each is this caller's job.
+    if (error instanceof errors.JWKSMultipleMatchingKeys) {
+      for await (const candidate of error) {
+        try {
+          return (await jwtVerify(assertion, candidate, options)).payload;
+        } catch {
+          // The next candidate, or the throw below.
+        }
+      }
+      throw new errors.JWSSignatureVerificationFailed();
+    }
+    throw error;
+  }
 }
 
 /**
