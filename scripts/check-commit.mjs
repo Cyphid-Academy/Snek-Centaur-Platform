@@ -188,6 +188,12 @@ function gatesFor(sha, files) {
           ...spec(withBin("biome", ["check", "--files-ignore-unknown=true", ...lintable])),
         }
       : null,
+    // Capability-declaration totality — the same tripwire CI runs, gated here
+    // so a commit touching the host's function surface learns of an undeclared
+    // handler now rather than after the push.
+    files.some((f) => f.startsWith("packages/convex-host/convex/"))
+      ? { name: "public-surface", cmd: "node", args: ["scripts/check-public-surface.mjs"] }
+      : null,
     { name: "citations", cmd: "node", args: ["scripts/check-spec-citations.mjs"] },
     changes.length > 0
       ? {
