@@ -13,12 +13,12 @@
 import { SignJWT, decodeJwt } from "jose";
 
 /**
- * ES256 (ECDSA on P-256). Why that algorithm and no other is recorded once, at
- * `packages/convex-host/convex/auth/credential.ts`. This package cannot depend
- * on the host — it is published to forks, which have no access to the
- * deployment's code — so the identifier is restated here, and
- * `credentials.contract.test.ts` in the host package feeds this function's real
- * output to the real verifier so the two cannot drift silently.
+ * ES256 (ECDSA on P-256), this library's choice for the Server's own key. The
+ * platform verifies assertions under the algorithms `ASSERTION_ALGS` in
+ * `packages/convex-host/convex/issuance.ts` names — which algorithm a Server
+ * signs with is the Server's decision, and `credentials.contract.test.ts` in
+ * the host package feeds this function's real output to the real verifier so
+ * the two cannot drift silently.
  */
 const ALG = "ES256";
 

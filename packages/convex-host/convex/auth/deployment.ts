@@ -4,17 +4,11 @@
 // Who this deployment is when it signs, and how it names the party it signs
 // for.
 //
-// Key custody is Better Auth's `jwt` plugin, not an environment variable: the
-// signing key is generated inside the deployment on first use — never
-// provisioned from outside, which is the direction
-// `global-invariants/credential-confinement#every-party-keeps-its-own-key`
-// asks for — held encrypted in the auth component's `jwks` table, and
-// published from that same store, so signing and publication cannot drift.
-// What is deliberately NOT the plugin's is minting: its token endpoint is
-// bound to the caller's own session and hardcodes its audience, so it cannot
-// express a token whose subject is a Centaur Team and whose audience is one
-// game instance. `auth/credential.ts` assembles the claims; the signer below
-// carries them to the plugin's stored key.
+// Key custody is Better Auth's `jwt` plugin — generated in-deployment on
+// first use, held encrypted in the auth component's `jwks` table, published
+// from the same store. Minting stays ours. The full division of labour, and
+// why, is design.md's "Substrate as built" section.
+// spec: global-invariants/credential-confinement#every-party-keeps-its-own-key
 import type { GenericCtx } from "@convex-dev/better-auth";
 import { type JwtOptions, signJWT } from "better-auth/plugins/jwt";
 import { type JWK, createLocalJWKSet } from "jose";
@@ -99,15 +93,9 @@ export const assertionAudience = (): string => issuer();
 /**
  * The `jwt`-plugin options the credential signer runs under. They restate what
  * `@convex-dev/better-auth`'s `convex()` plugin configures its embedded `jwt`
- * instance with, because the two share one `jwks` table and that table is
- * single-algorithm: `alg` is not a stored column, so every reader patches it
- * in from configuration, and a second configuration would be a second answer.
- *
- * RS256, therefore, is not chosen here — it is fixed by the `customJwt`
- * provider in `auth.config.ts`, which `@convex-dev/better-auth` accepts with
- * RS256 alone. A game's SpacetimeDB instance accepts RS256 and ES256 and
- * refuses everything else, so the constraint from below and the constraint
- * from above happen to meet.
+ * instance with, because the two share one single-algorithm `jwks` table and a
+ * second configuration would be a second answer. Why the algorithm is RS256
+ * and nothing else is `CREDENTIAL_ALG`'s story in `credential.ts`.
  *
  * The `adapter` override mirrors `@convex-dev/better-auth`'s own, comment and
  * all ("remove when date parsing for jwks adapter is fixed upstream"): rows

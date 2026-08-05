@@ -2,26 +2,12 @@
 //       identity-and-authorization/linked-provider-credentials,
 //       identity-and-authorization/client-credential-custody,
 //       identity-and-authorization/sole-credential-issuer
-// Human sign-in. Better Auth supplies exactly two things here — the Google
-// OAuth exchange and the session cookie that survives a reload — and nothing
-// else. Every credential the platform *issues* is minted by our own code in
-// `auth/credential.ts`, because Better Auth's token endpoint is bound to the
-// caller's own session and hardcodes its audience, which cannot express a token
-// whose subject is a Centaur Team and whose audience is one game instance.
-//
-// The component is mounted in npm mode rather than installed locally: its
-// tables live in their own component either way, so a local install would buy
-// only the ability to edit a generated schema we have no reason to edit.
-//
-// **Where sign-in happens.** Google talks to this deployment's origin and only
-// ever this one. A single OAuth client is registered to Cyphid, its redirect
-// URIs naming platform *environments* — never a team, never a developer. The
-// human-facing application is the artifact every team forks and runs on an
-// origin it controls, so wiring Google into a Server is the obvious
-// implementation and the forbidden one: it would hand a student-modified fork
-// the authorization code of everyone who signs in through it. A Server that
-// needs a human's identity gets it through `sign-in-handoff`, never by holding
-// a client of its own (`sole-credential-issuer`).
+// Human sign-in. Better Auth supplies the Google OAuth exchange, the session
+// cookie that survives a reload, and (through its embedded `jwt` plugin) the
+// deployment's key store — and mints nothing of ours; see `auth/deployment.ts`.
+// Google talks to this deployment's origin and only ever this one, never a
+// Server's — the whole argument is design.md's "Where sign-in happens". The
+// component mounts in npm mode, a departure design.md also records.
 
 import { type GenericCtx, createClient } from "@convex-dev/better-auth";
 import { convex } from "@convex-dev/better-auth/plugins";
@@ -117,24 +103,12 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
 const ALG = "RS256";
 
 /**
- * Where the end-to-end harness substitutes the one step it cannot perform, and
- * nothing else.
- *
- * A test machine has no route to Google and no human to click through a consent
- * screen, so an identity assertion has to come from somewhere the harness
- * controls. What that costs is bounded here: two environment variables name a
- * substitute issuer and where it publishes its keys, and finding them the
- * provider verifies an assertion against those instead of Google's. Everything
- * after verification — which account this resolves to, the linking policy above,
- * issuing the session, setting the cookie — is untouched, because a session the
- * harness assembled by hand would prove nothing about signing in.
- *
- * **Absence is production behaviour.** With neither variable set this spreads
- * nothing into the provider's options, so the provider verifies against Google
- * exactly as it always did and a harness-signed assertion is refused like any
- * other unverifiable one. That direction is the requirement: a deployment
- * nobody configured is a deployment that is safe, rather than one an operator
- * must remember to switch something off on.
+ * Where the end-to-end harness substitutes the one step it cannot perform —
+ * the provider's own verification — and nothing else; what that means and why
+ * absence must be production behaviour is the cited requirement's own text.
+ * The cost is bounded to two environment variables naming a substitute issuer
+ * and its key set; with neither set this spreads nothing into the provider's
+ * options, so there is no branch to switch off.
  *
  * spec: identity-and-authorization/substituted-provider-verification
  * spec: identity-and-authorization/substituted-provider-verification#absence-of-configuration-is-production-behaviour

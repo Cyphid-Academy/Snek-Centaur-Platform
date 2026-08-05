@@ -86,13 +86,9 @@ export type AdmittedCaller<C extends Capability, K extends PrincipalKind> =
  * reached a function on `ANONYMOUS_CAPABILITIES` alone.
  *
  * It is the credential's subject, decoded — so a handler receives the ids its
- * caller's kind is actually identified by, and cannot reach for one the kind
- * does not have (`identity-kinds`). Deliberately *without* the capabilities the
- * credential carried: a handler that could see them would sooner or later read
- * one as permission, and a capability grants reachability only, never the
- * answer to the authorization question the handler itself owns. Withholding
- * them is the only form of that rule an API shape can enforce; a comment saying
- * so would not survive the first handler that found the field convenient.
+ * caller's kind is actually identified by (`identity-kinds`), and deliberately
+ * *not* the capabilities the credential carried: withholding them is the only
+ * form of the cited rule an API shape can enforce.
  *
  * spec: identity-and-authorization/capability-registry#reachability-is-not-authorization
  */

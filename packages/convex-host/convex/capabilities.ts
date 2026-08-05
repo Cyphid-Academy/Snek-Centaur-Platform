@@ -4,26 +4,15 @@
 
 /**
  * Every capability the deployment recognises: what holding it reaches, and
- * which classes of caller reach it.
- *
- * A capability is a bare verb identifier — it names an action, so reading a
- * credential's claim tells you what its holder can go and do without consulting
- * a table of names.
- *
- * **Reach lives here, on the capability, rather than in a list beside this
- * one** — and that is true of `session` exactly as it is of `anonymous`. A
- * separate list is a thing that can disagree with the registry; a field cannot.
- * The session list was once separate, and it did disagree: `begin-sign-in` was
- * missing from it, so the sign-in entry route refused every browser carrying a
- * live session and its already-signed-in branch was unreachable code. Omitting a
- * flag is what "not reachable that way" means, so a capability added without a
- * thought about reach is reachable by neither — the default denies, and widening
- * reach is always a visible edit (`anonymous-reach#credentialed-by-default`).
- * Every entry that does declare one cites the scenario that justifies it, and
+ * which classes of caller reach it. Reach is a field on the capability, never
+ * a list beside the registry — the cited scenarios say why, and the incident
+ * that taught it is in design.md ("what the session list once got wrong").
+ * Every entry declaring `anonymous` cites the scenario that justifies it, and
  * `scripts/check-public-surface.mjs` fails the build on one that does not.
  *
  * spec: identity-and-authorization/anonymous-reach
  * spec: identity-and-authorization/anonymous-reach#session-reach-is-declared-with-the-capability
+ * spec: identity-and-authorization/anonymous-reach#credentialed-by-default
  */
 export const CAPABILITIES = {
   // spec: identity-and-authorization/anonymous-reach#liveness-exposes-no-principal
@@ -47,14 +36,10 @@ export const CAPABILITIES = {
     reaches: "Redeem a sign-in handoff reference for the credential it was minted for.",
     anonymous: true,
   },
-  // The sign-in entry route, and the one capability here reached by navigation
-  // rather than by a function call. It is *not* one of the bootstrap pair, and
-  // reading it as one is the mistake that made the route refuse the very caller
-  // its already-signed-in branch exists for: anonymous reach is what it needs to
-  // serve a browser that has never signed in, and it is reached again, at the
-  // same address, by a browser that has — answering that one without a provider
-  // is the whole of what makes a reload silent. Reachable anonymously says who
-  // may reach it *without* a credential, never who may not reach it with one.
+  // The sign-in entry route — reached by navigation, by browsers that have
+  // never signed in (`anonymous`) and again by browsers that have (`session`,
+  // the silent-reload branch). Anonymous reach says who may arrive without a
+  // credential, never who may not arrive with one.
   // spec: identity-and-authorization/google-sign-in#session-survives-reload
   // spec: identity-and-authorization/anonymous-reach#sign-in-entry-exposes-no-principal
   "begin-sign-in": {
@@ -144,25 +129,13 @@ export const GAME_CREDENTIAL_CAPABILITIES: ReadonlyArray<Capability> = [
 
 /**
  * Capabilities no external system's ceiling may include, whatever its
- * registration records and whatever the human it acts for could do directly.
- *
- * Each entry mints a credential, or completes a chain that does — an assertion
- * exchange mints one for the presenting system, a handoff redemption mints one
- * naming a human, and beginning a handoff is the step that makes a redemption
- * possible at all. So a ceiling containing any of them would let a compromised
- * peer manufacture authority instead of merely spending the authority it was
- * given. That is the exclusion `peer-capability-ceiling` names ("issue
- * credentials for a human"), and it is the only control that shrinks what a
- * compromised peer can do rather than shortening how long it can do it.
- *
- * **`begin-sign-in-handoff` is here because the exclusion is read against what
- * a capability reaches in combination, never against one step alone.** By
- * itself it mints only an opaque reference. But a credential naming a human
- * that carried it would let the Server begin a fresh handoff in that human's
- * name, redeem it — redemption proves itself and needs no capability — and hold
- * a new credential for them; repeat, and the fifteen-minute lifetime bounds
- * nothing. A human's *own session* still reaches it, and must; a ceiling is
- * what may be conferred on a peer.
+ * registration records: each mints a credential, or completes a chain that
+ * does. `begin-sign-in-handoff` is the chain case — alone it mints only an
+ * opaque reference, but joined with redemption (which proves itself and needs
+ * no capability) it renews a human's credential indefinitely, which is
+ * exactly what `#no-chain-reaches-what-one-step-may-not` refuses. A human's
+ * own session still reaches it, and must; a ceiling is what may be conferred
+ * on a peer.
  *
  * Nothing in today's surface destroys platform state or changes authentication
  * configuration; when such a function lands, its capability belongs here.

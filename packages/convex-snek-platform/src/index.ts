@@ -3,26 +3,19 @@
 // Owns platform-wide tables: users, rooms, games, replays, api_keys, webhooks.
 //
 // What lives here: typed skeletons for tables their own capability changes
-// have yet to define, and the cross-package shapes a consumer reads. A table
-// `convex/schema.ts` already owns appears here **not at all** — its type is
-// `Infer<>` of its validator, exported from `convex/schema.ts` itself, so a
-// field rename is a compile error rather than a drift. A set of interfaces
-// here once restated seven such tables; one had already dropped the
-// security-critical `challenge` field and another described a table that was
-// never created, which is the drift the rule below exists to prevent.
+// have yet to define, and the cross-package shapes a consumer reads.
 //
 // **A skeleton may forward-declare a table; it may not re-declare a type
-// somebody else owns.** A `GameConfigRecord` here did exactly that, and had
-// already drifted from `@cyphid/snek-game-configuration`'s `GameConfig` on
-// nearly every field — `hazardPercent` for `hazardPercentage`, a boolean where
-// fertile ground is a density and a clustering, one potion rate where the
-// engine declares two, three flat timer fields where there is a four-field
-// `clock`, and `maxHealth`, `maxTurns` and `hazardDamage` absent altogether.
-// Nothing could catch it: this package depended on neither authority, so no
-// compiler saw both shapes, and `@cyphid/centaur-server-lib` re-exported the
-// wrong one to bot authors as the public SDK.
+// somebody else owns.** Twice now a re-declaration here drifted with nothing
+// to catch it — a `GameConfigRecord` wrong on nearly every field that
+// `@cyphid/centaur-server-lib` re-exported to bot authors as the public SDK,
+// and a set of interfaces restating seven `convex/schema.ts` tables, one
+// silently missing the security-critical `challenge` field. So a table
+// `convex/schema.ts` owns appears here not at all (its type is `Infer<>` of
+// its validator, exported from the schema itself, so a rename is a compile
+// error), and the authority for shapes is imported.
 //
-// So the authority is imported. `game-configuration` owns the generation half
+// `game-configuration` owns the generation half
 // and mirrors the engine's runtime half by reference, which is what
 // `global-invariants/engine-mirrors-are-guarded` asks of a mirror — and the
 // cheapest way to satisfy an invariant about mirrors is to hold no mirror.

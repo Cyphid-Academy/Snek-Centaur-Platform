@@ -1,16 +1,8 @@
 // spec: identity-and-authorization/trusted-issuer-registry,
 //       identity-and-authorization/platform-admin-role
 // What this deployment was told rather than derived: who it trusts, and who
-// administers it.
-//
-// The issuer registry is read on every assertion exchange, every handoff, and
-// both sign-in routes, and until recently nothing wrote to it — a deployment
-// came up trusting nobody with no way to change that, which made a Snek Centaur
-// Server impossible to stand up against a real deployment at all. The admin
-// designation had the same shape of hole and a worse consequence: with no
-// writer outside the test harness, `isPlatformAdmin` could only ever answer
-// `false`, so every power that role confers was unreachable and the role existed
-// on paper alone.
+// administers it. (That both once had no writer at all, and what that made
+// unreachable, is recorded in design.md's third departure.)
 //
 // **Internal, not public, and that is the whole shape of the decision.** Both
 // are operator acts: someone at Cyphid decides that a Server or peer system is
@@ -50,12 +42,8 @@ export const registerIssuer = internalMutation({
 });
 
 /**
- * Designate a human a platform admin of this deployment, or withdraw it.
- *
- * The `designated` boolean rather than a designate/revoke pair, because
- * presence of the row *is* the designation and there is no third state: two
- * functions would be two spellings of one boolean, and the pair is how one
- * direction ends up implemented and the other forgotten.
+ * Designate a human a platform admin of this deployment, or withdraw it —
+ * one boolean, for the reason on the component's `designateAdmin`.
  *
  * spec: identity-and-authorization/platform-admin-role#a-deployment-can-designate-its-first-admin
  */
