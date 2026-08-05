@@ -10,7 +10,7 @@
 //
 // Flags combine. Ids are the platform's own user ids (`user:<id>` on a
 // credential's subject, minus the prefix).
-import { adminKey, backendBinary, origins, seedWorld } from "./lib.mjs";
+import { adminKey, backendBinary, origins, platformTarget, seedWorld } from "./lib.mjs";
 
 const args = Object.fromEntries(
   process.argv
@@ -22,8 +22,9 @@ const args = Object.fromEntries(
     }),
 );
 
-const key = adminKey(await backendBinary());
-const world = seedWorld(key, origins().appOrigin, {
+const target = platformTarget();
+const auth = target.kind === "hosted" ? target : adminKey(await backendBinary());
+const world = seedWorld(auth, origins(target).appOrigin, {
   member: args["member"],
   coach: args["coach"],
   admin: args["admin"],
