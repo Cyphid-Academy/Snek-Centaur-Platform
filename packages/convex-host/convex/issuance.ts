@@ -279,20 +279,13 @@ export const exchangeAssertion = publicAction({ capability: "exchange-assertion"
 
 /**
  * Mint a handoff reference and answer with the address to send the browser to.
- *
  * The one mutating function on this surface.
  *
- * **Reachable by a live session and by nothing else, which is what makes a
- * human's credential unrenewable once that human is gone.** A handoff is the
- * only path that mints a credential naming a human, so beginning one is the
- * whole of renewal. `begin-sign-in-handoff` is declared `session` and is on
- * `PEER_FORBIDDEN_CAPABILITIES`, so no credential can carry it: the assertion
- * path names a system rather than a human and is refused below, and the
- * redemption path intersects the ceiling, which excludes it. What is left is
- * `ctx.auth` and the sign-in routes' cookie — both the human's own session, read
- * at the moment of the call. So the session is re-read at every renewal because
- * a renewal cannot start without one, rather than because a check remembered to
- * look.
+ * Reachable by a live session and by nothing else — `begin-sign-in-handoff`
+ * is declared `session` and sits on `PEER_FORBIDDEN_CAPABILITIES`, whose
+ * comment in `capabilities.ts` holds the chain argument. What is left is the
+ * human's own session, read at the moment of the call, which is what makes
+ * renewal re-read the session by construction rather than by discipline.
  *
  * spec: identity-and-authorization/sign-in-handoff#return-address-is-registered-not-requested
  * spec: identity-and-authorization/token-lifetime-and-refresh#renewal-re-reads-the-session

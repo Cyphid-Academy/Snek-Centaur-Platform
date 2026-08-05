@@ -84,35 +84,22 @@ export default defineSchema({
   // spec: identity-and-authorization/trusted-issuer-registry
   trusted_issuers: defineTable(issuerRegistration).index("by_issuer", ["issuerId"]),
 
-  // Single-use needs a uniqueness guard that two concurrent presentations
-  // cannot both pass, and Convex has no unique index. `claimAssertionId` reads
-  // `by_assertion` and inserts in the same mutation, which puts the read in
-  // that transaction's read set: if a concurrent mutation inserts the same
-  // identifier first, this one's read is invalidated and it re-runs against the
-  // row the other committed, and refuses. The guard is therefore inside the
-  // transaction it protects rather than an earlier check a commit can outrun.
+  // Single-use, guarded transactionally — how `by_assertion` makes two
+  // concurrent presentations refusable is `claimAssertionId`'s comment in
+  // `functions.ts`, where the read-and-insert lives.
   // spec: identity-and-authorization/service-principal-assertions#replayed-assertion-refused
-  // spec: global-invariants/transactional-invariant-enforcement#concurrent-mutations-cannot-race-past-a-guard
   accepted_assertions: defineTable({ assertionId: v.string(), expiresAt: v.number() })
     .index("by_assertion", ["assertionId"])
     .index("by_expiry", ["expiresAt"]),
 
   // There is no `redeemedAt`: redemption deletes the row, so single-use is the
   // same read-then-write guard as `accepted_assertions` and there is no second
-  // state anyone has to remember to check. Nothing needs to tell a redeemed
-  // reference from an expired one — both are refused, and both are absent.
-  //
-  // `challenge` is what redeeming takes that the URL did not carry. The browser
-  // generates a verifier, keeps it, and sends only its hash here; redemption
-  // presents the verifier, and the hash of it must equal what is stored. It is
-  // required, not optional, and that is the security property rather than
-  // tidiness: the return leg puts the reference in the Server's own address bar,
-  // so a reference redeemable by anything the Server *has* — its signing key,
-  // say — would let the Server take the human's credential for itself. A row
-  // with no challenge would be exactly such a reference, so there is no way to
-  // write one.
-  //
-  // It is compared and never returned. Nothing reads it back out.
+  // state anyone has to remember to check. `challenge` is required, not
+  // optional, and that is a security property rather than tidiness — a row
+  // without one would be a reference redeemable by anything the Server has,
+  // which is design.md's "removing the assertion path is a security property"
+  // argument; how it is checked is `redeemHandoff`'s comment in `functions.ts`.
+  // It is compared and never returned.
   // spec: identity-and-authorization/sign-in-handoff#reference-is-accepted-once
   // spec: identity-and-authorization/sign-in-handoff#the-redeemer-keeps-what-it-earns
   sign_in_handoffs: defineTable({
