@@ -25,8 +25,34 @@ export const PORTS = {
   app: 5000,
 };
 
-/** External port each local port is published on by .replit's port map. */
-const REPLIT_EXTERNAL = { convex: 3002, convexSite: 3003, stdb: 3001, app: 80 };
+let portMap;
+
+/**
+ * The external port each local port is published on, read from `.replit`'s
+ * `[[ports]]` blocks — the mapping is declared once, there. Hand-copying it
+ * here is what lets the two drift apart: a port renumbered in `.replit` would
+ * leave the demo minting origins nobody is listening on, and nothing fails
+ * until a browser follows one.
+ */
+function externalPort(name) {
+  const local = PORTS[name];
+  if (portMap === undefined) {
+    const text = readFileSync(join(repoRoot, ".replit"), "utf8");
+    portMap = new Map();
+    for (const block of text.split(/^\[\[ports\]\]$/m).slice(1)) {
+      const from = /^\s*localPort\s*=\s*(\d+)/m.exec(block)?.[1];
+      const to = /^\s*externalPort\s*=\s*(\d+)/m.exec(block)?.[1];
+      if (from && to) portMap.set(Number(from), Number(to));
+    }
+  }
+  const external = portMap.get(local);
+  if (external === undefined) {
+    throw new Error(
+      `.replit publishes no external port for local ${local} (${name}) — add a [[ports]] block for it`,
+    );
+  }
+  return external;
+}
 
 /**
  * Which Convex the demo targets.
@@ -65,8 +91,8 @@ export function origins(target = platformTarget()) {
   const domain = process.env["REPLIT_DEV_DOMAIN"];
   const at = (port) => (port === 80 ? `https://${domain}` : `https://${domain}:${port}`);
   const local = {
-    stdbUrl: domain ? at(REPLIT_EXTERNAL.stdb) : `http://127.0.0.1:${PORTS.stdb}`,
-    appOrigin: domain ? at(REPLIT_EXTERNAL.app) : `http://127.0.0.1:${PORTS.app}`,
+    stdbUrl: domain ? at(externalPort("stdb")) : `http://127.0.0.1:${PORTS.stdb}`,
+    appOrigin: domain ? at(externalPort("app")) : `http://127.0.0.1:${PORTS.app}`,
   };
   if (target.kind === "hosted") {
     const convexUrl = target.convexUrl ?? capturedDeploymentUrl();
@@ -83,8 +109,8 @@ export function origins(target = platformTarget()) {
   }
   return {
     ...local,
-    convexUrl: domain ? at(REPLIT_EXTERNAL.convex) : `http://127.0.0.1:${PORTS.convex}`,
-    convexSiteUrl: domain ? at(REPLIT_EXTERNAL.convexSite) : `http://127.0.0.1:${PORTS.convexSite}`,
+    convexUrl: domain ? at(externalPort("convex")) : `http://127.0.0.1:${PORTS.convex}`,
+    convexSiteUrl: domain ? at(externalPort("convexSite")) : `http://127.0.0.1:${PORTS.convexSite}`,
   };
 }
 
