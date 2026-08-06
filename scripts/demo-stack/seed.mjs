@@ -1,33 +1,53 @@
 #!/usr/bin/env node
-// Re-seed the identity demo's world around real humans — `pnpm demo:seed`.
+// The demo world's manual controls — `pnpm demo:seed`.
 //
-// Run while the stack (`pnpm demo`) is up. Sign in first; the console shows
-// your platform user id and this exact command.
+// Ordinary play needs none of this: signing in at `/play` seats a human
+// automatically, through `roster.mjs`. These are the operator acts that have no
+// place on a page.
 //
-//   pnpm demo:seed --member=<userId>   put this human on team Alpha's roster
-//   pnpm demo:seed --coach=<userId>    designate them a coach of team Alpha
-//   pnpm demo:seed --admin=<userId>    designate them a platform admin
+//   pnpm demo:seed                        re-seed both snapshots as they stand
+//   pnpm demo:seed --seat=<userId>        seat a human on the emptier team
+//   pnpm demo:seed --admin=<userId>       designate a platform admin
 //
-// Flags combine. Ids are the platform's own user ids (`user:<id>` on a
-// credential's subject, minus the prefix).
-import { adminKey, backendBinary, origins, platformTarget, seedWorld } from "./lib.mjs";
+// A platform admin is worth seeing: the role reads everything and holds
+// implicit coach standing over every team, so an admin can obtain a coach token
+// for a team they were never designated a coach of — and is still refused every
+// mutating operation inside the game, because a game instance honours no
+// platform-side role at all.
+//
+// Ids are the platform's own user ids — the `user:<id>` on a credential's
+// subject, minus the prefix. `/play` shows yours.
+import {
+  adminKey,
+  backendBinary,
+  origins,
+  platformTarget,
+  readWorld,
+  seatPlayer,
+  seedInstance,
+  seedWorld,
+} from "./lib.mjs";
 
 const args = Object.fromEntries(
   process.argv
     .slice(2)
     .filter((arg) => arg.startsWith("--"))
     .map((arg) => {
-      const [name, value] = arg.replace(/^--/, "").split("=");
-      return [name, value ?? ""];
+      const [name, ...value] = arg.replace(/^--/, "").split("=");
+      return [name, value.join("=")];
     }),
 );
 
 const target = platformTarget();
 const auth = target.kind === "hosted" ? target : adminKey(await backendBinary());
-const world = seedWorld(auth, origins(target).appOrigin, {
-  member: args["member"],
-  coach: args["coach"],
-  admin: args["admin"],
-});
+
+const world = readWorld();
+const players = world?.players ? [...world.players] : [];
+const admins = world?.admins ?? [];
+if (args["seat"]) seatPlayer(players, args["seat"]);
+if (args["admin"]) admins.push(args["admin"]);
+
+const seeded = seedWorld(auth, origins(target).appOrigin, { players, admins });
+seedInstance(seeded, target);
 console.log("[demo:seed] world:");
-console.log(JSON.stringify(world, null, 2));
+console.log(JSON.stringify(seeded, null, 2));

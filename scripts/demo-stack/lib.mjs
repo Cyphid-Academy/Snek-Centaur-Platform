@@ -282,82 +282,134 @@ export function writeWorld(world) {
   writeFileSync(worldFile, JSON.stringify(world, null, 2));
 }
 
+/** The two teams the demo races, by the labels every surface shows. */
+export const TEAM_LABELS = ["Alpha", "Beta"];
+
 /**
- * Seed (or re-seed) the demo world: two teams, a playing game and a finished
- * one, with the given humans on team Alpha's roster. Ids are stable across
- * runs — previously seeded records are rewritten in place.
+ * Seat a human, on the team with fewer players — the demo's stand-in for a
+ * captain adding a member, which is `team-management`'s story and has no
+ * implementation yet.
+ *
+ * Idempotent: a player already seated keeps their team, so signing in again
+ * never moves anyone. The tie goes to the first label, so the very first
+ * player is always on Alpha and the second always faces them.
  */
-export function seedWorld(auth, appOrigin, { member, coach, admin } = {}) {
+export function seatPlayer(players, userId, name) {
+  const seated = players.find((player) => player.userId === userId);
+  if (seated) return seated.team;
+  const counts = TEAM_LABELS.map(
+    (label) => players.filter((player) => player.team === label).length,
+  );
+  const team = TEAM_LABELS[counts[1] < counts[0] ? 1 : 0];
+  players.push({ userId, ...(name ? { name } : {}), team });
+  return team;
+}
+
+/**
+ * Seed (or re-seed) the demo world: two teams and one game being played, whose
+ * roster snapshot is exactly the seated players. Ids are stable across runs and
+ * across re-seats — previously seeded records are rewritten in place, so the
+ * game a browser is connected to keeps its identity while its roster grows.
+ */
+export function seedWorld(auth, appOrigin, { players = [], admins = [] } = {}) {
   const existing = readWorld();
   const stillThere =
-    existing &&
+    existing?.game &&
     convexRun(
       "registrySeeding:seededWorld",
       {
         teamIds: existing.teams.map((team) => team.teamId),
-        gameIds: existing.games.map((game) => game.gameId),
+        gameIds: [existing.game.gameId],
       },
       auth,
     );
-  const previous = stillThere ? existing : { teams: [], games: [], admins: [] };
-  const teamId = (label) => previous.teams.find((team) => team.label === label)?.teamId;
-  const gameId = (label) => previous.games.find((game) => game.label === label)?.gameId;
+  const previous = stillThere ? existing : null;
+  const teamId = (label) => previous?.teams.find((team) => team.label === label)?.teamId;
 
-  const alpha = convexRun(
-    "registrySeeding:seedTeam",
-    { ...(teamId("Alpha") ? { teamId: teamId("Alpha") } : {}), serverDomain: appOrigin },
-    auth,
-  );
-  const beta = convexRun(
-    "registrySeeding:seedTeam",
-    { ...(teamId("Beta") ? { teamId: teamId("Beta") } : {}), serverDomain: null },
-    auth,
-  );
+  const teams = TEAM_LABELS.map((label) => ({
+    label,
+    teamId: convexRun(
+      "registrySeeding:seedTeam",
+      {
+        ...(teamId(label) ? { teamId: teamId(label) } : {}),
+        // Both teams are operated from this demo's own Server, which is what
+        // lets it earn either team's game credential.
+        serverDomain: appOrigin,
+      },
+      auth,
+    ),
+  }));
 
-  const roster = [
-    {
-      teamId: alpha,
-      memberUserIds: member ? [member] : [],
-      coachUserIds: coach ? [coach] : [],
-    },
-    { teamId: beta, memberUserIds: [], coachUserIds: [] },
-  ];
-  const playing = convexRun(
+  const roster = teams.map((team) => ({
+    teamId: team.teamId,
+    memberUserIds: players.filter((player) => player.team === team.label).map((p) => p.userId),
+    // Nobody is a designated coach in this demo: a coach token is the platform
+    // admin's implicit standing, granted at issuance, and `seed.mjs --admin` is
+    // where that is arranged.
+    coachUserIds: [],
+  }));
+  const gameId = convexRun(
     "registrySeeding:seedGame",
-    {
-      ...(gameId("Demo match") ? { gameId: gameId("Demo match") } : {}),
-      status: "playing",
-      roster,
-    },
-    auth,
-  );
-  const finished = convexRun(
-    "registrySeeding:seedGame",
-    {
-      ...(gameId("Finished match") ? { gameId: gameId("Finished match") } : {}),
-      status: "finished",
-      roster,
-    },
+    { ...(previous?.game ? { gameId: previous.game.gameId } : {}), status: "playing", roster },
     auth,
   );
 
-  const admins = new Set(previous.admins ?? []);
-  if (admin) {
+  const designated = new Set(previous?.admins ?? []);
+  for (const admin of admins) {
     convexRun("registry:designateAdmin", { userId: admin, designated: true }, auth);
-    admins.add(admin);
+    designated.add(admin);
   }
 
   const world = {
-    teams: [
-      { label: "Alpha", teamId: alpha, serverDomain: appOrigin },
-      { label: "Beta", teamId: beta, serverDomain: null },
-    ],
-    games: [
-      { label: "Demo match", gameId: playing, status: "playing" },
-      { label: "Finished match", gameId: finished, status: "finished" },
-    ],
-    admins: [...admins],
+    teams,
+    game: { gameId, status: "playing" },
+    players,
+    admins: [...designated],
   };
   writeWorld(world);
   return world;
+}
+
+/** The database the demo's game module is published as. */
+export const DEMO_DATABASE = "snek-demo-game";
+
+/**
+ * Seed the game instance from the world — the demo's stand-in for
+ * `initialize_game`, which belongs to migrate-game-lifecycle.
+ *
+ * Called on every roster change, because a game instance is seeded once and
+ * never refreshed: a player seated after the instance was initialised is a
+ * player the instance has never heard of, so the snapshot is written again.
+ * (A real game freezes its roster instead, which is exactly why this is
+ * demo-only scaffolding.) Counters survive — `seed_game` inserts them and
+ * never overwrites.
+ *
+ * The call goes through the CLI, whose login identity published the module and
+ * is therefore the owner `seed_game` answers.
+ */
+export function seedInstance(world, target = platformTarget()) {
+  const payload = {
+    platformIssuer: origins(target).convexSiteUrl,
+    gameId: world.game.gameId,
+    participantTeams: world.teams.map((team) => team.teamId),
+    rosterMembers: world.players.map((player) => ({
+      userId: player.userId,
+      teamId: world.teams.find((team) => team.label === player.team)?.teamId ?? "",
+    })),
+    rosterCoaches: [],
+  };
+  execFileSync(
+    "spacetime",
+    [
+      "call",
+      "--server",
+      `http://127.0.0.1:${PORTS.stdb}`,
+      DEMO_DATABASE,
+      "seed_game",
+      // The reducer takes one JSON *string* argument, so the document is
+      // stringified once for the reducer and again as its CLI argument.
+      JSON.stringify(JSON.stringify(payload)),
+    ],
+    { cwd: repoRoot, stdio: ["ignore", "pipe", "pipe"] },
+  );
 }

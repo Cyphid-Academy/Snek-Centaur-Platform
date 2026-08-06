@@ -1,11 +1,14 @@
-# Identity & Authorization demo
+# The identity demo: a team counter race
 
 `pnpm demo` stands the platform's three runtimes up together — the Convex
-deployment, a SpacetimeDB host with the game module published, and the
-reference Snek Centaur Server app — and runs the documented operator acts
-against them (issuer registration, world seeding). The result is the
-`identity-and-authorization` capability running end to end, driven from a
-browser at the app's **`/console`** page.
+deployment, a SpacetimeDB host with the game modules published, and the
+reference Snek Centaur Server app — and runs the operator acts that give them a
+world to play in. The result is at the app's **`/play`**: two teams, one
+counter each, and a button.
+
+Sign in and you are seated on a team. Press **+1** and everybody watching sees
+it land. That is the whole game, and every step of getting into it is the
+`identity-and-authorization` capability doing its real work.
 
 On Replit this is the Run button (`Identity Demo` workflow). Anywhere else:
 `pnpm demo` from the repo root (needs `spacetime` on `PATH`).
@@ -20,11 +23,7 @@ The stack targets whichever Convex the environment names:
   your deployment exactly as `pnpm dev:convex` would, and the platform origin
   is the deployment's stable `https://<name>.convex.site` — so the Google
   redirect URI is registered once and survives restarts, and the Convex
-  dashboard shows the live tables. One caveat: the deployment fetches this
-  app's published keys over the public internet, so the service-principal
-  panels need the app origin to be publicly reachable — a running Replit
-  workspace is; a laptop's loopback is not (everything browser-driven still
-  works there).
+  dashboard shows the live tables.
 - **Local** — with no deploy key, the pinned self-hosted backend runs on ports
   3210/3211 (the same binary the end-to-end harness drives, fetched once into
   `~/.cache/convex/binaries`), and its data persists in `.demo/`.
@@ -33,7 +32,7 @@ The stack targets whichever Convex the environment names:
 ## One-time setup: Google
 
 Sign-in is the real Google flow — the platform maintains no credential store
-for humans, so without a Google client nothing can sign in.
+for humans, so without a Google client nobody can sign in.
 
 1. Create (or reuse) a Google OAuth **web application** client.
 2. Set three environment secrets (on Replit: **Secrets**):
@@ -48,68 +47,83 @@ for humans, so without a Google client nothing can sign in.
    - local Convex locally: `http://127.0.0.1:3211/api/auth/callback/google`
 
 Open the app **in its own browser tab** (on Replit: the "open in new tab"
-button on the webview). Google refuses to complete sign-in inside an iframe,
-and the platform's session cookie rides on top-level navigations.
+button on the webview). Google refuses to complete sign-in inside an iframe.
 
-## What the console demonstrates
+To race somebody, open `/play` as a second person — another browser, another
+profile, or a private window — and sign in with a different Google account.
 
-- **Liveness & published verification material** — the anonymous
-  `platformStatus` query, and the `/.well-known/openid-configuration` +
-  `/.well-known/jwks.json` documents any party validates the platform's
-  credentials against, alone.
-- **Google sign-in and the session** — the real redirect chain: the app sends
-  the browser to the platform's `/sign-in` entry with a PKCE challenge, Google
-  answers at the platform's origin (never the app's), and the browser returns
-  carrying a single-use handoff reference. The session cookie is httpOnly, on
-  the platform's origin alone; reloading the console and signing in again is
-  the silent round trip.
-- **The sign-in handoff** — the reference is redeemed with the page's own
-  verifier; a reference arriving with no verifier behind it is discarded; a
-  spent reference redeems nothing.
-- **Credential custody** — the page holds its credential in memory only,
-  shows only decoded claims (subject, audience, the structured capability
-  claim, the `act` naming this server), and counts down the fifteen-minute
-  lifetime. Renewal is another silent round trip: a credential cannot renew
-  itself, because `begin-sign-in-handoff` is outside every peer ceiling.
-- **Game access tokens** — operator / spectator / coach issuance against the
-  seeded games, with the real refusals: not on a roster, not a designated
-  coach, game finished. A platform admin (seed with `--admin`) is an implicit
-  coach of every team. Token subjects encode the role; audiences name the one
-  game.
-- **Instance admission** — the console knocks on the published game instance
-  with and without tokens. The shipped module's seed tables have no writer
-  until `migrate-game-lifecycle` lands `initialize_game`, so every knock shows
-  the fail-closed refusal — decided by the same `admit()` the unit and
-  end-to-end suites drive.
-- **Attribution & the call bound** — every call the page makes under its
-  credential carries `act`, is charged against this server's call bound, and
-  appears in the "actions taken through a server" list.
-- **The server as a service principal** — the app signs short-lived assertions
-  with its own key (published at `/.well-known/snek-server-keys`, generated on
-  first boot), exchanges them for platform credentials, and shows the loud
-  refusal for capabilities beyond its registered ceiling. It holds a per-team
-  game credential with proactive renewal, obtains bot tokens under it, and
-  presents them at the instance — including the check that the host's
-  websocket-token exchange preserves the platform's issuer, game binding and
-  subject.
+## What is real underneath
 
-## Seeding
+Nothing about the identity machinery is simulated. In the order the demo
+exercises it:
 
-The tables behind games and teams have no production writer yet (they belong
-to `migrate-game-lifecycle` / `migrate-team-management`), so the stack seeds a
-demo world as an operator act — `registrySeeding.ts` in the host, reachable
-only with the deployment's admin key.
+- **Sign-in happens at the platform's origin, never at this server's.** The
+  page sends your browser to the platform carrying a challenge; Google answers
+  the platform; the platform sends you back holding a single-use handoff
+  reference. This server never sees the exchange with Google, and could not
+  redeem the reference itself — redeeming it takes the verifier the page kept.
+- **The session lives in a cookie no page script can read**, on the platform's
+  origin alone. Reload `/play` and the round trip repeats silently, because
+  the session is still there; sign out and it goes through Google again.
+- **Being seated is not being authorized.** Seating writes you into the game's
+  roster snapshot (see the scaffolding note below). What that earns you is
+  decided twice more, by two different parties.
+- **The platform decides whether to issue a game token.** An operator token
+  goes only to somebody the snapshot records on a participating team, and only
+  while the game is being played. A spectator token goes to any signed-in
+  human. Each is signed for one game and expires in fifteen minutes.
+- **The game instance decides whether to admit the connection**, entirely on
+  its own — checking the signature against material it was seeded with, that
+  the token names *this* game, that it has not expired, and that the subject
+  is somebody its roster knows. It calls nothing and nobody to do it.
+- **Your team comes from the roster, not from the token.** An operator token
+  binds no team at all; the instance derives it at admission from the snapshot,
+  so nothing a client sends can move a point to another team's counter.
+- **A spectator cannot act, structurally.** Press +1 while watching and the
+  game refuses — not by checking a permission, but because a spectator's
+  admitted identity carries no team to act for. The button is left enabled so
+  you can see it happen.
+- **An established connection survives its token's expiry.** Expiry bounds the
+  window for *establishing* a connection; reconnecting fetches a fresh token.
 
-The initial world holds team **Alpha** (operated by the app), team **Beta**
-(no server), a **playing** game and a **finished** one, with empty rosters.
-After signing in, the console shows your platform user id and the command that
-puts you on the roster:
+## The scaffolding, and why it exists
+
+Two things in this demo are not the platform, and both stand in for changes
+that have not landed yet:
+
+- **Seating.** Getting onto a team's roster is `team-management`'s story (a
+  captain adds a member), and a game taking a roster snapshot is
+  `game-lifecycle`'s. Neither exists, so the demo treats signing in as joining:
+  the app's server asks the stack to seat you on whichever team has fewer
+  players, which rewrites the platform's roster snapshot and re-seeds the
+  instance. It is an operator act, run with the deployment's admin credential
+  — the same trust level as registering a trusted issuer.
+- **The game module.** `packages/stdb/spacetimedb` ships the platform's real
+  instance, and it deliberately has no `initialize_game` and no gameplay
+  reducers — so it admits nobody and there is nothing to play. `apps/demo-game`
+  fills exactly those two gaps: a seeding reducer only the module's publisher
+  may call, and a one-line `increment`. Its admission path is not a copy of the
+  real one but a call into the same shared code (`admit`, `admissionRow`,
+  `actingTeam` from `@cyphid/snek-stdb`), so what a token earns in the demo is
+  what it earns in the real instance. The stack publishes both modules every
+  run.
+
+## Manual controls
+
+Ordinary play needs none of these — `/play` seats people by itself.
 
 ```
-pnpm demo:seed --member=<userId>            # operator eligibility, team Alpha
-pnpm demo:seed --member=<id> --coach=<id>   # also a designated coach of Alpha
-pnpm demo:seed --admin=<id>                 # platform admin (implicit coach)
+pnpm demo:seed                      re-seed both snapshots as they stand
+pnpm demo:seed --seat=<userId>      seat a human without them signing in
+pnpm demo:seed --admin=<userId>     designate a platform admin
+pnpm demo:codegen                   regenerate the game's client bindings
 ```
 
-Ids are stable across re-seeds and stack restarts; everything the stack
-persists lives in the gitignored `.demo/` directory.
+A **platform admin** is worth a look, because the role is deliberately
+lopsided: it reads everything and holds implicit coach standing over every team
+— so an admin can obtain a coach token for a team nobody designated them a
+coach of — and it still cannot act inside a game, because a game instance
+honours no platform-side role at all.
+
+Everything the stack persists lives in the gitignored `.demo/`; ids are stable
+across restarts, so players keep their seats.
