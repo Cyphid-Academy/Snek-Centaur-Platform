@@ -140,7 +140,8 @@ So: **tier 1 over every commit, tier 2 once at the tip.** For a ten-commit branc
 | `pnpm e2e:browsers` | The same browser specs under Chromium, Firefox and WebKit |
 | `pnpm coverage` | Branch coverage over the engine's resolver |
 | `pnpm build:packages` | `tsc -b` over the workspace packages (their gitignored `dist/`) |
-| `pnpm dev` | Starts the Centaur Server reference app |
+| `pnpm dev` | Starts the Centaur Server reference app (Vite dev server) |
+| `pnpm start` | Builds the reference app and serves it with adapter-node — honours `ORIGIN`/`PORT`/`HOST`, which `vite dev` does not |
 | `pnpm dev:convex` | `convex dev` against your personal cloud dev deployment |
 | `pnpm dev:convex:local` | `convex dev` against a loopback deployment — no Convex account required |
 | `pnpm codegen` | Regenerates the host's and both components' `_generated/` |
