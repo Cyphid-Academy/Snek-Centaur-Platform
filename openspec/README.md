@@ -246,9 +246,9 @@ PR that completes the implementation (the archive-due gate enforces this)
   a native word-level review diff of exactly what the change does to the
   requirements. This is an AI responsibility — and if the deltas are
   revised after review, the AI rewrites history to keep the seed/edit pair
-  intact rather than stacking correction commits. (In the Replit
-  environment, use the scripted-rebase tooling for this — see
-  `replit.md` → "Scripted history rewriting".)
+  intact rather than stacking correction commits. (Agent shells have no
+  TTY for an interactive rebase — use the scripted-rebase tooling, see
+  `AGENTS.md` → "Scripted history rewriting".)
 - **New capabilities are minted by their change's delta.** A delta file
   whose capability has no `specs/<capability>/spec.md` yet must open with
   a `## Purpose` preamble — the capability's Purpose section, including
@@ -328,9 +328,8 @@ PR that completes the implementation (the archive-due gate enforces this)
   same event. The freshness check runs continuously in CI and as
   `spec:fold`'s hard precondition; on staleness, re-seed (rewrite the
   seed/edit pair against the new base) and have the word-diff
-  re-reviewed. (Replit environment: the
-  scripted-rebase tooling in `replit.md` → "Scripted history rewriting"
-  performs these rewrites non-interactively.)
+  re-reviewed. (The scripted-rebase tooling in `AGENTS.md` → "Scripted
+  history rewriting" performs these rewrites non-interactively.)
 
 **One thing that advances `specs/` without a fold: a grammar migration.** A
 change to the *grammar* requirements are written in — the structural

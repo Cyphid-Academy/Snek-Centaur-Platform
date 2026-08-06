@@ -171,6 +171,97 @@ Both squash and merge-commit are enabled; **rebase-merge stays off** (it drops t
 
 **Verify a PR's live state before acting on it.** Before any step whose correctness depends on a PR being open or merged — pushing to its branch, adding an archive or "final" commit, rebasing it, merging, or telling the user to merge — re-check the current state first (`git fetch` and look for the PR's merge commit on the base branch, or the GitHub API `pull_request_read get`). **Never assume a PR is still open from an earlier check in the same session** — humans merge and close out of band, and there is no signal unless you look or `subscribe_pr_activity`. A merged PR is finished: its branch MUST NOT receive new commits — do follow-up work as a **fresh branch off the updated base**. When handing a PR off as "ready to merge," either subscribe to its activity or re-verify its state at the start of the next PR-related action.
 
+## Scripted history rewriting
+
+Keeping a seed/edit pair intact after review revisions, or re-seeding it after
+a rebase onto an advanced `main` (see `openspec/README.md`), means rewriting
+history rather than stacking correction commits. Interactive rebase needs an
+editor and a TTY, which agent shells — Replit workflows, Claude Code Web —
+do not have, so use the scripted-rebase tooling.
+
+Both scripts are **destructive and armed**: each refuses to do anything unless
+its own gitignored arming file exists (`.git-workflow-armed-rebase`,
+`.git-workflow-armed-reset`). The token is claimed atomically via `mv` and
+consumed on start, so one arming permits exactly one run of exactly that
+script, even if both start in parallel. Unarmed invocations exit harmlessly
+with a "Not armed" message — which is what makes them safe to expose as Replit
+workflows a Run-button sweep might trigger.
+
+1. Write the plan to `.rebase-plan.txt` (gitignored). Line 1 is the base ref
+   (e.g. `HEAD~3`); the rest is the rebase todo (`pick`/`squash`/`fixup`/
+   `drop`/`exec` lines, same format as `git rebase -i`).
+2. Arm it: `touch .git-workflow-armed-rebase`.
+3. Run `bash scripts/run-scripted-rebase.sh` (Replit: the **Scripted rebase**
+   workflow). It applies the todo non-interactively and, if the rebase fails,
+   runs `git rebase --abort` to restore the previous state. It refuses to run
+   if a rebase/merge/cherry-pick is already in progress. On success it deletes
+   `.rebase-plan.txt`, so a stale plan can never be replayed.
+4. After any rebase, run `pnpm spec:freshness`; on staleness, re-seed the
+   affected seed/edit pairs and have the word-diff re-reviewed.
+
+This rewrites local branch history only — pushing afterwards needs a
+force-push, done outside the script.
+
+`scripts/hard-reset-to-origin.sh` (arming file `.git-workflow-armed-reset`)
+resets the current branch to its matching `origin/` branch, failing if none
+exists.
+
+### Rewriting messages and file contents with `exec`
+
+A plain `reword` in the todo is a **no-op** here: the tool runs with
+`GIT_EDITOR=true`, so `reword`/`squash` keep the original message instead of
+prompting. To rewrite a commit's **message** *or* its **file contents**, use
+`exec` todo lines. An `exec` runs immediately after the preceding `pick`, in
+the worktree with that commit checked out as `HEAD`, so `git commit --amend`
+inside it rewrites exactly that commit; the following `pick` lines then replay
+on top of the amended commit.
+
+Prepare any replacement content (message bodies, file bodies) **outside the
+repo** first — a scratch dir — so the working tree is clean before the rebase
+starts. An `exec` that exits non-zero stops the rebase and the tool aborts, so
+each `exec` must fully succeed or fail cleanly.
+
+**Rewrite a message** — prepare `msg.txt`, then:
+```
+pick <sha> Old subject
+exec git commit --amend -F /abs/scratch/msg.txt
+```
+(`-m "New subject"` for a one-liner; a prepared `-F` file for a full body.)
+
+**Rewrite a file inside a commit** — prepare the replacement file, then:
+```
+pick <sha> Some commit
+exec cp /abs/scratch/new-body path/in/repo && git add path/in/repo && git commit --amend --no-edit
+```
+`--no-edit` keeps the existing message.
+
+**Re-seed a requirements seed commit.** `pnpm spec:freshness` passes only
+while a seed commit's blocks still match `specs/` exactly; a rebase onto an
+advanced `main` that touched those requirements makes the seed stale, and the
+convention is to **re-seed** (regenerate verbatim from the new base) rather
+than stack a correction commit:
+
+1. Copy the affected requirement blocks verbatim from the **current**
+   `openspec/specs/<capability>/spec.md` into a fresh delta file at a scratch
+   path (its `## MODIFIED Requirements` section holds the blocks unchanged).
+2. Plan:
+   ```
+   <new-base>
+   pick <seed-sha>  Seed <change> deltas verbatim
+   exec cp /abs/scratch/seed-delta.md openspec/changes/<change>/specs/<cap>/spec.md && git add -A && git commit --amend --no-edit
+   pick <edit-sha>  Edit <change> deltas: ...
+   ```
+   The `exec` overwrites the seed commit's delta file with the freshly-copied
+   blocks and amends the seed commit; `pick <edit-sha>` then replays the edits
+   on top. If the edits no longer apply cleanly, resolve the conflict — or,
+   for a substantive re-edit, follow the edit `pick` with a second
+   `exec … --amend` that writes the updated delta.
+3. Run `pnpm spec:freshness` and have the edit commit's word-diff re-reviewed.
+
+To create a seed/edit pair from scratch, two ordinary commits (seed verbatim,
+then edit) are simplest; reach for this `exec` recipe when you need to
+**re-seed** an existing pair after the base moves.
+
 ## Auth Library Note
 
 Better Auth integration (local install mode, plus the project-owned capability plugin that issues credentials to service principals) is deferred to the first Convex implementation task. Do not integrate it before then. See `packages/convex-host/AGENTS.md` for details.

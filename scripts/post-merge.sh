@@ -1,8 +1,8 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+# Replit [postMerge] hook: refresh node_modules after a pull or merge moves the
+# lockfile. Failures are reported rather than swallowed — a half-installed
+# workspace is worth knowing about here, not three commands later.
+set -euo pipefail
 
-if [ -f "package.json" ]; then
-  pnpm install --prefer-offline 2>/dev/null || true
-fi
-
+pnpm install --prefer-offline
 echo "Post-merge setup complete."
