@@ -37,6 +37,7 @@
     "demo:seed": "node scripts/demo-stack/seed.mjs",
     "demo:codegen": "node scripts/generate-demo-bindings.mjs",
     "dev": "pnpm build:packages && pnpm --filter @cyphid/centaur-server-reference dev",
+    "start": "pnpm --filter @cyphid/centaur-server-reference build && node apps/centaur-server-reference/build/index.js",
     "dev:tester": "pnpm build:packages && pnpm --filter @cyphid/visual-tester dev",
     "dev:convex": "pnpm --filter @cyphid/snek-convex-host exec convex dev",
     "dev:convex:local": "CONVEX_AGENT_MODE=anonymous pnpm --filter @cyphid/snek-convex-host exec convex dev",

@@ -4,4 +4,5 @@
 - [Convex & SpacetimeDB local dev](convex-spacetime-local-dev.md) — install the pinned spacetime CLI via `pnpm setup:stdb`, never "latest"; `convex dev` needs CONVEX_AGENT_MODE=anonymous and aiFiles disabled or it hangs headless. Cloud dev deploys go via CONVEX_DEPLOY_KEY, and Replit *can* be reached from one.
 - [Replit durable paths](replit-durable-paths.md) — $HOME gets wiped on rebuilds, the workspace doesn't; XDG_DATA/CONFIG/CACHE already point into it, so don't repoint them.
 - [Visual tester e2e on Replit](visual-tester-e2e.md) — the proxy's port list is of *external* ports; the tester binds 5001 but is published on 3000, so target that.
+- [Replit proxy & public origin](replit-proxy-origin.md) — TLS ends at the edge, so request-derived origins come out http://; SvelteKit dev ignores x-forwarded-proto. Configure identity origins explicitly.
 - [Verify PR state before acting](verify-pr-state.md) — re-check a PR's live open/merged state before pushing to its branch, archiving, rebasing, or merging; a merged branch must not be reused (fresh branch off base instead).
