@@ -59,10 +59,34 @@ deployment.
 - Dev server runs on port 5000 with `server.allowedHosts: true` so the Replit preview iframe works.
 - `@sveltejs/adapter-node` is used for production builds.
 
+## The identity demo lives here, and it is scaffolding
+
+`src/routes/play/` and `src/lib/server/demo/` are the `identity-and-authorization`
+demo — a two-team counter race against a live game instance, documented in
+`docs/identity-demo.md`. They are **not** part of this Server's specified
+surface. They exist because two capabilities this app will eventually rely on
+(`team-management`'s roster, `game-lifecycle`'s game creation) have no
+implementation yet, so the demo seats players itself by shelling the demo
+stack's own operator script.
+
+Two properties keep them from becoming a burden on forks. Everything is
+**guarded on the demo stack's environment** (`SNEK_WORLD_FILE`,
+`SNEK_REPO_ROOT`): with those unset — which is every fork — the seating routes
+answer that no demo stack is running, and nothing else in the app depends on
+them. And nothing here reaches the repository by import: the only repo-relative
+reference is a runtime `execFile` behind `SNEK_REPO_ROOT`, so the subtree still
+builds standalone.
+
+`src/lib/game/_generated/` is `spacetime generate` output for the demo's game
+module, committed so a fork typechecks without the module in reach. Regenerate
+with `pnpm demo:codegen`; do not hand-edit it (the script re-stamps its
+`@ts-nocheck` headers, and says there why they are needed).
+
 ## Key files
 
 - `src/routes/+page.svelte` — landing page skeleton
 - `src/routes/sign-in/` — both ends of the platform's sign-in handoff
+- `src/routes/play/` — the identity demo (scaffolding; see above)
 - `src/routes/.well-known/snek-game-invite/+server.ts` — game-start invitation endpoint
 - `src/routes/.well-known/snek-server-keys/+server.ts` — published signing keys
 - `src/routes/.well-known/snek-healthcheck/+server.ts` — unauthenticated liveness

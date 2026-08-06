@@ -1,0 +1,14 @@
+{
+  "name": "@cyphid/snek-demo-game-module",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The identity demo's SpacetimeDB module project. Built by `spacetime build`, not by tsc -b. See docs/identity-demo.md for why it exists beside the real module.",
+  "dependencies": {
+    "@cyphid/snek-stdb": "workspace:*",
+    "spacetimedb": "2.7.*"
+  },
+  "devDependencies": {
+    "typescript": "*"
+  }
+}

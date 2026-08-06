@@ -5,10 +5,14 @@
 // `CONVEX_DEPLOY_KEY` is in the environment (the repo's provisioning strategy:
 // a personal dev deployment), or the pinned self-hosted backend locally when
 // not — with the host's functions pushed and its environment set; the
-// SpacetimeDB host, with the real game module published; the reference app on
+// SpacetimeDB host, with both game modules published; the reference app on
 // port 5000. Then the documented operator acts run against the deployment:
-// the app is registered as a trusted issuer, and the demo world is seeded
-// (`registrySeeding.ts` — an operator stand-in until the owning changes land).
+// the app is registered as a trusted issuer, and the demo world — two teams and
+// one game being played — is seeded into the platform and into the game
+// instance (`registrySeeding.ts` and `seed_game`, operator stand-ins until the
+// changes that own those writers land).
+//
+// The demo itself is `/play`: sign in, get seated on a team, race the counter.
 //
 // Sign-in is the real Google flow. The deployment needs GOOGLE_CLIENT_ID and
 // GOOGLE_CLIENT_SECRET (and ideally BETTER_AUTH_SECRET) in this process's
@@ -25,6 +29,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import {
+  DEMO_DATABASE,
   PORTS,
   adminKey,
   backendBinary,
@@ -36,8 +41,10 @@ import {
   instanceSecret,
   origins,
   platformTarget,
+  readWorld,
   ready,
   repoRoot,
+  seedInstance,
   seedWorld,
   startChild,
   stopChild,
@@ -169,29 +176,32 @@ children.push(
   ]),
 );
 await ready(`http://127.0.0.1:${PORTS.stdb}/v1/ping`);
-console.log("[demo] publishing game module…");
-const publish = () =>
+// Two modules, and both are the point. `snek-local` is the platform's own game
+// instance, published exactly as it ships — it admits nobody until
+// migrate-game-lifecycle lands `initialize_game`, and publishing it every run
+// keeps that shipped module continuously proven buildable. `snek-demo-game` is
+// the demo's playable instance: the same admission code, plus the seeding and
+// gameplay reducers the real module is still waiting on.
+const publish = (path, name) =>
   execFileSync(
     "spacetime",
-    [
-      "publish",
-      "--server",
-      `http://127.0.0.1:${PORTS.stdb}`,
-      "--yes",
-      "-p",
-      "packages/stdb/spacetimedb",
-      "snek-local",
-    ],
+    ["publish", "--server", `http://127.0.0.1:${PORTS.stdb}`, "--yes", "-p", path, name],
     { cwd: repoRoot, stdio: "inherit" },
   );
+const publishBoth = () => {
+  console.log("[demo] publishing the platform's game module…");
+  publish("packages/stdb/spacetimedb", "snek-local");
+  console.log("[demo] publishing the demo's game module…");
+  publish("apps/demo-game", DEMO_DATABASE);
+};
 try {
-  publish();
+  publishBoth();
 } catch {
   console.log("[demo] publish failed — attempting a server-issued login and retrying…");
   execFileSync("spacetime", ["login", "--server-issued-login", `http://127.0.0.1:${PORTS.stdb}`], {
     stdio: "inherit",
   });
-  publish();
+  publishBoth();
 }
 
 // ------------------------------------------------- operator acts: registry
@@ -207,7 +217,7 @@ convexRun(
       "issue-game-token",
       "review-attributed-actions",
     ],
-    returnAddresses: [`${where.appOrigin}/sign-in`, `${where.appOrigin}/console`],
+    returnAddresses: [`${where.appOrigin}/sign-in`, `${where.appOrigin}/play`],
   },
   auth,
 );
@@ -218,7 +228,14 @@ if (target.kind === "hosted" && where.appOrigin.startsWith("http://127.0.0.1")) 
   );
 }
 console.log("[demo] seeding the demo world…");
-seedWorld(auth, where.appOrigin);
+// Players seated in an earlier run keep their teams: the world is re-seeded as
+// it stands rather than emptied, so restarting the stack does not evict anyone.
+const previous = readWorld();
+const world = seedWorld(auth, where.appOrigin, {
+  players: previous?.players ?? [],
+  admins: previous?.admins ?? [],
+});
+seedInstance(world, target);
 
 // ---------------------------------------------------------------------- app
 children.push(
@@ -228,17 +245,21 @@ children.push(
       CONVEX_SITE_URL: where.convexSiteUrl,
       SNEK_STDB_URL: where.stdbUrl,
       SNEK_STDB_URL_INTERNAL: `http://127.0.0.1:${PORTS.stdb}`,
-      SNEK_STDB_DATABASE: "snek-local",
+      SNEK_STDB_DATABASE: DEMO_DATABASE,
       SNEK_WORLD_FILE: worldFile,
       SNEK_SERVER_DATA_DIR: join(demoDir, "server"),
+      // Where the app finds the seating script it shells. Its absence is what
+      // makes the play page's seating surface answer "no demo stack here",
+      // which is the state a team's fork of this app runs in.
+      SNEK_REPO_ROOT: repoRoot,
     },
   }),
 );
 await ready(`http://127.0.0.1:${PORTS.app}/.well-known/snek-healthcheck`, 180_000);
 
 console.log(`
-[demo] up. Open ${where.appOrigin}/console — in a real browser tab, not the
+[demo] up. Open ${where.appOrigin}/play — in a real browser tab, not the
 [demo] preview iframe: Google refuses to sign anyone in inside an iframe.
-[demo] After signing in, the console shows the seeding command that puts you
-[demo] on a team's roster: pnpm demo:seed --member=<your user id>
+[demo] Signing in seats you on a team; open a second browser (or a private
+[demo] window) as another person and race them.
 `);

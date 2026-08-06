@@ -28,12 +28,16 @@ The Run button is the **Identity Demo** workflow: `pnpm demo` stands up the
 Convex deployment — **hosted**, when a `CONVEX_DEPLOY_KEY` Secret is set
 (recommended: stable `convex.site` origin, so the Google redirect URI never
 changes), or the self-hosted backend on ports 3210/3211 (external 3002/3003)
-when not — plus the SpacetimeDB host (3000, external 3001) with the game
-module published, and the reference app (5000, external 80). It then registers
-the app as a trusted issuer and seeds the demo world. Setup (Google secrets,
-the callback URI, the seeding commands) is in `docs/identity-demo.md`. Open
-the app in a new tab — Google will not complete sign-in inside the preview
-iframe. Demo state persists in the gitignored `.demo/`.
+when not — plus the SpacetimeDB host (3000, external 3001) with both game
+modules published, and the reference app (5000, external 80). It then
+registers the app as a trusted issuer and seeds the demo world.
+
+The demo itself is the app's **`/play`**: a two-team counter race. Sign in and
+you are seated on a team; press +1 and everyone watching sees it land. Setup
+(Google secrets, the callback URI) and what is real underneath are in
+`docs/identity-demo.md`. Open the app in a new tab — Google will not complete
+sign-in inside the preview iframe. Demo state persists in the gitignored
+`.demo/`.
 
 ## Workflow
 
