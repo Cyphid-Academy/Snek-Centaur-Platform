@@ -15,7 +15,9 @@ runButton = "Identity Demo"
 # is the real Google flow; it needs GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET
 # (and ideally BETTER_AUTH_SECRET) as Secrets, and the callback address the
 # script prints registered on the Google client. Open the app in a new tab —
-# Google refuses to sign anyone in inside the preview iframe.
+# Google refuses to sign anyone in inside the preview iframe. This binds port
+# 5000, as "Start application" does, so the two collide rather than compose:
+# stop the Project group before running the demo.
 [[workflows.workflow]]
 name = "Identity Demo"
 author = "agent"
@@ -125,6 +127,9 @@ args = "bash scripts/hard-reset-to-origin.sh"
 [workflows.workflow.metadata]
 outputType = "console"
 
+# Local → external port map. scripts/demo-stack/lib.mjs parses these blocks to
+# build the demo's browser-facing origins, so this is the single source of
+# truth for the mapping: add or renumber a port here, not there.
 [[ports]]
 localPort = 3000
 externalPort = 3001
