@@ -162,7 +162,15 @@ async function obtainToken(): Promise<void> {
 /** The subject of the token in hand — what the instance decides the role from. */
 let subject = $state("");
 
-/** Swap between playing and watching: a different token, a fresh connection. */
+/**
+ * Swap between playing and watching: a different token, a fresh connection.
+ *
+ * The board goes first and comes back with the new token. Dropping the
+ * connection before asking for the replacement is what stops a press landing
+ * under a token this human has just given up — which, swapping an operator's
+ * for a spectator's, would be the demo scoring a point it is trying to show
+ * being refused.
+ */
 async function toggleWatching(): Promise<void> {
   watching = !watching;
   token = "";
@@ -176,8 +184,8 @@ async function closed(everConnected: boolean): Promise<void> {
     return;
   }
   // A working connection that ended wants a fresh token: an established one
-  // survives its token's expiry, so a reconnect is the only thing that needs a
-  // new one.
+  // survives its token's expiry, so a reconnect is the only thing that ever
+  // needs a new one.
   token = "";
   await obtainToken();
 }
@@ -244,7 +252,7 @@ onMount(() => {
       {/if}
     </p>
 
-    {#key token}
+    {#if token}
       <GameBoard
         {token}
         stdbUrl={data.stdbUrl}
@@ -255,7 +263,7 @@ onMount(() => {
           refusal = said;
         }}
       />
-    {/key}
+    {/if}
 
     {#if refusal}
       <p data-testid="refusal" class="refused">{refusal}</p>
