@@ -39,6 +39,12 @@ you are seated on a team; press +1 and everyone watching sees it land. Setup
 sign-in inside the preview iframe. Demo state persists in the gitignored
 `.demo/`.
 
+The demo lives on **`replit/identity-auth-demo`**, the top of the identity
+stack (`claude/toolchain-scaffold` → `claude/e2e-testing-harness` →
+`claude/identity-and-authorisation` → here) and the one branch to run it from.
+Everything below it is under review as its own pull request, so a fix belongs
+on whichever of those branches owns its subject, not here by default.
+
 ## Workflow
 
 The development workflow (`Start application`) runs:
