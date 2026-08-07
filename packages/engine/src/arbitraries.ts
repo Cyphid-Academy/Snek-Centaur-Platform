@@ -5,7 +5,8 @@
 // property file draws from the same definitions.
 //
 // Configuration parameters are generated from their FULL documented ranges
-// (game-engine/configuration-parameters, mirrored in CONFIG_RANGES):
+// (game-engine/configuration-parameters, read via CONFIG_RANGES from the
+// published descriptor table in bounds.ts):
 // fast-check biases toward range boundaries, so narrowing ranges by hand
 // hides exactly the extreme cases property testing is best at finding.
 // Bounds that exist only to keep test wall-clock in check (turn budgets,
@@ -13,6 +14,7 @@
 // into these arbitraries. Not part of the package's public API.
 import * as fc from "fast-check";
 import { advance } from "./board.js";
+import { gameplayParameter } from "./bounds.js";
 import { itemsByCell } from "./items.js";
 import { SETUP_SPAWN_TURN } from "./items.js";
 import { rngFromSeed } from "./rng.js";
@@ -32,17 +34,29 @@ import type {
 } from "./types.js";
 import { ALL_DIRECTIONS, CellType, ItemType } from "./types.js";
 
-// Full documented parameter ranges. spec: game-engine/configuration-parameters
+// Full documented parameter ranges — DERIVED from the engine's published
+// descriptor table, never a second copy of its numbers
+// (spec: game-configuration/parameter-bounds-sourcing#widget-and-validator-agree;
+// the property suites are one more reader of the one declaration). Each entry
+// is the range of values that ENABLE the parameter; a disable sentinel lying
+// outside that range is drawn separately below, as it always was.
+const range = (key: string): { min: number; max: number } => {
+  const d = gameplayParameter(key);
+  return { min: d.min, max: d.max };
+};
+
 export const CONFIG_RANGES = {
-  maxHealth: { min: 1, max: 500 },
-  maxTurns: { min: 1, max: 1000 }, // 0 is the no-limit sentinel, drawn separately
-  hazardDamage: { min: 1, max: 100 },
-  foodSpawnRate: { min: 0, max: 5 },
-  potionSpawnRate: { min: 0, max: 0.2 },
-  initialBudgetMs: { min: 0, max: 600000 },
-  budgetIncrementMs: { min: 100, max: 5000 },
-  firstTurnTimeMs: { min: 1000, max: 300000 },
-  maxTurnTimeMs: { min: 100, max: 300000 },
+  maxHealth: range("maxHealth"),
+  maxTurns: range("maxTurns"), // 0 is the no-limit sentinel, drawn separately
+  hazardDamage: range("hazardDamage"),
+  foodSpawnRate: range("foodSpawnRate"),
+  // One range for both potions: the two parameters declare the same one, and
+  // bounds.test.ts holds them equal so this collapse cannot go stale.
+  potionSpawnRate: range("invulnPotionSpawnRate"),
+  initialBudgetMs: range("clock.initialBudgetMs"),
+  budgetIncrementMs: range("clock.budgetIncrementMs"),
+  firstTurnTimeMs: range("clock.firstTurnTimeMs"),
+  maxTurnTimeMs: range("clock.maxTurnTimeMs"),
 } as const;
 
 const int = (r: { min: number; max: number }) => fc.integer({ min: r.min, max: r.max });
@@ -52,9 +66,14 @@ const rate = (r: { min: number; max: number }) =>
 export const runtimeConfigArb: fc.Arbitrary<GameRuntimeConfig> = fc.record({
   maxHealth: int(CONFIG_RANGES.maxHealth),
   maxTurns: fc.oneof(fc.constant(0), int(CONFIG_RANGES.maxTurns)), // 0 = no turn limit
-  // 0 = no duration limit; the live range is drawn small enough that fuzzed
-  // games actually reach it, which is the point of generating it at all.
-  maxGameDurationMs: fc.oneof(fc.constant(0), int({ min: 1000, max: 60000 })),
+  // 0 = no duration limit; the live range's upper end is capped far below the
+  // declared 86400000 so that fuzzed games actually reach it, which is the
+  // point of generating it at all — a harness constant, per this file's
+  // header, not a second declaration of the bound.
+  maxGameDurationMs: fc.oneof(
+    fc.constant(0),
+    int({ min: gameplayParameter("maxGameDurationMs").min, max: 60000 }),
+  ),
   hazardDamage: int(CONFIG_RANGES.hazardDamage),
   foodSpawnRate: rate(CONFIG_RANGES.foodSpawnRate),
   invulnPotionSpawnRate: rate(CONFIG_RANGES.potionSpawnRate),

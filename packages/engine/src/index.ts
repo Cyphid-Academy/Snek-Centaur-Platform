@@ -72,6 +72,20 @@ export {
 // resolution reads. spec: game-engine/configuration-parameters
 export type { GameRuntimeConfig } from "./types.js";
 
+// The same vocabulary's ranges, defaults and disable sentinels as reflectable
+// data, so a configuration record's validator and an editing surface's widget
+// limits read one declaration instead of restating it
+// (spec: game-configuration/parameter-bounds-sourcing). Describing bounds is
+// not enforcing them: the engine still rejects nothing on range grounds
+// (spec: game-engine/configuration-parameters#bounds-live-at-the-surfaces).
+export {
+  GAMEPLAY_PARAMETER_DESCRIPTORS,
+  gameplayParameter,
+  gameplayParameterKey,
+  isWithinGameplayBounds,
+} from "./bounds.js";
+export type { GameplayParameterDescriptor, GameplayParameterKind } from "./bounds.js";
+
 // Outcome, events
 export type { DeathCause, GameOutcome, TurnEvent } from "./types.js";
 
