@@ -46,9 +46,13 @@ Three properties are load-bearing and none of them is a style choice. Read
   own choosing.
 
 The two platform addresses come from this process's environment; the issuer id
-and return address are derived from the request's own origin, so a fork keeps
-nothing in step by hand. The platform must have the origin registered — an
-operator act, `registry:registerIssuer` on the deployment.
+and return address come from `SNEK_SERVER_ORIGIN` where set, falling back to
+the request's own origin so a plainly-hosted fork keeps nothing in step by
+hand. Set the variable wherever a proxy sits between browsers and this process
+(a TLS-terminating edge hands this process `http://`, and an issuer that
+disagrees with its registration in scheme alone is refused). The platform must
+have the origin registered — an operator act, `registry:registerIssuer` on the
+deployment.
 
 ## Vite / SvelteKit notes
 
