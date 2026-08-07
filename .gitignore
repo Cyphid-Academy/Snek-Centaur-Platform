@@ -57,3 +57,7 @@ attached_assets/
 # Scripted rebase plan (local-only)
 .rebase-plan.txt
 .git-workflow-armed-*
+
+# SpacetimeDB CLI, installed by scripts/install-spacetime.sh
+.local/bin/
+.local/share/spacetime/

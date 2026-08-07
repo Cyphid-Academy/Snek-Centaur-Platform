@@ -54,13 +54,17 @@ waitForPort = 5001
 [workflows.workflow.metadata]
 outputType = "console"
 
+# `setup:stdb` first: the CLI is not in nixpkgs and lives in the workspace,
+# so it needs installing after a container rebuild. It is idempotent and
+# offline once the pinned version is present, so running it every start is
+# what makes a wiped container self-heal.
 [[workflows.workflow]]
 name = "SpacetimeDB"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "pnpm dev:stdb"
+args = "pnpm setup:stdb && pnpm dev:stdb"
 waitForPort = 3000
 
 [workflows.workflow.metadata]
