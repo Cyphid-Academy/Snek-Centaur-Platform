@@ -1,0 +1,16 @@
+{
+  "name": "@cyphid/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "playwright test --project=integration --project=chromium",
+    "test:browsers": "playwright test --project=chromium --project=firefox --project=webkit --pass-with-no-tests",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@types/node": "^25.9.0",
+    "typescript": "*"
+  }
+}

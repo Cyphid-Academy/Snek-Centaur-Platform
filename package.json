@@ -11,7 +11,7 @@
   },
   "scripts": {
     "build:packages": "tsc -b",
-    "typecheck": "pnpm build:packages && pnpm typecheck:convex && pnpm typecheck:stdb-module && pnpm --filter @cyphid/centaur-server-reference typecheck && pnpm --filter @cyphid/visual-tester typecheck",
+    "typecheck": "pnpm build:packages && pnpm typecheck:convex && pnpm typecheck:stdb-module && pnpm --filter @cyphid/centaur-server-reference typecheck && pnpm --filter @cyphid/visual-tester typecheck && pnpm --filter @cyphid/e2e typecheck",
     "typecheck:convex": "tsc -p packages/convex-snek-platform/tsconfig.convex.json && tsc -p packages/convex-centaur-state/tsconfig.convex.json && tsc -p packages/convex-host/convex/tsconfig.json",
     "typecheck:stdb-module": "tsc -p packages/stdb/spacetimedb/tsconfig.json",
     "lint": "biome check .",
@@ -19,6 +19,8 @@
     "test": "pnpm build:packages && vitest run && pnpm --filter @cyphid/visual-tester test && pnpm --filter @cyphid/centaur-server-reference test",
     "coverage": "vitest run --project '@cyphid/snek-engine' --coverage.enabled --coverage.provider=v8 --coverage.include='packages/engine/src/resolve/**' --coverage.reporter=text",
     "smoke": "pnpm build:packages && node scripts/smoke-app.mjs",
+    "e2e": "pnpm build:packages && pnpm --filter @cyphid/e2e test",
+    "e2e:browsers": "pnpm build:packages && pnpm --filter @cyphid/e2e test:browsers",
     "check:commit": "node scripts/check-commit.mjs",
     "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm smoke && pnpm spec:check",
     "dev": "pnpm build:packages && pnpm --filter @cyphid/centaur-server-reference dev",
