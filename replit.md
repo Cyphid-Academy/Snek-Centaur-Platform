@@ -67,6 +67,6 @@ whenever this repo is loaded into a new Replit environment.
 Both are live `.replit` workflows and run as part of the parallel `Project` workflow.
 
 - **Convex Dev** — `pnpm dev:convex`. Pushes schema and functions to your personal Convex dev deployment. Requires `CONVEX_DEPLOY_KEY` as a Replit Secret (never committed, never in a shared environment). See `CLAUDE.md` → "Secrets and third-party resources".
-- **SpacetimeDB** — `pnpm dev:stdb`, a standalone host on local port 3000 (mapped to external 3001), no Docker involved. `pnpm stdb:publish` builds and publishes the game module to it. Requires the `spacetime` CLI on `PATH`.
+- **SpacetimeDB** — `pnpm dev:stdb`, a standalone host on local port 3000 (mapped to external 3001), no Docker involved. `pnpm stdb:publish` builds and publishes the game module to it. The workflow runs `pnpm setup:stdb` first, which installs the CLI version `packages/stdb/spacetimedb/package.json` pins into the workspace and puts it on `PATH` — so a container rebuild self-heals, and nothing here needs a preinstalled `spacetime`. Never install it by hand at "latest": the on-disk data format is version-gated and a newer CLI rewrites `.stdb/data` so the pinned one will not start.
 
 Full setup is in `docs/external-setup.md`.

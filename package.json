@@ -25,6 +25,7 @@
     "dev:tester": "pnpm build:packages && pnpm --filter @cyphid/visual-tester dev",
     "dev:convex": "pnpm --filter @cyphid/snek-convex-host exec convex dev",
     "dev:convex:local": "CONVEX_AGENT_MODE=anonymous pnpm --filter @cyphid/snek-convex-host exec convex dev",
+    "setup:stdb": "bash scripts/install-spacetime.sh",
     "dev:stdb": "spacetime start --data-dir .stdb/data --listen-addr 127.0.0.1:3000 --non-interactive",
     "stdb:publish": "pnpm build:packages && spacetime publish --server local --yes -p packages/stdb/spacetimedb snek-local",
     "build": "pnpm -r build",
