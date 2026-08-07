@@ -43,10 +43,16 @@ sign-in inside the preview iframe. Demo state persists in the gitignored
 
 The development workflow (`Start application`) runs:
 ```
-pnpm --filter @cyphid/centaur-server-reference dev
+SNEK_SERVER_ORIGIN="https://$REPLIT_DEV_DOMAIN" pnpm dev
 ```
 
-This starts the Vite dev server on port 5000. The Replit preview iframe connects to port 5000.
+This starts the Vite dev server on port 5000; the Replit preview iframe
+connects there. `SNEK_SERVER_ORIGIN` names the identity the app presents
+(issuer id, return address) — necessary here because Replit's edge terminates
+TLS and forwards plain HTTP, so a request-derived origin reads `http://` and
+is refused against its `https://` registration. `pnpm start` serves a
+production-shaped adapter-node build instead (honours `ORIGIN`/`PORT`/`HOST`).
+See `.agents/memory/replit-proxy-origin.md`.
 
 ## Scripted history rewriting
 
