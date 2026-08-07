@@ -386,6 +386,83 @@ that keeps the trade from costing a game: a holder that discovers expiry
 from a refused call pays the retry while the chess clock runs. Renewal on a
 timer well ahead of expiry costs nothing and cannot land on a turn.
 
+### Where the fifteen-minute bound stops: two kinds of credential, not one
+
+The fifteen-minute rule was first written as "every credential the platform
+issues", and that letter proved wrong the moment the client side of sign-in
+was designed against it. The sentence's own rationale draws the real line:
+short lifetimes are what make a **self-contained** credential's revocation
+delay tolerable. A credential a resource verifies from signature and
+published material alone is a decision the platform made once and cannot
+take back, so it must die quickly. The session credential established at
+sign-in is the other kind: checked against platform state on every use and
+revocable at that same instant, its revocation delay is zero and expiry is
+not what bounds it. The requirement now names the distinction, and
+`#only-the-stateful-session-outlives-the-bound` makes the session the *only*
+credential permitted to outlive the bound — so a second long-lived
+credential appearing anywhere is a violation, not a precedent.
+
+Two tempting alternatives were weighed and rejected. A long-lived
+self-contained credential held by the page (skipping renewal round-trips)
+converts every response capability — sign-out, per-issuer revocation, a
+compromised-machine sweep — from minutes to hours, and violates the bound
+for no gain the renewal loop doesn't already provide. Revocable JWTs via
+identifier-and-denylist re-introduce a per-use platform check at every
+verification site, which is the stateful session rebuilt with more moving
+parts and none of its instant-revocation guarantee at resources that verify
+offline. *If reversed* — the bound kept as "every credential" — the session
+itself is non-compliant and every implementation quietly ships a violation,
+because no cross-origin client can renew without holding *something* that
+outlives fifteen minutes.
+
+### The client's credential architecture, as implemented
+
+Recorded here because the shape is load-bearing and each piece of it is the
+answer to a rejected alternative; the implementation is the identity change's
+`convex/signIn.ts`, `convex/issuance.ts`, and the reference app's sign-in
+route.
+
+The platform's session cookie is `SameSite=Lax` on the platform's own
+origin, which blocks a cross-site *fetch* and permits a top-level *GET
+navigation*. Sign-in and its renewal are therefore redirect chains through
+the platform's own HTTP routes — the one place the cookie rides — and what
+returns to a Server's origin is never the session but a **handoff
+reference**: opaque, minute-lived, single-use by transactional delete, bound
+at minting to a challenge whose verifier never left the redeeming page, and
+delivered only to a return address the Server's registration records. The
+page redeems it for a fifteen-minute platform credential held in component
+memory, and a reload or an ageing credential repeats the silent round trip
+rather than recovering anything client-side. The durable credential exists
+in exactly one place — the platform-origin cookie, readable by no page
+script on any origin — and everything a team-served page holds is minutes
+from death at all times.
+
+Why the handoff earns requirement text rather than staying mechanism: its
+two failure modes are invisible in testing and catastrophic in the field. A
+reference redeemable twice works perfectly until someone captures a URL —
+and it *does* travel in one, through the address bar of a page a team
+serves. A return address taken from the request works perfectly until
+someone supplies a hostile one, at which point the platform is a
+trusted-looking bounce delivering sign-in artifacts to any origin that
+asks — theft from users who never chose to trust that origin, outside the
+trust trade-off the read-access principle accepted. `sign-in-handoff` and
+the registry's return-address field exist to make both failures visible as
+violations. The PKCE-shaped challenge does double duty: it is what makes a
+reference in a URL, a log, or a browser history worthless to whoever finds
+it, and it is the only way to redeem — there being no key-based alternative
+is what stops the Server a reference passes through from taking the human's
+credential for itself.
+
+Custody of the two client-side artifacts splits on what each *is*. The
+fifteen-minute credential is a credential, so it lives in memory and
+nothing else (`client-credential-custody#memory-only`). The challenge
+verifier is not — it confers nothing and answers only for one pending
+reference — and it must survive the top-level navigation that empties page
+memory, so session storage is its one possible home and holding it there
+breaches nothing. A page that finds a reference but no stored verifier
+discards the reference unredeemed: redeeming against a challenge the page
+never generated is how a third party would plant a session.
+
 ### Dedupe clusters: one requirement per behaviour
 
 - **Credential scoping** (two module-03 ids stating scope and

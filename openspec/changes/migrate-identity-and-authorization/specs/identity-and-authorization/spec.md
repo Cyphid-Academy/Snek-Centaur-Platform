@@ -117,7 +117,7 @@ A non-human principal SHALL authenticate to the platform by presenting a short-l
 ### Requirement: identity-and-authorization/trusted-issuer-registry
 Depends on: global-invariants/issuer-anchored-trust.
 
-The platform SHALL hold a registry of the issuers it trusts — its own deployment and zero or more registered external systems — each recorded with an issuer identifier, the location at which that issuer publishes its verification material, and the ceiling of capabilities it may confer. The registry SHALL hold no secret for any issuer. A request for capabilities outside the requesting issuer's ceiling SHALL be refused with the excess named, never quietly narrowed to the permitted subset.
+The platform SHALL hold a registry of the issuers it trusts — its own deployment and zero or more registered external systems — each recorded with an issuer identifier, the location at which that issuer publishes its verification material, the ceiling of capabilities it may confer, and, for a principal humans are returned to after signing in, the addresses at which it may receive them. The registry SHALL hold no secret for any issuer. A request for capabilities outside the requesting issuer's ceiling SHALL be refused with the excess named, never quietly narrowed to the permitted subset.
 
 #### Scenario: #excess-fails-loudly
 - **WHEN** a caller requests more capability than its issuer's ceiling allows
@@ -125,11 +125,32 @@ The platform SHALL hold a registry of the issuers it trusts — its own deployme
 
 #### Scenario: #registry-holds-no-secret
 - **WHEN** an issuer is registered
-- **THEN** everything recorded is public — an identifier, where its material is published, and a ceiling; the record has no field a secret could occupy
+- **THEN** everything recorded is public — an identifier, where its material is published, a ceiling, and any addresses humans may be returned to; the record has no field a secret could occupy
 
 #### Scenario: #the-set-is-never-assumed-singular
 - **WHEN** any code resolves the issuer of a presented credential
 - **THEN** it resolves against the registry as a set, so registering a second issuer requires no change to how credentials are validated
+
+### Requirement: identity-and-authorization/sign-in-handoff
+Depends on: global-invariants/credential-confinement, global-invariants/issuer-anchored-trust#recognition-is-not-authorization.
+
+A Snek Centaur Server SHALL NOT authenticate a human itself. Where a human's identity must reach a Server application, the platform SHALL complete the sign-in at its own origin and return the browser to that Server carrying a handoff reference: an opaque value naming one authenticated human and one registered Server, accepted once, expiring on the redirect it exists to survive rather than on a credential's lifetime, and conferring nothing on its own. The platform SHALL return a browser only to an address that Server's registration records, and SHALL issue the resulting credential only to the party that redeems the reference and proves itself the party it was minted for.
+
+#### Scenario: #server-never-holds-the-provider-exchange
+- **WHEN** a human signs in to use a Server application
+- **THEN** the provider's authorization code and the platform's session credential stay at the platform's origin; the Server sees neither, and what a handoff reference can be exchanged for is bounded by that Server's registered ceiling
+
+#### Scenario: #reference-is-accepted-once
+- **WHEN** a handoff reference is presented a second time, whatever its remaining lifetime
+- **THEN** it is refused — a value that travelled in a URL is assumed to have been seen, so its defence is that redeeming it takes something the URL did not carry
+
+#### Scenario: #return-address-is-registered-not-requested
+- **WHEN** a sign-in names a return address the requesting Server's registration does not record
+- **THEN** the platform refuses to redirect there; taking the target from the request would make the platform a trusted-looking bounce to anywhere and hand the reference to whoever asked for it
+
+#### Scenario: #the-redeemer-keeps-what-it-earns
+- **WHEN** a handoff reference is redeemed
+- **THEN** the credential is returned in that exchange to the redeeming party and relayed onward to nobody — a party that redeems on a human's behalf holds a credential it may use, never one it may pass along
 
 ### Requirement: identity-and-authorization/capability-claim-structure
 Every credential the platform issues SHALL carry the capabilities it confers as a structured claim — a sequence of entries rather than an unstructured string — and enforcement SHALL read that structure from the first line of enforcement code written. An entry SHALL name one capability as a bare verb identifier and carry nothing else; the claim is a sequence so that constraining an entry later is a change to minting alone, and no entry carries a constraint today. Where a service principal obtained a credential to act with, the credential SHALL also name that principal.
@@ -324,7 +345,7 @@ The platform SHALL issue a coach access token to an authenticated human who is a
 ### Requirement: identity-and-authorization/token-lifetime-and-refresh
 Depends on: global-invariants/state-confined-to-owning-runtime#game-instance-holds-only-its-games-state.
 
-Every credential the platform issues SHALL expire fifteen minutes after issuance, and a holder SHALL be able to obtain a replacement without re-authenticating from scratch, so long as its underlying session or registration is still valid. Holders SHALL renew ahead of expiry on their own schedule, never in reaction to a refusal. Short lifetimes are what make a self-contained credential's revocation delay tolerable; the boundary that ends access after a game is the instance's decommissioning, not expiry.
+Every self-contained credential the platform issues — one a resource verifies from its signature and published material alone, consulting no platform state — SHALL expire fifteen minutes after issuance, and a holder SHALL be able to obtain a replacement without re-authenticating from scratch, so long as its underlying session or registration is still valid. The session credential established at sign-in is the one credential outside that bound, and is the stateful anchor such replacements are answered from: checked against platform state on every use and revocable at that same instant, its lifetime is bounded by revocation rather than expiry. A credential naming a human SHALL be renewable only while that human's own session is live, re-read at each renewal rather than inherited from the credential being replaced. Holders SHALL renew ahead of expiry on their own schedule, never in reaction to a refusal. Short lifetimes are what make a self-contained credential's revocation delay tolerable; the boundary that ends access after a game is the instance's decommissioning, not expiry.
 
 #### Scenario: #refresh-without-reauth
 - **WHEN** a holder needs a fresh credential during a long game — to reconnect after an interruption, or simply because the last one is ageing
@@ -333,6 +354,14 @@ Every credential the platform issues SHALL expire fifteen minutes after issuance
 #### Scenario: #renewal-is-proactive-never-reactive
 - **WHEN** a holder's credential approaches expiry during a live game
 - **THEN** it is replaced before it lapses; discovering the expiry from a refused call is a violation, because the game's clock keeps running while that call is retried and a lost turn is a real cost
+
+#### Scenario: #renewal-re-reads-the-session
+- **WHEN** a holder renews a credential naming a human whose session has since ended
+- **THEN** renewal is refused, whatever the holder's own registration still permits — a human's absence ends what is minted in their name, rather than being outlived by it
+
+#### Scenario: #only-the-stateful-session-outlives-the-bound
+- **WHEN** any credential the platform issued is found live beyond fifteen minutes after issuance
+- **THEN** it is the session credential established at sign-in and nothing else — a credential the platform checks against its own state at every use and can revoke at that same instant; every credential a resource verifies on its own dies within the bound
 
 #### Scenario: #renewal-failure-is-quiet-until-it-bites
 - **WHEN** renewal fails because the platform is briefly unreachable, while the credential in hand is still valid
