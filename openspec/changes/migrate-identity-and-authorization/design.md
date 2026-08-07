@@ -605,6 +605,33 @@ leave those unassertable with no substitute until team administration lands
 real session-authenticated mutations. That is the change which should decide
 whether it still earns its place.
 
+### The page names its Server from configuration, and the request is a fallback
+
+The sign-in page originally derived the issuer id and return address from the
+request's own origin, on the argument that this was the one honest source —
+the Server's identity *is* the domain it is operated from — and that deriving
+kept a fork from holding values in step by hand across environments. The
+argument holds only while the origin this process sees is the origin the
+browser used, and a TLS-terminating proxy is precisely where they part: the
+edge speaks `https` to the browser and plain HTTP inward, SvelteKit's dev
+server does not honour `x-forwarded-proto`, and the derived identity then
+disagrees with its registration in scheme alone. The refusal that follows
+names an issuer that looks correct and reads as a credentials failure, far
+from the cause. (`adapter-node`'s `ORIGIN` variable corrects the built
+server, but that is a per-environment countermeasure applied at the serving
+layer, and the dev server has no equivalent.)
+
+What decides the reversal is that the registry was already the authority on
+who a Server is — `sign-in-handoff#return-address-is-registered-not-requested`
+is the requirement's own posture, and the server library's `ServerIdentity`
+defines its `domain` as the one "its registration records", configured. The
+page now presents `SNEK_SERVER_ORIGIN` where set, so the identity offered is
+the registration echoed rather than the transport guessed; the request's
+origin remains the fallback, keeping a plainly-hosted fork at zero
+configuration. *If reversed* — derivation restored as the only source — every
+environment that fronts this process with a proxy re-inherits the scheme
+mismatch, and each must rediscover the serving-layer workaround for itself.
+
 ### One exchange, two registrations
 
 A Snek Centaur Server and a peer Cyphid system authenticate identically:
