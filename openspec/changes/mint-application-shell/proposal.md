@@ -118,6 +118,8 @@ the same commit.
 
 ## Open Questions
 
+None open. Two resolved:
+
 ### Q-A. Is `application-shell` the right name?
 
 **Context.** The corpus's rule is capability ≠ package and *name the role, not
@@ -130,9 +132,8 @@ into; technology-free; reads slightly narrow against *there is exactly one
 application*. (ii) `web-application` — plain, matches the author's sketch,
 carries a technology word. (iii) `unified-application`.
 
-**Recommendation:** (i). The cost of changing it is a rename across four
-change folders while every delta is still unfolded — near zero now, real once
-folded.
+**Decision (author, 2026-08-07):** (i) `application-shell`. The four change
+folders already carrying the name stand unchanged.
 
 ### Q-B. Does `one-board-rendering` bind `visual-tester`?
 
@@ -141,6 +142,10 @@ folded.
 `application-shell` would need a `## MODIFIED Purpose` on a folded capability
 that `revise-game-engine-contract` is already amending.
 
-**Recommendation.** No. The requirement binds *this application*, and the dev
-tool's reuse of the same renderer is a plan item rather than an obligation.
-Revisit once `visual-tester` is free.
+**Decision (author, 2026-08-07):** No. The requirement binds *this
+application*, and the dev tool stays unbound at spec level — revisit once
+`visual-tester` is free. At code level the shared renderer is extracted and
+`visual-tester` is repointed at it in this change's plan, so exactly one
+rendering exists in the repository even while the spec's reach stops at the
+application; the dev tool's reuse remains a plan item rather than an
+obligation.

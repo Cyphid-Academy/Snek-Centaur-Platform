@@ -20,11 +20,14 @@ would leave the corpus describing a package layout that does not exist.
 
 ## 2. The platform half
 
-- [ ] 2.1 Review this change's artifacts with the author immediately before the platform half begins, and refine this task breakdown then
-- [ ] 2.2 The configuration record on the game, in the single persistent deployment, with authoritative validation at the record and the mirror guard over the gameplay half (`config-lives-on-the-game`, `closed-parameter-vocabulary`, `engine-schema-fidelity`, `bounded-game-duration`)
-- [ ] 2.3 The board-preview workflow, its lock-in, the launch freeze, and the self-contained configuration surface (`board-preview`, `board-preview-lock-in`, `launch-freeze`, `self-contained-configuration-surface`, `host-selected-affordances`)
-- [ ] 2.4 Add `// spec:` citations in the code written for it, and `// design:` references where this change's design rationale warrants them
-- [ ] 2.5 Run `pnpm spec:check` and the full battery with the implementation
+- [x] 2.1 Review this change's artifacts with the author immediately before the platform half begins, and refine this task breakdown then (done 2026-08-07, in the planning round that also settled `mint-application-shell`'s Q-A/Q-B; the refinement is tasks 2.2–2.8 below)
+- [ ] 2.2 The engine-side gameplay parameter descriptor the bounds decision requested: a public, reflectable data export in `packages/engine` — per parameter its path in the config tree, range, default and disable sentinel — with the test-only ranges table derived from it rather than kept beside it (`parameter-bounds-sourcing`)
+- [ ] 2.3 The configuration record on the game, in the single persistent deployment: the minimal record established with identity plus the two config subtrees, authoritative validation at the record sourcing gameplay bounds from the engine descriptor and generation bounds from this capability's own declaration, the mirror guard over the gameplay half, and the in-transaction duration cross-field check (`config-lives-on-the-game`, `closed-parameter-vocabulary`, `engine-schema-fidelity`, `parameter-bounds-sourcing`, `bounded-game-duration`, `conditional-parameter-semantics`)
+- [ ] 2.4 The board-preview workflow platform-side: the single current-preview slot overwritten by each regeneration and delivered reactively, the seed reaching no client, the boolean lock cleared in the same transaction as any change to generation inputs, structured infeasibility on the record, and the launch freeze as an edit-window guard on the game's status (`board-preview`, `board-preview-lock-in`, `launch-freeze`, `infeasibility-surfaced`, `generation-parameter-boundary`)
+- [ ] 2.5 The self-contained configuration surface in the unified application: the three affordance kinds as independent mount parameters, widget limits read from the same declarations the validator reads, the preview rendered through the shared board rendering, and a standalone development mount offering every kind with nothing gating it (`self-contained-configuration-surface`, `host-selected-affordances`)
+- [ ] 2.6 Add `// spec:` citations in the code written for it, and `// design:` references where this change's design rationale warrants them
+- [ ] 2.7 Run `pnpm spec:check` and the full battery with the implementation
+- [ ] 2.8 Author review of the implemented platform half
 
 ## Archive
 
