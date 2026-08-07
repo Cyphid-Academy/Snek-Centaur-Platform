@@ -113,11 +113,3 @@ export interface TeamGameContext {
   readonly boardSeed: string;
   readonly config: GameConfigRecord;
 }
-
-// ---------------------------------------------------------------------------
-// Convex Component config — placeholder
-// ---------------------------------------------------------------------------
-
-export const componentConfig = {
-  name: "snek-platform",
-} as const;

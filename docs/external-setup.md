@@ -104,10 +104,14 @@ jobs:
           node-version: "20"
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
+      # Convex codegen needs a deployment to talk to, but not a cloud one: this
+      # starts a throwaway local backend and needs no deploy key, which is why
+      # the job can run on a pull request from a fork.
       - name: Run codegen scripts
+        env:
+          CONVEX_AGENT_MODE: anonymous
         run: |
-          pnpm --filter @cyphid/convex-snek-platform codegen
-          pnpm --filter @cyphid/convex-centaur-state codegen
+          pnpm codegen
           pnpm --filter @cyphid/snek-stdb codegen
       - name: Check for drift
         run: git diff --exit-code
@@ -192,23 +196,67 @@ External consumers currently use `github:cyphid/snek-centaur-server-lib#<tag>`. 
 
 ## Convex Dashboard
 
-*(Placeholder — fill in when the first Convex implementation task begins.)*
+The `convex` CLI is a dependency of `packages/convex-host`, so there is nothing to install globally — `pnpm install` provides it.
 
-### Prerequisites
+### Local development, without a Convex account
 
-- A Convex account at [convex.dev](https://convex.dev).
-- The Convex CLI: `pnpm add -g convex`.
+A Convex deployment does not have to be in the cloud. `pnpm dev:convex:local` downloads the Convex backend binary and runs a deployment on loopback — no account, no deploy key, nothing to provision:
 
-### Steps
+```bash
+pnpm dev:convex:local    # http://127.0.0.1:3210, HTTP actions on :3211
+```
 
-1. Log in: `npx convex login`.
-2. Create a new Convex project for the Snek platform.
-3. Note the deployment URL (e.g. `https://steady-hedgehog-123.convex.cloud`).
-4. Configure your local environment:
-   ```bash
-   echo "CONVEX_DEPLOYMENT=<your-deployment>" >> packages/convex-host/.env.local
-   ```
-5. Push the schema and functions: `npx convex deploy --cmd 'pnpm build'`.
+It writes the same `packages/convex-host/.env.local` a cloud deployment would, so every other command (`convex run`, `convex env set`, `pnpm codegen`) then addresses the local deployment with no further configuration. Deployment state lives in `packages/convex-host/.convex/` (gitignored) and is a throwaway: delete it and the next run rebuilds it.
+
+**Prefer this for day-to-day development**, for reasons beyond convenience:
+
+- **The platform can reach the rest of the stack.** A Centaur Server on `:5000` and a SpacetimeDB host on `:3000` are localhost services. A cloud Convex deployment cannot fetch a key document from a laptop, so anything where the platform reads what a Snek Centaur Server publishes — key publication, the assertion exchange, homing — cannot be exercised against the cloud without a public tunnel. On loopback it just works.
+- **Environment variables need no permission.** `convex env set` against a local deployment needs no cloud role, so a deploy key scoped for deploys alone is not a blocker for anything needing deployment environment variables.
+- **CI can use it.** Codegen and integration tests need *a* deployment, not a *cloud* one. With `CONVEX_AGENT_MODE=anonymous` a workflow gets one with no secret, which is what lets the codegen-drift job above run on a pull request from a fork.
+
+The mode prints a beta warning on every run. A developer with a Convex account can get the same loopback deployment attached to a real project with `convex dev --configure existing --dev-deployment local`.
+
+Cloud deployments stay the right answer for anything shared — a staging deployment, a demo, anything a teammate or an external system must reach.
+
+### One-time, per developer (cloud deployment)
+
+1. Create a Convex account at [convex.dev](https://convex.dev) and a project for the Snek platform (or get added to the existing one).
+2. Create a **development** deploy key: dashboard → **Settings → Deploy Keys**.
+3. Set `CONVEX_DEPLOY_KEY` as an environment variable in **your own** Claude Code cloud environment, or as a Replit Secret. Not in a file, and not in a shared environment — see `CLAUDE.md` → "Secrets and third-party resources". Use a dev key only; it is stored unencrypted and gated only by who can edit the environment.
+
+There is deliberately no `.env.example`. The authoritative list of variables is the code that reads them — `packages/convex-host/src/env.ts`, which names every unset one at once and never prints a value. It reports rather than throws: a session that is only running tests or the UI is not stopped by a credential it never uses.
+
+### Running it
+
+```bash
+pnpm dev:convex          # convex dev — pushes on change, watches
+```
+
+The first run provisions the deployment, writes `packages/convex-host/.env.local` (gitignored), and installs both components. Expect:
+
+```
+✔ Installed component snekPlatform.
+✔ Installed component centaurState.
+```
+
+Verify the mounting rather than just the deploy — `platformStatus` calls through to both components, and each answers with its own name, so a green response proves both mounted and mounted as themselves:
+
+```bash
+pnpm --filter @cyphid/snek-convex-host exec convex run platform:platformStatus '{}'
+# → { ok: true, components: [ "snekPlatform", "centaurState" ] }
+```
+
+Both component schemas are currently empty, so there are no tables to list yet — a table arrives with the capability change that fixes its fields. An empty schema still pushes, so this exercises the whole deploy path regardless: component mount, schema push, function push.
+
+### Generated files are committed
+
+`packages/*/convex/_generated/` is checked in, so `pnpm typecheck` never depends on regenerating it. After changing a schema or a function signature, run:
+
+```bash
+pnpm codegen              # regenerates the host's and both components' _generated/
+```
+
+and commit the result. `pnpm dev:convex` (or `dev:convex:local`) regenerates as it pushes, so an explicit run is only needed when not developing against a running deployment. Codegen does need a deployment to talk to — but not a cloud one, which is what lets the drift job above run without a deploy key.
 
 ### Credential rotation
 
@@ -247,10 +295,44 @@ Fill in once the first STDB hosting task begins:
 
 ### Local development
 
-For local STDB development without Fly.io:
+No Fly.io and no Docker: `spacetime start` runs a standalone host natively.
+
 ```bash
-spacetime start    # start local STDB instance
-spacetime publish snek-local --project-path packages/stdb
+pnpm dev:stdb        # host on 127.0.0.1:3000, data in .stdb/ (gitignored)
+pnpm stdb:publish    # build the module and publish it as `snek-local`
 ```
 
+`local` is a built-in server nickname pointing at `127.0.0.1:3000`, which is why neither command needs a `spacetime server add`.
+
+Then drive it. Reducer arguments are **positional**, and SpacetimeDB renames camelCase identifiers to snake_case on the way out — both reducer names and column names — so the exported `ping` reducer's `engineDigest` field is queried as `engine_digest`:
+
+```bash
+spacetime call --server local snek-local ping "hello"
+spacetime sql  --server local snek-local "SELECT * FROM module_info"
+spacetime logs --server local snek-local
+```
+
+`ping` is the module's whole surface today, and it is worth more than a health check: `engine_digest` is BLAKE3 computed by the shared engine *inside the instance's V8 isolate*. It must equal what the same call produces locally —
+
+```bash
+node -e "import('./packages/engine/dist/index.js').then(m=>console.log(Buffer.from(m.subSeed(new Uint8Array(32),'hello')).toString('hex')))"
+```
+
+— which is what makes `global-invariants/one-shared-engine` achievable for the reducers that arrive with their capability changes: no shim, no polyfill, no vendored copy of the rules.
+
+Three things bite here:
+
+- **The build flag is `-p` / `--module-path`**, and the path is `packages/stdb/spacetimedb` — the module project, not the package root. (`--project-path` does not exist.)
+- **A database name that resolves to the wrong host fails as a connection error, not a "no such server".** If `spacetime` cannot reach the instance, check that the host is actually on `127.0.0.1:3000` before suspecting anything else — `local` is hard-wired to that port, so a host started on another one produces a misleading failure.
+- **A reducer that throws aborts its transaction** and is reported as a fatal instance error by the CLI; the actual message is in `spacetime logs`, not in the response. That is the intended failure mode for turn resolution — half a turn must never commit.
+
 The Convex host can be pointed at a local STDB URL for dev by setting `STDB_MANAGEMENT_BASE_URL` to the local instance's URL. Local instances do not scale to zero, so the warm-up dispatch of spec [05-REQ-074] is a no-op (the local host always responds immediately).
+
+### Trusting the platform's tokens (verified against 2.7.0, 2026-07-29)
+
+A game instance will admit connections on tokens the platform signed, validating them from published material and nothing else. Two properties of the standalone host were measured rather than assumed, because that whole arrangement rests on them and because they decide what local development needs:
+
+- **The host does OIDC discovery, and accepts a plain-`http` issuer.** Given a token whose `iss` was `http://127.0.0.1:9100`, the host fetched `/.well-known/openid-configuration`, then the `jwks_uri` it named, validated the RS256 signature and served the request — with nothing registered in advance. A local Convex deployment publishes on `http://127.0.0.1:3211`, plain http on loopback, so **local development needs no TLS shim and no hosts-file entry**. Production is https either way.
+- **Verification material is cached per key id.** A second token signed by a *different* key but carrying the *same* `kid` under the same issuer is refused as `Invalid token: InvalidSignature`: the host answers from what it already fetched rather than re-reading. This is right, and it fixes the rotation procedure — publish the new key under a **new key id** alongside the old and sign with that, which is a re-fetch the host will make because the key id is one it has not seen. Replacing a key in place under an unchanged key id will not be noticed.
+
+Both were established by serving a discovery document and JWKS from a throwaway loopback server and calling `POST /v1/database/<name>/sql` with a token minted against it. Worth re-running if the host's major version moves.

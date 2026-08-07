@@ -9,7 +9,7 @@ This package is `@cyphid/convex-centaur-state`: a Convex Component that owns the
 ## What goes here
 
 - Convex schema for: `snake_config`, `snake_drives`, `heuristic_config`, `snake_heuristic_overrides`, `bot_params`, `centaur_action_log`.
-- Convex Component configuration (`convex.config.ts`).
+- Convex Component configuration (`convex/convex.config.ts`).
 - Selection invariant enforcement (at most one operator per snake, at most one snake per operator).
 - Drive management mutations.
 - Action log writes.
@@ -25,7 +25,9 @@ This is a Convex Component. Its tables are isolated from `convex-snek-platform`'
 
 Selection invariants in `06-REQ-070` and `06-REQ-071` must be enforced at the Convex function level — not at the client. Optimistic UI may show the action, but the server mutation is the authoritative gate.
 
-`pnpm codegen` is a no-op stub until real `convex codegen` is wired up.
+The component name in `convex/convex.config.ts` is **camelCase** (`centaurState`) because it becomes a property on the host's `components` object in generated code.
+
+The same two-halves split as `convex-snek-platform` applies here: `src/` is in `tsc -b`; everything under `convex/` is checked by `tsconfig.convex.json` via `pnpm typecheck:convex`, and `convex/_generated/` is committed so CI can typecheck without credentials. Convex files stay under `convex/` for a reason — see that package's `AGENTS.md`.
 
 ## Key files
 

@@ -17,9 +17,19 @@ This package is `@cyphid/snek-convex-host`: the Convex deployment that mounts bo
 - Credential issuance for SpacetimeDB access tokens, Centaur Servers' per-team game credentials, and external systems.
 - Game lifecycle orchestration that spans both components.
 
-## Auth integration (DEFERRED)
+## Implementation notes
 
-**Do not integrate the auth library until the first Convex implementation task.**
+`convex/` is the deployment: `convex.config.ts` mounts both components, `schema.ts` is empty because the host owns no tables, and `platform.ts` is the public function surface. Every host function reaches its data through `components.*`, never `ctx.db` — that is what makes this the one place an invariant spanning both components can be enforced in a single transaction.
+
+`platform.ts` holds only `platformStatus` so far. It is a liveness query with a purpose: each component answers with its own name, so a green response proves both components mounted *and mounted as themselves*, rather than merely that a function deployed. Real platform functions arrive with the capability changes that define them.
+
+The components are imported by **relative path**, not by package name. Convex bundles a component from its `convex.config.ts` source, and resolving that through a pnpm workspace symlink lands the component root outside the package the import was written in.
+
+`convex/` is excluded from `tsc -b` and checked by `convex/tsconfig.json` via `pnpm typecheck:convex`; `src/` stays in the composite build. `src/` exports what the rest of the workspace needs to *talk to* the deployment — record types and the environment contract in `env.ts` — without pulling the Convex runtime into every consumer. It carries no hand-written table of function names: functions are addressed through the generated `api` object, which `tsc` checks against the deployment's actual surface.
+
+## Auth integration (STILL DEFERRED)
+
+Wiring the runtimes up was the "first Convex implementation task" this section originally waited for, and auth is deliberately **not** part of it. The reason is unchanged and is about sequencing, not effort: the auth model is spec-heavy — federated issuance, linked credentials, two-sided consent, capability ceilings — and belongs with the `migrate-identity-and-authorization` change that owns those requirements, not with runtime plumbing. Implementing it alongside the wiring would mean inventing policy ahead of the spec it has to match.
 
 The plan is:
 1. **Better Auth**, installed in **local install mode** — the component embedded in this package's Convex directory rather than consumed across a component boundary, so the schema can carry the linkage records, issuer registry, and accepted-assertion identifiers the spec requires. Forking the integration repository is explicitly rejected.
@@ -30,7 +40,9 @@ When implementing auth, read the `identity-and-authorization` and `team-server-m
 
 ## Key files
 
-- `src/index.ts` — re-exports and placeholder host function
-- `convex/convex.config.ts` — component mounting (stub)
+- `convex/convex.config.ts` — mounts both components
+- `convex/platform.ts` — the public function surface
+- `src/env.ts` — the environment contract (this project ships no `.env.example` on purpose)
+- `src/index.ts` — record-type re-exports and the environment contract
 - `legacy-spec-archive/spec/02-platform-architecture.md`
 - `legacy-spec-archive/spec/03-auth-and-identity.md`

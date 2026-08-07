@@ -98,11 +98,3 @@ export interface SelectionState {
   readonly snakeId: string;
   readonly selectorUserId: string;
 }
-
-// ---------------------------------------------------------------------------
-// Convex Component config — placeholder
-// ---------------------------------------------------------------------------
-
-export const componentConfig = {
-  name: "centaur-state",
-} as const;

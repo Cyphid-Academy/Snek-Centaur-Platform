@@ -1,3 +1,8 @@
 packages:
   - "packages/*"
   - "apps/*"
+  # The SpacetimeDB module project. `packages/*` is one level deep and does not
+  # match it, but pnpm must install `spacetimedb` and link the shared engine
+  # here: `spacetime build` bundles the module together with its node_modules,
+  # so an unlinked engine fails the build outright.
+  - "packages/stdb/spacetimedb"

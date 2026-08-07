@@ -9,7 +9,7 @@
     "prebuild": "pnpm -w run build:packages",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "svelte-kit sync && tsc --noEmit",
+    "typecheck": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
     "pretest": "pnpm -w run build:packages",
     "test": "vitest run"
   },
@@ -20,14 +20,14 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@sveltejs/adapter-node": "^5.2.12",
-    "@sveltejs/kit": "^2.15.2",
-    "@sveltejs/vite-plugin-svelte": "^5.0.0",
+    "@sveltejs/adapter-node": "^5.5.7",
+    "@sveltejs/kit": "^2.70.1",
+    "@sveltejs/vite-plugin-svelte": "^7.2.0",
     "@types/node": "^25.9.0",
     "jsdom": "^29.1.1",
-    "svelte": "^5.20.2",
+    "svelte": "^5.56.8",
     "typescript": "*",
-    "vite": "^6.0.6",
-    "vitest": "*"
+    "vite": "^8.1.5",
+    "vitest": "^4.1.10"
   }
 }

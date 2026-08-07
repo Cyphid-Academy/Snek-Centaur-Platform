@@ -78,9 +78,19 @@ Code cites identifiers **inline**, as above. The rule that identifiers never app
 
 **TypeScript**: strict mode throughout. Root `tsconfig.base.json` defines the baseline; each package extends it. Run `pnpm typecheck` to check the whole workspace via `tsc -b`.
 
+**`.svelte` files are checked by `svelte-check`, not `tsc`.** `tsc` does not parse `.svelte` at all — it reads a project's `.ts` and silently skips every component, so an app whose `typecheck` script was `tsc --noEmit` had its entire UI unchecked while the script's name said otherwise. Biome cannot lint them either (`biome.json` ignores `**/*.svelte`). Both SvelteKit apps therefore run `svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --fail-on-warnings`, which covers the app's `.ts` *and* its components in one program under the same `tsconfig.base.json` flags. **A new SvelteKit app copies that script**, or its components are checked by nothing.
+
+`--fail-on-warnings` is deliberate: svelte-check's warning tier is where a11y violations, unused CSS selectors and misused runes land, and a warning nothing fails on is a warning nobody reads. Two consequences worth knowing before writing a component: a binding named `state` makes `$state(…)` parse as a store read of it rather than as the rune, and reading reactive state inside a `$state(…)` initialiser warns unless the intent to capture only the initial value is spelled with `untrack`.
+
 **Linting / formatting**: Biome. Run `pnpm lint` (check) or `pnpm format` (write). No ESLint or Prettier.
 
-**Testing**: Vitest. Run `pnpm test` across the workspace. Every package should have at least a smoke test confirming it loads.
+`complexity/useLiteralKeys` is **off**, and should stay off: it forbids `env["CONVEX_URL"]` while the TypeScript baseline's `noPropertyAccessFromIndexSignature` forbids `env.CONVEX_URL`. With both on, reading an index signature has no legal spelling short of destructuring, which is a workaround rather than a style. TypeScript wins because it is the one enforcing the safety property.
+
+**Testing**: Vitest. Run `pnpm test` across the workspace. Every package should have at least a smoke test confirming it loads. Both SvelteKit apps are excluded from workspace project discovery — their Vite transform conflicts with `@sveltejs/kit` resolution during a workspace run — so `pnpm test` invokes each as a separate filtered run after the main one. A new app needs adding there or its tests will never run.
+
+**Pin shared tooling; never `"*"`.** `vitest` and `vite` carry the same explicit caret range in every `package.json` that declares them. `"*"` looks like "inherit the workspace version" and is not: it means *any* version, so the resolution is whatever the lockfile happens to hold. That drifted unnoticed once — one app sat on vitest 2.x while everything else ran 3.x, invisible because its suite was never invoked. When upgrading, bump every declaration in the same commit.
+
+**Apps consume the packages' built `dist/`, not their source.** `packages/*/package.json` export `./dist/index.js`, and `dist/` is gitignored — so a package that has never been built is a *resolve failure* in every consumer, which surfaces as an HTTP 500 from a dev server rather than as a compile error. Every script that needs them (`dev`, `dev:tester`, `test`, `typecheck`, `build`, `smoke`, `stdb:publish`, and each app's own `dev`/`test`/`build` via a `pre*` hook) therefore runs `build:packages` first. That script is `tsc -b` over the root project references, so **a new package that typechecks is a new package this builds** — do not replace it with a hand-listed set, which is what silently broke when the second package arrived. Do not add a separate `pnpm --filter @cyphid/snek-engine build` step to a script, a workflow, or the SessionStart hook — chain `build:packages` instead, so the dependency is expressed once and stays true. (Explicit chaining rather than a `pretest` hook: pnpm does not run npm-style pre/post scripts by default, so such a hook would look correct and silently do nothing.)
 
 **Dev server**: `pnpm dev` starts the Centaur Server reference app on port 5000 via Vite; `pnpm dev:tester` starts the visual tester on 5001. The Replit preview iframe connects to port 5000.
 
@@ -92,7 +102,7 @@ Code cites identifiers **inline**, as above. The rule that identifiers never app
 
 The battery is ~33s. Running all of it at every commit of a phase-structured branch costs minutes and answers the same question ten times, so validation is split by **what each density is for**.
 
-**Tier 1 — `pnpm check:commit`, ~2–7s.** Is *this commit* green standing alone? That is a narrow question with a narrow answer: a boundary defect is a commit referencing something that only exists in a later one, and every such defect is **static**. So tier 1 is `tsc -b`, `biome` over the commit's own files, `spec:citations`, the touched change's own validation and freshness, the graph when a declaration moved, and `vitest related` over the changed sources. It runs against **the commit**, not the working tree — it refuses a dirty tree rather than answering a question you did not ask, since the divergence between the two is the bug it exists to catch.
+**Tier 1 — `pnpm check:commit`, ~2–7s.** Is *this commit* green standing alone? That is a narrow question with a narrow answer: a boundary defect is a commit referencing something that only exists in a later one, and every such defect is **static**. So tier 1 is `tsc -b`, `svelte-check` over any app whose `.svelte` sources the commit touched, `biome` over the commit's own files, `spec:citations`, the touched change's own validation and freshness, the graph when a declaration moved, and `vitest related` over the changed sources. It runs against **the commit**, not the working tree — it refuses a dirty tree rather than answering a question you did not ask, since the divergence between the two is the bug it exists to catch.
 
 Scope comes from the diff: any path under `openspec/changes/<name>/` names a change, so a commit carved at a change boundary scopes itself. `--change <name>` (repeatable) adds to that set for a commit that moves responsibilities between changes without touching both folders; a commit touching no change folder skips the four change-scoped gates entirely.
 
@@ -108,13 +118,17 @@ The division follows from what discriminates. On the branch that motivated this,
 
 So: **tier 1 over every commit, tier 2 once at the tip.** For a ten-commit branch that is ~50s rather than ~6 minutes.
 
+**Backend runtimes**: `pnpm dev:stdb` runs a local SpacetimeDB host on port 3000 (natively — no Docker), `pnpm stdb:publish` builds and publishes the game module to it, and `pnpm dev:convex:local` runs a Convex deployment on loopback — no account, no deploy key — while `pnpm dev:convex` pushes to a cloud dev deployment. **Prefer the local one while developing**: the platform can then reach a Centaur Server or a SpacetimeDB host running beside it, which a cloud deployment cannot do without a public tunnel, and `convex env set` against it needs no cloud permission. Each is one command against a binary on `PATH`; nothing resolves binaries by path. Convex credentials come from your own cloud-environment variables — see `CLAUDE.md` → "Secrets and third-party resources", and `docs/external-setup.md` for the full procedure and the one flag worth knowing (`-p` takes the module project, not the package root).
+
 ## Root Scripts
 
 | Script | What it does |
 |--------|-------------|
 | `pnpm check:commit` | **Tier 1** — is each commit green standing alone (see above) |
 | `pnpm verify` | **Tier 2** — the full battery, what CI runs |
-| `pnpm typecheck` | `tsc -b` across the workspace |
+| `pnpm typecheck` | `build:packages` plus the two foreign TS regimes and both apps (the apps via `svelte-check`, which reads their `.svelte` files as well as their `.ts`) |
+| `pnpm typecheck:convex` | Convex component/host files — separate because Convex's generated code is not written for the workspace's strict flags |
+| `pnpm typecheck:stdb-module` | The SpacetimeDB module project, whose tsconfig options SpacetimeDB mandates |
 | `pnpm lint` | `biome check .` |
 | `pnpm format` | `biome check --write .` |
 | `pnpm test` | Builds the packages, then `vitest run` across the workspace |
@@ -122,7 +136,16 @@ So: **tier 1 over every commit, tier 2 once at the tip.** For a ten-commit branc
 | `pnpm coverage` | Branch coverage over the engine's resolver |
 | `pnpm build:packages` | `tsc -b` over the workspace packages (their gitignored `dist/`) |
 | `pnpm dev` | Starts the Centaur Server reference app |
+| `pnpm dev:convex` | `convex dev` against your personal cloud dev deployment |
+| `pnpm dev:convex:local` | `convex dev` against a loopback deployment — no Convex account required |
+| `pnpm codegen` | Regenerates the host's and both components' `_generated/` |
+| `pnpm dev:stdb` | Local SpacetimeDB host on 127.0.0.1:3000 |
+| `pnpm stdb:publish` | Builds and publishes the game module as `snek-local` |
 | `pnpm build` | Builds all packages |
+
+Three TypeScript regimes coexist, and they are kept apart on purpose: `tsc -b` (the strict composite build, source of truth for `packages/*/src`), the Convex regime, and the SpacetimeDB module regime. The latter two do not extend `tsconfig.base.json` — their code is bundled by their own toolchain rather than emitted by tsc, and neither Convex's generated files nor SpacetimeDB's mandated options survive `exactOptionalPropertyTypes` / `noUncheckedIndexedAccess` / `verbatimModuleSyntax`. Do not try to unify them; add to the right one. `pnpm typecheck` runs all three, and `tsc -b` must run first because it emits `packages/engine/dist`, which the other two resolve through.
+
+The apps are a fourth, and the only one that is not a `tsc` invocation: each extends `tsconfig.base.json` *and* its generated `.svelte-kit/tsconfig.json`, and is checked by `svelte-check` because `tsc` cannot read a `.svelte` file. The same ordering rule binds it — components resolve `@cyphid/snek-engine` through its gitignored `dist/`, so `build:packages` runs first there too.
 
 ## Commit History & Message Grammar
 
@@ -148,6 +171,97 @@ Both squash and merge-commit are enabled; **rebase-merge stays off** (it drops t
 
 **Verify a PR's live state before acting on it.** Before any step whose correctness depends on a PR being open or merged — pushing to its branch, adding an archive or "final" commit, rebasing it, merging, or telling the user to merge — re-check the current state first (`git fetch` and look for the PR's merge commit on the base branch, or the GitHub API `pull_request_read get`). **Never assume a PR is still open from an earlier check in the same session** — humans merge and close out of band, and there is no signal unless you look or `subscribe_pr_activity`. A merged PR is finished: its branch MUST NOT receive new commits — do follow-up work as a **fresh branch off the updated base**. When handing a PR off as "ready to merge," either subscribe to its activity or re-verify its state at the start of the next PR-related action.
 
+## Scripted history rewriting
+
+Keeping a seed/edit pair intact after review revisions, or re-seeding it after
+a rebase onto an advanced `main` (see `openspec/README.md`), means rewriting
+history rather than stacking correction commits. Interactive rebase needs an
+editor and a TTY, which agent shells — Replit workflows, Claude Code Web —
+do not have, so use the scripted-rebase tooling.
+
+Both scripts are **destructive and armed**: each refuses to do anything unless
+its own gitignored arming file exists (`.git-workflow-armed-rebase`,
+`.git-workflow-armed-reset`). The token is claimed atomically via `mv` and
+consumed on start, so one arming permits exactly one run of exactly that
+script, even if both start in parallel. Unarmed invocations exit harmlessly
+with a "Not armed" message — which is what makes them safe to expose as Replit
+workflows a Run-button sweep might trigger.
+
+1. Write the plan to `.rebase-plan.txt` (gitignored). Line 1 is the base ref
+   (e.g. `HEAD~3`); the rest is the rebase todo (`pick`/`squash`/`fixup`/
+   `drop`/`exec` lines, same format as `git rebase -i`).
+2. Arm it: `touch .git-workflow-armed-rebase`.
+3. Run `bash scripts/run-scripted-rebase.sh` (Replit: the **Scripted rebase**
+   workflow). It applies the todo non-interactively and, if the rebase fails,
+   runs `git rebase --abort` to restore the previous state. It refuses to run
+   if a rebase/merge/cherry-pick is already in progress. On success it deletes
+   `.rebase-plan.txt`, so a stale plan can never be replayed.
+4. After any rebase, run `pnpm spec:freshness`; on staleness, re-seed the
+   affected seed/edit pairs and have the word-diff re-reviewed.
+
+This rewrites local branch history only — pushing afterwards needs a
+force-push, done outside the script.
+
+`scripts/hard-reset-to-origin.sh` (arming file `.git-workflow-armed-reset`)
+resets the current branch to its matching `origin/` branch, failing if none
+exists.
+
+### Rewriting messages and file contents with `exec`
+
+A plain `reword` in the todo is a **no-op** here: the tool runs with
+`GIT_EDITOR=true`, so `reword`/`squash` keep the original message instead of
+prompting. To rewrite a commit's **message** *or* its **file contents**, use
+`exec` todo lines. An `exec` runs immediately after the preceding `pick`, in
+the worktree with that commit checked out as `HEAD`, so `git commit --amend`
+inside it rewrites exactly that commit; the following `pick` lines then replay
+on top of the amended commit.
+
+Prepare any replacement content (message bodies, file bodies) **outside the
+repo** first — a scratch dir — so the working tree is clean before the rebase
+starts. An `exec` that exits non-zero stops the rebase and the tool aborts, so
+each `exec` must fully succeed or fail cleanly.
+
+**Rewrite a message** — prepare `msg.txt`, then:
+```
+pick <sha> Old subject
+exec git commit --amend -F /abs/scratch/msg.txt
+```
+(`-m "New subject"` for a one-liner; a prepared `-F` file for a full body.)
+
+**Rewrite a file inside a commit** — prepare the replacement file, then:
+```
+pick <sha> Some commit
+exec cp /abs/scratch/new-body path/in/repo && git add path/in/repo && git commit --amend --no-edit
+```
+`--no-edit` keeps the existing message.
+
+**Re-seed a requirements seed commit.** `pnpm spec:freshness` passes only
+while a seed commit's blocks still match `specs/` exactly; a rebase onto an
+advanced `main` that touched those requirements makes the seed stale, and the
+convention is to **re-seed** (regenerate verbatim from the new base) rather
+than stack a correction commit:
+
+1. Copy the affected requirement blocks verbatim from the **current**
+   `openspec/specs/<capability>/spec.md` into a fresh delta file at a scratch
+   path (its `## MODIFIED Requirements` section holds the blocks unchanged).
+2. Plan:
+   ```
+   <new-base>
+   pick <seed-sha>  Seed <change> deltas verbatim
+   exec cp /abs/scratch/seed-delta.md openspec/changes/<change>/specs/<cap>/spec.md && git add -A && git commit --amend --no-edit
+   pick <edit-sha>  Edit <change> deltas: ...
+   ```
+   The `exec` overwrites the seed commit's delta file with the freshly-copied
+   blocks and amends the seed commit; `pick <edit-sha>` then replays the edits
+   on top. If the edits no longer apply cleanly, resolve the conflict — or,
+   for a substantive re-edit, follow the edit `pick` with a second
+   `exec … --amend` that writes the updated delta.
+3. Run `pnpm spec:freshness` and have the edit commit's word-diff re-reviewed.
+
+To create a seed/edit pair from scratch, two ordinary commits (seed verbatim,
+then edit) are simplest; reach for this `exec` recipe when you need to
+**re-seed** an existing pair after the base moves.
+
 ## Auth Library Note
 
-`convex-host` has a `TODO` comment for Better Auth integration (local install mode, plus the project-owned capability plugin that issues credentials to service principals). Do not integrate it until the first Convex implementation task. See `packages/convex-host/AGENTS.md` for details.
+Better Auth integration (local install mode, plus the project-owned capability plugin that issues credentials to service principals) is deferred to the first Convex implementation task. Do not integrate it before then. See `packages/convex-host/AGENTS.md` for details.
