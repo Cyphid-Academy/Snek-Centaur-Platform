@@ -243,6 +243,11 @@ children.push(
     env: {
       CONVEX_URL: where.convexUrl,
       CONVEX_SITE_URL: where.convexSiteUrl,
+      // The identity this stack registers the app under, told to the app
+      // rather than left for it to re-derive from the request — behind
+      // Replit's TLS-terminating proxy a dev server derives http:// and the
+      // issuer it offers then disagrees with this registration in scheme.
+      SNEK_SERVER_ORIGIN: where.appOrigin,
       SNEK_STDB_URL: where.stdbUrl,
       SNEK_STDB_URL_INTERNAL: `http://127.0.0.1:${PORTS.stdb}`,
       SNEK_STDB_DATABASE: DEMO_DATABASE,
