@@ -24,7 +24,7 @@ importers:
         version: 4.1.10(vitest@4.1.10)
       svelte-check:
         specifier: ^4.7.4
-        version: 4.7.4(picomatch@4.0.5)(svelte@5.56.8)(typescript@5.9.3)
+        version: 4.7.4(picomatch@4.0.4)(svelte@5.56.8)(typescript@5.9.3)
       typescript:
         specifier: ^5.7.3
         version: 5.9.3
@@ -37,12 +37,21 @@ importers:
 
   apps/centaur-server-reference:
     dependencies:
+      '@cyphid/snek-app-shell':
+        specifier: workspace:*
+        version: link:../../packages/app-shell
       '@cyphid/snek-centaur-server-lib':
         specifier: workspace:*
         version: link:../../packages/centaur-server-lib
       '@cyphid/snek-convex-host':
         specifier: workspace:*
         version: link:../../packages/convex-host
+      '@cyphid/snek-engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
+      '@cyphid/snek-game-configuration':
+        specifier: workspace:*
+        version: link:../../packages/game-configuration
       convex:
         specifier: ^1.42.3
         version: 1.42.3
@@ -3874,6 +3883,19 @@ snapshots:
       has-flag: 4.0.0
 
   supports-preserve-symlinks-flag@1.0.0: {}
+
+  svelte-check@4.7.4(picomatch@4.0.4)(svelte@5.56.8)(typescript@5.9.3):
+    dependencies:
+      '@jridgewell/trace-mapping': 0.3.31
+      '@sveltejs/load-config': 0.2.1
+      chokidar: 4.0.3
+      fdir: 6.5.0(picomatch@4.0.4)
+      picocolors: 1.1.1
+      sade: 1.8.1
+      svelte: 5.56.8
+      typescript: 5.9.3
+    transitivePeerDependencies:
+      - picomatch
 
   svelte-check@4.7.4(picomatch@4.0.5)(svelte@5.56.8)(typescript@5.9.3):
     dependencies:

@@ -35,8 +35,14 @@ instance isolation, one Convex deployment).
 ## Layout
 
 - `src/fixtures.ts` — the one interface a spec imports: `test`, `expect`, and
-  the `runDir`, `spacetime`, `convex`, `centaurServer`, `identityProvider` and
-  `credentialSigningJwk` fixtures.
+  the `runDir`, `spacetime`, `convex`, `centaurServer`, `referenceApp`,
+  `identityProvider` and `credentialSigningJwk` fixtures. `centaurServer` and
+  `referenceApp` are the same app started two ways and the difference is
+  load-bearing: the first is told where Convex is and therefore stands a whole
+  deployment up, the second is told nothing and stands nothing up. Ask for
+  `referenceApp` when what a spec drives genuinely has no platform behind it —
+  the standalone configuration mount at `/dev/game-configuration` — and for
+  `centaurServer` when the platform is part of what is under test.
 - `src/process.ts` — spawn, capture, poll for readiness, terminate.
 - `src/runtimes/` — one module per runtime kind.
 - `src/identity.ts` — the substituted verification step, and signing a human in.

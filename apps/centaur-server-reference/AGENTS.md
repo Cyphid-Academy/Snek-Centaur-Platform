@@ -54,6 +54,58 @@ disagrees with its registration in scheme alone is refused). The platform must
 have the origin registered — an operator act, `registry:registerIssuer` on the
 deployment.
 
+## Surfaces live under `src/lib/surfaces/`, one directory per capability
+
+A surface is a self-contained component written to the shell's mounting
+contract: it takes a binding from `@cyphid/snek-app-shell` and an explicit
+boolean per affordance kind, and it derives no actor and reads no session —
+there is no API in the shell for doing so, and there must not be one here
+either. Which affordances a mounting offers is a *presentation* decision; the
+owning runtime judges every write on its own rules, so hiding one makes nothing
+unreachable that was not already unreachable.
+
+`src/lib/surfaces/game-configuration/` is the first of them:
+`ConfigurationSurface.svelte` plus the record shapes it reads
+(`record.ts`), the widgets it derives from the two descriptor tables
+(`widgets.ts`), and the dev-mount binding (`devBinding.ts`). **No number in
+`widgets.ts` is a bound** — every limit comes from
+`GAMEPLAY_PARAMETER_DESCRIPTORS` (the engine) or
+`GENERATION_PARAMETER_DESCRIPTORS` (`@cyphid/snek-game-configuration`), which is
+the same declaration the record rejects from. Adding a hard-coded min or max
+here re-creates exactly the second copy that sourcing exists to prevent.
+
+### The standalone dev mount
+
+`/dev/game-configuration` mounts the surface alone, over an in-memory game
+record held by `src/routes/dev/game-configuration/api/record.ts`, with every
+affordance offered and no authentication and no Convex deployment involved. It
+exists because the surface's requirement is that it works with no host, and this
+is that requirement made runnable — `pnpm dev`, then open the route.
+
+Three properties are load-bearing:
+
+- **Dev only, enforced.** `+page.server.ts` and the `api/+server.ts` handlers
+  both answer 404 when `dev` is false, so a fork building this app for
+  production does not ship an unauthenticated configuration write.
+- **The rules are not re-implemented.** The dev record calls
+  `validateGameConfig`, `changesGenerationInputs` and
+  `generateBoardAndInitialState` — the same three the Convex mutation in
+  `packages/convex-host/convex/gameConfiguration.ts` calls. A second spelling
+  would agree the day it was written and diverge afterwards, in the mount whose
+  whole purpose is exercising the real workflow.
+- **Generation runs server-side even here.** Boards are only ever generated
+  platform-side; the browser renders one it was handed and runs no
+  board-generation algorithm at all.
+
+The live path is the same component over `convexBinding` from the shell, wired
+wherever a session credential is available. Nothing about the component changes
+between the two — only what is behind the binding.
+
+Component tests are `*.browser.test.ts` and run in the `components` project of
+`vitest.config.ts` (the bare `svelte` plugin plus the `browser` resolve
+condition); plain logic tests run in the `logic` project under the SvelteKit
+pipeline. A component test placed in the wrong project cannot call `mount`.
+
 ## Vite / SvelteKit notes
 
 - Dev server runs on port 5000 with `server.allowedHosts: true` so the Replit preview iframe works.
@@ -63,6 +115,8 @@ deployment.
 
 - `src/routes/+page.svelte` — landing page skeleton
 - `src/routes/sign-in/` — both ends of the platform's sign-in handoff
+- `src/lib/surfaces/game-configuration/` — the configuration surface
+- `src/routes/dev/game-configuration/` — its standalone, dev-only mount
 - `src/routes/.well-known/snek-game-invite/+server.ts` — game-start invitation endpoint
 - `src/routes/.well-known/snek-server-keys/+server.ts` — published signing keys
 - `src/routes/.well-known/snek-healthcheck/+server.ts` — unauthenticated liveness

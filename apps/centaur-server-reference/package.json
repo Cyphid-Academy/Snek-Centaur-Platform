@@ -14,8 +14,11 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@cyphid/snek-app-shell": "workspace:*",
     "@cyphid/snek-centaur-server-lib": "workspace:*",
     "@cyphid/snek-convex-host": "workspace:*",
+    "@cyphid/snek-engine": "workspace:*",
+    "@cyphid/snek-game-configuration": "workspace:*",
     "convex": "^1.42.3"
   },
   "devDependencies": {
