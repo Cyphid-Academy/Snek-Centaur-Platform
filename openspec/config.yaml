@@ -89,7 +89,11 @@ context: |
   replay-check); depends on game-engine. visual-tester — the dedicated dev
   app for authoring board state, staging moves, engine-driven simulation,
   and running saved Test Sequences with discrepancy annotation; depends on
-  game-engine and test-sequences (leaf capability).
+  game-engine and test-sequences (leaf capability). identity-and-authorization
+  — who someone is on the platform and how they obtain access to a game:
+  sign-in, identity kinds, the platform-admin role, credential/token issuance
+  and validation, and the one delegation model every trusted-peer relationship
+  uses; depends on global-invariants only (a root of the user-story DAG).
 
   MIGRATION COMPLETE (2026-07-24): the legacy corpus
   (legacy-spec-archive/) is fully historical. Every numeric id is
