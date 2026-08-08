@@ -386,6 +386,152 @@ that keeps the trade from costing a game: a holder that discovers expiry
 from a refused call pays the retry while the chess clock runs. Renewal on a
 timer well ahead of expiry costs nothing and cannot land on a turn.
 
+### Where the fifteen-minute bound stops: two kinds of credential, not one
+
+The fifteen-minute rule was first written as "every credential the platform
+issues", and that letter proved wrong the moment the client side of sign-in
+was designed against it. The sentence's own rationale draws the real line:
+short lifetimes are what make a **self-contained** credential's revocation
+delay tolerable. A credential a resource verifies from signature and
+published material alone is a decision the platform made once and cannot
+take back, so it must die quickly. The session credential established at
+sign-in is the other kind: checked against platform state on every use and
+revocable at that same instant, its revocation delay is zero and expiry is
+not what bounds it. The requirement now names the distinction, and
+`#only-the-stateful-session-outlives-the-bound` makes the session the *only*
+credential permitted to outlive the bound — so a second long-lived
+credential appearing anywhere is a violation, not a precedent.
+
+Two tempting alternatives were weighed and rejected. A long-lived
+self-contained credential held by the page (skipping renewal round-trips)
+converts every response capability — sign-out, per-issuer revocation, a
+compromised-machine sweep — from minutes to hours, and violates the bound
+for no gain the renewal loop doesn't already provide. Revocable JWTs via
+identifier-and-denylist re-introduce a per-use platform check at every
+verification site, which is the stateful session rebuilt with more moving
+parts and none of its instant-revocation guarantee at resources that verify
+offline. *If reversed* — the bound kept as "every credential" — the session
+itself is non-compliant and every implementation quietly ships a violation,
+because no cross-origin client can renew without holding *something* that
+outlives fifteen minutes.
+
+### The client's credential architecture: an in-memory session, concealed, refreshed in the background
+
+Recorded here because the shape is load-bearing and each piece is the answer
+to a rejected alternative. The sign-in and handoff mechanism is the identity
+change's `convex/signIn.ts` and `convex/issuance.ts`; the client custody
+shape below is what the reference app's sign-in route must realise, and the
+requirements it satisfies are `client-credential-custody` (with
+`#concealed-from-co-resident-scripts`), `token-lifetime-and-refresh`
+(`#renewal-does-not-interrupt-a-live-session`), and `google-sign-in`'s
+session-lifetime floor.
+
+The durable session credential lives in exactly one place — a `SameSite=Lax`
+cookie on the platform's own origin, `HttpOnly` and so readable by no page
+script on any origin. A team-served page never holds it. What a live page
+holds instead, in memory, is a **renewal credential** obtained under that
+cookie, from which it mints the short working credentials it presents to the
+platform; and it holds those working credentials, also in memory. Nothing a
+page holds is written to storage, and a page reload — which empties memory —
+re-obtains the renewal credential through the cookie rather than recovering
+anything client-side.
+
+There were three shapes to choose from, and the requirements mandate the
+guarantees of the middle one, not its mechanism:
+
+- **(A) The session token in `localStorage`** — the integration library's
+  default. It survives reload with no redirect, but the durable, long-lived
+  session sits *at rest*, readable by any script in the origin. Rejected. In
+  a fork ecosystem the realistic code-execution vector is not bespoke
+  injection but a *co-resident* script the fork author trusted — a
+  compromised dependency, an analytics snippet — and such a script reads
+  `localStorage` in one passive line, the way generic credential-mining
+  sweeps already work. The distinction that kills A is exactly what
+  `#concealed-from-co-resident-scripts` requires: a credential reachable
+  only through the code that uses it forces that attacker to actively
+  instrument a specific transport, which a generic sweep does not do. *The
+  advantage is contingent on the concealment* — a renewal credential parked
+  on `window` or a well-known property is `localStorage`'s exposure by
+  another name, which is why concealment is a requirement and not a note.
+
+- **(B) The renewal credential in concealed page memory** — the chosen
+  shape. Refresh of a working credential is a background fetch carrying the
+  in-memory renewal credential explicitly, so it needs no cookie and
+  crosses origins freely; nothing is at rest, so the co-resident sweep of A
+  comes away empty; and only an actual reload costs a redirect. Its honest
+  cost against C is that a live page holds something session-powerful, so a
+  *full* XSS on that live page takes more than it would under C — but that
+  attacker is not the one concealment is aimed at, and against a full live
+  XSS no client shape helps. What B denies is the larger, more probable set:
+  the generic miner, the other-tab or after-close read that only a
+  persistent store affords, the residue on a shared machine.
+
+- **(C) The cookie and a short working credential only** — the more austere
+  sibling, holding nothing session-powerful on the page. It is stronger
+  against the live-page full XSS, but with nothing in memory to authenticate
+  a background refresh, a working credential that ages out can be replaced
+  only by re-reading the session — and the session rides only a top-level
+  navigation, so continuous use past one working-credential lifetime forces
+  a visible reload. For a two-hour workshop that is unacceptable, which is
+  what `#renewal-does-not-interrupt-a-live-session` forecloses. C remains
+  *compliant* where a runtime holds the live connection through the working
+  credential's expiry (no reload results), which is why the requirement
+  mandates the no-interruption guarantee rather than B's in-memory-renewal
+  mechanism — it forbids the degenerate C, not the connection-holding one.
+
+`SameSite=Lax` is load-bearing for exactly one leg: the reload that
+re-obtains the renewal credential is a top-level GET navigation to the
+platform, and Lax is what lets the cookie ride it while `Strict` would
+withhold it and force a fresh Google round trip. Background refresh does not
+touch the cookie at all — a cross-site fetch never carries it under Lax or
+Strict — which is precisely why the durable session stays out of script
+reach: the only thing that ever presents it is a navigation the browser
+controls, never code.
+
+**Session lifetime is a deployment configuration floored at four hours, and
+that revises the seven-day default an earlier reading assumed.** With
+background refresh keeping a live session seamless, a shorter session no
+longer costs active-use convenience — only the interval between *sittings*
+sets how often a human signs in again, and for a cohort meeting in a weekly
+two-hour workshop a four-hour session and a seven-day one are
+indistinguishable in that respect. They are not indistinguishable in
+exposure: the session is the one durable credential, so the shorter it lives
+the less standing exposure it carries, and a deployment should be free to
+keep it short. The floor exists so the shortening never reaches into a
+sitting — four hours comfortably outlasts the two-hour workshop — and
+seven days remains permitted for deployments whose pattern wants it. *If
+reversed* — a long fixed lifetime — a deployment pays for durable exposure
+it has no convenience reason to want.
+
+Why the handoff earns requirement text rather than staying mechanism: its
+two failure modes are invisible in testing and catastrophic in the field. A
+reference redeemable twice works perfectly until someone captures a URL —
+and it *does* travel in one, through the address bar of a page a team
+serves. A return address taken from the request works perfectly until
+someone supplies a hostile one, at which point the platform is a
+trusted-looking bounce delivering sign-in artifacts to any origin that
+asks — theft from users who never chose to trust that origin, outside the
+trust trade-off the read-access principle accepted. `sign-in-handoff` and
+the registry's return-address field exist to make both failures visible as
+violations. The PKCE-shaped challenge does double duty: it is what makes a
+reference in a URL, a log, or a browser history worthless to whoever finds
+it, and it is the only way to redeem — there being no key-based alternative
+is what stops the Server a reference passes through from taking the human's
+credential for itself.
+
+Custody of the client-side artifacts splits on what each *is*. The renewal
+credential and the working credentials are credentials, so they live in
+memory, concealed, and nothing else (`client-credential-custody#memory-only`
+and `#concealed-from-co-resident-scripts`) — reachable only through the code
+that presents them, never a global or a storage key a passive read would
+find. The challenge verifier is *not* a credential — it confers nothing and
+answers only for one pending reference — and it must survive the top-level
+navigation that empties page memory, so session storage is its one possible
+home and holding it there breaches nothing. A page that finds a reference but
+no stored verifier discards the reference unredeemed: redeeming against a
+challenge the page never generated is how a third party would plant a
+session.
+
 ### Dedupe clusters: one requirement per behaviour
 
 - **Credential scoping** (two module-03 ids stating scope and
