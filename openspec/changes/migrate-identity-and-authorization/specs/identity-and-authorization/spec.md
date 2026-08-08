@@ -32,7 +32,11 @@ The platform SHALL recognize exactly three kinds of persistent identity — **hu
 - **THEN** its participant identity is a derivation — from the human identity or team game credential that obtained the access token — scoped to that one game, never a new persistent identity
 
 ### Requirement: identity-and-authorization/google-sign-in
-Humans SHALL sign in exclusively with a Google account, and the platform SHALL maintain no independent credential store for humans. A successful sign-in SHALL produce a persistent session that survives page loads until it expires or the user signs out — persistent in the script-inaccessible cookie credential custody permits, never in storage a page can read — and sign-out SHALL terminate the session and revoke the client-held session credential, returning the client to the unauthenticated state.
+Humans SHALL sign in exclusively with a Google account, and the platform SHALL maintain no independent credential store for humans. A successful sign-in SHALL produce a persistent session that survives page loads until it expires or the user signs out — persistent in the script-inaccessible cookie credential custody permits, never in storage a page can read — and sign-out SHALL terminate the session and revoke the client-held session credential, returning the client to the unauthenticated state. The session's lifetime SHALL be a deployment configuration, and its configurable floor SHALL be no shorter than four hours — comfortably longer than a single sitting, so a session never lapses mid-use — while nothing SHALL require it to be long: the session is the platform's one durable credential, and a deployment whose users return in widely spaced sittings shortens its exposure for free, re-authentication being paced by the gaps between sittings rather than by the session clock.
+
+#### Scenario: #session-lifetime-is-configured-above-a-floor
+- **WHEN** a deployment sets its session lifetime
+- **THEN** it may choose any duration at or above a four-hour floor — a single sitting is never interrupted by the session expiring under it — and it is free to keep the session short, because a shorter session lessens the standing exposure of the one durable credential at no cost to a usage pattern whose sign-in frequency is set by absence, not by the clock
 
 #### Scenario: #google-account-specifically
 - **WHEN** any human authentication path exists
@@ -351,6 +355,10 @@ Every self-contained credential the platform issues — one a resource verifies 
 - **WHEN** a holder needs a fresh credential during a long game — to reconnect after an interruption, or simply because the last one is ageing
 - **THEN** they obtain one on the strength of their still-valid session or registration, with no interactive re-authentication
 
+#### Scenario: #renewal-does-not-interrupt-a-live-session
+- **WHEN** a web client's working credential ages out while a human is continuously using a live session — the session itself neither expired nor revoked
+- **THEN** a fresh working credential is obtained under that live session without a full-page navigation the human waits through and without a fresh interactive sign-in; only the session's own end, not a working credential's expiry, returns the human to signing in. Renewal that forces a visible reload on every working-credential expiry during continuous use is a violation — a self-contained working credential kept short for revocation must be renewable in the background under the session, not by round-tripping the human through sign-in each time it lapses
+
 #### Scenario: #renewal-is-proactive-never-reactive
 - **WHEN** a holder's credential approaches expiry during a live game
 - **THEN** it is replaced before it lapses; discovering the expiry from a refused call is a violation, because the game's clock keeps running while that call is retried and a lost turn is a real cost
@@ -438,11 +446,15 @@ The platform SHALL support an **admin** role as a platform-level designation on 
 ### Requirement: identity-and-authorization/client-credential-custody
 Depends on: global-invariants/credential-confinement, global-invariants/state-confined-to-owning-runtime#clients-restart-clean.
 
-Clients SHALL hold received credentials — access tokens, game credentials — in memory only, for the duration of use, and SHALL never store, display, or transmit credential plaintext. The single exception is the session credential established at sign-in, which SHALL be held in a cookie the browser withholds from page scripts and sends only to the platform's own origin, over HTTPS: it is the one credential a page reload recovers, and every other credential is obtained afresh under it rather than persisted. A signing key a party generates for itself is the one thing it persists, and it never leaves the party that generated it.
+Clients SHALL hold received credentials — access tokens, game credentials, and any in-memory renewal credential under which those are obtained — in memory only, for the duration of use, and SHALL never store, display, or transmit credential plaintext. Memory alone is not enough: a client SHALL hold such a credential concealed from other code sharing its origin, reachable only through the code path that uses it, so that obtaining it takes active subversion of that path rather than a passive read of storage, a global object, or the DOM. The single exception is the session credential established at sign-in, which SHALL be held in a cookie the browser withholds from page scripts and sends only to the platform's own origin, over HTTPS: it is the one credential a page reload recovers, and every other credential — including the in-memory renewal credential a live page holds under it — is obtained afresh under it rather than persisted. A signing key a party generates for itself is the one thing it persists, and it never leaves the party that generated it.
 
 #### Scenario: #memory-only
 - **WHEN** the web application holds a game access token
 - **THEN** the token lives in component memory only — never persisted to browser storage, never placed in a URL — and a page reload re-obtains a token rather than recovering one
+
+#### Scenario: #concealed-from-co-resident-scripts
+- **WHEN** a script sharing the page's origin that did not subvert the credential-handling code — a bundled dependency, an analytics snippet, a compromised package — enumerates browser storage, global objects, and the DOM in search of a credential
+- **THEN** it finds none: a client-held credential is reachable only through the code that uses it, so a generic credential-mining sweep comes away empty and only active interception of that code path could obtain one. Memory that a passive read reaches — a global, a well-known property, a storage key — does not satisfy this, being localStorage's exposure by another name
 
 #### Scenario: #the-session-is-the-only-thing-a-reload-recovers
 - **WHEN** a signed-in user reloads the page
