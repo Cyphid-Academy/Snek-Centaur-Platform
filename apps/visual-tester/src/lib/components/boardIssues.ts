@@ -1,3 +1,4 @@
+import { type Discontinuity, firstDiscontinuity } from "@cyphid/snek-app-shell";
 // Invalid-state detection for the board view.
 //
 // spec: visual-tester/invalid-state-surfacing — the tool must never quietly
@@ -7,7 +8,6 @@
 // of defect this tool exists to expose. We compute these issues here and the
 // board renders them as a loud on-page error, not a plausible silhouette.
 import type { GameState, SnakeId } from "@cyphid/snek-engine";
-import { type Discontinuity, firstDiscontinuity } from "./snakeBodyPath";
 
 export interface SnakeContiguityIssue extends Discontinuity {
   readonly snakeId: SnakeId;

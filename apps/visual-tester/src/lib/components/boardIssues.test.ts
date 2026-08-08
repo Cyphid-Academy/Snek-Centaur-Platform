@@ -1,3 +1,4 @@
+import { firstDiscontinuity } from "@cyphid/snek-app-shell";
 // spec: visual-tester/invalid-state-surfacing — detection of discontinuous
 // snake bodies, the invalid state the board must expose rather than hide.
 import type {
@@ -11,7 +12,6 @@ import type {
 import { itemsByCell } from "@cyphid/snek-engine";
 import { describe, expect, it } from "vitest";
 import { describeContiguityIssue, snakeContiguityIssues } from "./boardIssues";
-import { firstDiscontinuity } from "./snakeBodyPath";
 
 function snake(letter: string, body: Cell[], id: number): SnakeState {
   return {

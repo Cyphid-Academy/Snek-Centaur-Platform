@@ -19,8 +19,8 @@
     }
   },
   "scripts": {
-    "build:packages": "tsc -b",
-    "typecheck": "pnpm build:packages && pnpm typecheck:convex && pnpm typecheck:stdb-module && pnpm --filter @cyphid/centaur-server-reference typecheck && pnpm --filter @cyphid/visual-tester typecheck && pnpm --filter @cyphid/e2e typecheck",
+    "build:packages": "tsc -b && pnpm --filter @cyphid/snek-app-shell build",
+    "typecheck": "pnpm build:packages && pnpm typecheck:convex && pnpm typecheck:stdb-module && pnpm --filter @cyphid/snek-app-shell typecheck && pnpm --filter @cyphid/centaur-server-reference typecheck && pnpm --filter @cyphid/visual-tester typecheck && pnpm --filter @cyphid/e2e typecheck",
     "typecheck:convex": "tsc -p packages/convex-snek-platform/tsconfig.convex.json && tsc -p packages/convex-centaur-state/tsconfig.convex.json && tsc -p packages/convex-host/convex/tsconfig.json",
     "typecheck:stdb-module": "tsc -p packages/stdb/spacetimedb/tsconfig.json",
     "lint": "biome check .",

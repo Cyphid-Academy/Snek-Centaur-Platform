@@ -4,7 +4,7 @@
 // spec: visual-tester/dedicated-app — a dev tool, never player-facing;
 // turns advance exclusively through the shared engine's resolveTurn (D2:
 // the engine runs in the browser).
-import BoardView from "$lib/components/BoardView.svelte";
+import BoardPanel from "$lib/components/BoardPanel.svelte";
 import EditorPanel from "$lib/components/EditorPanel.svelte";
 import HistoryBar from "$lib/components/HistoryBar.svelte";
 import MovePanel from "$lib/components/MovePanel.svelte";
@@ -129,7 +129,7 @@ function onCellClick(cell: Cell): void {
 
   <div class="layout">
     <div class="left">
-      <BoardView
+      <BoardPanel
         state={store.currentState}
         {onCellClick}
         highlights={store.activeHighlights}

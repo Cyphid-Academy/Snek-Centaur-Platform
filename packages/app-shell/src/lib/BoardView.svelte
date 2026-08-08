@@ -1,4 +1,19 @@
 <script lang="ts">
+// The application's one board.
+//
+// spec: application-shell/one-board-rendering
+// Every surface that shows a board — a live game, a configuration preview, a
+// replay — mounts this component, so how terrain, a snake, an item, a hazard
+// and a fertile tile are drawn is stated here and nowhere else
+// (`#a-rendering-rule-is-stated-once`). It consumes the shared engine's own
+// domain values and holds no state of its own.
+//
+// spec: application-shell/one-board-rendering#composition-not-replacement
+// A surface that needs to mark something this component does not know about
+// supplies a `banner` (above the board) or an `overlay` (an SVG layer over it,
+// in board coordinates) rather than rendering a board of its own. That is how
+// the visual tester keeps its contiguity diagnostics — a tool-specific concern
+// this component has no business knowing — over the shared rendering.
 import {
   CellType,
   Direction,
@@ -8,12 +23,14 @@ import {
   isVisible,
 } from "@cyphid/snek-engine";
 import type { Cell, GameState, Item, SnakeId, SnakeState, StagedMove } from "@cyphid/snek-engine";
+import type { Snippet } from "svelte";
 import SnakeBody from "./SnakeBody.svelte";
-import { describeContiguityIssue, snakeContiguityIssues } from "./boardIssues";
+import type { BoardGeometry } from "./board";
+import { firstDiscontinuity } from "./snakeBodyPath";
 
 interface Props {
   state: GameState;
-  onCellClick: (cell: Cell) => void;
+  onCellClick?: (cell: Cell) => void;
   // spec: visual-tester/sequence-run#divergence-annotated — cells implicated
   // by a failed run's differences are highlighted on the board itself (D8).
   highlights?: ReadonlySet<number>;
@@ -31,6 +48,9 @@ interface Props {
   // on which a new head may NOT be placed (a red checkerboard overlay); null
   // when no parity constraint applies (not placing, or no head fixes it yet).
   blockedParity?: 0 | 1 | null;
+  // The two composition points (`#composition-not-replacement`).
+  banner?: Snippet;
+  overlay?: Snippet<[BoardGeometry]>;
 }
 
 const {
@@ -42,6 +62,8 @@ const {
   staged = new Map(),
   ghostSnakeIds = new Set(),
   blockedParity = null,
+  banner,
+  overlay,
 }: Props = $props();
 
 // Only alive snakes and this-turn ghosts are on the board.
@@ -74,10 +96,16 @@ function stagedArrow(s: SnakeState): string | null {
   return `${tipX},${tipY} ${baseX + px * w},${baseY + py * w} ${baseX - px * w},${baseY - py * w}`;
 }
 
-// spec: visual-tester/invalid-state-surfacing — a discontinuous snake is a
-// bug the tool must expose, not hide behind a plausible silhouette.
-const contiguityIssues = $derived(snakeContiguityIssues(state));
-const brokenSnakeIds = $derived(new Set(contiguityIssues.map((i) => i.snakeId)));
+// A structurally impossible body still has to be drawn — safely. The engine
+// cannot produce one, so a snake whose segments are not orthogonally adjacent
+// means a bug or a corrupt record upstream, and `createSnakeBodyPath` throws on
+// it by contract rather than inventing a plausible silhouette. Drawing the raw
+// segments instead keeps one bad snake from taking the whole surface down, and
+// shows the break where it is. Naming it — whose bug, in what words, with what
+// remedy — is the mounting surface's to compose over the board via `banner`.
+const brokenSnakeIds = $derived(
+  new Set(state.snakes.filter((s) => firstDiscontinuity(s.body) !== null).map((s) => s.snakeId)),
+);
 
 // Snake-overlay geometry (design D10): the SVG viewBox uses CELL units per
 // grid cell, so the zero-gap CSS grid beneath and the overlay share exact
@@ -85,6 +113,12 @@ const brokenSnakeIds = $derived(new Set(contiguityIssues.map((i) => i.snakeId)))
 const CELL = 24;
 const PAD = 2;
 const HEAD_INSET = PAD + 1;
+
+const geometry = $derived<BoardGeometry>({
+  cellSize: CELL,
+  padding: PAD,
+  boardSize: state.board.boardSize,
+});
 
 function teamColor(teamId: string): string {
   return teamColours[teamId] ?? "#94a3b8";
@@ -150,18 +184,7 @@ function itemClass(item: Item): string {
 }
 </script>
 
-{#if contiguityIssues.length > 0}
-  <div class="invalid-state" role="alert">
-    <strong>⚠ Invalid state: discontinuous snake body.</strong>
-    The engine should never produce this — it means a bug in turn resolution or a
-    corrupt sequence. Not rendering it as a normal snake.
-    <ul>
-      {#each contiguityIssues as issue (issue.snakeId)}
-        <li>{describeContiguityIssue(issue)}</li>
-      {/each}
-    </ul>
-  </div>
-{/if}
+{@render banner?.()}
 
 <div class="board-wrap">
   <div
@@ -176,8 +199,9 @@ function itemClass(item: Item): string {
         class:diff={highlights.has(entry.cell.y * state.board.boardSize + entry.cell.x)}
         class:wrong-parity={blockedParity !== null &&
           (entry.cell.x + entry.cell.y) % 2 === blockedParity}
+        class:inert={onCellClick === undefined}
         title={`(${entry.cell.x}, ${entry.cell.y})`}
-        onclick={() => onCellClick(entry.cell)}
+        onclick={() => onCellClick?.(entry.cell)}
       >
         {#if entry.item}
           <span class={`item ${itemClass(entry.item)}`}>{itemGlyph(entry.item)}</span>
@@ -188,7 +212,7 @@ function itemClass(item: Item): string {
 
   <!-- Contiguous snake silhouettes (design D10): one inflated-centerline
        path per snake, drawn over the cell grid; pointer-events stay with
-       the cells so the editor keeps its click targets. -->
+       the cells so an editing surface keeps its click targets. -->
   <svg
     class="snakes"
     viewBox={`0 0 ${state.board.boardSize * CELL} ${state.board.boardSize * CELL}`}
@@ -203,10 +227,9 @@ function itemClass(item: Item): string {
       {@const arrow = s.alive ? stagedArrow(s) : null}
       <g opacity={style.opacity} class:selected>
         {#if broken}
-          <!-- Invalid state (spec: visual-tester/invalid-state-surfacing):
-               show the raw segments in an alarming outline at their true
-               cells instead of a continuous silhouette that would hide the
-               break. -->
+          <!-- The safe fallback: raw segments at their true cells, in an
+               alarming outline, instead of a continuous silhouette that would
+               hide the break. -->
           {#each s.body as seg, i (i)}
             <rect
               class="broken-seg"
@@ -254,25 +277,11 @@ function itemClass(item: Item): string {
         {/if}
       </g>
     {/each}
+    {@render overlay?.(geometry)}
   </svg>
 </div>
 
 <style>
-  .invalid-state {
-    max-width: 640px;
-    margin-bottom: 0.75rem;
-    padding: 0.6rem 0.8rem;
-    border: 1px solid #f43f5e;
-    border-left: 4px solid #f43f5e;
-    border-radius: 4px;
-    background: #2a0a12;
-    color: #fecdd3;
-    font-size: 0.85rem;
-    line-height: 1.35;
-  }
-  .invalid-state strong { color: #fda4af; }
-  .invalid-state ul { margin: 0.4rem 0 0; padding-left: 1.1rem; }
-  .invalid-state li { font-family: ui-monospace, monospace; font-size: 0.8rem; }
   .broken-seg {
     fill: rgba(244, 63, 94, 0.25);
     stroke: #f43f5e;
@@ -320,11 +329,16 @@ function itemClass(item: Item): string {
     min-height: 0;
     box-shadow: inset 0 0 0 0.5px #1e293b;
   }
+  /* A mounting that offered no cell click is not clickable; the cells stay
+     buttons so the grid's structure is identical in every mounting. */
+  .cell.inert {
+    cursor: default;
+  }
   .cell.normal { background: #0f172a; }
   .cell.wall { background: #475569; }
   .cell.hazard { background: #7f1d1d; }
   .cell.fertile { background: #14532d; }
-  .cell:hover { outline: 1px solid #7dd3fc; outline-offset: -1px; }
+  .cell:not(.inert):hover { outline: 1px solid #7dd3fc; outline-offset: -1px; }
   .cell.diff { outline: 2px solid #f43f5e; outline-offset: -2px; }
   /* spec: visual-tester/board-editor#head-parity-enforced — wrong-parity cells
      for a new head, a translucent red checkerboard; placement there is rejected

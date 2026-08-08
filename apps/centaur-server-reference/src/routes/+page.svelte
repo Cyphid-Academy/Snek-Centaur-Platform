@@ -32,8 +32,8 @@ const subtitle = "Reference Implementation";
     margin: 4rem auto;
     padding: 0 1rem;
     color: #e2e8f0;
-    background: #0f172a;
-    min-height: 100vh;
+    /* The page's own full-height dark ground moved to the layout, which is now
+       what every route is mounted in. */
   }
 
   h1 {

@@ -1,8 +1,11 @@
 // spec: visual-tester/invalid-state-surfacing#discontinuous-body-flagged —
-// mounting BoardView with a discontinuous snake surfaces a loud error and
-// does NOT draw that snake as a continuous silhouette; a valid snake in the
-// same state still renders its path. Runs in the "components" vitest project
-// (client build + jsdom).
+// mounting the tester's board with a discontinuous snake surfaces a loud error
+// and does NOT draw that snake as a continuous silhouette; a valid snake in the
+// same state still renders its path. The alert is this app's layer, composed
+// over the shared `BoardView` (spec:
+// application-shell/one-board-rendering#composition-not-replacement), so it is
+// the composition that has to be mounted to see it. Runs in the "components"
+// vitest project (client build + jsdom).
 import type {
   Cell,
   CentaurTeamId,
@@ -14,7 +17,7 @@ import type {
 import { CellType, itemsByCell } from "@cyphid/snek-engine";
 import { mount, unmount } from "svelte";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import BoardView from "./BoardView.svelte";
+import BoardPanel from "./BoardPanel.svelte";
 
 function snake(letter: string, body: Cell[], id: number): SnakeState {
   return {
@@ -60,9 +63,9 @@ afterEach(() => {
   target.remove();
 });
 
-describe("BoardView invalid-state surfacing", () => {
+describe("BoardPanel invalid-state surfacing", () => {
   it("shows a discontinuity alert and no silhouette for the broken snake", () => {
-    comp = mount(BoardView, {
+    comp = mount(BoardPanel, {
       target,
       props: {
         state: state([
@@ -87,7 +90,7 @@ describe("BoardView invalid-state surfacing", () => {
   });
 
   it("renders a silhouette and no alert for a contiguous snake", () => {
-    comp = mount(BoardView, {
+    comp = mount(BoardPanel, {
       target,
       props: {
         state: state([

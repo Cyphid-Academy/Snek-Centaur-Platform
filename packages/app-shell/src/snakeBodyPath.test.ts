@@ -1,7 +1,7 @@
 // Tests for the contiguous snake-silhouette path builder (design D10),
 // copied from the demo renderer on the PR #6 branch.
 import { describe, expect, it } from "vitest";
-import { createSnakeBodyPath } from "./snakeBodyPath";
+import { createSnakeBodyPath } from "./lib/snakeBodyPath";
 
 const CELL = 24;
 const PAD = 2;
