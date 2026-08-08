@@ -101,10 +101,28 @@ describe("the preview slot holds the capability's own preview document", () => {
     ),
   );
 
-  /** The field names a `v.object` declares, or of an array's element object. */
-  function fieldsOf(validator: unknown): string[] {
-    const node = validator as { kind: string; fields?: object; element?: unknown };
-    return node.kind === "array" ? fieldsOf(node.element) : Object.keys(node.fields ?? {}).sort();
+  /**
+   * Compare field names at EVERY object level the document reaches, not a fixed
+   * few: the `Infer` assignment below applies no excess-property check to a
+   * variable, so an extra serializer field nested past the levels a hand-picked
+   * comparison covers would otherwise fail only at a real Convex write.
+   */
+  function sameShape(value: unknown, validator: unknown, path: string): void {
+    const node = validator as { kind: string; fields?: Record<string, unknown>; element?: unknown };
+    if (node.kind === "array") {
+      if (Array.isArray(value) && value[0] !== undefined) {
+        sameShape(value[0], node.element, `${path}[0]`);
+      }
+      return;
+    }
+    if (node.kind === "object" && node.fields !== undefined) {
+      const fields = node.fields;
+      expect(Object.keys(value as object).sort(), path).toEqual(Object.keys(fields).sort());
+      for (const [key, sub] of Object.entries(fields)) {
+        sameShape((value as Record<string, unknown>)[key], sub, `${path}.${key}`);
+      }
+    }
+    // Unions and primitives carry no field names to compare at this level.
   }
 
   it("declares exactly the fields the serializer emits", () => {
@@ -114,11 +132,6 @@ describe("the preview slot holds the capability's own preview document", () => {
     const stored: Infer<typeof boardPreview> = board;
     expect(stored).not.toBeNull();
 
-    expect(Object.keys(board).sort()).toEqual(fieldsOf(generatedBoardPreview));
-    const snakes = generatedBoardPreview.fields.snakes;
-    expect(Object.keys(board.snakes[0] ?? {}).sort()).toEqual(fieldsOf(snakes));
-    expect(Object.keys(board.items[0] ?? {}).sort()).toEqual(
-      fieldsOf(generatedBoardPreview.fields.items),
-    );
+    sameShape(board, generatedBoardPreview, "generated");
   });
 });
