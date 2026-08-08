@@ -39,6 +39,6 @@
 
 ## Archive
 
-- [ ] 2.1 On explicit author instruction, `pnpm spec:fold migrate-identity-and-authorization` then `openspec archive --skip-specs -y migrate-identity-and-authorization` at the tail of the PR that completes the implementation (fold enforces capability-dependency order)
-- [ ] 2.2 Add the minted capability to `openspec/config.yaml`'s context capability list
-- [ ] 2.3 Run `pnpm spec:check` after archiving
+- [x] 2.1 On explicit author instruction, `pnpm spec:fold migrate-identity-and-authorization` then `openspec archive --skip-specs -y migrate-identity-and-authorization` at the tail of the PR that completes the implementation (fold enforces capability-dependency order)
+- [x] 2.2 Add the minted capability to `openspec/config.yaml`'s context capability list
+- [x] 2.3 Run `pnpm spec:check` after archiving
