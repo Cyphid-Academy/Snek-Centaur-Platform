@@ -14,9 +14,11 @@
   "scripts": {
     "build": "tsc -b",
     "typecheck": "tsc -b",
+    "test": "vitest run",
     "codegen": "pnpm --filter @cyphid/snek-convex-host codegen"
   },
   "devDependencies": {
+    "@cyphid/snek-engine": "workspace:*",
     "typescript": "*",
     "vitest": "^4.1.10"
   },

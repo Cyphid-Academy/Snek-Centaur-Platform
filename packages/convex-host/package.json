@@ -26,6 +26,8 @@
     "@convex-dev/rate-limiter": "^0.3.2",
     "@cyphid/convex-centaur-state": "workspace:*",
     "@cyphid/convex-snek-platform": "workspace:*",
+    "@cyphid/snek-engine": "workspace:*",
+    "@cyphid/snek-game-configuration": "workspace:*",
     "@cyphid/snek-stdb": "workspace:*",
     "better-auth": "^1.6.25",
     "convex": "^1.42.3",

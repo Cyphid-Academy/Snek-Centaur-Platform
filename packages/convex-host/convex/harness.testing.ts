@@ -6,6 +6,7 @@
 // vitest's `convex/**/*.{test,spec}.ts` collection.
 import betterAuthTest from "@convex-dev/better-auth/test";
 import { register as registerRateLimiter } from "@convex-dev/rate-limiter/test";
+import { DEFAULT_GAME_CONFIG } from "@cyphid/snek-game-configuration";
 import { convexTest } from "convex-test";
 import type { FunctionReference } from "convex/server";
 import { v } from "convex/values";
@@ -123,11 +124,21 @@ const seedModule = {
     handler: async (ctx, args) => await ctx.db.insert("centaur_teams", args),
   }),
   // The status and snapshot validators are the schema's own, so a seeded game
-  // is one the schema accepts by construction.
+  // is one the schema accepts by construction. The configuration half is filled
+  // in here rather than asked of every caller: a game record carries a complete
+  // configuration from the moment it exists, so a suite that is asking about
+  // issuance should not have to say so
+  // (spec: game-configuration/generation-parameters#a-default-for-every-generation-parameter).
   seedGame: platformComponentMutation({
     args: { status: gameStatus, roster: v.array(participantSnapshot) },
     returns: v.string(),
-    handler: async (ctx, args) => await ctx.db.insert("games", args),
+    handler: async (ctx, args) =>
+      await ctx.db.insert("games", {
+        ...args,
+        config: DEFAULT_GAME_CONFIG,
+        boardPreview: null,
+        boardPreviewLocked: false,
+      }),
   }),
   setGameStatus: platformComponentMutation({
     args: { gameId: v.string(), status: gameStatus },

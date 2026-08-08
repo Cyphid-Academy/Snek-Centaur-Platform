@@ -474,6 +474,9 @@ describe("credentialed by default", () => {
     "issue-game-token": (t) =>
       t.action(anyApi.issuance.issueGameToken, { gameId: "g1", role: "spectator" }),
     "review-attributed-actions": (t) => t.query(api.platform.attributedActions, {}),
+    "read-game-configuration": (t) =>
+      t.query(api.gameConfiguration.gameConfiguration, { gameId: "g1" }),
+    "configure-game": (t) => t.mutation(api.gameConfiguration.createGame, {}),
     // Granted by game credentials ahead of the functions it will reach; until
     // one exists there is nothing to call, and the registry assertion below is
     // the whole testable statement of its reach.

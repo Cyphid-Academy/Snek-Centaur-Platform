@@ -14,6 +14,7 @@ import type * as auth_deployment from "../auth/deployment.js";
 import type * as auth_eligibility from "../auth/eligibility.js";
 import type * as capabilities from "../capabilities.js";
 import type * as crons from "../crons.js";
+import type * as gameConfiguration from "../gameConfiguration.js";
 import type * as http from "../http.js";
 import type * as issuance from "../issuance.js";
 import type * as platform from "../platform.js";
@@ -34,6 +35,7 @@ declare const fullApi: ApiFromModules<{
   "auth/eligibility": typeof auth_eligibility;
   capabilities: typeof capabilities;
   crons: typeof crons;
+  gameConfiguration: typeof gameConfiguration;
   http: typeof http;
   issuance: typeof issuance;
   platform: typeof platform;

@@ -38,6 +38,19 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         boolean,
         Name
       >;
+      createGame: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          roster?: Array<{
+            coachUserIds: Array<string>;
+            memberUserIds: Array<string>;
+            teamId: string;
+          }>;
+        },
+        string,
+        Name
+      >;
       createHandoff: FunctionReference<
         "mutation",
         "internal",
@@ -56,6 +69,116 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         "internal",
         { designated: boolean; userId: string },
         null,
+        Name
+      >;
+      gameConfiguration: FunctionReference<
+        "query",
+        "internal",
+        { gameId: string },
+        {
+          boardPreview:
+            | {
+                board: { boardSize: number; cells: Array<number> };
+                items: Array<{
+                  cell: { x: number; y: number };
+                  itemType: number;
+                  spawnIndex: number;
+                  spawnTurn: number;
+                }>;
+                kind: "generated";
+                snakes: Array<{
+                  activeEffects: Array<{
+                    expiryTurn: number;
+                    family: "invulnerability" | "invisibility";
+                    state: "buff" | "debuff";
+                  }>;
+                  alive: boolean;
+                  body: Array<{ x: number; y: number }>;
+                  centaurTeamId: string;
+                  health: number;
+                  lastDirection: number | null;
+                  letter: string;
+                  snakeId: number;
+                  turn: number;
+                }>;
+              }
+            | {
+                attemptsUsed: number;
+                code:
+                  | "HAZARD_CONNECTIVITY"
+                  | "TERRITORY_PARITY_SHORTAGE"
+                  | "INITIAL_FOOD_SHORTAGE";
+                details: {
+                  centaurTeamId?: string;
+                  eligibleCellCount?: number;
+                  innerCellCount: number;
+                };
+                kind: "infeasible";
+              }
+            | null;
+          boardPreviewLocked: boolean;
+          config: {
+            generation: {
+              boardSize: number;
+              fertileGround: { clustering: number; density: number };
+              hazardPercentage: number;
+              snakesPerTeam: number;
+            };
+            runtime: {
+              clock: {
+                budgetIncrementMs: number;
+                firstTurnTimeMs: number;
+                initialBudgetMs: number;
+                maxTurnTimeMs: number;
+              };
+              foodSpawnRate: number;
+              hazardDamage: number;
+              invisPotionSpawnRate: number;
+              invulnPotionSpawnRate: number;
+              maxGameDurationMs: number;
+              maxHealth: number;
+              maxTurns: number;
+            };
+          };
+        } | null,
+        Name
+      >;
+      gameForConfiguration: FunctionReference<
+        "query",
+        "internal",
+        { gameId: string },
+        {
+          boardPreviewLocked: boolean;
+          config: {
+            generation: {
+              boardSize: number;
+              fertileGround: { clustering: number; density: number };
+              hazardPercentage: number;
+              snakesPerTeam: number;
+            };
+            runtime: {
+              clock: {
+                budgetIncrementMs: number;
+                firstTurnTimeMs: number;
+                initialBudgetMs: number;
+                maxTurnTimeMs: number;
+              };
+              foodSpawnRate: number;
+              hazardDamage: number;
+              invisPotionSpawnRate: number;
+              invulnPotionSpawnRate: number;
+              maxGameDurationMs: number;
+              maxHealth: number;
+              maxTurns: number;
+            };
+          };
+          roster: Array<{
+            coachUserIds: Array<string>;
+            memberUserIds: Array<string>;
+            teamId: string;
+          }>;
+          status: "not-started" | "playing" | "finished";
+        } | null,
         Name
       >;
       gameForIssuance: FunctionReference<
@@ -120,6 +243,118 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           returnAddresses: Array<string>;
           verificationMaterialUrl: string;
         },
+        null,
+        Name
+      >;
+      setConfiguration: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          config: {
+            generation: {
+              boardSize: number;
+              fertileGround: { clustering: number; density: number };
+              hazardPercentage: number;
+              snakesPerTeam: number;
+            };
+            runtime: {
+              clock: {
+                budgetIncrementMs: number;
+                firstTurnTimeMs: number;
+                initialBudgetMs: number;
+                maxTurnTimeMs: number;
+              };
+              foodSpawnRate: number;
+              hazardDamage: number;
+              invisPotionSpawnRate: number;
+              invulnPotionSpawnRate: number;
+              maxGameDurationMs: number;
+              maxHealth: number;
+              maxTurns: number;
+            };
+          };
+          gameId: string;
+        },
+        null,
+        Name
+      >;
+      setConfigurationAndPreview: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          boardPreview:
+            | {
+                board: { boardSize: number; cells: Array<number> };
+                items: Array<{
+                  cell: { x: number; y: number };
+                  itemType: number;
+                  spawnIndex: number;
+                  spawnTurn: number;
+                }>;
+                kind: "generated";
+                snakes: Array<{
+                  activeEffects: Array<{
+                    expiryTurn: number;
+                    family: "invulnerability" | "invisibility";
+                    state: "buff" | "debuff";
+                  }>;
+                  alive: boolean;
+                  body: Array<{ x: number; y: number }>;
+                  centaurTeamId: string;
+                  health: number;
+                  lastDirection: number | null;
+                  letter: string;
+                  snakeId: number;
+                  turn: number;
+                }>;
+              }
+            | {
+                attemptsUsed: number;
+                code:
+                  | "HAZARD_CONNECTIVITY"
+                  | "TERRITORY_PARITY_SHORTAGE"
+                  | "INITIAL_FOOD_SHORTAGE";
+                details: {
+                  centaurTeamId?: string;
+                  eligibleCellCount?: number;
+                  innerCellCount: number;
+                };
+                kind: "infeasible";
+              }
+            | null;
+          boardSeed: ArrayBuffer;
+          config: {
+            generation: {
+              boardSize: number;
+              fertileGround: { clustering: number; density: number };
+              hazardPercentage: number;
+              snakesPerTeam: number;
+            };
+            runtime: {
+              clock: {
+                budgetIncrementMs: number;
+                firstTurnTimeMs: number;
+                initialBudgetMs: number;
+                maxTurnTimeMs: number;
+              };
+              foodSpawnRate: number;
+              hazardDamage: number;
+              invisPotionSpawnRate: number;
+              invulnPotionSpawnRate: number;
+              maxGameDurationMs: number;
+              maxHealth: number;
+              maxTurns: number;
+            };
+          };
+          gameId: string;
+        },
+        null,
+        Name
+      >;
+      setPreviewLock: FunctionReference<
+        "mutation",
+        "internal",
+        { gameId: string; locked: boolean },
         null,
         Name
       >;

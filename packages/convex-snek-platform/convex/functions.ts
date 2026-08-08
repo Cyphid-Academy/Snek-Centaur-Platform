@@ -5,9 +5,17 @@
 // Data access only, no decisions: whether a request exceeds a ceiling, whether
 // a handoff expired, whether a status permits issuance is answered in
 // `convex-host`'s `auth/` modules against values these functions return.
+import { DEFAULT_GAME_CONFIG } from "@cyphid/snek-game-configuration";
 import { v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
-import { gameStatus, issuerRegistration, participantSnapshot } from "./schema";
+import {
+  boardPreview,
+  gameConfig,
+  gameStatus,
+  issuerRegistration,
+  participantSnapshot,
+} from "./schema";
 
 /** Liveness of this component. See `platformStatus` in the host. */
 export const status = query({
@@ -231,6 +239,197 @@ export const gameForIssuance = query({
     const id = ctx.db.normalizeId("games", args.gameId);
     const game = id && (await ctx.db.get(id));
     return game && { gameId: game._id, status: game.status, roster: game.roster };
+  },
+});
+
+// ---------------------------------------------------------------------------
+// The configuration record on the game. Data access only, as everything in
+// this file is: the bounds, the edit window and the regeneration trigger are
+// decided in `convex-host`'s `gameConfiguration.ts`, in one transaction, over
+// values these functions return and store.
+// spec: game-configuration/config-lives-on-the-game
+// ---------------------------------------------------------------------------
+
+/**
+ * The game id as this component's data model spells one, or a thrown refusal.
+ *
+ * `normalizeId` rather than a `v.id("games")` argument for the reason
+ * `gameForIssuance` gives: the host holds the id as a string and cannot name
+ * this component's data model to type it as anything else. A write refuses
+ * rather than answering `null`, because a caller that meant to change a game
+ * has learnt nothing useful from a silent no-op.
+ */
+function gameId(
+  ctx: { db: { normalizeId: (table: "games", id: string) => Id<"games"> | null } },
+  id: string,
+): Id<"games"> {
+  const normalized = ctx.db.normalizeId("games", id);
+  if (!normalized) throw new Error(`no game ${id}`);
+  return normalized;
+}
+
+/**
+ * Create a game in its minimal form: identity, an empty-or-given roster, and a
+ * configuration holding every parameter's default — so a board can be
+ * generated from an untouched record and no field is ever absent.
+ *
+ * The defaults are `DEFAULT_GAME_CONFIG`'s, read from the capability's own
+ * package rather than written out here: a record initialised from a second
+ * copy of the defaults is a record that disagrees with every widget.
+ *
+ * spec: game-configuration/config-lives-on-the-game#the-game-record-starts-minimal
+ * spec: game-configuration/generation-parameters#a-default-for-every-generation-parameter
+ */
+export const createGame = mutation({
+  args: { roster: v.optional(v.array(participantSnapshot)) },
+  returns: v.string(),
+  handler: async (ctx, args) =>
+    await ctx.db.insert("games", {
+      status: "not-started",
+      roster: args.roster ?? [],
+      config: DEFAULT_GAME_CONFIG,
+      boardPreview: null,
+      boardPreviewLocked: false,
+    }),
+});
+
+/**
+ * What a configuration surface reads: this game's own parameter values, the
+ * one current preview, and the lock.
+ *
+ * **The seed is not among them, and its absence is the requirement**: every
+ * random choice generation makes is drawn from it, and it is accessible to no
+ * game client. Selecting fields rather than returning the document is what
+ * makes that structural — a field added to the table does not leak by default.
+ *
+ * spec: game-configuration/config-lives-on-the-game#views-read-the-games-own-record
+ * spec: game-configuration/board-generation-retry
+ */
+export const gameConfiguration = query({
+  args: { gameId: v.string() },
+  returns: v.union(
+    v.object({
+      config: gameConfig,
+      boardPreview,
+      boardPreviewLocked: v.boolean(),
+    }),
+    v.null(),
+  ),
+  handler: async (ctx, args) => {
+    const id = ctx.db.normalizeId("games", args.gameId);
+    const game = id && (await ctx.db.get(id));
+    return (
+      game && {
+        config: game.config,
+        boardPreview: game.boardPreview,
+        boardPreviewLocked: game.boardPreviewLocked,
+      }
+    );
+  },
+});
+
+/**
+ * The same record as the write path needs it: the status the edit window turns
+ * on, the roster generation reads, and the configuration an edit merges into.
+ * The preview is absent because a write never reads the old one — it either
+ * overwrites the slot or leaves it alone — and the seed is absent for the
+ * reason above.
+ *
+ * spec: game-configuration/launch-freeze
+ * spec: game-configuration/board-preview#roster-change-regenerates
+ */
+export const gameForConfiguration = query({
+  args: { gameId: v.string() },
+  returns: v.union(
+    v.object({
+      status: gameStatus,
+      roster: v.array(participantSnapshot),
+      config: gameConfig,
+      boardPreviewLocked: v.boolean(),
+    }),
+    v.null(),
+  ),
+  handler: async (ctx, args) => {
+    const id = ctx.db.normalizeId("games", args.gameId);
+    const game = id && (await ctx.db.get(id));
+    return (
+      game && {
+        status: game.status,
+        roster: game.roster,
+        config: game.config,
+        boardPreviewLocked: game.boardPreviewLocked,
+      }
+    );
+  },
+});
+
+/**
+ * Store a configuration whose edit touched no input generation reads, leaving
+ * the preview and the lock exactly as they stood. None of the parameters such
+ * an edit can carry is an input the designated board was generated from, so
+ * clearing a deliberate designation over one would discard it for no reason.
+ *
+ * spec: game-configuration/board-preview-lock-in#a-dynamic-gameplay-edit-leaves-the-lock-standing
+ */
+export const setConfiguration = mutation({
+  args: { gameId: v.string(), config: gameConfig },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.db.patch(gameId(ctx, args.gameId), { config: args.config });
+    return null;
+  },
+});
+
+/**
+ * Store a configuration whose edit changed what the board is generated from,
+ * together with the board that regeneration produced — overwriting the one
+ * preview slot, recording the fresh seed it was drawn from, and clearing the
+ * lock.
+ *
+ * One mutation rather than three, because the three are one outcome: a lock
+ * cleared in a later write would leave a window in which the standing lock
+ * designates a preview its own parameters no longer produce.
+ *
+ * spec: game-configuration/board-preview#one-slot-no-archive
+ * spec: game-configuration/board-preview-lock-in#board-affecting-edit-clears-the-lock
+ * spec: global-invariants/transactional-invariant-enforcement
+ */
+export const setConfigurationAndPreview = mutation({
+  args: {
+    gameId: v.string(),
+    config: gameConfig,
+    boardPreview,
+    boardSeed: v.bytes(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.db.patch(gameId(ctx, args.gameId), {
+      config: args.config,
+      boardPreview: args.boardPreview,
+      boardSeed: args.boardSeed,
+      boardPreviewLocked: false,
+    });
+    return null;
+  },
+});
+
+/**
+ * Set or clear the lock designating the current preview as the game's starting
+ * state.
+ *
+ * **It takes no board data, and that is the contract rather than an omission**:
+ * the flag designates the platform-held current preview, so what launches is
+ * always a board the platform generated and every viewer saw. A client with a
+ * fabricated board has nowhere to put it.
+ *
+ * spec: game-configuration/board-preview-lock-in#lock-carries-no-board-data
+ */
+export const setPreviewLock = mutation({
+  args: { gameId: v.string(), locked: v.boolean() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.db.patch(gameId(ctx, args.gameId), { boardPreviewLocked: args.locked });
+    return null;
   },
 });
 

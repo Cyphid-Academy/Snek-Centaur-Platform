@@ -19,8 +19,25 @@
 
 // The configuration vocabulary: the engine's gameplay half by reference, this
 // capability's generation half by declaration.
-export type { BoardGenerationConfig, BoardGenerationFailure, GameConfig } from "./config.js";
-export { DEFAULT_GAME_CONFIG, DEFAULT_GENERATION_CONFIG } from "./config.js";
+export type {
+  BoardGenerationConfig,
+  BoardGenerationFailure,
+  GameConfig,
+  GenerationParameterDescriptor,
+} from "./config.js";
+export {
+  DEFAULT_GAME_CONFIG,
+  DEFAULT_GENERATION_CONFIG,
+  GENERATION_PARAMETER_DESCRIPTORS,
+} from "./config.js";
+
+// Authoritative validation of a whole configuration record — the rules the
+// configuration record enforces and an editing surface reflects, so neither
+// owns them (spec: game-configuration/closed-parameter-vocabulary,
+// game-configuration/parameter-bounds-sourcing,
+// game-configuration/bounded-game-duration).
+export type { ConfigViolation, ConfigurationHalf, GameConfigValidation } from "./validate.js";
+export { changesGenerationInputs, validateGameConfig } from "./validate.js";
 
 // The generator itself — all-or-nothing over a bounded retry.
 export { generateBoardAndInitialState } from "./boardgen.js";

@@ -11,26 +11,33 @@
 // it is handed a fully specified board, whose dimensions state its size and
 // whose placed snakes state how many each team fields.
 // spec: game-configuration/generation-parameters
-import type { CentaurTeamId, GameRuntimeConfig } from "@cyphid/snek-engine";
+import type {
+  CentaurTeamId,
+  GameRuntimeConfig,
+  GameplayParameterDescriptor,
+} from "@cyphid/snek-engine";
 import { DEFAULT_RUNTIME_CONFIG } from "@cyphid/snek-engine";
 
 /** The parameters that decide what a board looks like before its first turn. */
+// The ranges are NOT written here: `GENERATION_PARAMETER_DESCRIPTORS` below is
+// this capability's one declaration of them, and a comment restating a number
+// is a second copy that no test can see drift.
 // spec: game-configuration/generation-parameters
+// spec: game-configuration/parameter-bounds-sourcing#widget-and-validator-agree
 export interface BoardGenerationConfig {
-  /** 7-32, default 21 — the generated board's edge length, wall ring included. */
+  /** The generated board's edge length, wall ring included. */
   // spec: game-configuration/generated-board-shape
   readonly boardSize: number;
-  /** 1-10, default 5. */
   // spec: game-configuration/initial-snakes
   readonly snakesPerTeam: number;
-  /** 0-30, default 0 — percentage of inner cells designated Hazard. */
+  /** Percentage of inner cells designated Hazard; 0 designates none. */
   // spec: game-configuration/hazards
   readonly hazardPercentage: number;
   // spec: game-configuration/fertile-ground
   readonly fertileGround: {
-    /** 0-90, default 30. 0 disables fertile ground entirely. */
+    /** Coverage; 0 disables fertile ground entirely. */
     readonly density: number;
-    /** 1-20, default 10 — patch coherence of the noise field. */
+    /** Patch coherence of the noise field. */
     readonly clustering: number;
   };
 }
@@ -49,6 +56,76 @@ export const DEFAULT_GENERATION_CONFIG: BoardGenerationConfig = {
   hazardPercentage: 0,
   fertileGround: { density: 30, clustering: 10 },
 };
+
+/**
+ * One board-generation parameter, described as data.
+ *
+ * Structurally the engine's own descriptor, and deliberately the same type
+ * rather than a twin of it: a surface reflecting over both halves of the
+ * vocabulary reads one shape, and the predicate that decides admissibility
+ * (`isWithinGameplayBounds`) is the engine's one implementation for both.
+ * What differs between the halves is who *declares* the numbers, not how they
+ * are shaped or checked.
+ */
+export type GenerationParameterDescriptor = GameplayParameterDescriptor;
+
+/**
+ * The board-generation half's ranges and disable sentinels, as reflectable
+ * data. **This is the sole declaration of these numbers anywhere** — the
+ * engine's vocabulary carries none of them, because a turn's resolution reads
+ * none of them, so there is no outer range to reconcile against and no second
+ * copy to drift. Defaults are READ from `DEFAULT_GENERATION_CONFIG` rather
+ * than restated beside it, for the same reason the engine reads its own.
+ *
+ * The roster-contextual tightening a surface may apply (does this board size
+ * seat these teams' snakes?) is a derivation over this table and never a
+ * second set of numbers.
+ *
+ * spec: game-configuration/generation-parameters
+ * spec: game-configuration/parameter-bounds-sourcing#roster-tightens-generation-bounds
+ */
+export const GENERATION_PARAMETER_DESCRIPTORS: readonly GenerationParameterDescriptor[] = [
+  {
+    path: ["boardSize"],
+    kind: "integer",
+    min: 7,
+    max: 32,
+    default: DEFAULT_GENERATION_CONFIG.boardSize,
+    disableSentinel: null,
+  },
+  {
+    path: ["snakesPerTeam"],
+    kind: "integer",
+    min: 1,
+    max: 10,
+    default: DEFAULT_GENERATION_CONFIG.snakesPerTeam,
+    disableSentinel: null,
+  },
+  {
+    path: ["hazardPercentage"],
+    kind: "integer",
+    min: 0,
+    max: 30,
+    default: DEFAULT_GENERATION_CONFIG.hazardPercentage,
+    disableSentinel: 0, // no hazards
+  },
+  {
+    path: ["fertileGround", "density"],
+    kind: "integer",
+    min: 0,
+    max: 90,
+    default: DEFAULT_GENERATION_CONFIG.fertileGround.density,
+    disableSentinel: 0, // fertile ground disabled
+  },
+  {
+    path: ["fertileGround", "clustering"],
+    kind: "integer",
+    min: 1,
+    max: 20,
+    default: DEFAULT_GENERATION_CONFIG.fertileGround.clustering,
+    disableSentinel: null,
+  },
+];
 
 /**
  * A whole default configuration: this capability's generation defaults plus

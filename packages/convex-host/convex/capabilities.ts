@@ -63,6 +63,24 @@ export const CAPABILITIES = {
     reaches: "The actions taken on this human's own account through a registered system.",
     session: true,
   },
+  // The two the configuration surface reaches. Both are `session: true` and
+  // humans-only on the default, and **neither carries an access rule** — that
+  // absence is deliberate rather than an omission: `game-configuration` holds
+  // no permission of its own, because the room story owns who exists and what
+  // they may do. What these declare is the deployment's uniform admission (may
+  // this caller reach a public function at all), which is reachability and not
+  // authorization; which affordances a mounted surface offers is a
+  // presentation parameter the host passes it, and never this.
+  // spec: identity-and-authorization/capability-registry#reachability-is-not-authorization
+  // spec: game-configuration/host-selected-affordances
+  "read-game-configuration": {
+    reaches: "A game's configured parameters, its current board preview, and the lock.",
+    session: true,
+  },
+  "configure-game": {
+    reaches: "Create a game, edit its configuration, and designate its board.",
+    session: true,
+  },
   // Named ahead of the functions it reaches, which is the one departure from
   // "not a forecast" and is forced: `game-credential-scope` fixes that a game
   // credential grants exactly two capabilities, so both have to be mintable

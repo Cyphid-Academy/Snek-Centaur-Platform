@@ -46,6 +46,16 @@ The components are imported by **relative path**, not by package name. Convex bu
 
 **Before any of it runs**, an operator must set the Google client and `BETTER_AUTH_SECRET`; `src/env.ts` names every variable and what it is for. The credential-signing key is *not* among them: the deployment generates one for itself on first use and holds it in Better Auth's key store, encrypted under `BETTER_AUTH_SECRET` — so no signing key is ever provisioned from outside, and losing the secret is the one way to lose the key.
 
+## Game configuration, as built
+
+`convex/gameConfiguration.ts` is the whole of the pre-launch shaping surface, and everything its requirements bind happens in **one transaction of the update mutation**: authoritative validation (`validateGameConfig`, the capability's own pure module — the host restates no bound), the edit-window guard on the game's status, and, when the write changed what a board is generated from, the regeneration of the preview and the clearing of the lock together. The last is why they are one mutation rather than three: a lock cleared in a later write leaves a window in which a standing lock designates a preview its own parameters no longer produce.
+
+Three things about it are easy to get wrong and worth reading before changing any of them.
+
+- **Boards are only ever generated here.** `generateBoardAndInitialState` runs inside the mutation, so the preview a surface renders is produced by the same generation a launch will use, and no client runs a board-generation algorithm at all. The seed is drawn from `Math.random`, which is Convex's own seeded randomness inside a mutation: unpredictable to a caller, and reproduced rather than re-drawn if the transaction retries — so a retried write cannot commit a different board than the one it computed.
+- **The two capabilities carry no access rule, deliberately.** `read-game-configuration` and `configure-game` declare the deployment's uniform admission and nothing else; `game-configuration` holds no permission of its own, because the room story owns who exists and what they may do. Which affordances a mounted surface offers is a presentation parameter its host passes it, never a capability.
+- **The two halves' validators are imported from the component's `convex/schema.ts` by relative path**, not spelled again here. The stored shape and the wire shape are one document, and a second copy in the host is exactly the drift the component's mirror guard exists to make impossible.
+
 ## How a browser on a Server's origin authenticates
 
 This was a known gap and is now the shape of the thing. It is written down because every piece of it looks arbitrary in isolation, and because the constraint it is built around is easy to forget and expensive to rediscover.
@@ -115,6 +125,7 @@ The counting itself is **`@convex-dev/rate-limiter`**, not ours: a token bucket 
 - `convex/auth.ts`, `convex/auth.config.ts` — human sign-in, and the one issuer this deployment trusts
 - `convex/auth/` — minting, verification, the token subject grammar, and the eligibility decision
 - `convex/issuance.ts` — everything the platform issues
+- `convex/gameConfiguration.ts` — a game's configuration, its board preview, and the lock
 - `convex/http.ts` — the auth routes and the published verification material
 - `convex/platform.test.ts` — the surface under test with both components registered, no deployment involved
 - `src/env.ts` — the environment contract (this project ships no `.env.example` on purpose)

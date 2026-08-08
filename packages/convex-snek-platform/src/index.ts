@@ -20,7 +20,11 @@
 // `global-invariants/engine-mirrors-are-guarded` asks of a mirror — and the
 // cheapest way to satisfy an invariant about mirrors is to hold no mirror.
 // spec: global-invariants/engine-mirrors-are-guarded
-import type { GameConfig } from "@cyphid/snek-game-configuration";
+import type {
+  BoardGenerationFailure,
+  GameConfig,
+  GeneratedInitialState,
+} from "@cyphid/snek-game-configuration";
 
 // ---------------------------------------------------------------------------
 // Table record types
@@ -86,22 +90,53 @@ export interface ParticipantSnapshotRecord {
 }
 
 /**
- * A game as this change defined it: the status token issuance re-reads at the
- * moment of every request, and the roster snapshot every other authorization
- * question about the game is answered from. There is no `teamIds` beside the
- * snapshot — a second list of participants is a second answer waiting to
- * disagree with the first.
+ * The board a preview regeneration produced, or the structured reason there is
+ * none — the game's ONE current-preview value, overwritten by each
+ * regeneration and never accumulated into an archive. `null` is a game whose
+ * preview has not been generated yet.
  *
- * migrate-game-lifecycle adds the room, the config, the instance attachment and
- * the outcome; this change wrote only the fields it reads.
+ * The generated arm is the generator's own `GeneratedInitialState`, imported
+ * rather than restated: a preview a surface renders and a board a launch
+ * designates are the same document, and a second spelling of it here is the
+ * re-declaration this file's header forbids.
+ *
+ * spec: game-configuration/board-preview#one-slot-no-archive
+ * spec: game-configuration/infeasibility-surfaced#failure-names-the-constraint
+ */
+export type BoardPreviewRecord =
+  | ({ readonly kind: "generated" } & GeneratedInitialState)
+  | ({ readonly kind: "infeasible" } & BoardGenerationFailure)
+  | null;
+
+/**
+ * A game in its minimal form: the status token issuance re-reads at the moment
+ * of every request, the roster snapshot every other authorization question
+ * about the game is answered from, and the configuration record this game is
+ * shaped by — held on the game record itself, which is configuration's sole
+ * source of truth for this game. There is no `teamIds` beside the snapshot — a
+ * second list of participants is a second answer waiting to disagree with the
+ * first.
+ *
+ * `boardSeed` is absent from this interface as it is absent from every query
+ * result: the seed every random choice generation makes is drawn from is
+ * accessible to no game client, so nothing outside the component's own write
+ * path holds a type for it.
+ *
+ * migrate-game-lifecycle adds the room, the instance attachment and the
+ * outcome to this same record; it does not introduce a second one.
  *
  * spec: identity-and-authorization/live-game-issuance
  * spec: identity-and-authorization/roster-snapshot-binding
+ * spec: game-configuration/config-lives-on-the-game#the-game-record-starts-minimal
+ * spec: game-configuration/board-generation-retry
  */
 export interface GameRecord {
   readonly _id: string;
   readonly status: GameStatus;
   readonly roster: ReadonlyArray<ParticipantSnapshotRecord>;
+  readonly config: GameConfig;
+  readonly boardPreview: BoardPreviewRecord;
+  readonly boardPreviewLocked: boolean;
 }
 
 export interface ReplayRecord {
