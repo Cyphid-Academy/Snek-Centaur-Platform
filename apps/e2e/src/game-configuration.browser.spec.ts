@@ -7,11 +7,9 @@
 // mounted over a live `convexBinding` is the same component; what this suite
 // exercises is the component and the capability's rules, not the transport.
 //
-// Three facts a browser is entitled to claim and a unit test is not: that an
-// edit to a generation input reaches the record and comes back as a different
-// board with the designation cleared, that the record refuses an out-of-range
-// value identically when nothing renders a widget at all, and that an edit to a
-// parameter generation never reads leaves a deliberate designation standing.
+// What only a browser can claim: that an edit travels to the record and comes
+// back as a rendered board, with the designation cleared or standing according
+// to what was edited.
 import { expect, test } from "./fixtures";
 
 const ROUTE = "/dev/game-configuration";

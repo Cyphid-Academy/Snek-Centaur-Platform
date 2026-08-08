@@ -1,41 +1,32 @@
 // A game's configuration record, held in this dev server's memory.
 //
+// No host means no auth, no Convex deployment and no session: the surface is
+// fully usable over this, and the same component mounted over a `convexBinding`
+// against the real deployment is the same component.
 // spec: game-configuration/self-contained-configuration-surface#runs-with-no-host
-// This is what "no host" means concretely: the surface is fully usable — every
-// parameter editable, the generated board rendered, the lock operable — with no
-// authentication, no Convex deployment, and no session anywhere in the picture.
-// The same component mounted over a `convexBinding` against the real deployment
-// is the same component; only what is behind the binding differs.
 //
-// **The rules are not re-implemented here.** Validation is the capability's own
-// `validateGameConfig`, the regeneration trigger is its own
-// `changesGenerationInputs`, and the board comes from the one shared generator —
-// the same three the Convex mutation in `packages/convex-host` calls. A second
-// spelling of any of them would agree on the day it was written and diverge
-// afterwards, in the mount whose whole purpose is exercising the real workflow.
+// **The rules are not re-implemented here.** Validation, the regeneration
+// trigger, the generator and the preview document are the capability package's
+// own — the same four the Convex mutation calls — because a second spelling
+// would diverge in the mount whose whole purpose is exercising the real
+// workflow. Generation runs HERE, on the server, and never in the browser.
 // spec: global-invariants/one-shared-generation
 // spec: game-configuration/closed-parameter-vocabulary#out-of-range-rejected-regardless-of-client
-//
-// Generation runs HERE, on the server, and never in the browser: boards are only
-// ever generated platform-side, so the client still only renders one.
 // spec: game-configuration/board-preview#clients-render-never-generate
 import { randomBytes } from "node:crypto";
-import type {
-  BoardPreview,
-  GameConfigurationRecord,
-} from "$lib/surfaces/game-configuration/record";
+import type { GameConfigurationRecord } from "$lib/surfaces/game-configuration/record";
 import type { CentaurTeamId } from "@cyphid/snek-engine";
 import type {
-  BoardGenerationFailure,
+  BoardPreview,
   ConfigViolation,
   GameConfig,
-  GeneratedInitialState,
   TeamRegistration,
 } from "@cyphid/snek-game-configuration";
 import {
   DEFAULT_GAME_CONFIG,
   changesGenerationInputs,
   generateBoardAndInitialState,
+  previewDocument,
   validateGameConfig,
 } from "@cyphid/snek-game-configuration";
 
@@ -132,59 +123,10 @@ function regenerate(record: DevGame, config: GameConfig): void {
   const result = generateBoardAndInitialState(config, ROSTER, seed);
   record.config = config;
   record.boardSeed = seed;
-  record.boardPreview = storable(result);
+  record.boardPreview = previewDocument(result);
   // Every regeneration overwrites the one slot and clears the designation: a
   // lock that survived would designate a board its own parameters no longer
   // produce.
   // spec: game-configuration/board-preview#one-slot-no-archive
   record.boardPreviewLocked = false;
-}
-
-/**
- * The generator's answer as the one preview slot holds it, tagged by arm — the
- * same document `packages/convex-snek-platform`'s `boardPreview` validator
- * describes, so the component renders one shape whichever binding delivered it.
- */
-function storable(result: GeneratedInitialState | BoardGenerationFailure): BoardPreview {
-  if ("code" in result) {
-    return {
-      kind: "infeasible",
-      code: result.code,
-      attemptsUsed: result.attemptsUsed,
-      details: {
-        ...(result.details.centaurTeamId === undefined
-          ? {}
-          : { centaurTeamId: result.details.centaurTeamId as string }),
-        innerCellCount: result.details.innerCellCount,
-        ...(result.details.eligibleCellCount === undefined
-          ? {}
-          : { eligibleCellCount: result.details.eligibleCellCount }),
-      },
-    };
-  }
-  return {
-    kind: "generated",
-    board: { boardSize: result.board.boardSize, cells: [...result.board.cells] },
-    snakes: result.snakes.map((snake) => ({
-      snakeId: snake.snakeId as number,
-      letter: snake.letter,
-      centaurTeamId: snake.centaurTeamId as string,
-      health: snake.health,
-      activeEffects: snake.activeEffects.map((effect) => ({
-        family: effect.family,
-        state: effect.state,
-        expiryTurn: effect.expiryTurn as number,
-      })),
-      alive: snake.alive,
-      turn: snake.turn as number,
-      body: snake.body.map((cell) => ({ x: cell.x, y: cell.y })),
-      lastDirection: snake.lastDirection === null ? null : (snake.lastDirection as number),
-    })),
-    items: result.items.map((item) => ({
-      itemType: item.itemType as number,
-      spawnTurn: item.spawnTurn as number,
-      spawnIndex: item.spawnIndex,
-      cell: { x: item.cell.x, y: item.cell.y },
-    })),
-  };
 }

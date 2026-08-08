@@ -9,11 +9,9 @@
 //
 // It exists because the surfaces that DO enforce — the configuration
 // record's validator and the editing surface's widgets — must read one
-// declaration rather than restate it
+// declaration rather than restate it, and a prose comment on a field of
+// GameRuntimeConfig cannot be read by code
 // (spec: game-configuration/parameter-bounds-sourcing#widget-and-validator-agree).
-// Prose comments on the fields of GameRuntimeConfig cannot be read by code,
-// so the numbers were previously reachable only as the property suites'
-// private CONFIG_RANGES; that table is now a consumer of this one.
 //
 // Defaults are READ from DEFAULT_RUNTIME_CONFIG, never restated here, so a
 // changed default cannot disagree with the descriptor that reports it.

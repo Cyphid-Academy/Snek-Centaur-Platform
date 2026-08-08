@@ -13,7 +13,7 @@ import { fixtureBinding, mutableFixtureBinding } from "@cyphid/snek-app-shell";
 // spec: game-configuration/closed-parameter-vocabulary#board-size-round-trip
 import { GAMEPLAY_PARAMETER_DESCRIPTORS, gameplayParameter } from "@cyphid/snek-engine";
 import { CellType } from "@cyphid/snek-engine";
-import type { GameConfig } from "@cyphid/snek-game-configuration";
+import type { GameConfig, GeneratedBoardPreview } from "@cyphid/snek-game-configuration";
 import {
   DEFAULT_GAME_CONFIG,
   GENERATION_PARAMETER_DESCRIPTORS,
@@ -21,11 +21,7 @@ import {
 import { mount, unmount } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ConfigurationSurface from "./ConfigurationSurface.svelte";
-import type {
-  ConfigurationMutations,
-  GameConfigurationRecord,
-  GeneratedBoardPreview,
-} from "./record";
+import type { ConfigurationMutations, GameConfigurationRecord } from "./record";
 
 /** A small generated board, in the shape the preview slot holds one. */
 function preview(): GeneratedBoardPreview {

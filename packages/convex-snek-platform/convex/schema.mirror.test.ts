@@ -17,9 +17,21 @@ import { DEFAULT_RUNTIME_CONFIG } from "@cyphid/snek-engine";
 // spec: game-configuration/engine-schema-fidelity
 // spec: game-configuration/engine-schema-fidelity#a-generation-field-is-not-a-mirror-failure
 // spec: global-invariants/engine-mirrors-are-guarded
-import { DEFAULT_GENERATION_CONFIG } from "@cyphid/snek-game-configuration";
+import type { CentaurTeamId } from "@cyphid/snek-engine";
+import {
+  DEFAULT_GAME_CONFIG,
+  DEFAULT_GENERATION_CONFIG,
+  generateBoardAndInitialState,
+  previewDocument,
+} from "@cyphid/snek-game-configuration";
+import type { Infer } from "convex/values";
 import { describe, expect, it } from "vitest";
-import { gameplayConfig, generationConfig } from "./schema";
+import {
+  type boardPreview,
+  gameplayConfig,
+  generatedBoardPreview,
+  generationConfig,
+} from "./schema";
 
 /** Every leaf path of a plain value, dotted. */
 function leaves(value: unknown, prefix: readonly string[] = []): string[] {
@@ -69,5 +81,44 @@ describe("the generation half mirrors nothing", () => {
   it("shares no leaf name with the gameplay half", () => {
     const gameplay = new Set(validatorLeaves(gameplayConfig));
     for (const leaf of validatorLeaves(generationConfig)) expect(gameplay.has(leaf)).toBe(false);
+  });
+});
+
+describe("the preview slot holds the capability's own preview document", () => {
+  // The document is `@cyphid/snek-game-configuration`'s `previewDocument`, and
+  // this validator is the wire contract for it. Nothing derives one from the
+  // other, so the correspondence is checked here rather than asserted: a field
+  // the serializer emits and the validator omits would be rejected at the write.
+  // spec: game-configuration/board-preview
+  const board = previewDocument(
+    generateBoardAndInitialState(
+      DEFAULT_GAME_CONFIG,
+      [
+        { centaurTeamId: "team-red" as CentaurTeamId, name: "Red" },
+        { centaurTeamId: "team-blue" as CentaurTeamId, name: "Blue" },
+      ],
+      new Uint8Array(32),
+    ),
+  );
+
+  /** The field names a `v.object` declares, or of an array's element object. */
+  function fieldsOf(validator: unknown): string[] {
+    const node = validator as { kind: string; fields?: object; element?: unknown };
+    return node.kind === "array" ? fieldsOf(node.element) : Object.keys(node.fields ?? {}).sort();
+  }
+
+  it("declares exactly the fields the serializer emits", () => {
+    if (board.kind !== "generated") throw new Error(`default parameters: ${board.code}`);
+    // The assignment is half the check: a field the validator declares and the
+    // document does not carry is a compile error here.
+    const stored: Infer<typeof boardPreview> = board;
+    expect(stored).not.toBeNull();
+
+    expect(Object.keys(board).sort()).toEqual(fieldsOf(generatedBoardPreview));
+    const snakes = generatedBoardPreview.fields.snakes;
+    expect(Object.keys(board.snakes[0] ?? {}).sort()).toEqual(fieldsOf(snakes));
+    expect(Object.keys(board.items[0] ?? {}).sort()).toEqual(
+      fieldsOf(generatedBoardPreview.fields.items),
+    );
   });
 });

@@ -130,9 +130,11 @@ export const gameConfig = v.object({ generation: generationConfig, runtime: game
 const cell = v.object({ x: v.number(), y: v.number() });
 
 /**
- * The board preview as generation produced it — a serialized
- * `GeneratedInitialState`, tagged so the one preview slot can also hold the
- * structured reason generation gave up.
+ * The board preview as generation produced it — the wire contract for
+ * `@cyphid/snek-game-configuration`'s `previewDocument`, whose output is the
+ * only thing ever written here (`schema.mirror.test.ts` holds the two to the
+ * same fields). Tagged, so the one preview slot can also hold the structured
+ * reason generation gave up.
  *
  * The branded scalars of the engine's domain (`SnakeId`, `CentaurTeamId`,
  * `TurnNumber`, the `CellType`/`ItemType`/`Direction` enums) are numbers and

@@ -8,12 +8,9 @@
 // implementations here, `convexBinding` and `fixtureBinding`, are the same type
 // to their consumer.
 //
-// What a surface may *do* to state is the binding's shape, not the surface's
-// discipline. `StateBinding` has no mutation to invoke at all; `MutableBinding`
-// is the one that carries a typed record of them. So a read-only mounting is
-// read-only because there is nothing to call, rather than because something
-// refuses the call (`#absence-not-refusal`) — a surface written before the
-// replay path existed cannot write through a replay's binding even if it tries.
+// A read-only mounting is read-only because there is nothing to call, rather
+// than because something refuses the call (`#absence-not-refusal`): mutations
+// are `MutableBinding`'s member, and `StateBinding` has none.
 import type { ConvexClient } from "convex/browser";
 import type { FunctionArgs, FunctionReference, FunctionReturnType } from "convex/server";
 
@@ -138,13 +135,26 @@ class BindingSource<TState> {
   }
 }
 
-function readBinding<TState>(source: BindingSource<TState>): StateBinding<TState> {
+/**
+ * The read surface over a source, plus whatever members the caller composes
+ * onto it — the one place `current`/`subscribe`/`close` are built.
+ *
+ * Composed by construction rather than by spreading a built read surface:
+ * spreading an object copies a getter's *current value* as a plain property,
+ * which would freeze `current` at the moment of construction. The extra members
+ * are plain functions and values, so spreading THEM is safe.
+ */
+function bindingOver<TState, TExtra extends object>(
+  source: BindingSource<TState>,
+  extra: TExtra,
+): StateBinding<TState> & TExtra {
   return {
     get current() {
       return source.snapshot;
     },
-    subscribe: (run) => source.subscribe(run),
+    subscribe: (run: (snapshot: BindingSnapshot<TState>) => void) => source.subscribe(run),
     close: () => source.close(),
+    ...extra,
   };
 }
 
@@ -175,19 +185,11 @@ function fixtureSource<TState>(initial?: TState): BindingSource<TState> {
   );
 }
 
-// Composed by construction rather than by spreading `readBinding`: spreading an
-// object copies a getter's *current value* as a plain property, which would
-// freeze `current` at the moment of construction.
 function fixtureHandles<TState>(source: BindingSource<TState>): FixtureBinding<TState> {
-  return {
-    get current() {
-      return source.snapshot;
-    },
-    subscribe: (run) => source.subscribe(run),
-    close: () => source.close(),
-    set: (value) => source.value(value),
-    report: (status) => source.status(status),
-  };
+  return bindingOver(source, {
+    set: (value: TState) => source.value(value),
+    report: (status: ConnectionStatus) => source.status(status),
+  });
 }
 
 /**
@@ -208,17 +210,11 @@ export function mutableFixtureBinding<TState, TMutations extends MutationRecord<
   mutations: TMutations,
 ): MutableFixtureBinding<TState, TMutations> {
   const source = fixtureSource(initial);
-  const handles = fixtureHandles(source);
-  return {
-    get current() {
-      return source.snapshot;
-    },
-    subscribe: handles.subscribe,
-    close: handles.close,
-    set: handles.set,
-    report: handles.report,
+  return bindingOver(source, {
+    set: (value: TState) => source.value(value),
+    report: (status: ConnectionStatus) => source.status(status),
     mutations,
-  };
+  });
 }
 
 // --- Convex --------------------------------------------------------------
@@ -241,10 +237,8 @@ export interface ConvexBindingOptions<TQuery extends FunctionReference<"query">>
   readonly credential?: string | undefined;
 }
 
-/** How the mutations of a Convex-backed binding are declared: name → ref. */
 export type ConvexMutationSpec = Record<string, FunctionReference<"mutation">>;
 
-/** The mutation record a `ConvexMutationSpec` produces on the binding. */
 export type ConvexMutations<TSpec extends ConvexMutationSpec> = {
   [K in keyof TSpec]: (args: FunctionArgs<TSpec[K]>) => Promise<FunctionReturnType<TSpec[K]>>;
 };
@@ -282,11 +276,10 @@ function convexSource<TQuery extends FunctionReference<"query">>(
   return source;
 }
 
-/** A live read of one Convex query — the platform's own state, subscribed. */
 export function convexBinding<TQuery extends FunctionReference<"query">>(
   options: ConvexBindingOptions<TQuery>,
 ): StateBinding<FunctionReturnType<TQuery>> {
-  return readBinding(convexSource(options));
+  return bindingOver(convexSource(options), {});
 }
 
 /**
@@ -309,12 +302,5 @@ export function convexMutableBinding<
         withCredential(args, credential) as FunctionArgs<typeof reference>,
       );
   }
-  return {
-    get current() {
-      return source.snapshot;
-    },
-    subscribe: (run) => source.subscribe(run),
-    close: () => source.close(),
-    mutations: mutations as ConvexMutations<TSpec>,
-  };
+  return bindingOver(source, { mutations: mutations as ConvexMutations<TSpec> });
 }

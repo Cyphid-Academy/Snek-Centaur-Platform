@@ -11,7 +11,11 @@
 import type { GameplayParameterDescriptor } from "@cyphid/snek-engine";
 import { GAMEPLAY_PARAMETER_DESCRIPTORS, gameplayParameterKey } from "@cyphid/snek-engine";
 import type { GameConfig } from "@cyphid/snek-game-configuration";
-import { GENERATION_PARAMETER_DESCRIPTORS } from "@cyphid/snek-game-configuration";
+import {
+  GENERATION_PARAMETER_DESCRIPTORS,
+  isPlainRecord,
+  valueAtPath,
+} from "@cyphid/snek-game-configuration";
 
 /** The two disjoint halves the vocabulary comprises, named by their field. */
 // spec: game-configuration/closed-parameter-vocabulary
@@ -99,17 +103,10 @@ export const GAMEPLAY_WIDGETS: readonly ParameterWidget[] = widgets(
   GAMEPLAY_PARAMETER_DESCRIPTORS,
 );
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 /** The number a half holds at a descriptor's path, or `undefined`. */
 export function valueAt(half: unknown, path: readonly string[]): number | undefined {
-  let cursor: unknown = half;
-  for (const segment of path) {
-    if (!isRecord(cursor)) return undefined;
-    cursor = cursor[segment];
-  }
-  return typeof cursor === "number" ? cursor : undefined;
+  const value = valueAtPath(half, path);
+  return typeof value === "number" ? value : undefined;
 }
 
 /**
@@ -122,7 +119,7 @@ export function valueAt(half: unknown, path: readonly string[]): number | undefi
  * total.
  */
 function clonePlain(value: unknown): unknown {
-  if (!isRecord(value)) return value;
+  if (!isPlainRecord(value)) return value;
   const copy: Record<string, unknown> = {};
   for (const [key, nested] of Object.entries(value)) copy[key] = clonePlain(nested);
   return copy;
@@ -132,6 +129,12 @@ function clonePlain(value: unknown): unknown {
  * A whole configuration with one parameter replaced — a fresh document rather
  * than a mutation, because what the surface emits is the post-write record and
  * the stored one is not the surface's to edit in place.
+ *
+ * A descriptor's path is total over the record it describes — the bounds suite
+ * walks every one of them — so a path that does not reach a leaf is a broken
+ * declaration rather than a value to leave unedited. It throws rather than
+ * silently answering with the configuration it was handed.
+ * spec: game-configuration/parameter-bounds-sourcing#widget-and-validator-agree
  */
 export function withParameter(
   config: GameConfig,
@@ -143,11 +146,13 @@ export function withParameter(
   const path = widget.descriptor.path;
   for (const segment of path.slice(0, -1)) {
     const next = cursor[segment];
-    if (!isRecord(next)) return config;
-    cursor = next as Record<string, unknown>;
+    if (!isPlainRecord(next)) {
+      throw new Error(`${widget.path} has no subtree at ${segment}`);
+    }
+    cursor = next;
   }
   const leaf = path[path.length - 1];
-  if (leaf === undefined) return config;
+  if (leaf === undefined) throw new Error(`${widget.path} declares an empty path`);
   cursor[leaf] = value;
   return { ...config, [widget.half]: half } as GameConfig;
 }

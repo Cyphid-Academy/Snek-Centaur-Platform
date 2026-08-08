@@ -17,7 +17,7 @@ import {
   isWithinGameplayBounds,
 } from "@cyphid/snek-engine";
 import type { GameConfig } from "./config.js";
-import { GENERATION_PARAMETER_DESCRIPTORS } from "./config.js";
+import { GENERATION_PARAMETER_DESCRIPTORS, isPlainRecord, valueAtPath } from "./config.js";
 
 /**
  * The two disjoint halves the vocabulary comprises, named by the field each
@@ -66,22 +66,9 @@ const HALVES: readonly ConfigurationHalf[] = ["generation", "runtime"];
 const TURN_LIMIT = "maxTurns";
 const DURATION_LIMIT = "maxGameDurationMs";
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-/** The value at a descriptor's path within one half, or `undefined`. */
-function at(half: unknown, path: readonly string[]): unknown {
-  let cursor: unknown = half;
-  for (const segment of path) {
-    if (!isRecord(cursor)) return undefined;
-    cursor = cursor[segment];
-  }
-  return cursor;
-}
-
 /** Every leaf path of a value, dotted — what a closed vocabulary is closed over. */
 function leaves(value: unknown, prefix: readonly string[] = []): readonly string[] {
-  if (!isRecord(value)) return [prefix.join(".")];
+  if (!isPlainRecord(value)) return [prefix.join(".")];
   return Object.keys(value).flatMap((key) => leaves(value[key], [...prefix, key]));
 }
 
@@ -93,28 +80,19 @@ function leaves(value: unknown, prefix: readonly string[] = []): readonly string
  * will hold once the write lands, which no per-field check can see. A caller
  * merges its edit into the stored record and validates the result.
  *
- * Four rules, in one pass:
+ * No bound is restated here: every range comes from the one declaration its
+ * half has — the engine's descriptors for the gameplay half, this package's own
+ * for the generation half.
  *
- * 1. **Closed vocabulary, two disjoint halves.** Exactly `generation` and
- *    `runtime` at the root, and within each exactly the leaves its descriptor
- *    table declares — a field belonging to neither half is rejected rather
- *    than stored, and a generation field appearing on the gameplay side is an
- *    unknown parameter there (`closed-parameter-vocabulary`).
- * 2. **Type.** Every parameter is a finite number, and an `integer`-kind one
- *    is a whole number.
- * 3. **Range**, from the one declaration each half has: the engine's
- *    descriptors for the gameplay half, this package's own for the generation
- *    half. No bound is restated here (`parameter-bounds-sourcing`).
- * 4. **At least one limit on how long the game can last** — the cross-field
- *    condition no range on either parameter can express
- *    (`bounded-game-duration`).
- *
+ * spec: game-configuration/closed-parameter-vocabulary
+ * spec: game-configuration/parameter-bounds-sourcing
+ * spec: game-configuration/bounded-game-duration
  * spec: game-configuration/closed-parameter-vocabulary#out-of-range-rejected-regardless-of-client
  * spec: game-configuration/bounded-game-duration#neither-limit-is-rejected
  */
 export function validateGameConfig(candidate: unknown): GameConfigValidation {
   const violations: ConfigViolation[] = [];
-  if (!isRecord(candidate)) {
+  if (!isPlainRecord(candidate)) {
     return { ok: false, violations: HALVES.map((half) => missing(half)) };
   }
 
@@ -126,7 +104,7 @@ export function validateGameConfig(candidate: unknown): GameConfigValidation {
 
   for (const half of HALVES) {
     const subtree = candidate[half];
-    if (!isRecord(subtree)) {
+    if (!isPlainRecord(subtree)) {
       violations.push(missing(half));
       continue;
     }
@@ -137,7 +115,7 @@ export function validateGameConfig(candidate: unknown): GameConfigValidation {
     }
     for (const descriptor of DESCRIPTORS[half]) {
       const path = `${half}.${gameplayParameterKey(descriptor)}`;
-      const value = at(subtree, descriptor.path);
+      const value = valueAtPath(subtree, descriptor.path);
       if (value === undefined) {
         violations.push({ code: "missing-parameter", path });
       } else if (typeof value !== "number" || !Number.isFinite(value)) {
@@ -183,7 +161,7 @@ const missing = (half: ConfigurationHalf): ConfigViolation => ({
  */
 function bothLimitsDisabled(runtime: unknown): boolean {
   const disabled = (parameter: string): boolean =>
-    at(runtime, [parameter]) === gameplayParameter(parameter).disableSentinel;
+    valueAtPath(runtime, [parameter]) === gameplayParameter(parameter).disableSentinel;
   return disabled(TURN_LIMIT) && disabled(DURATION_LIMIT);
 }
 
@@ -204,11 +182,9 @@ function bothLimitsDisabled(runtime: unknown): boolean {
  *
  * spec: game-configuration/board-preview#roster-change-regenerates
  * spec: game-configuration/board-preview-lock-in#a-dynamic-gameplay-edit-leaves-the-lock-standing
- *
- * The widening from "board-affecting parameters" to "generation inputs" is
- * `migrate-game-configuration`'s design decision of 2026-07-28: the roster is
- * an input generation reads, so a team joining while a lock stands would
- * otherwise leave a designated board whose snake set does not match.
+ * The roster counts as one of those inputs (why, in `migrate-game-configuration`'s
+ * design record), so a team joining under a standing lock cannot leave a
+ * designated board whose snake set no longer matches.
  */
 export function changesGenerationInputs(update: {
   readonly generation?: unknown;

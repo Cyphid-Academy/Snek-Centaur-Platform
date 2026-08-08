@@ -19,15 +19,12 @@
 // spec: global-invariants/transactional-invariant-enforcement
 // spec: global-invariants/one-shared-generation
 import type { CentaurTeamId } from "@cyphid/snek-engine";
-import type {
-  BoardGenerationFailure,
-  ConfigViolation,
-  GameConfig,
-  GeneratedInitialState,
-} from "@cyphid/snek-game-configuration";
+import type { ConfigViolation, GameConfig } from "@cyphid/snek-game-configuration";
 import {
+  DEFAULT_GAME_CONFIG,
   changesGenerationInputs,
   generateBoardAndInitialState,
+  previewDocument,
   validateGameConfig,
 } from "@cyphid/snek-game-configuration";
 import type { Value } from "convex/values";
@@ -56,7 +53,7 @@ import { publicMutation, publicQuery } from "./publicFunctions";
  */
 export interface ConfigurationRejected {
   readonly kind: "configuration-rejected";
-  readonly violations: unknown;
+  readonly violations: ReadonlyArray<Record<string, Value>>;
 }
 
 /**
@@ -90,7 +87,7 @@ const AWAITING_LAUNCH = "not-started";
  * spec: game-configuration/generation-parameters#a-default-for-every-generation-parameter
  */
 export const createGame = publicMutation({ capability: "configure-game" })({
-  args: { roster: v.optional(v.array(v.object({ teamId: v.string(), name: v.string() }))) },
+  args: { roster: v.optional(v.array(v.object({ teamId: v.string() }))) },
   handler: async (ctx, args): Promise<string> => {
     const roster = args.roster ?? [];
     const gameId: string = await ctx.runMutation(components.snekPlatform.functions.createGame, {
@@ -100,7 +97,7 @@ export const createGame = publicMutation({ capability: "configure-game" })({
         coachUserIds: [],
       })),
     });
-    if (roster.length > 0) await regenerate(ctx, gameId);
+    if (roster.length > 0) await regenerate(ctx, gameId, DEFAULT_GAME_CONFIG, roster);
     return gameId;
   },
 });
@@ -108,11 +105,9 @@ export const createGame = publicMutation({ capability: "configure-game" })({
 /**
  * This game's own configured values, the one current preview, and the lock.
  *
- * Delivered reactively by Convex's own query subscription, which is what makes
- * every configuration surface showing this game render the same candidate: none
- * holds a private one, and none survives a refresh.
- *
- * The board seed is not in the answer, because it is in no query's answer.
+ * Delivered by Convex's own query subscription, which is what makes every
+ * surface showing this game render the same candidate. The board seed is not in
+ * the answer, because it is in no query's answer.
  *
  * spec: game-configuration/board-preview#all-viewers-in-sync
  * spec: game-configuration/config-lives-on-the-game#views-read-the-games-own-record
@@ -158,17 +153,13 @@ export const updateConfiguration = publicMutation({ capability: "configure-game"
     };
     const validation = validateGameConfig(candidate);
     if (!validation.ok) {
-      // Spread into mutable objects because a `ConvexError`'s payload is a
-      // Convex `Value`, which the capability's own read-only violation type is
-      // not — the same document, re-spelled for the wire rather than reshaped.
       throw new ConvexError({
         kind: "configuration-rejected",
         violations: validation.violations.map(onTheWire),
       } satisfies ConfigurationRejected);
     }
-    // The one place the trigger is decided, named by the capability's own
-    // helper so the regeneration and the lock-clearing can never disagree
-    // about what counts as a change to generation's inputs.
+    // The capability's own helper decides the trigger, so the regeneration and
+    // the lock-clearing cannot disagree about what counts as a change.
     if (!changesGenerationInputs(args)) {
       await ctx.runMutation(components.snekPlatform.functions.setConfiguration, {
         gameId: args.gameId,
@@ -186,10 +177,8 @@ export const updateConfiguration = publicMutation({ capability: "configure-game"
  * designation.
  *
  * It takes a boolean and a game, and no board: the flag designates the
- * platform-held current preview, so board data a client supplied would be
- * irrelevant even if there were somewhere to put it. Each set designates the
- * candidate standing at that moment, and only the designation standing at
- * launch has any effect.
+ * platform-held current preview, so there is nowhere for client-supplied board
+ * data to go.
  *
  * spec: game-configuration/board-preview-lock-in#lock-carries-no-board-data
  * spec: game-configuration/board-preview-lock-in#lock-toggles-freely-before-launch
@@ -236,8 +225,13 @@ async function editable(ctx: MutationCtx, gameId: string): Promise<GameForConfig
 }
 
 /**
- * Run the one shared generator against the game's current inputs and store the
- * result in the single preview slot, clearing the lock.
+ * Run the one shared generator against the config and roster it is handed, and
+ * store the result in the single preview slot, clearing the lock.
+ *
+ * The inputs are explicit rather than re-read here: each caller already holds
+ * the pair it means to generate from — the validated candidate and the game it
+ * guarded, or a new game's defaults and its roster — and a second read could
+ * generate from something the caller did not intend.
  *
  * The seed is drawn fresh for every regeneration and stored beside the board it
  * produced; it reaches no client, so a client cannot reproduce a candidate it
@@ -258,70 +252,24 @@ async function editable(ctx: MutationCtx, gameId: string): Promise<GameForConfig
 async function regenerate(
   ctx: MutationCtx,
   gameId: string,
-  config?: GameConfig,
-  roster?: ReadonlyArray<{ readonly teamId: string }>,
+  config: GameConfig,
+  roster: ReadonlyArray<{ readonly teamId: string }>,
 ): Promise<void> {
-  const game = config && roster ? { config, roster } : await editable(ctx, gameId);
   const seed = freshBoardSeed();
   const result = generateBoardAndInitialState(
-    game.config,
-    game.roster.map((team) => ({
-      centaurTeamId: team.teamId as CentaurTeamId,
-      name: team.teamId,
-    })),
+    config,
+    // The team id stands in as the display name: a roster snapshot carries no
+    // display name, and team display names arrive with team-management's roster
+    // work. Until then a snake reads "team-red.A".
+    roster.map((team) => ({ centaurTeamId: team.teamId as CentaurTeamId, name: team.teamId })),
     seed,
   );
   await ctx.runMutation(components.snekPlatform.functions.setConfigurationAndPreview, {
     gameId,
-    config: game.config,
-    boardPreview: storable(result),
+    config,
+    boardPreview: previewDocument(result),
     boardSeed: seed.buffer as ArrayBuffer,
   });
-}
-
-/** The generator's answer as the one preview slot holds it, tagged by arm. */
-function storable(result: GeneratedInitialState | BoardGenerationFailure) {
-  if ("code" in result) {
-    return {
-      kind: "infeasible" as const,
-      code: result.code,
-      attemptsUsed: result.attemptsUsed,
-      details: {
-        ...(result.details.centaurTeamId === undefined
-          ? {}
-          : { centaurTeamId: result.details.centaurTeamId as string }),
-        innerCellCount: result.details.innerCellCount,
-        ...(result.details.eligibleCellCount === undefined
-          ? {}
-          : { eligibleCellCount: result.details.eligibleCellCount }),
-      },
-    };
-  }
-  return {
-    kind: "generated" as const,
-    board: { boardSize: result.board.boardSize, cells: [...result.board.cells] },
-    snakes: result.snakes.map((snake) => ({
-      snakeId: snake.snakeId as number,
-      letter: snake.letter,
-      centaurTeamId: snake.centaurTeamId as string,
-      health: snake.health,
-      activeEffects: snake.activeEffects.map((effect) => ({
-        family: effect.family,
-        state: effect.state,
-        expiryTurn: effect.expiryTurn as number,
-      })),
-      alive: snake.alive,
-      turn: snake.turn as number,
-      body: snake.body.map((cell) => ({ x: cell.x, y: cell.y })),
-      lastDirection: snake.lastDirection === null ? null : (snake.lastDirection as number),
-    })),
-    items: result.items.map((item) => ({
-      itemType: item.itemType as number,
-      spawnTurn: item.spawnTurn as number,
-      spawnIndex: item.spawnIndex,
-      cell: { x: item.cell.x, y: item.cell.y },
-    })),
-  };
 }
 
 /** Thirty-two bytes of this transaction's randomness. */

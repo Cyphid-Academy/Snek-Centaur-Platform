@@ -98,13 +98,7 @@ $effect(() => binding.subscribe((next) => (snapshot = next)));
 const record = $derived(snapshot.value ?? null);
 const config = $derived<GameConfig | null>(record?.config ?? null);
 
-/**
- * The mutations, or `null` when the binding carries none.
- *
- * The check is over the binding's shape rather than over an affordance: an
- * affordance says what a host offers, and a read-only binding says what is
- * expressible at all. Both must hold before an input is rendered.
- */
+/** The mutations, or `null` when the binding carries none. */
 const mutations = $derived<ConfigurationMutations | null>(
   "mutations" in binding ? binding.mutations : null,
 );
@@ -214,6 +208,51 @@ const editableWidgets = $derived(
 );
 </script>
 
+<!-- One row per declared parameter, for both halves: the two loops differ in
+     which table they walk, never in what a row is.
+     spec: game-configuration/parameter-bounds-sourcing#widget-and-validator-agree -->
+{#snippet parameterRow(widget: ParameterWidget)}
+  {@const value = valueAt(config?.[widget.half], widget.descriptor.path) ?? 0}
+  {@const gated = config !== null && isGatedOff(widget, config)}
+  {@const violation = violationFor(widget)}
+  <div
+    class="parameter"
+    class:gated
+    data-testid={`parameter-${widget.path}`}
+    data-gated={gated ? "true" : "false"}
+  >
+    <label for={`p-${widget.path}`}>{widget.label}</label>
+    {#if canEdit}
+      <input
+        id={`p-${widget.path}`}
+        type="number"
+        min={widget.descriptor.min}
+        max={widget.descriptor.max}
+        step={step(widget)}
+        {value}
+        data-testid={`input-${widget.path}`}
+        onchange={(event) => edit(widget, event.currentTarget.value)}
+      />
+    {:else}
+      <output id={`p-${widget.path}`} data-testid={`value-${widget.path}`}>{value}</output>
+    {/if}
+    <span class="hint" data-testid={`bounds-${widget.path}`}>{rangeHint(widget)}</span>
+    {#if gated}
+      <!-- Shown inactive, and still persisted: raising the gate later brings the
+           stored value into effect without re-entry.
+           spec: game-configuration/conditional-parameter-semantics#ui-communicates-without-blocking -->
+      <span class="gate" data-testid={`gate-${widget.path}`}
+        >Inactive — {widget.gatedBy} is off. This value is still saved.</span
+      >
+    {/if}
+    {#if violation !== undefined}
+      <span class="violation" data-testid={`violation-${widget.path}`}
+        >Out of range for this parameter.</span
+      >
+    {/if}
+  </div>
+{/snippet}
+
 <section class="surface" data-testid="configuration-surface" data-mode={mode}>
   <header>
     <h2>Game configuration</h2>
@@ -272,77 +311,14 @@ const editableWidgets = $derived(
           </div>
 
           {#each editableWidgets as widget (widget.path)}
-            {@const value = valueAt(config[widget.half], widget.descriptor.path) ?? 0}
-            {@const gated = isGatedOff(widget, config)}
-            {@const violation = violationFor(widget)}
-            <div
-              class="parameter"
-              class:gated
-              data-testid={`parameter-${widget.path}`}
-              data-gated={gated ? "true" : "false"}
-            >
-              <label for={`p-${widget.path}`}>{widget.label}</label>
-              {#if canEdit}
-                <input
-                  id={`p-${widget.path}`}
-                  type="number"
-                  min={widget.descriptor.min}
-                  max={widget.descriptor.max}
-                  step={step(widget)}
-                  {value}
-                  data-testid={`input-${widget.path}`}
-                  onchange={(event) => edit(widget, event.currentTarget.value)}
-                />
-              {:else}
-                <output id={`p-${widget.path}`} data-testid={`value-${widget.path}`}>{value}</output>
-              {/if}
-              <span class="hint" data-testid={`bounds-${widget.path}`}>{rangeHint(widget)}</span>
-              {#if gated}
-                <!-- Shown inactive, and still persisted: raising the gate later
-                     brings the stored value into effect without re-entry.
-                     spec: game-configuration/conditional-parameter-semantics#ui-communicates-without-blocking -->
-                <span class="gate" data-testid={`gate-${widget.path}`}
-                  >Inactive — {widget.gatedBy} is off. This value is still saved.</span
-                >
-              {/if}
-              {#if violation !== undefined}
-                <span class="violation" data-testid={`violation-${widget.path}`}
-                  >Out of range for this parameter.</span
-                >
-              {/if}
-            </div>
+            {@render parameterRow(widget)}
           {/each}
         </fieldset>
 
         <fieldset data-testid="gameplay-half">
           <legend>Gameplay</legend>
           {#each GAMEPLAY_WIDGETS as widget (widget.path)}
-            {@const value = valueAt(config[widget.half], widget.descriptor.path) ?? 0}
-            {@const gated = isGatedOff(widget, config)}
-            {@const violation = violationFor(widget)}
-            <div class="parameter" class:gated data-testid={`parameter-${widget.path}`}>
-              <label for={`p-${widget.path}`}>{widget.label}</label>
-              {#if canEdit}
-                <input
-                  id={`p-${widget.path}`}
-                  type="number"
-                  min={widget.descriptor.min}
-                  max={widget.descriptor.max}
-                  step={step(widget)}
-                  {value}
-                  data-testid={`input-${widget.path}`}
-                  onchange={(event) => edit(widget, event.currentTarget.value)}
-                />
-              {:else}
-                <output id={`p-${widget.path}`} data-testid={`value-${widget.path}`}>{value}</output>
-              {/if}
-              <span class="hint" data-testid={`bounds-${widget.path}`}>{rangeHint(widget)}</span>
-              {#if violation !== undefined}
-                <span class="violation" data-testid={`violation-${widget.path}`}
-                  >Out of range for this parameter.</span
-                >
-              {/if}
-            </div>
+            {@render parameterRow(widget)}
           {/each}
           {#if violations.some((violation) => violation.code === "unbounded-game")}
             <!-- spec: game-configuration/bounded-game-duration#neither-limit-is-rejected -->

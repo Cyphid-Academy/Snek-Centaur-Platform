@@ -26,10 +26,7 @@ const asHuman = (t: Harness) => t.withIdentity(HUMAN);
 
 const createGame = async (t: Harness, teams = 2): Promise<string> =>
   await asHuman(t).mutation(api.gameConfiguration.createGame, {
-    roster: Array.from({ length: teams }, (_, index) => ({
-      teamId: `team-${index}`,
-      name: `Team ${index}`,
-    })),
+    roster: Array.from({ length: teams }, (_, index) => ({ teamId: `team-${index}` })),
   });
 
 const read = async (t: Harness, gameId: string) =>

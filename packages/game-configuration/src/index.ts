@@ -13,9 +13,10 @@
 // two code paths over the same parameters and seed diverge only when someone
 // compares the two boards (spec: global-invariants/one-shared-generation).
 //
-// The capability's persistent record, its validation surface and its preview
-// workflow are not here yet: they belong to the runtimes that hold them, and
-// arrive with `migrate-game-configuration`'s remaining implementation.
+// The persistent record itself is not here and will not be: it belongs to the
+// runtime that holds it. What is here is everything both sides of that boundary
+// must agree on — the vocabulary, the rules, the generator, and the document a
+// generated board is stored and rendered as.
 
 // The configuration vocabulary: the engine's gameplay half by reference, this
 // capability's generation half by declaration.
@@ -29,7 +30,20 @@ export {
   DEFAULT_GAME_CONFIG,
   DEFAULT_GENERATION_CONFIG,
   GENERATION_PARAMETER_DESCRIPTORS,
+  isPlainRecord,
+  valueAtPath,
 } from "./config.js";
+
+// The board-preview document — the one spelling of what the preview slot holds,
+// shared by the record that stores it and every surface that renders it.
+// spec: game-configuration/board-preview
+export type {
+  BoardInfeasibility,
+  BoardPreview,
+  GeneratedBoardPreview,
+  PreviewCell,
+} from "./preview.js";
+export { previewDocument } from "./preview.js";
 
 // Authoritative validation of a whole configuration record — the rules the
 // configuration record enforces and an editing surface reflects, so neither

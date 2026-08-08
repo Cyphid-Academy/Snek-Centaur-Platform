@@ -12,6 +12,8 @@ This package is `@cyphid/snek-game-configuration`: the runtime-agnostic core of 
 - `BoardGenerationConfig`, `GameConfig`, and the generation half's defaults. The gameplay half is read from the engine (`DEFAULT_RUNTIME_CONFIG`), never restated.
 - `generateBoardAndInitialState(config, teams, gameSeed)` — the generation pipeline as named stage functions with a bounded, sub-seeded retry.
 - `BoardGenerationFailure` — the all-or-nothing outcome. Generation never substitutes a board it *can* seat for one it cannot.
+- `validateGameConfig` / `changesGenerationInputs` — the rules the configuration record enforces and an editing surface reflects, so neither owns them.
+- `previewDocument` and the preview-document types — the one spelling of what a preview slot holds. Every party that stores, transports or renders a generated board imports it; a runtime that re-spells it is the drift this package exists to prevent.
 - Perlin noise and any other generation-only maths.
 
 ## What does NOT go here

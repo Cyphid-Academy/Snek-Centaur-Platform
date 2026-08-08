@@ -139,6 +139,34 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
 };
 
 /**
+ * Whether a value is a plain record — the only interior node a configuration
+ * tree has. A configuration is numbers in nested plain objects and nothing
+ * else, which is what the closed vocabulary makes true and what lets every
+ * walk over one be total.
+ * spec: game-configuration/closed-parameter-vocabulary
+ */
+export const isPlainRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/**
+ * The value at a descriptor's path within a configuration tree, or `undefined`
+ * where the tree does not reach that far.
+ *
+ * The one walk over a descriptor's `path`: the validator reads a candidate with
+ * it and an editing surface reads the stored record with it, so neither can
+ * disagree with the other about where a declared parameter lives.
+ * spec: game-configuration/parameter-bounds-sourcing#widget-and-validator-agree
+ */
+export function valueAtPath(tree: unknown, path: readonly string[]): unknown {
+  let cursor: unknown = tree;
+  for (const segment of path) {
+    if (!isPlainRecord(cursor)) return undefined;
+    cursor = cursor[segment];
+  }
+  return cursor;
+}
+
+/**
  * Why an all-or-nothing generation attempt gave up, after its bounded retry.
  * Generation never substitutes a board of its own: an infeasible parameter set
  * yields this instead.
