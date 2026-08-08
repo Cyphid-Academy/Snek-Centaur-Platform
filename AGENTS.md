@@ -114,7 +114,7 @@ pnpm check:commit origin/main..HEAD     # every commit on the branch
 pnpm check:commit --no-tests            # static gates only, ~1.5s
 ```
 
-**Tier 2 — `pnpm verify`, the full battery.** Is the *code* right? Lint, typecheck, both suites, `smoke`, `spec:check`. Run it at the tip before pushing. **CI runs the same named scripts** — its jobs are `pnpm verify` decomposed for wall-clock, never their own inlined steps. That is not a style preference: the `test` job once carried an inline build step local `pnpm test` did not have, and it was red for a week while every local check agreed the branch was fine.
+**Tier 2 — `pnpm verify`, the full battery.** Is the *code* right? Lint, `check:public-surface`, typecheck, both suites, `smoke`, `spec:check`. Run it at the tip before pushing. **CI runs the same named scripts** — its jobs are `pnpm verify` decomposed for wall-clock, never their own inlined steps. That is not a style preference: the `test` job once carried an inline build step local `pnpm test` did not have, and it was red for a week while every local check agreed the branch was fine.
 
 The division follows from what discriminates. On the branch that motivated this, four boundary defects were caught — a `tasks.md` citing a scenario renamed in a later commit (twice, one of which forced a commit reorder), a type field added without its construction sites, and a section renumbering. Every one fell to a static gate costing under 1.5s combined. The two test suites — half the battery's wall clock — caught none of them; they caught *semantic* errors, which is tier 2's job.
 
@@ -128,6 +128,7 @@ So: **tier 1 over every commit, tier 2 once at the tip.** For a ten-commit branc
 |--------|-------------|
 | `pnpm check:commit` | **Tier 1** — is each commit green standing alone (see above) |
 | `pnpm verify` | **Tier 2** — the full battery, what CI runs |
+| `pnpm check:public-surface` | Capability-declaration totality for the Convex host — the one check `typecheck` cannot stand in for (see `packages/convex-host/AGENTS.md`) |
 | `pnpm typecheck` | `build:packages` plus the two foreign TS regimes and both apps (the apps via `svelte-check`, which reads their `.svelte` files as well as their `.ts`) |
 | `pnpm typecheck:convex` | Convex component/host files — separate because Convex's generated code is not written for the workspace's strict flags |
 | `pnpm typecheck:stdb-module` | The SpacetimeDB module project, whose tsconfig options SpacetimeDB mandates |
@@ -150,6 +151,8 @@ So: **tier 1 over every commit, tier 2 once at the tip.** For a ten-commit branc
 Three TypeScript regimes coexist, and they are kept apart on purpose: `tsc -b` (the strict composite build, source of truth for `packages/*/src`), the Convex regime, and the SpacetimeDB module regime. The latter two do not extend `tsconfig.base.json` — their code is bundled by their own toolchain rather than emitted by tsc, and neither Convex's generated files nor SpacetimeDB's mandated options survive `exactOptionalPropertyTypes` / `noUncheckedIndexedAccess` / `verbatimModuleSyntax`. Do not try to unify them; add to the right one. `pnpm typecheck` runs all three, and `tsc -b` must run first because it emits `packages/engine/dist`, which the other two resolve through.
 
 The apps are a fourth, and the only one that is not a `tsc` invocation: each extends `tsconfig.base.json` *and* its generated `.svelte-kit/tsconfig.json`, and is checked by `svelte-check` because `tsc` cannot read a `.svelte` file. The same ordering rule binds it — components resolve `@cyphid/snek-engine` through its gitignored `dist/`, so `build:packages` runs first there too.
+
+**Where the app regime and the Convex regime touch.** `@cyphid/snek-convex-host/api` resolves to `convex/_generated/api.d.ts`, which imports the host's `convex/*.ts` *sources* — so a consumer of `api` pulls those files into its own program, under its own flags. The reference app's sign-in page imports it, which is why the host's hand-written `convex/` files answer to `exactOptionalPropertyTypes` and `noPropertyAccessFromIndexSignature` even though `pnpm typecheck:convex` does not enforce them. Nothing generated is implicated (`_generated/` is `.d.ts` and `skipLibCheck` covers it). If a host function starts failing the *app's* typecheck, that is the seam: spell environment reads `process.env["X"]`, and omit an optional property rather than passing it as `undefined`.
 
 ## Commit History & Message Grammar
 
@@ -268,4 +271,6 @@ then edit) are simplest; reach for this `exec` recipe when you need to
 
 ## Auth Library Note
 
-Better Auth integration (local install mode, plus the project-owned capability plugin that issues credentials to service principals) is deferred to the first Convex implementation task. Do not integrate it before then. See `packages/convex-host/AGENTS.md` for details.
+Auth is implemented, across three packages, and the division is worth knowing before touching any of them: **Better Auth authenticates humans and does nothing else** (`packages/convex-host/convex/auth.ts`, mounted from npm); **the platform mints and verifies its own credentials with `jose`** (`convex/auth/`, `convex/issuance.ts`), because a library token endpoint bound to the caller's own session cannot express a credential whose subject is a Centaur Team and whose audience is one game instance; and **a game instance validates alone** (`packages/stdb/`), against material it obtained at initialisation, calling nothing out per connection. `packages/convex-host/AGENTS.md` has the detail.
+
+One consequence reaches the whole repo: `@convex-dev/better-auth` declares a required `react` peer, and auto-installing it split `convex` into two peer-suffixed copies whose `ComponentDefinition` types are unrelated — which fails `app.use()` at every mount site. The root `package.json` marks that peer optional under `pnpm.packageExtensions`. Removing it re-breaks `pnpm typecheck` in a way whose error text says nothing about react.

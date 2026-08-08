@@ -39,7 +39,7 @@ flowchart TD
   game-lifecycle["game-lifecycle"]:::open
   game-runtime["game-runtime"]:::open
   global-invariants["global-invariants"]
-  identity-and-authorization["identity-and-authorization"]:::open
+  identity-and-authorization["identity-and-authorization"]
   live-game-observation["live-game-observation"]:::open
   operator-control["operator-control"]:::open
   platform-integrations["platform-integrations"]:::open
@@ -90,7 +90,7 @@ flowchart TD
   game-runtime -->|1| identity-and-authorization
   game-runtime -->|3| test-sequences
   global-invariants -->|4| game-engine
-  identity-and-authorization -->|35| global-invariants
+  identity-and-authorization -->|39| global-invariants
   live-game-observation -->|2| application-shell
   live-game-observation -->|4| game-engine
   live-game-observation -->|6| game-runtime

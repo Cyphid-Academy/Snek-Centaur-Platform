@@ -161,6 +161,171 @@ attribution all stay in application code. *Reversed* — policy migrated into
 the plugin — the platform's authorization rules, the code most needing
 review, end up buried inside an auth plugin and coupled to its lifecycle.
 
+### Substrate as built: three departures from the section above
+
+The section above was written before the substrate was tried. Building it moved
+three things, and they are recorded as departures rather than folded into the
+original text, because what a decision *was* is part of why the current one is
+right.
+
+**Better Auth is mounted in npm mode, not installed locally.** Local install was
+chosen for schema control: the linkage records, issuer registry and
+accepted-assertion identifiers "had to be modifiable where they live". They did
+not. Better Auth's tables live in a Convex component of their own **either
+way** — local install vendors that component's source into this repository so
+its schema can be extended, and buys nothing else. Every record this capability
+owns turned out to be a table of *ours* (`trusted_issuers`,
+`accepted_assertions`, `sign_in_handoffs`, `platform_admins` in
+`convex-snek-platform`), so nothing of Better Auth's needed an added field or
+index, and npm mode avoids committing a few hundred lines of generated schema
+that would then have to be re-vendored on every upgrade. *If reversed* — local
+install taken anyway — the repository carries a generated schema nobody edits
+and an upgrade path that reads as a source change.
+
+This also settles the open question `packages/convex-host/AGENTS.md` recorded,
+and settles it in the negative: auth tables do not breach the host's "owns no
+tables" rule, because they are the auth component's. `convex/schema.ts` stays
+empty and needs no amendment.
+
+**The platform assembles and verifies its own credentials; the key belongs to
+the library.** The section above assigns key management, signing and
+publication of verification material to the library. Better Auth's token
+endpoint cannot carry the *minting*: it is bound to the caller's own session
+and hardcodes its audience, and a credential of ours names a Centaur Team as
+its subject and one game instance as its audience. So `auth/credential.ts`
+assembles claims and verifies presented credentials, and the library's role in
+*that* narrows to nothing.
+
+This departure was first taken more broadly than its justification: an early
+revision also moved key custody and publication into our own code —
+`CREDENTIAL_SIGNING_JWK`, an operator-provisioned environment variable, and a
+hand-derived public document behind the well-known routes, including a
+hand-written allow-list stripping the private JWK fields. The session-bound
+argument above never covered that half, and it has been returned to the
+library: `@convex-dev/better-auth`'s `convex()` plugin already embeds Better
+Auth's `jwt` plugin — one key store in the auth component's `jwks` table, one
+algorithm, publication at `/api/auth/convex/jwks` — and `auth/deployment.ts`
+now signs through that store (`deploymentSigner`) and reads verification keys
+back off the same served document (`deploymentKeys`). The well-known routes
+proxy the plugin's endpoint. The key is generated inside the deployment on
+first use and provisioned by nobody, which is also the stronger reading of
+`credential-confinement#every-party-keeps-its-own-key`; the algorithm is RS256
+because the shared store is single-algorithm and the `customJwt` provider
+accepts RS256 alone, while a game instance's validator accepts RS256 and
+ES256 — the constraints from both sides meet.
+
+The boundary that section calls load-bearing is unchanged, and is still
+enforced by construction rather than by discipline: there is no plugin *of
+ours*, so no policy can migrate into one. Issuance is ordinary application
+code in `convex/issuance.ts`, which is where the registry, ceilings, kind
+gating and attribution already were required to live.
+
+**The admin designation is a table of this capability's own, with an operator
+writer.** It is written through `registry:designateAdmin`, an internal mutation
+beside `registerIssuer` and for the same reason: designating an admin is an
+operator act reached with a deployment admin credential, not over the public
+surface. Without a writer the table had none outside the test harness, so
+`isPlatformAdmin` could only ever answer `false` and every power the role
+confers was unreachable — which is what
+`platform-admin-role#a-deployment-can-designate-its-first-admin` now names. One
+mutation takes a `designated` boolean for both directions, because presence of
+the row *is* the designation and a pair of functions is how one direction ends
+up implemented and the other forgotten.
+
+ Better Auth's
+user table belongs to its component and is not ours to extend, so the
+designation is a `platform_admins` row keyed by user id rather than a field on
+the user record. "Admin designation stays mechanism" below already retires the
+mechanism note-only, so this sits inside what the design left open; the
+observable contract it does fix — effect without reload — holds because the
+membership is read per call rather than carried in a credential.
+
+### The instance pins the issuer, because the host does not
+
+`verification-without-shared-secrets` reads, at a glance, as one check: publish
+the material, and a party that verifies a signature against it has verified the
+platform's signature. On SpacetimeDB 2.7 those are two checks, and only the
+first is the host's.
+
+The host resolves verification material by OIDC discovery **from the `iss`
+inside the token under examination**, and `spacetime start` exposes no
+issuer allow-list — `--jwt-pub-key-path` names the host's own key and nothing
+else. Measured rather than inferred: a loopback server publishing
+`/.well-known/openid-configuration` and a key set of its own gets a token it
+signed accepted by the host, with `hasJWT` true and the claims surfaced to the
+module. So "the signature verified" means "whoever the token pointed at holds
+the key they publish" — a fact about a stranger, over claims the stranger chose,
+including `sub` and `aud`.
+
+The instance therefore pins the platform's issuer itself: `game_binding` carries
+`platformIssuer` beside the game id, seeded by the same write, and `admit()`
+compares it **before any other claim** — because every later claim is a
+statement by whoever signed, and is worth what they are worth. Beside the game
+id rather than in a table of its own, so `initialize_game` cannot seed one and
+forget the other in a direction where forgetting means accepting a stranger.
+
+*If reversed* — leaving the host to be the only judge of provenance — an
+attacker who can publish a discovery document mints admissible tokens for any
+role in any game, and the pre-existing end-to-end scenario would not have caught
+it: it refuses a token signed by an *unpublished* key, which an issuer-agnostic
+host also refuses.
+
+### The runtime's token exchange preserves the binding, and that is a dependency
+
+A browser cannot set an `Authorization` header on a WebSocket upgrade, so a
+browser's connection goes through `spacetimedb/sdk`, which first trades the
+presented token at `/v1/identity/websocket-token` for one the host re-mints
+under its own key. `connect-time-validation` allows either outcome — the
+exchange carries issuer, game binding and subject through unaltered, or the
+credential reaches admission by a path performing no re-issuance — so which one
+holds had to be established rather than assumed.
+
+It is the first: the exchange rewrites only the lifetime, to about a minute, and
+leaves `iss`, `aud` and `sub` as signed. The SDK's default path is therefore
+admissible and no hand-built socket is needed. Because that is a property of the
+host rather than of this design, `apps/e2e/src/admission.integration.spec.ts`
+asserts it: a host release that began re-issuing under its own issuer would
+refuse every browser with `untrusted-issuer`, and the suite is what says so
+first.
+
+### The admin's implicit coach standing has to reach the snapshot
+
+`coach-tokens` grants the platform admin implicit coach standing over every
+team, and issuance reads that standing live so a changed designation takes
+effect without a fresh session. `admission-validation` now requires the instance
+to check the human half of a coach token against its seeded snapshot — without
+which `coach:<anyone>:<any participating team>` was admissible, since only the
+team was ever checked.
+
+The two meet at a seam the instance cannot cross: it honours no platform-side
+role at all, and admin standing is deliberately invisible on the wire, so the
+subject an admin's coach token carries is indistinguishable from a designated
+coach's. The only reconciliation is that the standing be **materialised into the
+snapshot**: `initialize_game` records the admins standing at that moment among
+each participating team's coaches, and the instance then sees an ordinary
+designation and learns nothing of the role. That obligation travels to
+migrate-game-lifecycle with the seed tables, and is written down in
+`packages/stdb/AGENTS.md` and pinned by a scenario in
+`convex/auth/eligibility.test.ts`.
+
+Thereafter `roster-snapshot-binding` governs, as it does for every other
+in-game authorization fact: an admin designated after a game was sealed coaches
+the next game, not that one. *If reversed* — seeding the admin set into the
+instance so the waiver could be honoured live — a platform-side role would be
+readable inside a game runtime, which `platform-admin-role` forbids in the same
+sentence that grants the standing.
+
+### A capability's reach is one field, never a second list
+
+`anonymous-reach` requires the reach of every capability to be read from one
+enumeration. That was true of anonymous reach and false of session reach, which
+was a hand-kept array beside the registry — and it had already disagreed once:
+`begin-sign-in` was missing from it, so the sign-in entry route refused every
+browser carrying a live session and its already-signed-in branch was
+unreachable code. Both are now a `true` flag on the capability, derived by one
+filter, and the requirement was revised to say the rule governs every declared
+class of caller rather than the anonymous one alone.
+
 ### Trust and identity model: Google as a linked credential, not as the identity
 
 **Google specifically** (not "a federated provider") is carried as binding
@@ -236,6 +401,236 @@ only at connect time** (`admission-validation`, `connect-time-validation`,
 authorities** (`client-credential-custody`, `game-credential-scope`).
 Platform-side distinctions (captaincy, admin) deliberately do not travel
 into game instances — the token's role is the whole in-game privilege story.
+
+### Where sign-in happens: one Google client, at the platform's origin
+
+Module 09 was absorbed into module 08, so the human-facing application *is*
+the Snek Centaur Server application — the artifact every team forks and runs
+on an origin the team controls. That makes one question the requirements
+never ask out loud load-bearing: **which origin does Google talk to?** The
+platform's Convex deployment, and only ever that one. A single OAuth client
+is registered to Cyphid, its redirect URIs naming platform *environments* —
+never teams, never developers — and a Server holds no client, receives no
+authorization code, and never sees the platform's session cookie. It is a
+relying party exactly as a peer Cyphid system is.
+
+**The Server's own authentication introduces no second protocol; the handoff
+does introduce something new, and `sign-in-handoff` is it.** A Server proves
+who it is exactly as it already does under `service-principal-assertions`
+and `trusted-issuer-registry` — nothing there is new. But that mechanism
+authenticates a *Server*; nothing in it carries *which human just signed
+in*, and that gap is filled by a single-use reference handed back through
+the browser and exchanged for a credential. Claiming the existing exchange
+covered both would have left the one genuinely new artifact unnamed, and
+with it the two ways it fails: replayed, and redirected somewhere the
+requester chose. Hence a requirement rather than a paragraph.
+
+**Who ends up holding the human's credential is not a free choice**, which
+is easy to miss. `credential-confinement` returns an issued credential "only
+to the party whose own authentication earned it, in the response to that
+exchange", and lets it "travel on no other channel" — so a Server that
+redeems the reference may *use* the resulting credential, but may not relay
+it onward to the page it serves. The two coherent shapes are therefore a
+Server that redeems and acts, or a client that redeems for itself and leaves
+the Server holding nothing of the human's; the intermediate one, where a
+Server redeems and forwards, is already closed. Which of the two is built is
+left to implementation, but it is a choice between two, not a detail — the
+second keeps a hostile fork out of the human's credential entirely, at the
+cost of the redeeming client having to prove itself without the Server's
+key. `#the-redeemer-keeps-what-it-earns` is written so either satisfies it
+and the relay satisfies neither.
+
+Nothing further is minted, because two requirements already forbid the
+alternative to the origin decision itself:
+`sole-credential-issuer` makes the platform's deployment the sole
+authorization server for the platform's own affordances, and
+`client-credential-custody` confines the session credential to a cookie sent
+only to the platform's own origin — which a Server-run sign-in could not
+produce. What was missing was the sentence naming the origin, and its
+absence is not benign: wiring Google directly into the human-facing
+application is the obvious implementation, so silence selects the violation
+by default. *If reversed*, every team's domain becomes a registered redirect
+URI on Cyphid's client — a list that grows with the cohort and never shrinks
+— and a student-modified fork is handed the Google authorization code of
+everyone who signs in through it, **including a platform admin who opens it
+to observe a game**, whose read breadth `platform-admin-role` deliberately
+makes wide. As decided, a hostile fork obtains only what its own players
+granted it, bounded by `peer-capability-ceiling` and dead inside the fifteen
+minutes of `token-lifetime-and-refresh`.
+
+Reload therefore round-trips through the platform rather than establishing a
+second session on a team-controlled origin. The round-trip is silent while
+the platform session is live, so `google-sign-in#session-survives-reload`
+holds without a second cookie and `client-credential-custody#memory-only` is
+read literally rather than worked around; the alternative buys one fewer
+redirect and costs the persistent credential this decision exists to remove.
+The registered URI list stays at two or three entries because the platform
+runs as a Convex **local deployment** on a fixed loopback port, so
+development shares one loopback redirect rather than one per developer. And
+when module 08 migrates, its ids requiring the application to authenticate
+the human with Google re-read as requiring an *authenticated platform
+identity, obtained from the platform*.
+
+### Which of the two shapes was built: the client redeems, and sign-in is redirects
+
+The section above leaves the choice between "a Server that redeems and acts"
+and "a client that redeems for itself" to implementation, and calls it a
+choice between two rather than a detail. The first landed initially. **The
+second is what is built**, and the reason is not the preference that section
+weighed — it is that the first turned out not to reach the case the whole
+handoff exists for.
+
+**A browser on a Server's origin could not authenticate here at all.** The
+platform's session cookie is `sameSite: "lax"` on this deployment's origin, so
+it is never sent on a cross-site request from a team's fork; the `ctx.auth`
+branch of the caller seam is therefore unreachable from any origin but this
+one. The other way in — a credential as a function argument — works from
+anywhere, but the only function that minted a human's credential demanded a
+service-principal assertion, so only a party holding a key could obtain one,
+and a page holds none. Both halves looked correct in isolation, which is why
+this is recorded rather than left to be rediscovered.
+
+**The fix rests on one asymmetry, and it is why sign-in is redirects rather
+than a better client library.** `sameSite: "lax"` blocks a cross-site *fetch*
+and permits a top-level *GET navigation*. A page fetching the platform cannot
+use the cookie; a browser navigating to the platform can. So the flow is a
+chain of redirects through the platform's own HTTP routes — an entry address a
+Server links a signed-out human to, and a return address the provider's
+callback sends them back through — and the cookie is available exactly where
+it is needed and nowhere else.
+
+**The return context needs no artifact of ours.** Which Server, which of its
+registered addresses, and the challenge must survive the visit to Google. The
+obvious construction is a signed, short-lived token of the platform's own in
+the `state` parameter — and it is unnecessary and, as it happens, impossible:
+the provider library generates `state` itself and accepts none from a caller,
+but it does store a caller-supplied return address server-side keyed by that
+state. The context therefore rides in that address, which is attacker-invisible
+and attacker-unmodifiable because the library kept it. *If reversed* — a token
+minted for this — the platform gains a second short-lived credential format,
+its own verification path, and a lifetime to keep in step with a redirect,
+buying nothing the library was already doing.
+
+**The keyless proof is PKCE, and no requirement moved to allow it.**
+`anonymous-reach#handoff-redemption-proves-itself` already says what stands in
+for a credential is "the reference together with proof of being the party it
+was minted for". A verifier the page keeps and a challenge the reference is
+bound to is such a proof. `#the-redeemer-keeps-what-it-earns` was written so
+either shape satisfies it, and it does.
+
+**Better Auth's `oidc-provider` plugin was examined for this flow and
+declined, on the artifact and on the registry.** The earlier rejection of the
+built-in provider was argued for machine-to-machine issuance, and the flow
+actually built is browser-shaped — a redirect chain, a registered return
+address, a single-use code, PKCE — so the question deserved re-asking rather
+than inheriting that answer. Re-asked, it fails on two hard mismatches. The
+artifact: the plugin's token endpoint answers an authorization code with an
+*opaque random access token* rowed in its own table (an `id_token` only under
+`openid` scope, and describing the session user), and what redemption must
+yield here is a platform credential — capability entries intersected with the
+Server's ceiling, an `act` naming the Server, an audience of ours — which no
+hook of the plugin's mints. The registry: the plugin resolves clients from its
+`oauthApplication` table or a static `trustedClients` list, and Servers are
+registered in `trusted_issuers` with their return addresses; adopting it means
+either dual registration — one row per Server in each table, drifting — or
+abandoning the registry requirement's own shape. Either way the bespoke
+minting survives *behind* the plugin, so adoption would add a layer, not
+replace one. The handoff therefore stays application code; what it shares
+with OAuth (S256, single-use-by-delete, allow-listed return) is convention,
+not machinery worth importing at that price.
+
+**Removing the assertion path is a security property, not tidying.** The return
+leg puts the reference in the address bar of the Server's own page, so the
+Server sees every reference it is sent. If a reference could also be opened
+with something the Server already holds — its signing key — the Server could
+take the human's credential for itself, which is `#the-redeemer-keeps-what-it-earns`
+inverted with the credential landing somewhere the human never sent it. So the
+challenge is required on every handoff row and there is no second way to
+redeem: the intermediate shape the section above says is "already closed" is
+now closed by construction rather than by rule. The proof is compared inside
+the component's own mutation, which is the only place it can be — the challenge
+lives on the row, so nothing outside that transaction can check it before the
+row is read, and returning it to compare elsewhere would hand it to whoever is
+guessing.
+
+**The entry route is a fourth anonymously reachable capability**, and
+`anonymous-reach` was revised to say so. It is reached by a browser that has
+never signed in — that is what it is for — and it fits the requirement's own
+first limb unchanged: it reads only the public issuer registry, mints nothing,
+and answers every caller alike because there is no caller yet for an answer to
+be specific to. Revising the requirement is what that requirement demands of a
+fourth entry, and doing it now is cheap in a way it will not be later: the
+capability is still minted by an open, ADDED-only delta, so this is an edit
+rather than a modification of a live spec. The alternative — a second
+no-capability builder beside the one serving the published verification
+material — was rejected because that builder's justification is that its body
+receives no context at all, and an entry route that reads a registry would
+hollow it out for the next route that wanted the same exemption.
+
+**Two consequences are accepted rather than solved.** A page's calls now carry
+`act` naming the Server it arrived through, which keeps attribution and the
+call bound live on this path — but that bound is per issuer, so every signed-in
+page on a team's Server shares one bucket with the Server's own calls. The
+constants say a per-issuer limit is "a registration column and a second lookup
+on the day one is actually wanted"; this is the first evidence that day is
+coming. Part of what that day threatened has since been answered by moving the
+counting to `@convex-dev/rate-limiter`: contention on a single issuer's counter
+is now a `shards:` field rather than a rewrite, so the pressure that arrives
+first — many pages' calls landing on one bucket — is absorbed without touching
+the ceiling. What the component does *not* answer is the other half, that a
+busy Server's ceiling is shared with its users' pages at all; that is still a
+registration column when someone wants it. And redemption itself is no longer charged against any window, because
+there is no assertion to identify an issuer by and a failed proof deliberately
+identifies nothing: what bounds it is the verifier's entropy and the
+reference's one-minute life, which is a different argument from the one the
+assertion path made and is written down here so it is not mistaken for the same
+one.
+
+**One thing the browser side will owe, recorded before it is built.** The
+verifier must survive a top-level navigation, so a page cannot hold it in
+memory; session storage is the only home, and that is not a breach of
+`client-credential-custody#memory-only`, which binds access tokens and game
+credentials — a verifier is neither. But a page that finds a reference and *no*
+stored verifier must discard the reference rather than try to redeem: without
+that, a third party can navigate a victim to the entry address carrying a
+challenge of their own choosing, and the victim's page would redeem a handoff
+bound to a challenge it never generated.
+
+**`beginSignInHandoff` is kept**, though the return route means it now has no
+production caller. It is the surface's only mutation and its only
+humans-only-by-default function, so it is the sole exemplar three scenarios are
+tested against — kind checked independently of capability, no anonymous
+mutation path, and UI gating not being enforcement — and deleting it would
+leave those unassertable with no substitute until team administration lands
+real session-authenticated mutations. That is the change which should decide
+whether it still earns its place.
+
+### The page names its Server from configuration, and the request is a fallback
+
+The sign-in page originally derived the issuer id and return address from the
+request's own origin, on the argument that this was the one honest source —
+the Server's identity *is* the domain it is operated from — and that deriving
+kept a fork from holding values in step by hand across environments. The
+argument holds only while the origin this process sees is the origin the
+browser used, and a TLS-terminating proxy is precisely where they part: the
+edge speaks `https` to the browser and plain HTTP inward, SvelteKit's dev
+server does not honour `x-forwarded-proto`, and the derived identity then
+disagrees with its registration in scheme alone. The refusal that follows
+names an issuer that looks correct and reads as a credentials failure, far
+from the cause. (`adapter-node`'s `ORIGIN` variable corrects the built
+server, but that is a per-environment countermeasure applied at the serving
+layer, and the dev server has no equivalent.)
+
+What decides the reversal is that the registry was already the authority on
+who a Server is — `sign-in-handoff#return-address-is-registered-not-requested`
+is the requirement's own posture, and the server library's `ServerIdentity`
+defines its `domain` as the one "its registration records", configured. The
+page now presents `SNEK_SERVER_ORIGIN` where set, so the identity offered is
+the registration echoed rather than the transport guessed; the request's
+origin remains the fallback, keeping a plainly-hosted fork at zero
+configuration. *If reversed* — derivation restored as the only source — every
+environment that fronts this process with a proxy re-inherits the scheme
+mismatch, and each must rediscover the serving-layer workaround for itself.
 
 ### One exchange, two registrations
 
@@ -527,6 +922,27 @@ invariant a future implementer could silently violate?
     What breaks later: adding a constraint becomes a breaking change across
     every enforcement site, audit consumer and registered system at once —
     the most expensive shape of change in a federation.
+
+**Judged and deliberately not minted — the sign-in origin.** That Google
+talks only to the platform's deployment is the shape constraint-mining looks
+for: silently violable, and violated by the *natural* implementation. It is
+not minted because `sole-credential-issuer` and `client-credential-custody`
+already imply it twice over, and a third statement would be the duplication
+the corpus forbids, carrying no authority the originals lack. What the
+omission warranted was a design decision naming the origin, recorded above.
+
+**Minted — the handoff that origin decision implies.** The same pass over
+the same decision found a second lead that nothing implied, and
+`sign-in-handoff` is it. Sending a human back to a Server needs an artifact
+carrying *which human*, and the assertion exchange carries only *which
+Server*; an implementation must therefore invent one, and the two ways to
+get it wrong are both invisible in testing. A reference redeemable twice
+works perfectly until someone captures a URL. A return address taken from
+the request works perfectly until someone supplies a hostile one — and turns
+the platform into a trusted-looking bounce to anywhere, with the reference
+attached. Neither shows up as a failing test, and `trusted-issuer-registry`
+had no field for a return address at all, so nothing would have caught the
+second. That is the profile this section exists to find.
 
 No further lead survived judgment: the remaining design content (wire
 parameter names, claim encodings, key formats, callback step orderings,

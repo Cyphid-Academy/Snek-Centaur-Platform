@@ -15,10 +15,12 @@
 // The browser is *not* here. `browser`, `context` and `page` are Playwright's
 // own fixtures, and a context is already an isolated cookie jar and storage
 // partition per test — which is what a wrapper around them would have been for.
+import { randomBytes } from "node:crypto";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test as base } from "@playwright/test";
+import { type IdentityProvider, startIdentityProvider } from "./identity";
 import { freePort, freePortPair } from "./process";
 import { type CentaurServer, startCentaurServer } from "./runtimes/centaur-server";
 import { type ConvexDeployment, startConvex } from "./runtimes/convex";
@@ -30,7 +32,16 @@ export interface Runtimes {
   spacetime: SpacetimeHost;
   convex: ConvexDeployment;
   centaurServer: CentaurServer;
+  /** Who a scenario signs in as. See `identity.ts`. */
+  identityProvider: IdentityProvider;
 }
+
+/**
+ * The OAuth client the deployment is configured with, and so the audience the
+ * substitute provider's assertions name. Fixed rather than random: it is not a
+ * secret, and a stable value makes a mismatch legible in a refusal.
+ */
+const OAUTH_CLIENT_ID = "snek-e2e.apps.googleusercontent.test";
 
 export const test = base.extend<Record<never, never>, Runtimes>({
   runDir: [
@@ -61,13 +72,43 @@ export const test = base.extend<Record<never, never>, Runtimes>({
     { scope: "worker" },
   ],
 
+  identityProvider: [
+    // biome-ignore lint/correctness/noEmptyPattern: Playwright reads the pattern
+    async ({}, use) => {
+      const provider = await startIdentityProvider(OAUTH_CLIENT_ID);
+      await use(provider);
+      await provider.stop();
+    },
+    { scope: "worker" },
+  ],
+
   convex: [
-    async ({ runDir }, use) => {
+    async ({ runDir, identityProvider }, use) => {
       const [port, siteProxyPort] = await freePortPair();
       const dataDir = join(runDir, "convex");
       mkdirSync(dataDir, { recursive: true });
       const deployment = await startConvex({ port, siteProxyPort, dataDir });
-      await deployment.setEnv({ SITE_URL: deployment.siteUrl });
+      // Everything the deployment needs of its environment, in one place. Two
+      // kinds of thing are here and the difference matters:
+      //
+      //   * addresses of what this worker started — the substitute identity
+      //     provider, and the deployment's own site origin;
+      //   * credentials the deployment would otherwise have from an operator,
+      //     generated per run and thrown away with it. Nothing is read from a
+      //     developer's environment, so a run holds no secret of anyone's and
+      //     cannot pass because of one.
+      // No signing key is among them: the deployment generates its own on
+      // first use and holds it in its own store, encrypted under the secret
+      // below — so nothing outside the deployment ever holds it.
+      // spec: identity-and-authorization/substituted-provider-verification
+      await deployment.setEnv({
+        SITE_URL: deployment.siteUrl,
+        BETTER_AUTH_SECRET: randomBytes(32).toString("hex"),
+        GOOGLE_CLIENT_ID: identityProvider.audience,
+        GOOGLE_CLIENT_SECRET: randomBytes(16).toString("hex"),
+        SUBSTITUTE_IDENTITY_ISSUER: identityProvider.issuer,
+        SUBSTITUTE_IDENTITY_JWKS_URL: identityProvider.jwksUrl,
+      });
       await use(deployment);
       await deployment.stop();
     },
