@@ -1,43 +1,66 @@
-// The pre-launch configuration workflow, driven in a browser.
+// The pre-launch configuration workflow, driven in a browser against the whole
+// stack: a Convex deployment, the substituted identity provider standing in for
+// Google's verification step, and the reference Server serving the surface.
 //
-// spec: game-configuration/self-contained-configuration-surface#runs-with-no-host
-// It runs against the reference app's standalone dev mount, which is the whole
-// point of the mount: no Convex deployment, no sign-in, no host of any kind is
-// stood up here, and the surface is fully usable anyway. The same component
-// mounted over a live `convexBinding` is the same component; what this suite
-// exercises is the component and the capability's rules, not the transport.
+// spec: game-configuration/config-lives-on-the-game
+// spec: game-configuration/board-preview
+// spec: game-configuration/board-preview-lock-in
+// The mount at `/dev/game-configuration` is the surface with nothing around it,
+// and what is behind its binding is the platform: a credential the page earned
+// through the platform's own sign-in handoff, a game created by the real
+// `createGame` mutation, and Convex's own query subscription. Nothing here
+// reloads a page to see a write land, because nothing polls — an edit's effect
+// arrives on the subscription that delivered the record in the first place.
 //
-// What only a browser can claim: that an edit travels to the record and comes
-// back as a rendered board, with the designation cleared or standing according
+// What only a browser and a real deployment together can claim: that an edit
+// travels to the game's record, regenerates the board there, and comes back to
+// every viewer of that game with the designation cleared or standing according
 // to what was edited.
+import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
+import type { Human } from "./identity";
+import { signIn } from "./identity";
 
 const ROUTE = "/dev/game-configuration";
-const API = `${ROUTE}/api`;
 
-interface Snapshot {
-  readonly config: { readonly generation: Record<string, unknown> };
-  readonly boardPreview: unknown;
-  readonly boardPreviewLocked: boolean;
-}
+/**
+ * This Server's ceiling, as the deployment's registry records it. Both are
+ * `session` capabilities, so both survive the intersection a redeemed
+ * credential is capped at — which is what makes the human on this page reach
+ * the configuration surface's two functions and nothing else.
+ * spec: identity-and-authorization/sign-in-handoff#server-never-holds-the-provider-exchange
+ */
+const CEILING = ["read-game-configuration", "configure-game"];
 
-// Each scenario starts from an untouched record: the dev mount holds one game
-// in the app process's memory, and a worker runs the whole file against one app.
-test.beforeEach(async ({ page, referenceApp }) => {
-  const reset = await page.request.post(`${referenceApp.url}${API}`, {
-    data: { action: "reset" },
+const grace: Human = { subject: "google-grace", email: "grace@example.test", name: "Grace" };
+
+/** Long enough for a redirect chain, a redemption and a board generation. */
+const ROUND_TRIP_MS = 30_000;
+
+// The registry has no public write and should not have one: registering an
+// issuer is an operator act. Re-registered per file rather than shared with the
+// sign-in spec's registration — a registration replaces whatever was held for
+// that issuer, and the two files want different ceilings.
+test.beforeAll(async ({ convex, centaurServer }) => {
+  await convex.run("registry:registerIssuer", {
+    issuerId: centaurServer.url,
+    verificationMaterialUrl: centaurServer.keysUrl,
+    capabilityCeiling: CEILING,
+    returnAddresses: [`${centaurServer.url}${ROUTE}`],
   });
-  expect(reset.ok()).toBe(true);
 });
 
 test("a generation edit regenerates the board and clears the designation", async ({
+  context,
   page,
-  referenceApp,
+  convex,
+  centaurServer,
+  identityProvider,
 }) => {
-  await page.goto(`${referenceApp.url}${ROUTE}`);
-  await expect(page.getByTestId("board-preview")).toBeVisible();
+  await signIn(context, convex.siteUrl, identityProvider, grace);
+  await open(page, centaurServer.url);
 
-  const before = (await (await page.request.get(`${referenceApp.url}${API}`)).json()) as Snapshot;
+  const before = await boardMarkup(page);
 
   // Designate the candidate on screen.
   // spec: game-configuration/board-preview-lock-in#lock-toggles-freely-before-launch
@@ -49,59 +72,31 @@ test("a generation edit regenerates the board and clears the designation", async
   await page.getByTestId("input-generation.hazardPercentage").fill("12");
   await page.getByTestId("input-generation.hazardPercentage").press("Tab");
 
+  // No reload anywhere: the regeneration committed in the deployment arrives on
+  // the subscription that delivered the record.
   await expect(page.getByTestId("lock-marker")).toHaveCount(0);
   await expect(page.getByTestId("lock-toggle")).toHaveText(/Lock this board in/);
+  await expect(page.getByTestId("configuration-document")).toContainText('"hazardPercentage": 12');
 
-  const after = (await (await page.request.get(`${referenceApp.url}${API}`)).json()) as Snapshot;
-  expect(after.config.generation["hazardPercentage"]).toBe(12);
-  expect(after.boardPreviewLocked).toBe(false);
   // One slot, overwritten: the candidate on screen is a different board, and no
   // archive of the previous one accumulates.
   // spec: game-configuration/board-preview#one-slot-no-archive
-  expect(after.boardPreview).not.toEqual(before.boardPreview);
-});
-
-test("an out-of-range value is rejected by the record however it arrives", async ({
-  page,
-  referenceApp,
-}) => {
-  // No widget is involved: this is the mutation surface called directly, which
-  // is the point — a client's inline feedback merely spares the round-trip.
-  // spec: game-configuration/closed-parameter-vocabulary#out-of-range-rejected-regardless-of-client
-  const current = (await (await page.request.get(`${referenceApp.url}${API}`)).json()) as Snapshot;
-  const response = await page.request.post(`${referenceApp.url}${API}`, {
-    data: {
-      action: "updateConfiguration",
-      generation: { ...current.config.generation, boardSize: 40 },
-    },
-    failOnStatusCode: false,
-  });
-
-  expect(response.status()).toBe(422);
-  const rejection = (await response.json()) as {
-    violations: ReadonlyArray<{ code: string; path?: string }>;
-  };
-  // Machine-readable, naming the parameter that failed rather than a sentence.
-  expect(rejection.violations).toContainEqual(
-    expect.objectContaining({ code: "out-of-range", path: "generation.boardSize" }),
-  );
-
-  const after = (await (await page.request.get(`${referenceApp.url}${API}`)).json()) as Snapshot;
-  expect(after.config.generation["boardSize"]).toBe(current.config.generation["boardSize"]);
+  await expect.poll(() => boardMarkup(page)).not.toBe(before);
 });
 
 test("a dynamic gameplay edit leaves a designated board standing", async ({
+  context,
   page,
-  referenceApp,
+  convex,
+  centaurServer,
+  identityProvider,
 }) => {
-  await page.goto(`${referenceApp.url}${ROUTE}`);
-  await expect(page.getByTestId("board-preview")).toBeVisible();
+  await signIn(context, convex.siteUrl, identityProvider, grace);
+  await open(page, centaurServer.url);
 
   await page.getByTestId("lock-toggle").click();
   await expect(page.getByTestId("lock-marker")).toBeAttached();
-  const designated = (await (
-    await page.request.get(`${referenceApp.url}${API}`)
-  ).json()) as Snapshot;
+  const designated = await boardMarkup(page);
 
   // The turn limit is not an input the designated board was generated from, so
   // clearing the designation over it would discard a deliberate act for nothing.
@@ -109,10 +104,96 @@ test("a dynamic gameplay edit leaves a designated board standing", async ({
   await page.getByTestId("input-runtime.maxTurns").fill("400");
   await page.getByTestId("input-runtime.maxTurns").press("Tab");
 
+  await expect(page.getByTestId("configuration-document")).toContainText('"maxTurns": 400');
   await expect(page.getByTestId("lock-toggle")).toHaveText(/Release this board/);
   await expect(page.getByTestId("lock-marker")).toBeAttached();
-
-  const after = (await (await page.request.get(`${referenceApp.url}${API}`)).json()) as Snapshot;
-  expect(after.boardPreviewLocked).toBe(true);
-  expect(after.boardPreview).toEqual(designated.boardPreview);
+  expect(await boardMarkup(page)).toBe(designated);
 });
+
+test("an out-of-range value is rejected by the record, structurally", async ({
+  context,
+  page,
+  convex,
+  centaurServer,
+  identityProvider,
+}) => {
+  await signIn(context, convex.siteUrl, identityProvider, grace);
+  await open(page, centaurServer.url);
+  const before = await page.getByTestId("configuration-document").textContent();
+
+  // Written past the widget's own advisory limits: the value reaches the
+  // deployment, and the deployment is what refuses it — a client's inline
+  // feedback merely spares the round-trip.
+  // spec: game-configuration/closed-parameter-vocabulary#out-of-range-rejected-regardless-of-client
+  await page.getByTestId("board-size-custom").fill("40");
+  await page.getByTestId("board-size-custom").press("Tab");
+
+  // Machine-readable, naming the parameter that failed rather than a sentence.
+  // spec: global-invariants/client-truthfulness#rejections-reach-the-user
+  await expect(page.getByTestId("rejection")).toContainText("generation.boardSize");
+  await expect(page.getByTestId("rejection")).toContainText("out-of-range");
+
+  // And nothing was stored: the record the subscription still delivers is the
+  // one that stood before the refused write.
+  expect(await page.getByTestId("configuration-document").textContent()).toBe(before);
+});
+
+test("two viewers of one game see the same board", async ({
+  context,
+  page,
+  convex,
+  centaurServer,
+  identityProvider,
+}) => {
+  await signIn(context, convex.siteUrl, identityProvider, grace);
+  await open(page, centaurServer.url);
+  const gameId = await page.getByTestId("game-id").textContent();
+
+  // A second page over the same game, earning its own credential through the
+  // same handoff — two viewers, not two copies of one.
+  const second = await context.newPage();
+  await open(second, centaurServer.url, gameId ?? "");
+  expect(await second.getByTestId("game-id").textContent()).toBe(gameId);
+
+  const before = await boardMarkup(second);
+  await page.getByTestId("input-generation.hazardPercentage").fill("14");
+  await page.getByTestId("input-generation.hazardPercentage").press("Tab");
+
+  // The second page reloads nothing and asks for nothing: the deployment
+  // re-runs the query behind its subscription because the record it reads
+  // changed.
+  // spec: game-configuration/board-preview#all-viewers-in-sync
+  await expect(second.getByTestId("configuration-document")).toContainText(
+    '"hazardPercentage": 14',
+  );
+  await expect.poll(() => boardMarkup(second)).not.toBe(before);
+  await second.close();
+});
+
+/**
+ * The standalone mount, over a game on the deployment, for a context whose
+ * human is already signed in at the platform's origin.
+ *
+ * `signIn` is the context's business and happens once per scenario: the session
+ * cookie is one the browser stored from the platform's own `Set-Cookie`. Each
+ * page then takes the platform's own sign-in handoff for itself, which finds
+ * that session live and returns a reference without a provider leg — so two
+ * pages of one context are two redemptions, each keeping what it earns.
+ * spec: identity-and-authorization/substituted-provider-verification#only-the-verification-step-is-substituted
+ * spec: identity-and-authorization/sign-in-handoff#the-redeemer-keeps-what-it-earns
+ */
+async function open(page: Page, serverUrl: string, gameId = ""): Promise<void> {
+  await page.goto(`${serverUrl}${ROUTE}${gameId === "" ? "" : `?game=${gameId}`}`);
+  await page.getByTestId("begin").click();
+  await expect
+    .poll(() => page.getByTestId("status").getAttribute("data-status"), {
+      timeout: ROUND_TRIP_MS,
+    })
+    .toBe("ready");
+  await expect(page.getByTestId("board-preview")).toBeVisible();
+}
+
+/** What the board rendering currently is, as a value two readings can differ in. */
+function boardMarkup(page: Page): Promise<string> {
+  return page.getByTestId("board-preview").innerHTML();
+}

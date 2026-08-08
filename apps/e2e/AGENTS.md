@@ -35,14 +35,15 @@ instance isolation, one Convex deployment).
 ## Layout
 
 - `src/fixtures.ts` — the one interface a spec imports: `test`, `expect`, and
-  the `runDir`, `spacetime`, `convex`, `centaurServer`, `referenceApp`,
-  `identityProvider` and `credentialSigningJwk` fixtures. `centaurServer` and
-  `referenceApp` are the same app started two ways and the difference is
-  load-bearing: the first is told where Convex is and therefore stands a whole
-  deployment up, the second is told nothing and stands nothing up. Ask for
-  `referenceApp` when what a spec drives genuinely has no platform behind it —
-  the standalone configuration mount at `/dev/game-configuration` — and for
-  `centaurServer` when the platform is part of what is under test.
+  the `runDir`, `spacetime`, `convex`, `centaurServer` and `identityProvider`
+  fixtures. There is one reference-app fixture and there should be one:
+  `centaurServer` is told where Convex is, so asking for it stands a whole
+  deployment up. A second copy told nothing used to exist for the standalone
+  configuration mount, back when that mount had no platform behind it; the mount
+  now runs against the deployment like everything else, and the requirement it
+  serves — that the surface needs no surrounding application context — is a
+  claim about the *component*, answered by the component tests that mount it
+  over `fixtureBinding`.
 - `src/process.ts` — spawn, capture, poll for readiness, terminate.
 - `src/runtimes/` — one module per runtime kind.
 - `src/identity.ts` — the substituted verification step, and signing a human in.
@@ -162,6 +163,14 @@ verification — resolving the account, the linking policy, issuing the session,
 setting the cookie — is the platform's own. Do **not** grow this into a general
 fake provider: the requirement is that one step is substituted, and a second
 substituted step is a passing run that means less.
+
+**A registration replaces whatever was held for that issuer.** Both browser
+specs register the reference Server with `registry:registerIssuer` in their own
+`beforeAll`, with the ceiling and return addresses that spec needs — the sign-in
+spec's two credential capabilities, the configuration spec's two configuration
+ones. That is safe because the files run in sequence within a project, each
+re-registering before its own tests. A spec that needs a registration to survive
+another file's is a spec that must say so, not assume it.
 
 **Sign-in happens inside a browser context, not beside one.** `signIn(context,
 …)` posts through that context's own request client, which shares the browser's

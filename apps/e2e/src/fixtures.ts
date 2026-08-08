@@ -32,17 +32,6 @@ export interface Runtimes {
   spacetime: SpacetimeHost;
   convex: ConvexDeployment;
   centaurServer: CentaurServer;
-  /**
-   * The same reference app with **no platform behind it**, for the surfaces
-   * that genuinely have none.
-   *
-   * Not a second copy of `centaurServer` for its own sake: that fixture is told
-   * where Convex is, so asking for it stands up a whole deployment. A surface
-   * whose requirement is that it works with no host is exactly the thing that
-   * must not be exercised against one.
-   * spec: game-configuration/self-contained-configuration-surface#runs-with-no-host
-   */
-  referenceApp: CentaurServer;
   /** Who a scenario signs in as. See `identity.ts`. */
   identityProvider: IdentityProvider;
 }
@@ -122,16 +111,6 @@ export const test = base.extend<Record<never, never>, Runtimes>({
       });
       await use(deployment);
       await deployment.stop();
-    },
-    { scope: "worker" },
-  ],
-
-  referenceApp: [
-    // biome-ignore lint/correctness/noEmptyPattern: Playwright reads the pattern
-    async ({}, use) => {
-      const server = await startCentaurServer({ port: await freePort() });
-      await use(server);
-      await server.stop();
     },
     { scope: "worker" },
   ],

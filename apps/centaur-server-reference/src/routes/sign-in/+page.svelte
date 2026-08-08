@@ -9,6 +9,11 @@
 // The deployment's own generated API rather than a table of name strings — see
 // `packages/convex-host/src/index.ts` for why.
 import { api } from "@cyphid/snek-convex-host/api";
+// Both halves of the round trip live in `$lib/platform/handoff.ts`, shared with
+// the dev configuration mount: two pages of this Server need a human's identity
+// to reach the platform, and a second spelling of the verifier's custody is a
+// second thing that can get it wrong.
+import { beginHandoff, redeemHandoff, takeKept } from "$lib/platform/handoff";
 import { ConvexHttpClient } from "convex/browser";
 import { onMount } from "svelte";
 import type { PageData } from "./$types";
@@ -50,20 +55,19 @@ onMount(async () => {
   // Taken and cleared in one step: a verifier is answerable for exactly one
   // reference, and one left behind is one a later arrival could be redeemed
   // against.
-  const verifier = window.sessionStorage.getItem(VERIFIER_KEY);
-  window.sessionStorage.removeItem(VERIFIER_KEY);
+  const kept = takeKept<null>(VERIFIER_KEY);
 
-  if (verifier === null) {
+  if (kept === null) {
     status = "discarded";
     detail = "this page kept no verifier for that reference";
     return;
   }
 
   try {
-    const client = new ConvexHttpClient(data.convexUrl);
-    credential = await client.action(api.issuance.redeemSignInHandoff, { reference, verifier });
+    credential = await redeemHandoff(data.convexUrl, reference, kept.verifier);
     // Used, not shown: the credential's evidence is that the platform answers a
     // question about this human under it.
+    const client = new ConvexHttpClient(data.convexUrl);
     const actions = await client.query(api.platform.attributedActions, { credential });
     status = "signed-in";
     detail = `${actions.length} attributed action(s)`;
@@ -74,31 +78,8 @@ onMount(async () => {
 });
 
 /** Start the round trip: keep a verifier, send its challenge, hand over. */
-async function beginSignIn(): Promise<void> {
-  const verifier = base64url(crypto.getRandomValues(new Uint8Array(32)));
-  window.sessionStorage.setItem(VERIFIER_KEY, verifier);
-
-  const entry = new URL("/sign-in", data.convexSiteUrl);
-  entry.searchParams.set("issuer", data.issuerId);
-  entry.searchParams.set("return", data.returnAddress);
-  entry.searchParams.set("challenge", await challenge(verifier));
-  window.location.href = entry.toString();
-}
-
-/** The challenge a verifier answers to: base64url of its SHA-256. */
-async function challenge(verifier: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
-  return base64url(new Uint8Array(digest));
-}
-
-function base64url(bytes: Uint8Array): string {
-  // Byte by byte, never `String.fromCharCode(...bytes)`: spreading puts every
-  // byte on the argument stack, which overflows on inputs a lot smaller than
-  // "large" — fine at 32 bytes, a trap for the next reuse.
-  return btoa(Array.from(bytes, (byte) => String.fromCharCode(byte)).join(""))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
+function beginSignIn(): void {
+  void beginHandoff(VERIFIER_KEY, data, null);
 }
 </script>
 

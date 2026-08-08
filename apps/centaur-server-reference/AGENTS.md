@@ -67,8 +67,9 @@ unreachable that was not already unreachable.
 `src/lib/surfaces/game-configuration/` is the first of them:
 `ConfigurationSurface.svelte` plus the record shapes it reads
 (`record.ts`), the widgets it derives from the two descriptor tables
-(`widgets.ts`), and the dev-mount binding (`devBinding.ts`). **No number in
-`widgets.ts` is a bound** — every limit comes from
+(`widgets.ts`), and the binding it is mounted over — the platform's own
+deployment, never a dev-only source (`convexConfigurationBinding.ts`). **No
+number in `widgets.ts` is a bound** — every limit comes from
 `GAMEPLAY_PARAMETER_DESCRIPTORS` (the engine) or
 `GENERATION_PARAMETER_DESCRIPTORS` (`@cyphid/snek-game-configuration`), which is
 the same declaration the record rejects from. Adding a hard-coded min or max
@@ -76,30 +77,51 @@ here re-creates exactly the second copy that sourcing exists to prevent.
 
 ### The standalone dev mount
 
-`/dev/game-configuration` mounts the surface alone, over an in-memory game
-record held by `src/routes/dev/game-configuration/api/record.ts`, with every
-affordance offered and no authentication and no Convex deployment involved. It
-exists because the surface's requirement is that it works with no host, and this
-is that requirement made runnable — `pnpm dev`, then open the route.
+`/dev/game-configuration` mounts the surface alone — every affordance offered,
+nothing around it — over **a real game on the platform's own Convex
+deployment**. It exists because the surface's requirement is that it needs no
+surrounding application context, and this is that requirement made runnable:
+`pnpm dev:convex:local`, `pnpm dev`, then open the route.
 
-Three properties are load-bearing:
+There is no dev-only record and no dev-only mutation surface. There used to be
+one, polling itself over an app endpoint; what it proved was that a second
+implementation of the capability's rules agrees with the real one on the day it
+is written. What runs now is the workflow: a credential the page earned, the
+real `createGame`/`updateConfiguration`/`setPreviewLock` mutations, and Convex's
+own query subscription behind the binding.
 
-- **Dev only, enforced.** `+page.server.ts` and the `api/+server.ts` handlers
-  both answer 404 when `dev` is false, so a fork building this app for
-  production does not ship an unauthenticated configuration write.
-- **The rules are not re-implemented.** The dev record calls
-  `validateGameConfig`, `changesGenerationInputs` and
-  `generateBoardAndInitialState` — the same three the Convex mutation in
-  `packages/convex-host/convex/gameConfiguration.ts` calls. A second spelling
-  would agree the day it was written and diverge afterwards, in the mount whose
-  whole purpose is exercising the real workflow.
-- **Generation runs server-side even here.** Boards are only ever generated
-  platform-side; the browser renders one it was handed and runs no
-  board-generation algorithm at all.
+Four properties are load-bearing:
 
-The live path is the same component over `convexBinding` from the shell, wired
-wherever a session credential is available. Nothing about the component changes
-between the two — only what is behind the binding.
+- **Dev only, enforced.** `+page.server.ts` answers 404 when `dev` is false, so
+  a fork building this app for production serves no such route and nothing the
+  route reaches is imported anywhere else.
+- **The auth is the platform's own.** The page takes the platform's sign-in
+  handoff, exactly as `/sign-in` does and through the same
+  `$lib/platform/handoff.ts`: this Server never authenticates a human itself,
+  and the credential it redeems is capped by this Server's registered ceiling
+  intersected with what a human's session may reach. The deployment must
+  therefore hold a registration for this origin whose ceiling includes
+  `configure-game` and `read-game-configuration`, and whose return addresses
+  include `<origin>/dev/game-configuration` — `registry:registerIssuer`, an
+  operator act. Signing in without Google is the *deployment's* affair, not this
+  Server's: point it at a substitute issuer
+  (`SUBSTITUTE_IDENTITY_ISSUER` / `SUBSTITUTE_IDENTITY_JWKS_URL`, the
+  substituted verification step the identity capability declares), which is what
+  `apps/e2e` does.
+- **Nothing polls.** The binding is `convexMutableBinding`'s live subscription.
+  Two tabs over one game converge because the deployment re-runs the query, not
+  because either of them asked again.
+- **Report, never crash.** With `CONVEX_URL` or `CONVEX_SITE_URL` unset the page
+  renders which variable is missing and how to start a deployment, in the style
+  of `hooks.server.ts`'s environment report. It does not 500 and does not
+  half-mount.
+
+Generation still runs platform-side, as it only ever does: the browser renders a
+board it was handed and runs no board-generation algorithm at all.
+
+The same component over the same binding is what a room will mount later.
+Nothing about it changes between the two — only which host passes the affordance
+booleans.
 
 Component tests are `*.browser.test.ts` and run in the `components` project of
 `vitest.config.ts` (the bare `svelte` plugin plus the `browser` resolve
