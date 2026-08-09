@@ -21,7 +21,7 @@ different hosting consequences:
 |---|---|---|
 | Convex deployment (exactly one, `global-invariants/single-convex-deployment`) | Cyphid | **The whole problem.** See §3. |
 | SpacetimeDB host (self-hosted, per-game databases) | Cyphid | Already self-hosted by design. Region is a config line. |
-| Snek Centaur Servers | **Each team, on domains they nominate** (`02-REQ-005`) | **Not controllable.** See §6. |
+| Snek Centaur Servers | **Each team, on domains they nominate** (`02-REQ-005`) | **Not controllable.** See §7. |
 
 Only the first two are Cyphid's to place. That asymmetry is the single most
 important fact in this evaluation and it is absent from the proposal.
@@ -512,7 +512,247 @@ and do not let a hosting decision stand in for having done it.
 
 ---
 
-## 6. The part that cannot be solved by choosing a provider
+## 6. Deployment plan: two Convex variants over one scale-to-zero host
+
+Both variants share the SpacetimeDB side. They differ in where Convex runs,
+and that difference propagates into networking, security, and — most
+sharply — into whether the scale-to-zero logic can rely on Convex being
+awake.
+
+### 6.1 What the spec already settles, and the one thing it does not
+
+Per-**instance** lifecycle is specified end to end, and the plan below must not
+reinvent it:
+
+- `game-lifecycle/teardown-after-persistence` — an instance is never torn down
+  before Convex confirms the record is persisted; once confirmed, teardown is
+  immediate and is **exclusively Convex's act**. Instances have no
+  self-teardown (`#no-self-teardown`). The proposal's `auto_destroy` and reaper
+  cron are not merely unnecessary — self-destruction is forbidden.
+- `game-lifecycle/finish-notification` — bounded delivery retries, and the push
+  is explicitly *not* the only path to `finished`.
+- `game-lifecycle/stale-game-recovery` — a recurring sweep finds records stuck
+  at `playing` past the longest game the configured clocks and turn limit could
+  produce, probes for a live instance, retrieves the record or finishes with an
+  error outcome, and reclaims the residue either way.
+- `game-lifecycle/no-orphans` — a failed launch tears down what it provisioned.
+
+What is **not** specified is the **host's** own lifecycle. The corpus has
+`game-lifecycle/host-warm-up` for waking it and no counterpart for putting it
+to sleep — correctly, since that is hosting mechanism rather than platform
+behaviour. So the stop rule has to be designed. It is derivable rather than
+invented:
+
+> **The host is quiescent when no game record is `playing` and no instance
+> remains provisioned.** Both facts are Convex's own, by
+> `game-lifecycle/status-authority` and `teardown-after-persistence`.
+
+Stop on quiescence plus a cooldown. Never on anything else.
+
+### 6.2 Do not let the Fly proxy decide
+
+`auto_stop_machines` is the wrong instrument for the SpacetimeDB host, and it
+fails in **both** directions:
+
+- **Too sticky.** The proxy stops on excess capacity judged from connection
+  load. Players hold WebSocket subscriptions; one browser tab left open after a
+  session pins the host indefinitely. This is the same trap the proposal
+  correctly identified for the Convex backend, and it applies here for the same
+  reason.
+- **Too eager.** A live game whose players all briefly drop — a flaky school
+  network, a between-turns lull — can present as excess capacity. Stopping a
+  host mid-game destroys it, and it also breaks chess-timer continuity, because
+  the clock's wall-clock reference does not survive the gap.
+
+So: `auto_stop_machines = "off"` on the host, and keep `auto_start_machines`
+on. Autostart is what makes a mistimed stop self-healing — the next
+provisioning call wakes the host rather than failing — and it is what
+`host-warm-up` rides on.
+
+**Layer the stop:**
+
+| Layer | Actor | Trigger |
+|---|---|---|
+| Primary | Convex | quiescence (§6.1) + cooldown, via the Fly Machines API |
+| Backstop | external scheduler (e.g. a GitHub Actions cron) | host up beyond a session window — covers Convex being asleep or broken |
+| Never | Fly proxy `auto_stop_machines` | — |
+
+The backstop is not belt-and-braces padding. In variant B it is load-bearing;
+see §6.5.
+
+### 6.3 Networking and security
+
+**The constraint that shapes everything:** SpacetimeDB serves its entire HTTP
+surface — `POST /v1/database` (publish), `DELETE /v1/database/:name`,
+`POST /v1/database/:name/call/:reducer`, `GET /v1/database/:name/subscribe`,
+`/sql`, `/logs` — **on one host and port**. There is no separate management
+port to bind privately, so the proposal's "public game port, private deploy
+port" split does not map onto the real API.
+
+Worse, and this is the finding that matters most for a publicly reachable
+host: **SpacetimeDB is publish-open by default — anyone who can reach it can
+create a database on it.** Publishing has no permission gate of its own;
+ownership attaches to whichever identity published, so the first caller wins.
+The vendor's own guidance is a reverse proxy with a path allowlist, defaulting
+to permitting only `/v1/identity` and `^/v1/database/[^/]+/subscribe$` and
+denying the rest.
+
+That gives the required split:
+
+| Surface | Paths | Who needs it |
+|---|---|---|
+| **Public** | `GET /v1/database/:name/subscribe` (WebSocket), `/v1/identity` | players, spectators, Snek Centaur Servers |
+| **Private** | `POST /v1/database`, `DELETE /v1/database/:name`, `POST …/call/:reducer`, record retrieval | Convex alone |
+
+**Variant A — managed Convex Cloud.** Convex calls in from the public internet
+with no stable egress addresses, so the private surface cannot be closed at the
+network layer. Two ways to gate it, and the second is better:
+
+1. Verify the Convex-issued RS256 JWT (`03-REQ-048`) *at the proxy* before
+   forwarding management paths — nginx `auth_request` or a JWT-aware proxy.
+2. **A small provisioning shim** as its own Fly app: public HTTPS, verifies the
+   Convex JWT against Convex's published JWKS, and forwards to SpacetimeDB over
+   the private 6PN network. The host then needs **no public route to its
+   management surface at all**.
+
+Prefer (2). It keeps verification asymmetric (`global-invariants/no-shared-secrets`),
+puts the trust decision in code that can be tested rather than in proxy
+configuration, and gives variant A the same private-management posture variant
+B gets for free. The shim is an HTTP service, so Fly's own autostart handles
+it — it scales to zero alongside everything else.
+
+**Variant B — self-hosted Convex on Fly.** Convex sits inside the same 6PN
+network. Bind the management surface to **Flycast (private IPv6) only** and
+expose a public service carrying just the subscribe path. There is then no
+public route to publish — strictly stronger than an allowlist, because it is
+not a rule that can be misconfigured open. This is the one genuinely good idea
+in the original proposal's §4.2, applied at host level instead of per game.
+
+**Common to both:**
+
+- **TLS** — Fly managed certificates for `stdb.<domain>`, and in variant B for
+  the Convex deployment's own domain.
+- **`CONVEX_SITE_URL` must be stable and publicly reachable in both variants**
+  — browsers use it, and SpacetimeDB fetches OIDC discovery and JWKS from it
+  (§6.4). In variant B that means a real domain on the Convex app, not a
+  private address.
+- **Volume on the host, and keep it.** The SpacetimeDB data directory holds the
+  `[certificate-authority]` keypair as well as the databases; regenerating that
+  on every wake would change the host's identity and the ownership semantics
+  that gate `DELETE`. A volume is billed while the machine is stopped, but at
+  $0.15/GB/month a small one is noise.
+- **`kill_signal = "SIGTERM"` and a generous `kill_timeout`** on both stateful
+  machines, so the commitlog flushes. Stopping only at quiescence means there
+  should be nothing in flight, but the margin is free.
+- **Fly API token custody.** Convex needs a token to stop the host. That is a
+  third-party secret and is expressly permitted by
+  `no-shared-secrets#third-party-protocols-may-require-a-secret` — Fly's API
+  admits no asymmetric client authentication, the token authenticates the
+  platform outward to Fly alone, and it confers nothing inside the trust chain.
+  Scope it to the host app.
+
+### 6.4 The JWKS ordering dependency
+
+SpacetimeDB validates connection tokens by fetching the issuer's
+`.well-known/openid-configuration` and then its JWKS — **lazily, on first token
+validation rather than at startup**, and cached thereafter. That single
+implementation detail creates an ordering constraint the architecture has to
+respect:
+
+- **Variant A** — the issuer is `…convex.site`, always up. Non-issue.
+- **Variant B** — if the Convex machine is asleep the moment SpacetimeDB first
+  validates a token, discovery either cold-starts Convex inside the connection
+  path or fails outright.
+
+So **Convex must outlive the host at both ends**:
+
+```
+start Convex → warm host → provision → initialize → play
+             → persist + teardown → stop host → stop Convex
+```
+
+At launch this is satisfied naturally, since Convex mints the tokens and cannot
+do so asleep. The rule matters for the cases that are not the happy path: a
+host restarted mid-session with a cold JWKS cache, or a maintenance window that
+stops Convex first. Make the ordering explicit in the runbook rather than
+relying on it falling out.
+
+Worth verifying against a real build: `global-invariants/game-instance-hermeticity`
+requires that connection-token validation use key material "obtained at instance
+startup, not a per-connection external call." Lazy-fetch-then-cache satisfies
+the *per-connection* half but not the *at-startup* half. Whether that matters
+in practice — and whether the fetch can be forced at boot — is an
+implementation question to answer before it becomes a surprise.
+
+### 6.5 The sharpest interaction: two scale-to-zero systems
+
+In variant B both Convex and the host scale to zero, and they are not
+independent. **`stale-game-recovery` is a recurring sweep, and Convex's
+scheduled functions do not run while Convex is stopped.** So:
+
+> A game whose finish notification was lost, on a Convex that has since gone to
+> sleep, is never recovered — which means its instance is never torn down,
+> which means the host never reaches quiescence and never stops.
+
+The failure is silent and it costs money continuously. Three rules contain it:
+
+1. **Convex never stops while any game is not `finished`.** The quiescence test
+   that gates the host's stop gates Convex's stop too, one step later.
+2. **Drive Convex's stop and start from an external scheduler**, not from
+   Convex's own crons. A process cannot reliably schedule its own resurrection,
+   and the sweep it owes is exactly what its sleep suppresses.
+3. **Require the sweep to have run since the last game finished** before Convex
+   may stop — so the recovery path has had at least one chance before the thing
+   that runs it goes away.
+
+Variant A has none of this. Convex Cloud is always on, its crons always run,
+and `stale-game-recovery` behaves as written. That is variant A's real
+advantage, and it is a correctness advantage rather than a convenience one.
+
+### 6.6 Edge-case register
+
+| # | Case | Handling |
+|---|---|---|
+| 1 | Browser tabs holding WebSockets after a game ends | Explicit quiescence-driven stop, never proxy autostop (§6.2). Deleting the database drains its subscribers. |
+| 2 | Stop races a launch | Self-healing: `auto_start_machines` means the provisioning call wakes the host. Add a cooldown past quiescence so the race is rare rather than merely survivable. |
+| 3 | Stop while a game is live | Forbidden by the quiescence rule. Also breaks chess-timer wall-clock continuity — a second reason never to stop on connection count. |
+| 4 | Abandoned game, no players | `maxGameDurationMs` and the turn limit bound it; `stale-game-recovery`'s bound sits above that. The host's stop simply waits for the sweep. |
+| 5 | Self-hosted Convex asleep → sweep never runs | §6.5. The one that turns a lost notification into an unbounded bill. |
+| 6 | Convex stopped mid-flight during terminal handling | In-flight actions are lost; mutations are transactional. `#lost-notification-recovered` re-drives it — provided rule 1 of §6.5 holds. |
+| 7 | Overdue crons burst on Convex wake | Audit every installed component's internal crons before enabling a scheduled stop (proposal §3.4). |
+| 8 | Record retrieval keeps failing | `#no-teardown-before-persistence` keeps the instance up, so the host cannot reach quiescence. Bounded retries then a **loud** alert. Decide in advance whether a replay is ever sacrificed to reclaim the host — the spec does not, and silence here becomes an outage. |
+| 9 | Commitlog damage on stop | `SIGTERM` + generous `kill_timeout`; stop only at quiescence. |
+| 10 | Placement failure on resume at session start | Pre-session human-visible readiness check (§5.4) — the warm-up is best-effort and silent on failure by design. |
+| 11 | Orphaned database surviving a stop | A volume means databases persist across stops, so ephemerality is not the reaper. `no-orphans` and `teardown-after-persistence` should prevent orphans; a host-level audit that lists databases and compares against non-`finished` game records is the cheap check that they did. |
+| 12 | Flycast + autostart (variant B) | Verify that private 6PN traffic wakes a stopped machine — variant B's entire management path depends on it. |
+
+### 6.7 Choosing between them
+
+| | **A — managed Convex Cloud** | **B — self-hosted Convex on Fly `syd`** |
+|---|---|---|
+| Platform-state residency | US East or EU West | Australia |
+| Convex operations | vendor's | yours (§3) |
+| `stale-game-recovery` | always runs | suppressed while Convex sleeps (§6.5) |
+| Host management surface | needs the shim (§6.3) | private via Flycast, no public route |
+| JWKS reachability | non-issue | ordering constraint (§6.4) |
+| Moving parts | host + shim | host + Convex + external scheduler |
+| Failure modes | few | the ones §6.5 and §6.4 describe |
+
+**Recommendation: start on A, keep B as a supported target.** Variant A gets
+the scale-to-zero host — which is the part of this you actually want — while
+leaving Convex a managed dependency whose always-on crons make the recovery
+path behave as specified. Variant B is the one to build when Australian
+residency of platform state becomes a requirement worth its operational
+weight (§4 establishes that no law makes it one).
+
+The two share everything that costs real design: the single host with per-game
+databases, the public/private surface split, the quiescence stop rule, and the
+edge-case register. Only the Convex placement and the shim differ, which is
+what makes keeping both viable cheap.
+
+---
+
+## 7. The part that cannot be solved by choosing a provider
 
 Teams nominate their own Snek Centaur Server domains (`02-REQ-005`), the
 captain declares trust unilaterally, and there is no platform-level server
