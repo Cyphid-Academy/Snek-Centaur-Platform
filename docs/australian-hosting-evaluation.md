@@ -92,9 +92,35 @@ A shared HMAC secret held by both `convex-backend` and `stdb-router` to
 authenticate routing within the platform's own trust chain is a symmetric
 credential inside the chain. The proposal's own open decision #3 asks whether
 Ed25519 is "worth it"; the spec answered that question already, and the answer
-is not optional. (The proposal's §3 `STDB_WARMUP_TOKEN`-style static token is a
-different case and *is* already sanctioned — `game-lifecycle/host-warm-up`
-explicitly permits a light check because resuming a host is its only effect.)
+is not optional.
+
+The same invariant disposes of a static warm-up token, and it is worth being
+precise about why, because the legacy corpus reads the other way.
+`04-REQ-072` permitted "a lightweight static-token check", and
+`docs/external-setup.md` still instructs an operator to provision a
+`STDB_WARMUP_TOKEN` shared secret. **Module 04 is migrated**, so that text is
+no longer binding — the archive binds only unmigrated modules — and the
+migration dropped the mechanism. What survives is `game-lifecycle/host-warm-up`:
+
+> SHALL NOT require a credential carrying provisioning authority — a
+> lightweight check sufficient to deter casual abuse suffices
+
+That bounds the credential's *ceiling*, not its cryptography, and
+`migrate-game-lifecycle`'s design record is explicit that the allowance is a
+boundary judgement against `global-invariants/authenticated-unambiguous-identity`
+— the signal sits outside the mutation surface that invariant governs. Nothing
+relaxes `no-shared-secrets`, which is unconditional and names a game's
+SpacetimeDB instance among the parties it binds. So the light check is
+asymmetric like everything else: a credential from the trusted issuer, verified
+against published material, simply not one carrying provisioning capability.
+That is `issuer-anchored-trust#ceiling-is-checked-at-the-resource` applied to a
+host whose worst abuse is being woken up.
+
+**Repo defect, unrelated to hosting:** `docs/external-setup.md` §"SpacetimeDB on
+Fly.io" still documents `STDB_WARMUP_TOKEN` as a shared secret. That is stale
+pre-migration guidance and contradicts the binding corpus regardless of which
+hosting target is chosen. It should be corrected when that section is rewritten
+(§5.3).
 
 ### 2.4 It sizes the wrong workload
 
