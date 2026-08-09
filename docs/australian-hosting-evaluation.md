@@ -82,7 +82,8 @@ objection — it is a prerequisite the proposal does not mention.
 
 ### 2.3 The HMAC join token conflicts with a global invariant
 
-`global-invariants/no-shared-secrets` forbids exactly what §5.3 proposes:
+`global-invariants/no-shared-secrets` forbids exactly what the proposal's
+§5.3 proposes:
 
 > No symmetric key, client secret, or long-lived bearer key SHALL be
 > generated, stored, transmitted, or seeded anywhere to authenticate a party
@@ -120,7 +121,7 @@ host whose worst abuse is being woken up.
 Fly.io" still documents `STDB_WARMUP_TOKEN` as a shared secret. That is stale
 pre-migration guidance and contradicts the binding corpus regardless of which
 hosting target is chosen. It should be corrected when that section is rewritten
-(§5.3).
+(§5.4).
 
 ### 2.4 It sizes the wrong workload
 
@@ -357,91 +358,151 @@ at, and that assessment is not made anywhere in the corpus.
 
 ## 5. Recommendation
 
-### 5.1 Right-size first
+### 5.1 Fly.io, scaled to zero — the duty cycle settles it
 
-The workload is a few dozen 10-minute games, weekly. The whole platform-owned
-footprint is:
+Sessions run about two hours a week, growing to several. That is roughly
+**1–2% duty cycle**. An always-on instance bills 730 hours a month to deliver
+ten, and forces the machine to be sized small precisely because it is paid for
+around the clock. An earlier draft of this document recommended one always-on
+VM; on the arithmetic that is the wrong shape, and the objection that
+overturned it is worth recording, because it inverts the usual sizing
+instinct.
 
-- one Convex backend (single-writer by nature — no HA to lose),
-- its datastore,
-- one SpacetimeDB host,
-- the reference Centaur Server at `snek-centaur.cyphid.org`,
-- a reverse proxy terminating TLS.
+Fly bills Machines **per second**, and a stopped Machine costs nothing for
+compute or RAM — only its rootfs (about $0.15/GB per 30 days) and any volume
+($0.15/GB/month, billed whether or not the Machine is running). So with
+scale-to-zero the session machine's *size* nearly stops mattering to the bill.
+Against roughly 12 billed hours a month:
 
-That is a Docker Compose file on **one adequately-sized virtual machine**.
-Not four Fly apps, a replay router, token minting, app sharding, pre-provisioning
-from lobby state, and a reaper cron. The proposal's §6.5 sharding table — 600
-concurrent machines, 10-minute spin-up — is planning for roughly fifteen times
-the stated peak, against a rate limit that only exists because it chose to
-create VMs.
+| Session machine | ≈ hourly | ≈ monthly at ~12h |
+|---|---|---|
+| `performance-1x` / 2GB | $0.045 | **~$0.54** |
+| `performance-2x` / 4GB | $0.089 | **~$1.07** |
+| `performance-4x` / 8GB | $0.178 | **~$2.14** |
+| `performance-8x` / 16GB | $0.356 | **~$4.27** |
 
-### 5.2 The one question that selects the answer
+(Base-region rates; `syd` sits above these under the regional pricing rollout,
+but the ratio is what matters.)
 
-**Is the requirement residency or sovereignty?** It cleanly picks the target:
+A `performance-8x` running only during sessions costs a **fraction** of an
+always-on `shared-cpu-2x`, which the proposal itself priced at $21–40/month.
+The fixed floor is the volume plus stopped rootfs — on the order of **$5–6 a
+month** for both platform machines. So the rule is: **size for the peak, pay
+for the hours.** That is a strictly better deal than any always-on box, and it
+gets better as Cyphid adds sessions, because the bill tracks use instead of
+the calendar.
 
-- **Residency** (bytes in Australia; US-owned operator acceptable) → Fly.io
-  `syd`. Matches what the spec's design text already names, gives managed
-  volumes with snapshots, managed TLS, and the least operational surface.
-  Sydney only — there is no Melbourne region.
-- **Sovereignty** (Australian-owned and -operated) → an Australian-owned
-  provider with a Melbourne presence. Several exist at the relevant scale;
-  they are ordinary VM hosts, so the deliverable is the same Compose stack
-  with self-managed TLS, backups, and patching.
+This also means the earlier "provider-agnostic Compose stack" framing was too
+strong. Scale-to-zero with an API to start, stop and resize a stateful machine
+holding a volume is exactly the primitive this workload wants, and Fly Machines
+is a very good implementation of it. Keep it.
 
-At this scale the operational delta between the two is smaller than it looks,
-because the Fly-specific machinery the spec currently anticipates —
-scale-to-zero, the warm-up signal, the Machines API — is complexity that a
-plain always-on VM simply does not need. An always-on 8GB VM is in the same
-cost band as the proposal's own $34–80/month estimate, which is dominated by
-the always-on Convex machine either way.
+### 5.2 What can actually burst, and what cannot
 
-**Recommendation: build for portability, and treat the choice as elective.**
-Deliver the platform's own runtimes as a provider-agnostic Compose stack. Then
-the hosting substrate is a deployment target rather than an architecture,
-moving between Fly `syd`, an Australian-owned VM, and a US region is a
-redeploy, and the choice can be deferred past the point where it would
-otherwise block implementation.
+The one thing to be clear-eyed about: of the three platform-owned runtimes,
+**two cannot scale horizontally at all**, and neither limit is Fly's.
 
-There is no compliance forcing function here (§4). Nothing in the coming
-children's privacy law requires Australian hosting, and US IT services remain
-available. So the case for Australian hosting rests on grounds that are real
-but discretionary — round-trip latency to a chess-timered game, what Cyphid
-wants to be able to tell parents and schools, and any residency term a school
-procurement contract imposes. Those are Cyphid's calls, and the portable
-stack is what keeps them cheap to make and to revisit.
+- **Convex** is single-writer by construction, and
+  `global-invariants/single-convex-deployment` makes exactly one deployment
+  load-bearing for cross-record transactional invariants. Never two.
+- **SpacetimeDB** is capped by its own licence: the BSL Additional Use Grant
+  permits *"no more than one SpacetimeDB instance in production"* (§2.2). A
+  second host is a commercial-licensing conversation, not a config change.
 
-What the portability recommendation *does* protect against is the thing
-§2 identified: adopting provider-specific machinery — scale-to-zero, warm-up
-signalling, a Machines API orchestrator — that has to be unwound if the
-substrate changes. Avoid that in either direction.
+For both, "scale high in a burst" means **a bigger machine for the session** —
+which scale-to-zero makes nearly free, and which is why the two facts fit
+together well. It is a real ceiling, not an unlimited one, and the ceiling on
+SpacetimeDB is contractual before it is technical.
 
-### 5.3 Consequences for the spec
+It is also worth noting how much headroom is there: 40 concurrent games of a
+small grid, resolving a turn every few seconds, is a trivial load for a
+database built for MMO-scale simulation. The game workload is not what will
+stress a host.
 
-None of this requires a spec change, which is worth stating explicitly:
+**The genuinely horizontal workload is Centaur bot compute.** Anytime
+game-tree search, per snake, per turn, under a chess timer, in an isolated
+context per hosted team (`global-invariants/bot-compute-view-confinement`) —
+embarrassingly parallel, and the only part of the platform whose cost rises
+steeply with concurrent games. On the reference deployment at
+`snek-centaur.cyphid.org`, that is Cyphid's to run and to scale.
 
-- `game-lifecycle/host-warm-up` is written as **MAY** suspend. An always-on
-  host satisfies it trivially — the warm-up signal becomes a success no-op,
-  which the requirement already contemplates. The Fly-specific
-  scale-to-zero mechanics live only in design text (`04` §2.13, `05` §2.3.1)
-  and in `docs/external-setup.md`, exactly as `04-REVIEW-022` intended when it
-  kept the requirement implementation-neutral.
-- `docs/external-setup.md` §"SpacetimeDB on Fly.io" is a stub whose TODO list
-  is precisely the set of decisions this evaluation feeds. It should be
-  rewritten once the target is chosen, not before.
+So the proposal's orchestration instinct was sound and simply pointed at the
+wrong runtime. **If a Machines-API fleet is built anywhere, build it for bot
+compute, not for games.** That is where per-unit lifecycle, placement retry
+and a reaper actually earn their complexity — and where a machine-per-tenant
+model raises no licensing question at all.
 
-### 5.4 What to verify before committing
+### 5.3 The shape
+
+| App | Machines | Lifecycle |
+|---|---|---|
+| Convex backend | 1 + volume, sized for session peak | scheduled stop; `auto_start_machines` on request |
+| SpacetimeDB host | 1, sized for session peak | scale-to-zero; woken by `game-lifecycle/host-warm-up` |
+| Reference Centaur Server | static serving + bot compute | the fleet, if any, goes here (§5.2) |
+
+Per-game **databases** on the one SpacetimeDB host, per `05-REQ-032` step 3 —
+not per-game machines (§2.1, §2.2). No replay router, no join token, no app
+sharding, no orphan reaper: those exist only to serve a machine-per-game model
+the spec does not use.
+
+Carry the proposal's §3 hazards, which are all real and all still apply:
+`auto_stop_machines` cannot stop a Convex backend that browser clients hold
+WebSockets to, so the stop must be externally scheduled; audit every installed
+component's internal crons before enabling a scheduled stop, or overdue jobs
+fire as a burst on wake; in-flight actions are lost on stop while mutations are
+safe; pin the image by digest and keep backend and dashboard versions
+identical; and a volume snapshot is the only rollback from a forward-only
+migration.
+
+Evaluate `auto_stop_machines = "suspend"` against plain `stop` for the
+SpacetimeDB host — suspend resumes faster, which is squarely what the warm-up
+budget cares about, though it carries caveats worth reading before relying on
+it for a stateful process across a week-long idle gap.
+
+### 5.4 Consequences for the spec — the warm-up is load-bearing after all
+
+An earlier draft of this document said an always-on host would make
+`game-lifecycle/host-warm-up` a trivial no-op. With scale-to-zero it is the
+opposite: it is **load-bearing**, and it was authored for precisely this
+hosting model. `04-REVIEW-022` and `05-REVIEW-019` adopted scale-to-zero
+deliberately and added the warm-up signal to keep the cold start off the
+game-launch critical path, with the dispatch firing on game-**configuration**
+creation so the host wakes while captains are still setting up. The corpus was
+already shaped for this. The always-on suggestion was fighting it.
+
+Still no spec change needed — but now because the spec anticipated this, not
+because the requirement was inert.
+
+`docs/external-setup.md` §"SpacetimeDB on Fly.io" is the one artifact that
+does need work. Its hosting model is right and can stay; its TODO list is
+precisely the set of decisions above; and its `STDB_WARMUP_TOKEN` shared
+secret must go, being stale pre-migration guidance that contradicts
+`global-invariants/no-shared-secrets` (§2.3).
+
+One operational gap the spec deliberately does not fill: the warm-up is
+best-effort by construction, and `#warm-up-never-blocks-creation` means a
+failed wake is silent to the acting user. That is correct for latency
+amortisation and wrong as a readiness guarantee. A session where the host
+fails to resume with forty children waiting is the failure that matters, so
+run a **human-visible pre-session readiness check** — a separate thing from
+the warm-up, outside the spec's scope, belonging in an operational runbook.
+
+### 5.5 What to verify before committing
 
 1. **Written confirmation from Clockwork Labs** that one self-hosted host
-   running one per-game database at a time — dozens concurrently — is one
-   "instance" under the BSL Additional Use Grant. The whole provisioning
-   design depends on this reading. (§2.2)
-2. **A benchmark of Centaur bot compute**, not of SpacetimeDB. That is the
-   workload that will determine what the reference deployment costs. (§2.4)
-3. **Convex self-hosted upgrade rehearsal** — snapshot, upgrade across
-   several intermediate revisions, restore — before any real data exists.
-   Forward-only migrations mean the rehearsal is the only thing that
-   establishes the rollback works. (§3) *Only reached if Australian
-   residency is chosen; Convex Cloud remains available otherwise.*
+   running dozens of concurrent per-game databases is one "instance" under the
+   BSL Additional Use Grant. The whole provisioning design depends on this
+   reading, and §5.2's ceiling depends on it too. (§2.2)
+2. **A benchmark of Centaur bot compute**, not of SpacetimeDB. It sizes the
+   session machine, and it is the only thing that decides whether §5.2's fleet
+   is ever needed. (§2.4)
+3. **Cold-start and resume timings measured in `syd`**, for both machines,
+   against the ten-second warm-up budget the spec commits to.
+4. **Convex self-hosted upgrade rehearsal** — snapshot, upgrade across several
+   intermediate revisions, restore — before any real data exists. Forward-only
+   migrations mean the rehearsal is the only thing that establishes the
+   rollback works. (§3) *Only reached if Australian residency is chosen;
+   Convex Cloud remains available otherwise (§4).*
 
 Not on this list, because it is not a hosting prerequisite: legal advice on
 APP entity status and the Children's Online Privacy Code. That work is real
