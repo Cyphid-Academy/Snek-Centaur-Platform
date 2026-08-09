@@ -197,16 +197,41 @@ open decision #7.
 3. **Regulatory fitness** — the obligations that actually attach to handling
    Australian children's personal information.
 
-(3) is the one with a date on it. The OAIC released the exposure draft of the
-**Privacy (Children's Online Privacy) Code 2026** on 31 March 2026;
-consultation closed 5 June 2026; the Code **will be registered by 10 December
-2026**. It applies to online services including games and educational tools
-that handle children's personal information, and a breach of the Code is a
-breach of the Privacy Act. Commencement and transition period were still
-unconfirmed as at this writing. Whether Cyphid is an APP entity at all (the
-small-business turnover threshold) is a question for a lawyer, not for this
-document — but the Code is the reason to treat the hosting decision as having
-a deadline rather than being a preference.
+**(3) does not point at hosting at all.** This was checked against the
+primary source rather than commentary: the exposure draft of the
+**Privacy (Children's Online Privacy) Code 2026** (OAIC, 31 March 2026;
+consultation closed 5 June 2026; to be registered by 10 December 2026)
+contains **no data localisation requirement and no restriction on overseas
+hosting or overseas service providers**. Across all 27 pages the words
+"localis", "offshore", "outside Australia" and "residency" do not appear.
+
+Its only cross-border provision is s26, *Consent to cross-border
+disclosures*, and it does not restrict anything. It regulates *how a child
+is informed* when an entity relies on APP 8.2(b)(i) — the express-consent
+route that switches **off** the APP 8.1 protections. The effect is to make
+consent a worse way to escape accountability for children's data, which
+leaves ordinary APP 8.1 compliance (contractual reasonable steps over the
+overseas recipient) as the sensible path. s28(5)(b) adds a documentation
+duty: a response to an information request must explain the APP 8.1 steps
+taken if the child's information went to an overseas recipient. That is the
+whole of it.
+
+APP 8 itself is an **accountability** rule, not a prohibition — and OAIC
+guidance is that supplying personal information to an overseas cloud provider
+purely to store it, where the entity keeps it under its effective control and
+the provider cannot use it for its own purposes, can be a *use* rather than a
+*disclosure*, in which case APP 8 does not engage. This is the ordinary
+footing on which Australian organisations use US cloud services.
+
+So: **using US IT services is permitted, and nothing in the coming children's
+privacy law changes that.** Hosting location is a latency, cost, operations
+and positioning decision. It is not a compliance decision, and an earlier
+draft of this document was wrong to imply the Code put a deadline on it. The
+Code's real obligations are dated and substantial, but they land on identity,
+consent and retention — see §4a.
+
+*(Not legal advice. Whether Cyphid is an APP entity at all is the threshold
+question — see §4a.)*
 
 **The uncomfortable observation.** Under any of the three framings, server
 location is not the largest exposure. Identity is Google OAuth
@@ -223,6 +248,110 @@ already anticipates provider change only at the resolution boundary.
 That is not an argument against Australian hosting. It is an argument for
 being precise about what Australian hosting is being bought to achieve, so
 the answer to a parent's question is accurate.
+
+---
+
+## 4a. What the children's privacy law will actually require
+
+Recorded here because the hosting question surfaced it, not because it is a
+hosting matter. **Not legal advice** — this is a reading of the exposure
+draft, to scope engineering work and to know what to take to a lawyer.
+
+### The threshold question comes first
+
+The Code binds **APP entities**. The small business exemption — annual
+turnover of A$3 million or less — remains in force as at mid-2026; its removal
+is signalled for a future reform tranche but has not been legislated. If
+Cyphid is under the threshold and none of the exemption's carve-outs apply
+(health services, trading in personal information, Commonwealth contracted
+services, being related to a larger business, or opting in voluntarily), the
+Privacy Act and therefore this Code do not bind it today.
+
+Two reasons not to stop there. The exemption's removal is a matter of when,
+not whether. And selling into schools imports obligations by **contract**
+regardless of the Act — a state education department's procurement terms are
+their own regime, and are the most likely place an actual data-residency
+requirement would come from, since the Code contains none.
+
+### If it applies, the coverage test is met comfortably
+
+s5 and s7: the Code reaches a social media service, relevant electronic
+service or designated internet service that is *"likely to be accessed by
+children"* or *"primarily concerned with the activities of children."* A game
+built for gifted children is the second limb without argument. There is no
+scale threshold in the coverage test — only the Act's own entity threshold
+above.
+
+### The obligations that cost engineering
+
+- **s8 age assurance** — reasonable steps to ascertain age before collecting,
+  proportionate to risk of harm. There is an escape hatch worth taking:
+  applying the Code's protections to *all* end-users removes the need to
+  ascertain age at all. For a platform whose users are children by design,
+  that is almost certainly cheaper and better than building age assurance.
+- **s9 privacy by default** — technical and organisational measures so that
+  by default only strictly-necessary personal information is collected, with
+  child-accessible controls over anything beyond that.
+- **s10, s11 best interests of the child** — a substantive test gating
+  collection, and separately gating use and disclosure.
+- **s13 consent** — a child may self-consent only at **15 or over**. Under 15
+  requires consent from a person with parental responsibility, *reasonable
+  steps to confirm that person actually has parental responsibility*, and an
+  age-appropriate notice to the child covering purpose, duration, consequences
+  and withdrawal. s20 adds the child's own "assent" in some circumstances.
+- **s14–s19, s21 consent quality** — voluntary, informed, current, specific,
+  unambiguous; no pre-ticked boxes or consent deemed from continued use; no
+  coercive patterns.
+- **s23–s25, s27–s29 transparency and access** — age-appropriate policy and
+  collection notices, documented periodic review, access and
+  information-about-handling requests answered within 30 days, direct
+  marketing opt-out.
+- **s32 destruction on request** — a child, or a parent of a child under 15,
+  may require destruction of specified personal information, subject to
+  narrow exceptions (legal proceedings, other law, enforcement, serious
+  threat to life or safety).
+
+### Where this collides with the architecture
+
+**s32 versus the replay model, and it is a real collision.**
+`02-REQ-065` and the `replay-and-audit` capability make every Centaur Team's
+within-turn actions — action log entries, stateMap snapshots — visible to
+*every authenticated user* for *every finished game*, permanently. That is a
+deliberately public, permanently retained, cross-referenced record of what
+identified children did. A parental destruction request under s32 lands
+directly on it, and neither the legacy corpus nor the migrated capability has
+an answer.
+
+`global-invariants/durable-identity-references` is what makes the answer
+tractable, and it is worth noticing early: every identity in a replay is
+recorded as the platform's own durable identifier, never an email or a
+provider subject. So destruction can be satisfied by severing the resolution
+from platform identifier to person — the replay corpus stays intact as a
+pedagogical and competitive record, while ceasing to be personal information
+about an identifiable child. Designing for that now costs a schema decision.
+Retrofitting it costs a rewrite of every artifact that names a player.
+
+**s9 versus the action log.** The Centaur action log exists to record what
+operators did, for replay and for teaching. That is data about children,
+retained and shown to everyone, and "strictly necessary to provide the
+service" is a test it must actually be argued to pass rather than assumed to.
+The argument is available — the log *is* the pedagogical artifact the platform
+exists to produce — but it should be written down under s10/s11's best-interests
+framing before someone has to make it under pressure.
+
+### The other regime, which may matter more
+
+The **Online Safety Act** is separate from privacy and is where a children's
+multiplayer game draws the most regulator attention. The under-16 social media
+minimum age (in force 10 December 2025) excludes services whose sole or
+primary purpose is online gaming, so Team Snek is very likely outside it.
+That is not the end of it: eSafety has instead used legally enforceable
+transparency notices against gaming services — Roblox, Minecraft, Fortnite,
+Steam — on grooming, cyberbullying and related harms, and the Basic Online
+Safety Expectations and industry codes continue to apply. The exposure there
+scales with any **user-to-user communication** the platform carries. Team
+coordination, room lobbies, team and player profiles are the surfaces to look
+at, and that assessment is not made anywhere in the corpus.
 
 ---
 
@@ -266,14 +395,25 @@ plain always-on VM simply does not need. An always-on 8GB VM is in the same
 cost band as the proposal's own $34–80/month estimate, which is dominated by
 the always-on Convex machine either way.
 
-**Recommendation: build for portability, target sovereignty.** Deliver the
-platform's own runtimes as a provider-agnostic Compose stack. Then the hosting
-substrate is a deployment target rather than an architecture, moving between
-Fly `syd` and an Australian-owned VM is a redeploy, and the choice above can be
-deferred past the point where it would otherwise block implementation. If
-sovereignty is the real requirement — and for a program built around
-Australian children it probably is — go there directly and skip the Fly-shaped
-detour, because unwinding scale-to-zero later costs more than never adopting it.
+**Recommendation: build for portability, and treat the choice as elective.**
+Deliver the platform's own runtimes as a provider-agnostic Compose stack. Then
+the hosting substrate is a deployment target rather than an architecture,
+moving between Fly `syd`, an Australian-owned VM, and a US region is a
+redeploy, and the choice can be deferred past the point where it would
+otherwise block implementation.
+
+There is no compliance forcing function here (§4). Nothing in the coming
+children's privacy law requires Australian hosting, and US IT services remain
+available. So the case for Australian hosting rests on grounds that are real
+but discretionary — round-trip latency to a chess-timered game, what Cyphid
+wants to be able to tell parents and schools, and any residency term a school
+procurement contract imposes. Those are Cyphid's calls, and the portable
+stack is what keeps them cheap to make and to revisit.
+
+What the portability recommendation *does* protect against is the thing
+§2 identified: adopting provider-specific machinery — scale-to-zero, warm-up
+signalling, a Machines API orchestrator — that has to be unwound if the
+substrate changes. Avoid that in either direction.
 
 ### 5.3 Consequences for the spec
 
@@ -295,15 +435,19 @@ None of this requires a spec change, which is worth stating explicitly:
    running one per-game database at a time — dozens concurrently — is one
    "instance" under the BSL Additional Use Grant. The whole provisioning
    design depends on this reading. (§2.2)
-2. **Legal advice** on APP entity status and the Children's Online Privacy
-   Code's application to Battle Bunker, before the Code is registered in
-   December 2026. (§4)
-3. **A benchmark of Centaur bot compute**, not of SpacetimeDB. That is the
+2. **A benchmark of Centaur bot compute**, not of SpacetimeDB. That is the
    workload that will determine what the reference deployment costs. (§2.4)
-4. **Convex self-hosted upgrade rehearsal** — snapshot, upgrade across
+3. **Convex self-hosted upgrade rehearsal** — snapshot, upgrade across
    several intermediate revisions, restore — before any real data exists.
    Forward-only migrations mean the rehearsal is the only thing that
-   establishes the rollback works. (§3)
+   establishes the rollback works. (§3) *Only reached if Australian
+   residency is chosen; Convex Cloud remains available otherwise.*
+
+Not on this list, because it is not a hosting prerequisite: legal advice on
+APP entity status and the Children's Online Privacy Code. That work is real
+and dated, and §4a scopes it — but it gates identity, consent and retention
+design, not where the machines run. Do not let it hold up a hosting decision,
+and do not let a hosting decision stand in for having done it.
 
 ---
 
