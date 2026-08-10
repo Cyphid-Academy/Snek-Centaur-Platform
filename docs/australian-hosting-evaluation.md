@@ -1,6 +1,8 @@
 # Evaluating Australian Hosting for the Platform
 
-**Status:** Evaluation, not a decision. No spec change is proposed here.
+**Status:** Evaluation and deployment plan. Mostly analysis — with one
+recorded author decision (§6.7) that **does** require a spec change, which this
+document scopes but does not make.
 **Date:** 2026-08-09
 **Occasioned by:** an externally-authored proposal, *Fly.io Hosting Architecture:
 Convex + Ephemeral SpacetimeDB*, written without access to this repository.
@@ -543,9 +545,14 @@ to sleep — correctly, since that is hosting mechanism rather than platform
 behaviour. So the stop rule has to be designed. It is derivable rather than
 invented:
 
-> **The host is quiescent when no game record is `playing` and no instance
-> remains provisioned.** Both facts are Convex's own, by
+> **The host is quiescent when no game record is `playing` and no instance is
+> awaiting teardown.** Both facts are Convex's own, by
 > `game-lifecycle/status-authority` and `teardown-after-persistence`.
+
+An **abandoned** database (§6.7) is deliberately *not* awaiting teardown: it
+sits on the volume pending manual investigation and must never hold the host
+awake. That distinction is the whole point of §6.7, and it is why quiescence is
+defined against teardown-pending rather than against "no databases exist".
 
 Stop on quiescence plus a cooldown. Never on anything else.
 
@@ -720,13 +727,101 @@ advantage, and it is a correctness advantage rather than a convenience one.
 | 5 | Self-hosted Convex asleep → sweep never runs | §6.5. The one that turns a lost notification into an unbounded bill. |
 | 6 | Convex stopped mid-flight during terminal handling | In-flight actions are lost; mutations are transactional. `#lost-notification-recovered` re-drives it — provided rule 1 of §6.5 holds. |
 | 7 | Overdue crons burst on Convex wake | Audit every installed component's internal crons before enabling a scheduled stop (proposal §3.4). |
-| 8 | Record retrieval keeps failing | `#no-teardown-before-persistence` keeps the instance up, so the host cannot reach quiescence. Bounded retries then a **loud** alert. Decide in advance whether a replay is ever sacrificed to reclaim the host — the spec does not, and silence here becomes an outage. |
+| 8 | Record retrieval keeps failing | **Decided — see §6.7.** Bounded at 3 durable attempts, then abandon: leave the database on disk, mark the record, stop the host. Requires a spec change. |
 | 9 | Commitlog damage on stop | `SIGTERM` + generous `kill_timeout`; stop only at quiescence. |
 | 10 | Placement failure on resume at session start | Pre-session human-visible readiness check (§5.4) — the warm-up is best-effort and silent on failure by design. |
 | 11 | Orphaned database surviving a stop | A volume means databases persist across stops, so ephemerality is not the reaper. `no-orphans` and `teardown-after-persistence` should prevent orphans; a host-level audit that lists databases and compares against non-`finished` game records is the cheap check that they did. |
 | 12 | Flycast + autostart (variant B) | Verify that private 6PN traffic wakes a stopped machine — variant B's entire management path depends on it. |
 
-### 6.7 Choosing between them
+### 6.7 Abandoning a record retrieval — the decision, and the spec change it needs
+
+**Decision (author, 2026-08-09).** Record retrieval gets a hard attempt limit
+of **3**. If persistence is still indeterminate after the third, Convex gives
+up: it stops trying, leaves the game's database **on the host's volume**
+rather than deleting it, marks the failure durably and loudly for manual
+follow-up, and lets the host reach quiescence and stop.
+
+The reasoning is sound and the hazard is real. As the corpus stands,
+`teardown-after-persistence` is an **unconditional gate** — "an instance SHALL
+NOT be torn down until Convex has confirmed persistence" — and
+`stale-game-recovery` says a retrieval that yields no completed record "SHALL
+leave the status untouched for a later sweep." Those compose into an unbounded
+retry loop with a running meter: one export bug holds a host awake
+indefinitely, and scale-to-zero silently stops happening. Bounded retries exist
+for notification *delivery*; there is no equivalent bound on record
+*retrieval*. That is the hole.
+
+**Why leaving the database in place is the load-bearing choice.** It is what
+keeps this compatible with the requirement's actual concern. The gate exists so
+that "the instance stays up with its record intact and retrievable, so the
+persistence can be retried against it" — the mischief being guarded against is
+**discarding an unretrieved record**. Stopping a Fly Machine discards nothing:
+the database persists on the volume, and `auto_start_machines` means the next
+request wakes it. The record stays intact and retrievable, exactly as the
+scenario requires, at the cost of a cold start — which is the same
+scale-to-zero bargain `host-warm-up` already sanctions. Deleting the database
+would breach the requirement outright; stopping the host does not.
+
+So what needs to change in the spec is narrower than it first appears: not
+permission to destroy an unretrieved record, but an explicit bound on
+*attempts*, and a defined terminal state for the game once that bound is hit.
+
+**Do not reach for the existing error outcome.** `finish-notification` defines
+an error outcome as "a game terminated by failure rather than by play," and it
+records **no scores**. A game that played perfectly and merely failed to export
+is not that. Using the error outcome here would record a legitimately won game
+as a no-score — corrupting the competitive record to paper over an
+infrastructure fault. The two failure shapes are genuinely different and the
+spec change must keep them apart:
+
+| What is known | Terminal state |
+|---|---|
+| Notification arrived: outcome known, persistence failed | `finished`, **scores recorded**, replay marked unavailable pending recovery |
+| Nothing arrived and retrieval failed: outcome unknown | `finished`, error outcome, no scores (the existing path) |
+
+This distinction is available because `finish-notification` has the instance
+push the outcome *and* the record together — so when the push landed, losing
+the record does not lose the result.
+
+**The implementation trap: the counter must be durable.** Three attempts held
+in an action's memory is not a bound, because `stale-game-recovery` re-drives
+terminal handling on every sweep and would reset the count each pass — leaving
+exactly the unbounded loop this decision exists to prevent, only harder to see.
+The attempt count belongs **on the game record**, incremented in the same
+mutation that records the failure, and the sweep must read it and decline to
+re-drive an abandoned game. Space the three attempts with backoff so a Convex
+cold start or a network blip does not burn the budget in a second.
+
+**"Loudly" has to mean durably.** A log line in a self-hosted Convex that
+scales to zero is the easiest thing in this system to lose. The durable
+artifact is the marker on the game record — attempt count, last error, the
+abandoned database's name — with logging and alerting layered on top of it, not
+instead of it. That marker is also what makes manual follow-up possible at all:
+it is the only thing that says *which* database on the volume is worth waking
+the host for.
+
+**Consequences to carry:**
+
+- The host-level audit (register row 11) must now distinguish three kinds of
+  database: awaiting teardown, abandoned-pending-investigation, and leaked.
+  Only the third is a defect. Without the marker they are indistinguishable.
+- Abandoned databases accumulate on the volume. They need a retention policy
+  and volume headroom, or a slow leak reappears in a new form. Manual follow-up
+  should end in one of exactly two acts: the replay is recovered and the
+  database deleted, or the loss is accepted and the database deleted.
+- Successor auto-creation fires on `finished`, so a session continues normally
+  past an abandoned export. That is the desired behaviour — the abandonment
+  must not stall the room.
+
+**This requires a spec change, and should not be implemented before one.**
+`game-lifecycle/teardown-after-persistence` and `game-lifecycle/stale-game-recovery`
+both need amending — the first to bound attempts and define the abandoned
+terminal state, the second to stop re-driving an abandoned record. Both live in
+the open `migrate-game-lifecycle` change rather than in `specs/`, so the edit
+lands there under the seed/edit rule for modified requirements. This document
+records the decision and its rationale; it does not make it binding.
+
+### 6.8 Choosing between them
 
 | | **A — managed Convex Cloud** | **B — self-hosted Convex on Fly `syd`** |
 |---|---|---|
