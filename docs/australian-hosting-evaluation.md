@@ -549,10 +549,12 @@ invented:
 > awaiting teardown.** Both facts are Convex's own, by
 > `game-lifecycle/status-authority` and `teardown-after-persistence`.
 
-An **abandoned** database (§6.7) is deliberately *not* awaiting teardown: it
-sits on the volume pending manual investigation and must never hold the host
-awake. That distinction is the whole point of §6.7, and it is why quiescence is
-defined against teardown-pending rather than against "no databases exist".
+An **abandoned** database (§6.7) is deliberately *not* awaiting teardown: it is
+closed to connections and sits inert on the volume pending manual
+investigation, so it must never hold the host awake. That distinction is why
+quiescence is defined against teardown-pending rather than against "no
+databases exist" — and note it cuts only one way, since a closed database is
+also no reason to stop a host still serving other games.
 
 Stop on quiescence plus a cooldown. Never on anything else.
 
@@ -727,7 +729,7 @@ advantage, and it is a correctness advantage rather than a convenience one.
 | 5 | Self-hosted Convex asleep → sweep never runs | §6.5. The one that turns a lost notification into an unbounded bill. |
 | 6 | Convex stopped mid-flight during terminal handling | In-flight actions are lost; mutations are transactional. `#lost-notification-recovered` re-drives it — provided rule 1 of §6.5 holds. |
 | 7 | Overdue crons burst on Convex wake | Audit every installed component's internal crons before enabling a scheduled stop (proposal §3.4). |
-| 8 | Record retrieval keeps failing | **Decided — see §6.7.** Bounded at 3 durable attempts, then abandon: leave the database on disk, mark the record, stop the host. Requires a spec change. |
+| 8 | Record retrieval keeps failing | **Decided — see §6.7.** Bounded at 3 durable attempts, then abandon *that database only*: close it to connections, retain it on the volume, mark the record. Other games are unaffected; the host stops on the ordinary quiescence rule. Requires a spec change. |
 | 9 | Commitlog damage on stop | `SIGTERM` + generous `kill_timeout`; stop only at quiescence. |
 | 10 | Placement failure on resume at session start | Pre-session human-visible readiness check (§5.4) — the warm-up is best-effort and silent on failure by design. |
 | 11 | Orphaned database surviving a stop | A volume means databases persist across stops, so ephemerality is not the reaper. `no-orphans` and `teardown-after-persistence` should prevent orphans; a host-level audit that lists databases and compares against non-`finished` game records is the cheap check that they did. |
@@ -737,34 +739,81 @@ advantage, and it is a correctness advantage rather than a convenience one.
 
 **Decision (author, 2026-08-09).** Record retrieval gets a hard attempt limit
 of **3**. If persistence is still indeterminate after the third, Convex gives
-up: it stops trying, leaves the game's database **on the host's volume**
-rather than deleting it, marks the failure durably and loudly for manual
-follow-up, and lets the host reach quiescence and stop.
+up on that game: it stops trying, **closes that one database to further
+connections** while leaving it in existence on the host's volume, and marks the
+failure durably and loudly for manual follow-up.
 
-The reasoning is sound and the hazard is real. As the corpus stands,
+**Closure is per database, not per host.** Other games on the same host are
+untouched and keep running — one failed export must never disturb a session in
+progress. The host stops only when the ordinary quiescence rule of §6.1 is met:
+no game `playing`, and no instance awaiting teardown. An abandoned database is
+closed and inert, so it does not count as awaiting teardown and never holds the
+host awake — and equally, closing it does not by itself cause the host to stop.
+
+The hazard being closed is real. As the corpus stands,
 `teardown-after-persistence` is an **unconditional gate** — "an instance SHALL
 NOT be torn down until Convex has confirmed persistence" — and
 `stale-game-recovery` says a retrieval that yields no completed record "SHALL
 leave the status untouched for a later sweep." Those compose into an unbounded
-retry loop with a running meter: one export bug holds a host awake
-indefinitely, and scale-to-zero silently stops happening. Bounded retries exist
-for notification *delivery*; there is no equivalent bound on record
-*retrieval*. That is the hole.
+retry loop with a running meter: one export bug keeps a database perpetually
+awaiting teardown, so the host never quiesces and scale-to-zero silently stops
+happening. Bounded retries exist for notification *delivery*; there is no
+equivalent bound on record *retrieval*. That is the hole.
 
-**Why leaving the database in place is the load-bearing choice.** It is what
-keeps this compatible with the requirement's actual concern. The gate exists so
-that "the instance stays up with its record intact and retrievable, so the
-persistence can be retried against it" — the mischief being guarded against is
-**discarding an unretrieved record**. Stopping a Fly Machine discards nothing:
-the database persists on the volume, and `auto_start_machines` means the next
-request wakes it. The record stays intact and retrievable, exactly as the
-scenario requires, at the cost of a cold start — which is the same
-scale-to-zero bargain `host-warm-up` already sanctions. Deleting the database
-would breach the requirement outright; stopping the host does not.
+**Why leaving the database in existence is the load-bearing choice.** It is
+what keeps this compatible with the requirement's actual concern. The gate
+exists so that "the instance stays up with its record intact and retrievable,
+so the persistence can be retried against it" — the mischief being guarded
+against is **discarding an unretrieved record**. Closing a database to
+connections discards nothing: the data stays on the volume and the record
+remains retrievable by an operator who reopens it. Deleting the database would
+breach the requirement outright; closing it does not.
 
-So what needs to change in the spec is narrower than it first appears: not
-permission to destroy an unretrieved record, but an explicit bound on
-*attempts*, and a defined terminal state for the game once that bound is hit.
+So what the spec change must authorise is narrower than it first appears: an
+explicit bound on *attempts*, and a defined closed-but-retained state — not
+permission to destroy a record.
+
+**How to close one database — what SpacetimeDB actually supports.**
+
+There is **no pause or suspend operation on the self-hosted management API**.
+The 14 documented `/v1/database` endpoints cover create (`POST`, `PUT`), read
+(`GET`) and destroy (`DELETE`), with nothing in between. A pause *does* exist
+as a **Maincloud dashboard** feature — "the database is suspended and all data
+is preserved, but the database is not serving requests" — which proves the
+capability exists in the product, but it is not documented as reachable on a
+self-hosted host by HTTP or CLI. Do not design on it; if it turns out to be
+exposed, it becomes the cleanest option available.
+
+What *is* first-class is **rejecting connections in `client_connected`**: a
+documented how-to with per-language examples, where throwing or returning
+`Err` makes the server terminate the connection before it is established. This
+fits the architecture unusually well, because `client_connected` is **already**
+the spec's enforcement point for connection admission (`02` §3.7 has it
+checking `aud` and `sub` after OIDC validation). A closed-game gate there
+extends an existing check rather than introducing a mechanism.
+
+The corpus already asks for something adjacent. `game-lifecycle/game-end-boundary`
+says "what the runtime refuses from that commit onward is that runtime's own
+obligation" — refusing *work* after the end commit is already the instance's
+job, and an abandoned database has normally already had its end commit. What
+closure adds is refusing **admission**.
+
+| # | Mechanism | Effect | Notes |
+|---|---|---|---|
+| 1 | **Stop issuing tokens** | No new party can obtain a credential for the game | Already true by `identity-and-authorization/sole-credential-issuer`; passive, and existing tokens live until `exp` (2h per `03`) |
+| 2 | **`client_connected` refuses** | New connections rejected at handshake, valid token or not | The deliberate act. Needs a closed flag set by a reducer, so Convex calls it on the private surface |
+| 3 | **Unbind the database name** (`PUT …/names`) | `/v1/database/<name>/subscribe` stops resolving; the database persists under its identity | Needs no module cooperation, but **removal semantics are undocumented** — verify that replacing the name list actually unbinds before relying on it |
+
+**Design 1 + 2**, with 3 as a belt-and-braces option to test. Convex must
+retain the database's **identity**, not just its name, on the game record, so
+an operator can address it later for manual retrieval — under mechanism 3 the
+name may no longer resolve at all.
+
+**None of these evict already-connected clients.** There is no documented
+module-side API to disconnect an existing client. That is tolerable here: the
+game has ended, so nothing remains to do on the connection, and tokens expire
+within two hours. If eviction ever matters, the only lever is a host restart,
+which arrives at the next quiescence anyway.
 
 **Do not reach for the existing error outcome.** `finish-notification` defines
 an error outcome as "a game terminated by failure rather than by play," and it
