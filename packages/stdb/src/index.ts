@@ -9,6 +9,20 @@
 // A name exported here is a promise that the published module answers to it, so
 // it is added when the module is — see packages/stdb/AGENTS.md.
 
+// Admission is the one decision the instance already owes: who may connect at
+// all. It is pure and lives here rather than in a reducer body so it is checked
+// under the strict build (spec: identity-and-authorization/admission-validation).
+export {
+  type Admission,
+  type AdmissionContext,
+  type AdmissionRefusal,
+  type AdmissionRow,
+  type AdmittedIdentity,
+  type VerifiedToken,
+  actingTeam,
+  admissionRow,
+  admit,
+} from "./admission";
 export type {
   Board,
   Direction,
@@ -22,3 +36,35 @@ export type {
   TurnResolution,
 } from "@cyphid/snek-engine";
 export { itemsByCell } from "@cyphid/snek-engine";
+
+/**
+ * The key of `game_binding`'s single row, written by `initialize_game` and read
+ * by admission.
+ *
+ * It lives here and not in the module because **the module may export nothing
+ * but tables and reducers**: the SpacetimeDB host walks a published module's
+ * exports and refuses the whole thing — at publish, with
+ * `exporting something that is not a spacetime export` — on meeting one it does
+ * not recognise. A constant the module needs is therefore a constant the module
+ * imports.
+ *
+ * spec: identity-and-authorization/admission-validation
+ */
+export const GAME_BINDING_KEY = "game";
+
+/**
+ * The primary key of one `roster_coach` row: the (human, team) pair that is
+ * what a coach designation actually is.
+ *
+ * Here for the same reason `GAME_BINDING_KEY` is — the module may export
+ * nothing but tables and reducers, so a constant or a helper it needs is one it
+ * imports. And here rather than spelled at each end because `initialize_game`
+ * (migrate-game-lifecycle) writes these rows and `onConnect` reads them: two
+ * spellings of a composite key is how a designation quietly stops matching.
+ *
+ * Colon-delimited, on the same standing fact the subject grammar rests on —
+ * platform ids contain no colon.
+ *
+ * spec: identity-and-authorization/roster-snapshot-binding
+ */
+export const coachKey = (userId: string, teamId: string): string => `${userId}:${teamId}`;

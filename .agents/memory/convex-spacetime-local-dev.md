@@ -15,3 +15,10 @@ description: Installing the pinned spacetime CLI, and the two prompts that hang 
 - `convex dev` blocks workflows with interactive prompts. Fixes: run with `CONVEX_AGENT_MODE=anonymous` (local, no account), and disable the "Set up Convex AI files?" prompt via `"aiFiles": {"enabled": false}` in `convex.json`.
 - **Why:** both prompts hang headless workflows forever with status RUNNING and no error.
 - **How to apply:** whenever restarting or reconfiguring the Convex Dev or SpacetimeDB workflows.
+
+## Pointing the stack at a cloud (dev) deployment
+
+- Prefer a **development deploy key** as a Replit Secret (`CONVEX_DEPLOY_KEY`) over `convex login`; the login device flow does not complete in a headless workflow.
+- With the key set, remove any stale `packages/convex-host/.env.local` first — a leftover `CONVEX_DEPLOYMENT=anonymous:*` line keeps the CLI on the local backend and the cloud provision is skipped silently.
+- A dev deploy key can `convex env set` but **not** `convex env list` (no `deployment:env:view` permission). Verify values through the Convex dashboard, not the CLI.
+- **Replit is not a laptop for reachability purposes.** `docs/external-setup.md` warns that a cloud Convex deployment cannot fetch a key document from a localhost service — that warning is written for a developer's laptop and does not hold on Replit, where `.replit`'s port map publishes the app and the SpacetimeDB host on the public edge. Verified by fetching JWKS and a healthcheck from a third-party vantage. Do not repeat the laptop caveat for this environment without testing it first.

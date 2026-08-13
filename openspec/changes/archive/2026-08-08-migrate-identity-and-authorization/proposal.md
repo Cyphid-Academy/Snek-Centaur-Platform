@@ -54,7 +54,7 @@ synthesis, 2026-07-24):
 
 ## What Changes
 
-- **New capability: `identity-and-authorization`** — 28 requirements,
+- **New capability: `identity-and-authorization`** — 31 requirements,
   ADDED-only mint delta with a `## Purpose` preamble declaring "Depends
   on: global-invariants."
 - **Retirements**: this change's legacy absorptions are recorded in the
@@ -74,12 +74,17 @@ synthesis, 2026-07-24):
   (`client-credential-custody`), client-invisible admission records
   (`admission-records-private`), build-time totality of the capability
   registry, principal-kind gating of team administration, proactive
-  credential renewal, and the structured capability claim.
+  credential renewal, the structured capability claim, and the single-use
+  sign-in handoff with its registered return address (`sign-in-handoff`),
+  and the configuration-gated substitution of the provider's verification
+  step (`substituted-provider-verification`) — what a deployment verifies
+  against, and what it does when nobody configured it, is this
+  capability's behaviour rather than a test harness's policy.
 
 ## Impact
 
 - New: `openspec/specs/identity-and-authorization/spec.md` (folded at
-  archive; 28 requirements).
+  archive; 31 requirements).
 - `openspec/config.yaml` context capability list gains
   `identity-and-authorization` at archive.
 - Code citations of retired ids (currently `03-REQ-001` in
@@ -145,3 +150,25 @@ synthesis, 2026-07-24):
      act on: standing down or handing off would take the same unreachable
      platform. Minted as
      `token-lifetime-and-refresh#renewal-failure-is-quiet-until-it-bites`.
+
+4. **Which origin serves human sign-in, given that the human-facing
+   application is the forkable Snek Centaur Server application?**
+   - **Context**: no requirement names the origin Google redirects to, and
+     the obvious implementation — the Server running its own Google sign-in
+     — hands a team-modified fork the authorization code of everyone who
+     signs in through it, admins included, and makes every team domain a
+     registered redirect URI on Cyphid's client.
+   - **Options**: (A) one Google client registered to Cyphid, redirect URIs
+     naming platform environments only, Servers obtaining human-scoped
+     credentials through the assertion exchange they already use; (B) each
+     Server a Google client in its own right; (A′) as A, but the Server sets
+     its own session cookie so a reload does not round-trip.
+   - **Decision (author, 2026-07-29)**: A, with the round-trip. B is already
+     foreclosed by `sole-credential-issuer` and `client-credential-custody`;
+     A′ leaves a persistent credential on a team-controlled origin, which is
+     the property the decision exists to remove, and the round-trip is
+     silent while the platform session is live. The origin rule itself is
+     not minted — `sole-credential-issuer` and `client-credential-custody`
+     imply it already — but the artifact that carries *which human* back to
+     a Server is nothing implied, and is minted as `sign-in-handoff`. Both
+     are recorded in `design.md` under "Where sign-in happens".

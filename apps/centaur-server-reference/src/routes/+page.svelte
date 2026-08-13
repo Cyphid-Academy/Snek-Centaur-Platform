@@ -19,6 +19,7 @@ const subtitle = "Reference Implementation";
     Svelte 5 / SvelteKit app scaffolds and serves correctly.
   </p>
   <ul>
+    <li><a href="/sign-in">Sign in through the platform</a></li>
     <li><a href="/.well-known/snek-healthcheck">Healthcheck endpoint</a></li>
     <li><a href="/.well-known/snek-server-keys">Published signing keys</a></li>
   </ul>

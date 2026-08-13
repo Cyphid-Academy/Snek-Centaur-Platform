@@ -1,4 +1,16 @@
+import { existsSync } from "node:fs";
 import { defineConfig, devices } from "@playwright/test";
+
+// An environment that pre-installs a Chromium of its own (the cloud
+// development container does, at a browsers path this Playwright version will
+// not resolve) names it in `.claude/settings.json`; anywhere the named binary
+// does not exist — a local machine with ordinary Playwright browsers — the
+// variable is ignored rather than trusted.
+const preinstalledChromium = process.env["PLAYWRIGHT_CHROMIUM_EXECUTABLE"];
+const chromiumLaunch =
+  preinstalledChromium && existsSync(preinstalledChromium)
+    ? { launchOptions: { executablePath: preinstalledChromium } }
+    : {};
 
 // The harness's runner.
 //
@@ -28,7 +40,7 @@ export default defineConfig({
     {
       name: "chromium",
       testMatch: /.*\.browser\.spec\.ts$/,
-      use: devices["Desktop Chrome"],
+      use: { ...devices["Desktop Chrome"], ...chromiumLaunch },
     },
     {
       name: "firefox",

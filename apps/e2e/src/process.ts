@@ -7,8 +7,9 @@
 // alike. What is left is the part Playwright does not do — spawning, capturing
 // what the process said, and deciding it is ready.
 import { type ChildProcess, spawn } from "node:child_process";
-import { type Server, createServer } from "node:net";
+import type { Server } from "node:net";
 import { setTimeout as sleep } from "node:timers/promises";
+import getPort from "get-port";
 
 /** A running child process a fixture is responsible for. */
 export interface Process {
@@ -58,6 +59,10 @@ export async function startProcess(spec: ProcessSpec): Promise<Process> {
     cwd: spec.cwd ?? repoRoot(),
     env: { ...process.env, ...spec.env },
     stdio: ["ignore", "pipe", "pipe"],
+    // Its own process group, so stopping can signal the whole tree: several
+    // commands here are runners (`pnpm … exec vite`) whose real server is a
+    // grandchild, and a SIGTERM to the runner alone leaves that running.
+    detached: true,
   });
 
   let log = "";
@@ -113,10 +118,24 @@ export async function startProcess(spec: ProcessSpec): Promise<Process> {
 async function terminate(child: ChildProcess): Promise<void> {
   if (child.exitCode !== null || child.signalCode !== null) return;
   const exited = new Promise<void>((resolve) => child.once("exit", () => resolve()));
-  child.kill("SIGTERM");
+  signalGroup(child, "SIGTERM");
   const timedOut = Symbol("timed out");
   if ((await Promise.race([exited, sleep(TERM_GRACE_MS, timedOut)])) === timedOut) {
-    child.kill("SIGKILL");
+    signalGroup(child, "SIGKILL");
+  }
+}
+
+/**
+ * Signal the child's whole process group — it leads one, see `detached` at the
+ * spawn — so grandchildren go with it. Falls back to the child alone if the
+ * group cannot be signalled (it may already be gone, which is success here).
+ */
+function signalGroup(child: ChildProcess, signal: NodeJS.Signals): void {
+  if (child.pid === undefined) return;
+  try {
+    process.kill(-child.pid, signal);
+  } catch {
+    child.kill(signal);
   }
 }
 
@@ -145,38 +164,35 @@ function isOk(status: number): boolean {
 }
 
 /**
- * Reserve a port the OS says is free.
+ * Reserve a port the OS says is free — `get-port`, which also locks a returned
+ * port against being handed out again for a while, so two reservations cannot
+ * collide the way two bare binds to `:0` can.
  *
- * None of the runtimes' documented defaults (3000, 3210/3211, 5000) is used:
- * those are where a developer's own `pnpm dev:*` processes are, and a run that
- * claimed them would either fail to start or succeed by writing to the
+ * None of the runtimes' documented defaults (3000, 3210/3211, 5000) is asked
+ * for: those are where a developer's own `pnpm dev:*` processes are, and a run
+ * that claimed them would either fail to start or succeed by writing to the
  * developer's deployment.
  *
  * The port is released before the child binds it, so the window is a race this
  * only narrows. The alternative — holding the socket and passing the descriptor
  * — is not something these runtimes accept.
  */
-export async function freePort(): Promise<number> {
-  const server = createServer();
-  const port = await listen(server);
-  await new Promise<void>((resolve, reject) =>
-    server.close((error) => (error ? reject(error) : resolve())),
-  );
-  return port;
+export const freePort = (): Promise<number> => getPort();
+
+/** Reserve two distinct free ports — distinct by `get-port`'s own lock. */
+export async function freePortPair(): Promise<[number, number]> {
+  return [await getPort(), await getPort()];
 }
 
 /**
- * Reserve two distinct free ports.
+ * Bind `server` to an ephemeral loopback port and answer with the origin a
+ * fetch or a browser can be pointed at.
  *
- * Sequential rather than concurrent, and checked: two binds to `:0` at once can
- * be handed the same port, and a duplicate surfaces much later as one runtime
- * failing to bind.
+ * For a server this process runs itself, rather than one it spawned — the port
+ * is never released, so there is no window for anything else to take it.
  */
-export async function freePortPair(): Promise<[number, number]> {
-  const first = await freePort();
-  let second = await freePort();
-  while (second === first) second = await freePort();
-  return [first, second];
+export async function loopbackOrigin(server: Server): Promise<string> {
+  return `http://127.0.0.1:${await listen(server)}`;
 }
 
 /**
