@@ -14,14 +14,19 @@
   "scripts": {
     "build": "tsc -b",
     "typecheck": "tsc -b",
-    "test": "vitest run"
+    "test": "vitest run",
+    "codegen": "convex codegen"
   },
   "dependencies": {
+    "@cyphid/convex-centaur-state": "workspace:*",
     "@cyphid/convex-snek-platform": "workspace:*",
-    "@cyphid/convex-centaur-state": "workspace:*"
+    "convex": "^1.42.3"
   },
   "devDependencies": {
+    "@edge-runtime/vm": "^5.0.0",
+    "@types/node": "^25.9.0",
+    "convex-test": "^0.0.54",
     "typescript": "*",
-    "vitest": "*"
+    "vitest": "^4.1.10"
   }
 }

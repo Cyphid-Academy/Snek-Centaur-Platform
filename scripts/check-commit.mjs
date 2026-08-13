@@ -8,6 +8,10 @@
 // the cheap half of the battery:
 //
 //   typecheck   a type changed without its construction sites
+//   svelte      the same question for a SvelteKit app's `.svelte` sources,
+//               which `tsc` cannot parse and Biome cannot lint — without this
+//               gate a component is the one source file a commit can change
+//               with no static check reading it at all
 //   lint        format/lint drift in what this commit touched
 //   citations   a `// spec:` or tasks.md reference to an identifier that only
 //               lands in a LATER commit — the single highest-signal gate here,
@@ -43,7 +47,7 @@
 // with uncommitted work is not the commit, and the divergence between the two
 // is exactly the bug this exists to catch.
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const root = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
@@ -110,6 +114,8 @@ if (needsCheckout) {
 
 const SOURCE_RE = /\.(ts|tsx|js|mjs|svelte)$/;
 const LINTABLE_RE = /\.(ts|tsx|js|mjs|jsx|json|jsonc)$/;
+// Components and rune modules: what `svelte-check` reads and `tsc` does not.
+const SVELTE_RE = /\.svelte(\.ts)?$/;
 
 function run(cmd, args) {
   const res = spawnSync(cmd, args, { cwd: root, encoding: "utf8" });
@@ -135,6 +141,24 @@ function changesTouched(files) {
   return [...names].filter((n) => existsSync(join(root, "openspec", "changes", n))).sort();
 }
 
+/**
+ * The SvelteKit apps whose `.svelte` sources this commit touched, by package
+ * name. Read off each app's own `package.json` rather than listed here, so a
+ * third app is covered by existing anywhere under `apps/`.
+ */
+function svelteAppsTouched(files) {
+  const dirs = new Set();
+  for (const file of files) {
+    const m = /^apps\/([^/]+)\//.exec(file);
+    if (m && SVELTE_RE.test(file) && existsSync(join(root, "apps", m[1], "svelte.config.js"))) {
+      dirs.add(m[1]);
+    }
+  }
+  return [...dirs]
+    .map((d) => JSON.parse(readFileSync(join(root, "apps", d, "package.json"), "utf8")).name)
+    .sort();
+}
+
 function gatesFor(sha, files) {
   const changes = changesTouched(files);
   const present = files.filter((f) => existsSync(join(root, f)));
@@ -151,6 +175,13 @@ function gatesFor(sha, files) {
 
   const gates = [
     { name: "typecheck", ...spec(withBin("tsc", ["-b"])) },
+    // After `tsc -b`, never before: an app's components resolve the packages
+    // through their gitignored `dist/`, which that gate is what emits.
+    ...svelteAppsTouched(present).map((pkg) => ({
+      name: `svelte(${pkg})`,
+      cmd: "pnpm",
+      args: ["--filter", pkg, "run", "typecheck"],
+    })),
     lintable.length > 0
       ? {
           name: "lint",

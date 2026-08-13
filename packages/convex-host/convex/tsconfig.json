@@ -1,0 +1,11 @@
+{
+  "extends": "../../../tsconfig.convex.base.json",
+  "compilerOptions": {
+    // The test file beside these functions uses `import.meta.glob` to hand
+    // convex-test the module map the deployment would have bundled; the type
+    // for it comes from Vite, which is what runs the suite.
+    "types": ["vite/client"]
+  },
+  "include": ["./**/*"],
+  "exclude": ["node_modules"]
+}

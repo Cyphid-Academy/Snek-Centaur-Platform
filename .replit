@@ -1,4 +1,4 @@
-modules = ["nodejs-20", "python-3.11"]
+modules = ["nodejs-20"]
 [agent]
 expertMode = true
 
@@ -22,6 +22,14 @@ args = "Start application"
 task = "workflow.run"
 args = "Visual Tester"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "SpacetimeDB"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Convex Dev"
+
 [[workflows.workflow]]
 name = "Start application"
 author = "agent"
@@ -35,26 +43,47 @@ args = "pnpm --filter @cyphid/centaur-server-reference dev"
 waitForPort = 5000
 
 [[workflows.workflow]]
-name = "backtrack"
-mode = "sequential"
-author = 23295030
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "git reset --hard HEAD~1"
-
-[[workflows.workflow]]
 name = "Visual Tester"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "pnpm --filter @cyphid/visual-tester exec vite dev --port 5173 --host"
-waitForPort = 5173
+args = "pnpm dev:tester"
+waitForPort = 5001
 
 [workflows.workflow.metadata]
 outputType = "console"
 
+# `setup:stdb` first: the CLI is not in nixpkgs and lives in the workspace,
+# so it needs installing after a container rebuild. It is idempotent and
+# offline once the pinned version is present, so running it every start is
+# what makes a wiped container self-heal.
+[[workflows.workflow]]
+name = "SpacetimeDB"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm setup:stdb && pnpm dev:stdb"
+waitForPort = 3000
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow]]
+name = "Convex Dev"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm dev:convex"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+# Destructive git workflows. Each refuses to run unless its own gitignored
+# arming file exists, so a Run-button sweep cannot trigger them. The procedure
+# is in AGENTS.md → "Scripted history rewriting".
 [[workflows.workflow]]
 name = "Scripted rebase"
 author = "agent"
@@ -78,13 +107,13 @@ args = "bash scripts/hard-reset-to-origin.sh"
 outputType = "console"
 
 [[ports]]
+localPort = 3000
+externalPort = 3001
+
+[[ports]]
 localPort = 5000
 externalPort = 80
 
 [[ports]]
 localPort = 5001
 externalPort = 3000
-
-[[ports]]
-localPort = 5173
-externalPort = 5173
