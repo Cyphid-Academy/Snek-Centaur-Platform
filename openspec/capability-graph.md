@@ -90,7 +90,7 @@ flowchart TD
   game-runtime -->|1| identity-and-authorization
   game-runtime -->|3| test-sequences
   global-invariants -->|4| game-engine
-  identity-and-authorization -->|35| global-invariants
+  identity-and-authorization -->|37| global-invariants
   live-game-observation -->|2| application-shell
   live-game-observation -->|4| game-engine
   live-game-observation -->|6| game-runtime

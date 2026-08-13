@@ -32,7 +32,11 @@ The platform SHALL recognize exactly three kinds of persistent identity — **hu
 - **THEN** its participant identity is a derivation — from the human identity or team game credential that obtained the access token — scoped to that one game, never a new persistent identity
 
 ### Requirement: identity-and-authorization/google-sign-in
-Humans SHALL sign in exclusively with a Google account, and the platform SHALL maintain no independent credential store for humans. A successful sign-in SHALL produce a persistent session that survives page loads until it expires or the user signs out — persistent in the script-inaccessible cookie credential custody permits, never in storage a page can read — and sign-out SHALL terminate the session and revoke the client-held session credential, returning the client to the unauthenticated state.
+Humans SHALL sign in exclusively with a Google account, and the platform SHALL maintain no independent credential store for humans. A successful sign-in SHALL produce a persistent session that survives page loads until it expires or the user signs out — persistent in the script-inaccessible cookie credential custody permits, never in storage a page can read — and sign-out SHALL terminate the session and revoke the client-held session credential, returning the client to the unauthenticated state. The session's lifetime SHALL be a deployment configuration, and its configurable floor SHALL be no shorter than four hours — comfortably longer than a single sitting, so a session never lapses mid-use — while nothing SHALL require it to be long: the session is the platform's one durable credential, and a deployment whose users return in widely spaced sittings shortens its exposure for free, re-authentication being paced by the gaps between sittings rather than by the session clock.
+
+#### Scenario: #session-lifetime-is-configured-above-a-floor
+- **WHEN** a deployment sets its session lifetime
+- **THEN** it may choose any duration at or above a four-hour floor — a single sitting is never interrupted by the session expiring under it — and it is free to keep the session short, because a shorter session lessens the standing exposure of the one durable credential at no cost to a usage pattern whose sign-in frequency is set by absence, not by the clock
 
 #### Scenario: #google-account-specifically
 - **WHEN** any human authentication path exists
@@ -117,7 +121,7 @@ A non-human principal SHALL authenticate to the platform by presenting a short-l
 ### Requirement: identity-and-authorization/trusted-issuer-registry
 Depends on: global-invariants/issuer-anchored-trust.
 
-The platform SHALL hold a registry of the issuers it trusts — its own deployment and zero or more registered external systems — each recorded with an issuer identifier, the location at which that issuer publishes its verification material, and the ceiling of capabilities it may confer. The registry SHALL hold no secret for any issuer. A request for capabilities outside the requesting issuer's ceiling SHALL be refused with the excess named, never quietly narrowed to the permitted subset.
+The platform SHALL hold a registry of the issuers it trusts — its own deployment and zero or more registered external systems — each recorded with an issuer identifier, the location at which that issuer publishes its verification material, the ceiling of capabilities it may confer, and, for a principal humans are returned to after signing in, the addresses at which it may receive them. The registry SHALL hold no secret for any issuer. A request for capabilities outside the requesting issuer's ceiling SHALL be refused with the excess named, never quietly narrowed to the permitted subset.
 
 #### Scenario: #excess-fails-loudly
 - **WHEN** a caller requests more capability than its issuer's ceiling allows
@@ -125,11 +129,32 @@ The platform SHALL hold a registry of the issuers it trusts — its own deployme
 
 #### Scenario: #registry-holds-no-secret
 - **WHEN** an issuer is registered
-- **THEN** everything recorded is public — an identifier, where its material is published, and a ceiling; the record has no field a secret could occupy
+- **THEN** everything recorded is public — an identifier, where its material is published, a ceiling, and any addresses humans may be returned to; the record has no field a secret could occupy
 
 #### Scenario: #the-set-is-never-assumed-singular
 - **WHEN** any code resolves the issuer of a presented credential
 - **THEN** it resolves against the registry as a set, so registering a second issuer requires no change to how credentials are validated
+
+### Requirement: identity-and-authorization/sign-in-handoff
+Depends on: global-invariants/credential-confinement, global-invariants/issuer-anchored-trust#recognition-is-not-authorization.
+
+A Snek Centaur Server SHALL NOT authenticate a human itself. Where a human's identity must reach a Server application, the platform SHALL complete the sign-in at its own origin and return the browser to that Server carrying a handoff reference: an opaque value naming one authenticated human and one registered Server, accepted once, expiring on the redirect it exists to survive rather than on a credential's lifetime, and conferring nothing on its own. The platform SHALL return a browser only to an address that Server's registration records, and SHALL issue the resulting credential only to the party that redeems the reference and proves itself the party it was minted for.
+
+#### Scenario: #server-never-holds-the-provider-exchange
+- **WHEN** a human signs in to use a Server application
+- **THEN** the provider's authorization code and the platform's session credential stay at the platform's origin; the Server sees neither, and what a handoff reference can be exchanged for is bounded by that Server's registered ceiling
+
+#### Scenario: #reference-is-accepted-once
+- **WHEN** a handoff reference is presented a second time, whatever its remaining lifetime
+- **THEN** it is refused — a value that travelled in a URL is assumed to have been seen, so its defence is that redeeming it takes something the URL did not carry
+
+#### Scenario: #return-address-is-registered-not-requested
+- **WHEN** a sign-in names a return address the requesting Server's registration does not record
+- **THEN** the platform refuses to redirect there; taking the target from the request would make the platform a trusted-looking bounce to anywhere and hand the reference to whoever asked for it
+
+#### Scenario: #the-redeemer-keeps-what-it-earns
+- **WHEN** a handoff reference is redeemed
+- **THEN** the credential is returned in that exchange to the redeeming party and relayed onward to nobody — a party that redeems on a human's behalf holds a credential it may use, never one it may pass along
 
 ### Requirement: identity-and-authorization/capability-claim-structure
 Every credential the platform issues SHALL carry the capabilities it confers as a structured claim — a sequence of entries rather than an unstructured string — and enforcement SHALL read that structure from the first line of enforcement code written. An entry SHALL name one capability as a bare verb identifier and carry nothing else; the claim is a sequence so that constraining an entry later is a change to minting alone, and no entry carries a constraint today. Where a service principal obtained a credential to act with, the credential SHALL also name that principal.
@@ -324,15 +349,27 @@ The platform SHALL issue a coach access token to an authenticated human who is a
 ### Requirement: identity-and-authorization/token-lifetime-and-refresh
 Depends on: global-invariants/state-confined-to-owning-runtime#game-instance-holds-only-its-games-state.
 
-Every credential the platform issues SHALL expire fifteen minutes after issuance, and a holder SHALL be able to obtain a replacement without re-authenticating from scratch, so long as its underlying session or registration is still valid. Holders SHALL renew ahead of expiry on their own schedule, never in reaction to a refusal. Short lifetimes are what make a self-contained credential's revocation delay tolerable; the boundary that ends access after a game is the instance's decommissioning, not expiry.
+Every self-contained credential the platform issues — one a resource verifies from its signature and published material alone, consulting no platform state — SHALL expire fifteen minutes after issuance, and a holder SHALL be able to obtain a replacement without re-authenticating from scratch, so long as its underlying session or registration is still valid. The session credential established at sign-in is the one credential outside that bound, and is the stateful anchor such replacements are answered from: checked against platform state on every use and revocable at that same instant, its lifetime is bounded by revocation rather than expiry. A credential naming a human SHALL be renewable only while that human's own session is live, re-read at each renewal rather than inherited from the credential being replaced. Holders SHALL renew ahead of expiry on their own schedule, never in reaction to a refusal. Short lifetimes are what make a self-contained credential's revocation delay tolerable; the boundary that ends access after a game is the instance's decommissioning, not expiry.
 
 #### Scenario: #refresh-without-reauth
 - **WHEN** a holder needs a fresh credential during a long game — to reconnect after an interruption, or simply because the last one is ageing
 - **THEN** they obtain one on the strength of their still-valid session or registration, with no interactive re-authentication
 
+#### Scenario: #renewal-does-not-interrupt-a-live-session
+- **WHEN** a web client's working credential ages out while a human is continuously using a live session — the session itself neither expired nor revoked
+- **THEN** a fresh working credential is obtained under that live session without a full-page navigation the human waits through and without a fresh interactive sign-in; only the session's own end, not a working credential's expiry, returns the human to signing in. Renewal that forces a visible reload on every working-credential expiry during continuous use is a violation — a self-contained working credential kept short for revocation must be renewable in the background under the session, not by round-tripping the human through sign-in each time it lapses
+
 #### Scenario: #renewal-is-proactive-never-reactive
 - **WHEN** a holder's credential approaches expiry during a live game
 - **THEN** it is replaced before it lapses; discovering the expiry from a refused call is a violation, because the game's clock keeps running while that call is retried and a lost turn is a real cost
+
+#### Scenario: #renewal-re-reads-the-session
+- **WHEN** a holder renews a credential naming a human whose session has since ended
+- **THEN** renewal is refused, whatever the holder's own registration still permits — a human's absence ends what is minted in their name, rather than being outlived by it
+
+#### Scenario: #only-the-stateful-session-outlives-the-bound
+- **WHEN** any credential the platform issued is found live beyond fifteen minutes after issuance
+- **THEN** it is the session credential established at sign-in and nothing else — a credential the platform checks against its own state at every use and can revoke at that same instant; every credential a resource verifies on its own dies within the bound
 
 #### Scenario: #renewal-failure-is-quiet-until-it-bites
 - **WHEN** renewal fails because the platform is briefly unreachable, while the credential in hand is still valid
@@ -409,11 +446,15 @@ The platform SHALL support an **admin** role as a platform-level designation on 
 ### Requirement: identity-and-authorization/client-credential-custody
 Depends on: global-invariants/credential-confinement, global-invariants/state-confined-to-owning-runtime#clients-restart-clean.
 
-Clients SHALL hold received credentials — access tokens, game credentials — in memory only, for the duration of use, and SHALL never store, display, or transmit credential plaintext. The single exception is the session credential established at sign-in, which SHALL be held in a cookie the browser withholds from page scripts and sends only to the platform's own origin, over HTTPS: it is the one credential a page reload recovers, and every other credential is obtained afresh under it rather than persisted. A signing key a party generates for itself is the one thing it persists, and it never leaves the party that generated it.
+Clients SHALL hold received credentials — access tokens, game credentials, and any in-memory renewal credential under which those are obtained — in memory only, for the duration of use, and SHALL never store, display, or transmit credential plaintext. Memory alone is not enough: a client SHALL hold such a credential concealed from other code sharing its origin, reachable only through the code path that uses it, so that obtaining it takes active subversion of that path rather than a passive read of storage, a global object, or the DOM. The single exception is the session credential established at sign-in, which SHALL be held in a cookie the browser withholds from page scripts and sends only to the platform's own origin, over HTTPS: it is the one credential a page reload recovers, and every other credential — including the in-memory renewal credential a live page holds under it — is obtained afresh under it rather than persisted. A signing key a party generates for itself is the one thing it persists, and it never leaves the party that generated it.
 
 #### Scenario: #memory-only
 - **WHEN** the web application holds a game access token
 - **THEN** the token lives in component memory only — never persisted to browser storage, never placed in a URL — and a page reload re-obtains a token rather than recovering one
+
+#### Scenario: #concealed-from-co-resident-scripts
+- **WHEN** a script sharing the page's origin that did not subvert the credential-handling code — a bundled dependency, an analytics snippet, a compromised package — enumerates browser storage, global objects, and the DOM in search of a credential
+- **THEN** it finds none: a client-held credential is reachable only through the code that uses it, so a generic credential-mining sweep comes away empty and only active interception of that code path could obtain one. Memory that a passive read reaches — a global, a well-known property, a storage key — does not satisfy this, being localStorage's exposure by another name
 
 #### Scenario: #the-session-is-the-only-thing-a-reload-recovers
 - **WHEN** a signed-in user reloads the page
