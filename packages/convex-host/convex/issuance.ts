@@ -18,7 +18,7 @@ import { base64url, createRemoteJWKSet, decodeJwt, errors, jwtVerify } from "jos
 import type { IssuerRegistration as Registration } from "../../convex-snek-platform/convex/schema";
 import { components } from "./_generated/api";
 import type { ActionCtx } from "./_generated/server";
-import { type CapabilityEntry, mint } from "./auth/credential";
+import { CREDENTIAL_LIFETIME_SECONDS, type CapabilityEntry, mint } from "./auth/credential";
 import {
   PLATFORM_AUDIENCE,
   assertionAudience,
@@ -40,6 +40,17 @@ import { type Principal, boundSystemCall, publicAction, publicMutation } from ".
  * spec: identity-and-authorization/sign-in-handoff
  */
 const HANDOFF_LIFETIME_MS = 60_000;
+
+/**
+ * How long one link of a renewal chain lives: the fifteen-minute bound, the
+ * same one the working credential is under. The chain outlives the bound only
+ * by being re-forged link by link, each rotation re-reading the session — so
+ * nothing the platform issued is ever found live beyond the bound except the
+ * session itself.
+ *
+ * spec: identity-and-authorization/token-lifetime-and-refresh#only-the-stateful-session-outlives-the-bound
+ */
+const RENEWAL_LIFETIME_MS = CREDENTIAL_LIFETIME_SECONDS * 1000;
 
 /**
  * What minting a handoff needs of a context, spelled structurally because it is
@@ -316,7 +327,13 @@ export const beginSignInHandoff = publicMutation({ capability: "begin-sign-in-ha
  */
 export async function mintHandoff(
   ctx: HandoffMinter,
-  args: { userId: string; issuerId: string; returnAddress: string; challenge: string },
+  args: {
+    userId: string;
+    issuerId: string;
+    returnAddress: string;
+    challenge: string;
+    sessionId?: string | undefined;
+  },
 ): Promise<string> {
   const registration = await requiredRegistration(ctx, args.issuerId);
   if (!registration.returnAddresses.includes(args.returnAddress)) {
@@ -332,6 +349,9 @@ export async function mintHandoff(
     issuerId: args.issuerId,
     challenge: args.challenge,
     expiresAt: Date.now() + HANDOFF_LIFETIME_MS,
+    // The session this handoff was minted under, where the entrance could read
+    // one — what lets redemption start a renewal chain bound to that session.
+    ...(args.sessionId === undefined ? {} : { sessionId: args.sessionId }),
   });
   return `${args.returnAddress}?handoff=${reference}`;
 }
@@ -350,20 +370,24 @@ export async function mintHandoff(
  */
 export const redeemSignInHandoff = publicAction({ capability: "redeem-handoff" })({
   args: { reference: v.string(), verifier: v.string() },
-  returns: v.string(),
+  returns: v.object({ credential: v.string(), renewal: v.optional(v.string()) }),
   handler: async (ctx, args) => {
-    const handoff: { userId: string; issuerId: string; expiresAt: number } | null =
-      await ctx.runMutation(components.snekPlatform.functions.redeemHandoff, {
-        reference: args.reference,
-        proof: await challengeFor(args.verifier),
-      });
+    const handoff: {
+      userId: string;
+      issuerId: string;
+      expiresAt: number;
+      sessionId?: string;
+    } | null = await ctx.runMutation(components.snekPlatform.functions.redeemHandoff, {
+      reference: args.reference,
+      proof: await challengeFor(args.verifier),
+    });
     // One answer for "no such reference" and "wrong verifier" — see
     // `redeemHandoff`. Saying which would tell someone who cannot redeem a
     // reference whether it exists.
     if (!handoff) throw new Error("no such handoff reference");
     if (handoff.expiresAt <= Date.now()) throw new Error("handoff reference has expired");
     const registration = await requiredRegistration(ctx, handoff.issuerId);
-    return mint(await deploymentSigner(ctx), issuer(), {
+    const credential = await mint(await deploymentSigner(ctx), issuer(), {
       subject: encodePrincipal({ kind: "human", userId: handoff.userId }),
       audience: PLATFORM_AUDIENCE,
       // Bounded twice over: by that Server's registered ceiling
@@ -376,6 +400,109 @@ export const redeemSignInHandoff = publicAction({ capability: "redeem-handoff" }
       // spec: identity-and-authorization/capability-claim-structure#acting-principal-is-recorded
       act: registration.issuerId,
     });
+    // The first link of the renewal chain, where the handoff knows which
+    // session it was minted under. A handoff that carries no session — the
+    // `beginSignInHandoff` mutation's, authenticated by a resolved identity
+    // rather than a readable session record — starts no chain, and its
+    // redeemer renews by the route it arrived through instead.
+    // spec: identity-and-authorization/token-lifetime-and-refresh#renewal-does-not-interrupt-a-live-session
+    if (handoff.sessionId === undefined) return { credential };
+    const renewal = await forgedLink(ctx, {
+      userId: handoff.userId,
+      issuerId: handoff.issuerId,
+      sessionId: handoff.sessionId,
+    });
+    return { credential, renewal };
+  },
+});
+
+/**
+ * Mint one link of a renewal chain: an opaque single-use token, stored only as
+ * its hash — the same one-way construction as the handoff challenge, and for
+ * the same reason: nothing at rest is presentable.
+ *
+ * spec: identity-and-authorization/token-lifetime-and-refresh#renewal-does-not-interrupt-a-live-session
+ */
+async function forgedLink(
+  ctx: HandoffMinter,
+  chain: { userId: string; issuerId: string; sessionId: string },
+): Promise<string> {
+  const token = base64url.encode(crypto.getRandomValues(new Uint8Array(32)));
+  await ctx.runMutation(components.snekPlatform.functions.createRenewal, {
+    tokenHash: await challengeFor(token),
+    ...chain,
+    expiresAt: Date.now() + RENEWAL_LIFETIME_MS,
+  });
+  return token;
+}
+
+/**
+ * Trade a renewal credential, alongside the still-valid working credential it
+ * renews, for a fresh working credential and the next link of the chain.
+ *
+ * A background call, which is the whole point: a live page renews under its
+ * session without a navigation the human waits through. Everything that names
+ * the human is re-read at this moment rather than inherited — the session,
+ * looked up by the id the chain was forged under and refused if it has ended
+ * or expired; and the registration's ceiling, so a ceiling narrowed since
+ * redemption narrows the renewed credential with it. The presented link is
+ * consumed in the same mutation that reads it, so a replayed link finds
+ * nothing whatever its remaining lifetime.
+ *
+ * Not anonymously reachable — the registry's comment on `renew-credential`
+ * says why the anonymous surface stays at four — so the caller here is always
+ * the human the working credential names, and the one extra check is that the
+ * chain names the same human: two credentials stolen separately do not
+ * assemble into a renewal.
+ *
+ * spec: identity-and-authorization/token-lifetime-and-refresh#renewal-does-not-interrupt-a-live-session
+ * spec: identity-and-authorization/token-lifetime-and-refresh#renewal-re-reads-the-session
+ * spec: identity-and-authorization/token-lifetime-and-refresh#renewal-is-proactive-never-reactive
+ * spec: identity-and-authorization/token-lifetime-and-refresh#only-the-stateful-session-outlives-the-bound
+ */
+export const renewCredential = publicAction({ capability: "renew-credential" })({
+  args: { renewal: v.string() },
+  returns: v.object({ credential: v.string(), renewal: v.string() }),
+  handler: async (ctx, args) => {
+    const next = base64url.encode(crypto.getRandomValues(new Uint8Array(32)));
+    const link: {
+      userId: string;
+      issuerId: string;
+      sessionId: string;
+      expiresAt: number;
+    } | null = await ctx.runMutation(components.snekPlatform.functions.rotateRenewal, {
+      tokenHash: await challengeFor(args.renewal),
+      nextTokenHash: await challengeFor(next),
+      nextExpiresAt: Date.now() + RENEWAL_LIFETIME_MS,
+    });
+    // One answer for "no such link" and "already rotated": a consumed link and
+    // a token that never existed look the same to a caller, deliberately.
+    if (!link) throw new Error("no such renewal credential");
+    if (link.expiresAt <= Date.now()) throw new Error("renewal credential has expired");
+    if (link.userId !== ctx.caller.userId) {
+      throw new Error("renewal credential names a different human");
+    }
+    // The re-read itself: the Better Auth session row, by the id the chain was
+    // forged under. Sign-out deletes the row and expiry outlives nothing, so a
+    // human's absence ends what is minted in their name here, not fifteen
+    // minutes later.
+    // spec: identity-and-authorization/token-lifetime-and-refresh#renewal-re-reads-the-session
+    const session = (await ctx.runQuery(components.betterAuth.adapter.findOne, {
+      model: "session",
+      where: [{ field: "_id", value: link.sessionId }],
+    })) as { expiresAt?: unknown } | null;
+    if (!session) throw new Error("the session this chain was forged under has ended");
+    if (typeof session.expiresAt === "number" && session.expiresAt <= Date.now()) {
+      throw new Error("the session this chain was forged under has expired");
+    }
+    const registration = await requiredRegistration(ctx, link.issuerId);
+    const credential = await mint(await deploymentSigner(ctx), issuer(), {
+      subject: encodePrincipal({ kind: "human", userId: link.userId }),
+      audience: PLATFORM_AUDIENCE,
+      cap: entries(ceilingOf(registration).filter((c) => SESSION_CAPABILITIES.includes(c))),
+      act: registration.issuerId,
+    });
+    return { credential, renewal: next };
   },
 });
 

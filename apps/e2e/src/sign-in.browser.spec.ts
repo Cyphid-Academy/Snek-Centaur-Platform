@@ -38,10 +38,11 @@ import type { Human } from "./identity";
 import { signIn } from "./identity";
 
 /**
- * The registered Server's ceiling. Both are session capabilities, so both
- * survive the intersection a redeemed credential is capped at.
+ * The registered Server's ceiling. All are session capabilities, so all
+ * survive the intersection a redeemed credential is capped at —
+ * `renew-credential` is what lets the page rotate in the background.
  */
-const CEILING = ["issue-game-token", "review-attributed-actions"];
+const CEILING = ["issue-game-token", "review-attributed-actions", "renew-credential"];
 
 const ada: Human = { subject: "google-ada", email: "ada@example.test", name: "Ada" };
 
@@ -60,7 +61,7 @@ test.beforeAll(async ({ convex, centaurServer }) => {
   });
 });
 
-test("earns a credential from a Server's page, and earns another on a fresh visit", async ({
+test("earns a credential from a Server's page, and a reload silently earns another", async ({
   context,
   page,
   convex,
@@ -75,26 +76,41 @@ test("earns a credential from a Server's page, and earns another on a fresh visi
   await signIn(context, convex.siteUrl, identityProvider, ada);
   await page.goto(`${centaurServer.url}/sign-in`);
 
-  await page.getByTestId("begin").click();
-
-  // The whole round trip: out to the platform on a top-level navigation
-  // carrying the session cookie, answered without a provider, back to this
-  // Server's registered address with a reference, redeemed with the verifier
-  // this page kept across it, and the credential spent on a question the
-  // platform answers only for the human it names.
+  // No click: the page finds its memory empty, takes the silent trip on its
+  // own — out to the platform on a top-level navigation carrying the session
+  // cookie, answered without a provider, back to this Server's registered
+  // address with a reference, redeemed with the verifier the page kept across
+  // it, and the credential spent on a question the platform answers only for
+  // the human it names.
+  // spec: identity-and-authorization/google-sign-in#session-survives-reload
   await expect.poll(() => status(page), { timeout: ROUND_TRIP_MS }).toBe("signed-in");
 
-  await page.goto(`${centaurServer.url}/sign-in`);
+  await page.reload();
 
-  // Nothing of the credential survived the navigation — a page that had
-  // persisted one would recover it and render signed-in — and the trip is on
-  // offer again. Taking it costs no interactive sign-in, because what survived
-  // is the platform session, in a cookie no page script could read while it did.
+  // Nothing of the credential survived the reload — a page that had persisted
+  // one would render signed-in without navigating anywhere — and the silent
+  // trip happens again, unasked. What survived is the platform session, in a
+  // cookie no page script could read while it did; the human clicks nothing
+  // and never sees a provider.
   // spec: identity-and-authorization/client-credential-custody#memory-only
   // spec: identity-and-authorization/client-credential-custody#the-session-is-the-only-thing-a-reload-recovers
-  await expect.poll(() => status(page)).toBe("signed-out");
-  await page.getByTestId("begin").click();
   await expect.poll(() => status(page), { timeout: ROUND_TRIP_MS }).toBe("signed-in");
+});
+
+test("a browser with no session is told so after one silent trip, and never shown a provider", async ({
+  page,
+  centaurServer,
+}) => {
+  // No `signIn` here: this context has no platform session at all. The page
+  // still takes its silent trip — that is how it learns the answer — and the
+  // platform sends it straight back marked signed-out rather than on to a
+  // consent screen nobody asked for. The button is the honest next step.
+  await page.goto(`${centaurServer.url}/sign-in`);
+
+  await expect.poll(() => status(page), { timeout: ROUND_TRIP_MS }).toBe("signed-out");
+  await expect(page.getByTestId("begin")).toBeVisible();
+  // One trip, not a loop: the page is at rest on this Server's own origin.
+  expect(page.url().startsWith(centaurServer.url)).toBe(true);
 });
 
 /** What the page says it is, read from what it rendered rather than from its state. */

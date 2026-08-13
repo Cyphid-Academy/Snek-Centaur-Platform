@@ -410,10 +410,12 @@ describe("anonymous reach", () => {
     const reference = new URL(url).searchParams.get("handoff");
     expect(reference).toBeTruthy();
 
-    const issued = (await t.action(anyApi.issuance.redeemSignInHandoff, {
-      reference,
-      verifier: VERIFIER,
-    })) as string;
+    const issued = (
+      (await t.action(anyApi.issuance.redeemSignInHandoff, {
+        reference,
+        verifier: VERIFIER,
+      })) as { credential: string }
+    ).credential;
 
     const payload = decodeJwt(issued);
     expect(payload.sub).toBe("user:user-42");
@@ -474,6 +476,7 @@ describe("credentialed by default", () => {
     "issue-game-token": (t) =>
       t.action(anyApi.issuance.issueGameToken, { gameId: "g1", role: "spectator" }),
     "review-attributed-actions": (t) => t.query(api.platform.attributedActions, {}),
+    "renew-credential": (t) => t.action(anyApi.issuance.renewCredential, { renewal: "not-a-link" }),
     // Granted by game credentials ahead of the functions it will reach; until
     // one exists there is nothing to call, and the registry assertion below is
     // the whole testable statement of its reach.
@@ -740,10 +743,12 @@ describe("attribution is user-visible", () => {
         returnAddress: RETURN_ADDRESS,
         challenge: await challengeFor(VERIFIER),
       })) as string;
-    return (await t.action(anyApi.issuance.redeemSignInHandoff, {
-      reference: new URL(url).searchParams.get("handoff"),
-      verifier: VERIFIER,
-    })) as string;
+    return (
+      (await t.action(anyApi.issuance.redeemSignInHandoff, {
+        reference: new URL(url).searchParams.get("handoff"),
+        verifier: VERIFIER,
+      })) as { credential: string }
+    ).credential;
   };
 
   // spec: identity-and-authorization/peer-capability-ceiling#attribution-is-user-visible

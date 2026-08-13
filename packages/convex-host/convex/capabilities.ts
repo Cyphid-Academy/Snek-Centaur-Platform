@@ -51,6 +51,19 @@ export const CAPABILITIES = {
     reaches: "Mint a handoff reference returning this human to a registered Server.",
     session: true,
   },
+  // Not anonymous, deliberately: renewal is reached with the working credential
+  // being replaced, still valid because renewal is proactive, plus the
+  // single-use renewal credential — so the anonymous surface stays at exactly
+  // four. `session: true` because the session is the anchor renewals are
+  // answered from, and because redemption caps a credential at the
+  // session-capability intersection: a capability the session did not reach
+  // could never survive into a redeemed credential to be exercised at all.
+  // spec: identity-and-authorization/token-lifetime-and-refresh#renewal-does-not-interrupt-a-live-session
+  // spec: identity-and-authorization/anonymous-reach#credentialed-by-default
+  "renew-credential": {
+    reaches: "Trade a live renewal credential for a fresh working credential and the next link.",
+    session: true,
+  },
   "issue-game-credential": {
     reaches: "Obtain a Snek Centaur Server's per-team, per-game credential.",
   },

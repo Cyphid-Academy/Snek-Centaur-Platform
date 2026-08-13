@@ -108,6 +108,7 @@ export const createHandoff = mutation({
     issuerId: v.string(),
     challenge: v.string(),
     expiresAt: v.number(),
+    sessionId: v.optional(v.string()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -148,7 +149,12 @@ export const createHandoff = mutation({
 export const redeemHandoff = mutation({
   args: { reference: v.string(), proof: v.string() },
   returns: v.union(
-    v.object({ userId: v.string(), issuerId: v.string(), expiresAt: v.number() }),
+    v.object({
+      userId: v.string(),
+      issuerId: v.string(),
+      expiresAt: v.number(),
+      sessionId: v.optional(v.string()),
+    }),
     v.null(),
   ),
   handler: async (ctx, args) => {
@@ -159,7 +165,85 @@ export const redeemHandoff = mutation({
     if (!row) return null;
     if (row.challenge !== args.proof) return null;
     await ctx.db.delete(row._id);
-    return { userId: row.userId, issuerId: row.issuerId, expiresAt: row.expiresAt };
+    return {
+      userId: row.userId,
+      issuerId: row.issuerId,
+      expiresAt: row.expiresAt,
+      // Spread-omitted rather than `undefined`, to satisfy the validator above:
+      // an optional field may be absent but not explicitly undefined.
+      ...(row.sessionId === undefined ? {} : { sessionId: row.sessionId }),
+    };
+  },
+});
+
+/**
+ * Begin a renewal chain: store one link, minted at handoff redemption.
+ *
+ * spec: identity-and-authorization/token-lifetime-and-refresh#renewal-does-not-interrupt-a-live-session
+ */
+export const createRenewal = mutation({
+  args: {
+    tokenHash: v.string(),
+    userId: v.string(),
+    issuerId: v.string(),
+    sessionId: v.string(),
+    expiresAt: v.number(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.db.insert("renewal_credentials", args);
+    return null;
+  },
+});
+
+/**
+ * Trade one link of a renewal chain for the next, deleting the presented link
+ * in the same mutation that reads it — single-use by the same read-then-write
+ * guard as `redeemHandoff`, so two concurrent rotations cannot both succeed.
+ *
+ * The lookup key is the hash of what the holder presented, hashed by the host:
+ * a wrong token finds no row, and this component stores nothing presentable.
+ * The expiry and session come back rather than being enforced here, for the
+ * reason `redeemHandoff` records: the host is where every other refusal on
+ * this path is decided, so it is where they all live together.
+ *
+ * spec: identity-and-authorization/token-lifetime-and-refresh#renewal-re-reads-the-session
+ */
+export const rotateRenewal = mutation({
+  args: { tokenHash: v.string(), nextTokenHash: v.string(), nextExpiresAt: v.number() },
+  returns: v.union(
+    v.object({
+      userId: v.string(),
+      issuerId: v.string(),
+      sessionId: v.string(),
+      expiresAt: v.number(),
+    }),
+    v.null(),
+  ),
+  handler: async (ctx, args) => {
+    const row = await ctx.db
+      .query("renewal_credentials")
+      .withIndex("by_token_hash", (q) => q.eq("tokenHash", args.tokenHash))
+      .unique();
+    if (!row) return null;
+    await ctx.db.delete(row._id);
+    // The next link is written even when the presented one turns out expired:
+    // the host refuses on `expiresAt` after this returns, and a link created
+    // beside a refusal is inert — nothing was returned to present it by.
+    // Writing unconditionally keeps this mutation free of the decision.
+    await ctx.db.insert("renewal_credentials", {
+      tokenHash: args.nextTokenHash,
+      userId: row.userId,
+      issuerId: row.issuerId,
+      sessionId: row.sessionId,
+      expiresAt: args.nextExpiresAt,
+    });
+    return {
+      userId: row.userId,
+      issuerId: row.issuerId,
+      sessionId: row.sessionId,
+      expiresAt: row.expiresAt,
+    };
   },
 });
 
@@ -336,7 +420,13 @@ export const sweepExpired = mutation({
       .query("system_actions")
       .withIndex("by_expiry", (q) => q.lt("expiresAt", args.now))
       .take(200);
-    for (const row of [...assertions, ...handoffs, ...attributions]) await ctx.db.delete(row._id);
-    return assertions.length + handoffs.length + attributions.length;
+    const renewals = await ctx.db
+      .query("renewal_credentials")
+      .withIndex("by_expiry", (q) => q.lt("expiresAt", args.now))
+      .take(200);
+    for (const row of [...assertions, ...handoffs, ...attributions, ...renewals]) {
+      await ctx.db.delete(row._id);
+    }
+    return assertions.length + handoffs.length + attributions.length + renewals.length;
   },
 });

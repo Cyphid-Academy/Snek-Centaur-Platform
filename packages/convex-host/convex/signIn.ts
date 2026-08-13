@@ -42,6 +42,7 @@ export const begin = publicHttpAction(
           issuerId,
           returnAddress,
           challenge,
+          sessionId: await sessionIdOf(ctx, request),
         });
       }
 
@@ -51,6 +52,20 @@ export const begin = publicHttpAction(
       if (!registration) return refusal(403, `no registration for issuer ${issuerId}`);
       if (!registration.returnAddresses.includes(returnAddress)) {
         return refusal(403, `${returnAddress} is not a return address this issuer registered`);
+      }
+
+      // A silent attempt asks only "is a session live?" — and the answer here
+      // is no, so the browser goes straight back marked signed-out rather than
+      // on to a consent screen nobody asked for. This is what lets a page
+      // recover a session on reload without ever surprising a signed-out human
+      // with Google. The address was checked against the registration just
+      // above, like every other redirect this route issues.
+      // spec: identity-and-authorization/google-sign-in#session-survives-reload
+      // spec: identity-and-authorization/client-credential-custody#the-session-is-the-only-thing-a-reload-recovers
+      if (asked.get("silent") !== null) {
+        const back = new URL(returnAddress);
+        back.searchParams.set("signed-out", "1");
+        return redirect(back.toString());
       }
 
       const returnUrl = new URL(RETURN_PATH, process.env["CONVEX_SITE_URL"] ?? "");
@@ -105,6 +120,7 @@ export const complete = publicHttpAction(
         issuerId,
         returnAddress,
         challenge,
+        sessionId: await sessionIdOf(ctx, request),
       });
     },
   },
@@ -120,7 +136,13 @@ export const complete = publicHttpAction(
  */
 async function completed(
   ctx: HandoffMinter,
-  args: { userId: string; issuerId: string; returnAddress: string; challenge: string },
+  args: {
+    userId: string;
+    issuerId: string;
+    returnAddress: string;
+    challenge: string;
+    sessionId?: string | undefined;
+  },
 ): Promise<Response> {
   try {
     return redirect(await mintHandoff(ctx, args));
@@ -147,3 +169,20 @@ function redirect(location: string, from?: Headers): Response {
 /** A refusal a human might actually read, since these addresses are reached by a browser. */
 const refusal = (status: number, why: string): Response =>
   new Response(why, { status, headers: { "Cache-Control": "no-store" } });
+
+/**
+ * The Better Auth session this request rides, by id — read a second time
+ * beyond the builder's admission, because the builder distils a session down
+ * to a principal and renewal needs the session record itself to re-read later.
+ * `undefined` never happens on the routes that call this (both admitted a
+ * session already), but the type is honest about what a lookup can say.
+ *
+ * spec: identity-and-authorization/token-lifetime-and-refresh#renewal-re-reads-the-session
+ */
+async function sessionIdOf(
+  ctx: Parameters<typeof createAuth>[0] & HandoffMinter,
+  request: Request,
+): Promise<string | undefined> {
+  const held = await createAuth(ctx).api.getSession({ headers: request.headers });
+  return held?.session.id;
+}

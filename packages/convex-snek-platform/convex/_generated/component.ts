@@ -46,6 +46,20 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           expiresAt: number;
           issuerId: string;
           reference: string;
+          sessionId?: string;
+          userId: string;
+        },
+        null,
+        Name
+      >;
+      createRenewal: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          expiresAt: number;
+          issuerId: string;
+          sessionId: string;
+          tokenHash: string;
           userId: string;
         },
         null,
@@ -108,7 +122,12 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         "mutation",
         "internal",
         { proof: string; reference: string },
-        { expiresAt: number; issuerId: string; userId: string } | null,
+        {
+          expiresAt: number;
+          issuerId: string;
+          sessionId?: string;
+          userId: string;
+        } | null,
         Name
       >;
       registerIssuer: FunctionReference<
@@ -121,6 +140,18 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           verificationMaterialUrl: string;
         },
         null,
+        Name
+      >;
+      rotateRenewal: FunctionReference<
+        "mutation",
+        "internal",
+        { nextExpiresAt: number; nextTokenHash: string; tokenHash: string },
+        {
+          expiresAt: number;
+          issuerId: string;
+          sessionId: string;
+          userId: string;
+        } | null,
         Name
       >;
       status: FunctionReference<"query", "internal", {}, string, Name>;

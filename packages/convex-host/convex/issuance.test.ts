@@ -671,7 +671,7 @@ describe("the peer capability ceiling", () => {
       });
     const reference = new URL(returnUrl).searchParams.get("handoff") as string;
 
-    const credential = await t.action(issuance.redeemSignInHandoff, { reference, verifier });
+    const { credential } = await t.action(issuance.redeemSignInHandoff, { reference, verifier });
 
     const capabilities = (await verifyIssued(credential, PLATFORM_AUDIENCE)).cap.map(
       (entry) => entry.capability,
@@ -714,7 +714,7 @@ describe("the sign-in handoff", () => {
     expect(returnUrl.startsWith(`${RETURN_A}?handoff=`)).toBe(true);
     const reference = new URL(returnUrl).searchParams.get("handoff") as string;
 
-    const credential = await t.action(issuance.redeemSignInHandoff, { reference, verifier });
+    const { credential } = await t.action(issuance.redeemSignInHandoff, { reference, verifier });
 
     const payload = await verifyIssued(credential, PLATFORM_AUDIENCE);
     expect(payload.sub).toBe(`user:${OPERATOR_A}`);
@@ -1250,7 +1250,10 @@ describe("game access tokens", () => {
 
     const verifier = newVerifier();
     const reference = await begunHandoff(t, verifier);
-    const redeemed = await t.action(issuance.redeemSignInHandoff, { reference, verifier });
+    const { credential: redeemed } = await t.action(issuance.redeemSignInHandoff, {
+      reference,
+      verifier,
+    });
     const token = await t.action(issuance.issueGameToken, {
       gameId,
       role: "operator",
@@ -1340,7 +1343,7 @@ describe("refresh without re-authentication", () => {
   it("cannot begin a fresh handoff with the credential a redemption produced", async () => {
     const { t } = await setup();
     const verifier = newVerifier();
-    const redeemed = await t.action(issuance.redeemSignInHandoff, {
+    const { credential: redeemed } = await t.action(issuance.redeemSignInHandoff, {
       reference: await begunHandoff(t, verifier),
       verifier,
     });

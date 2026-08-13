@@ -102,14 +102,47 @@ export default defineSchema({
   // It is compared and never returned.
   // spec: identity-and-authorization/sign-in-handoff#reference-is-accepted-once
   // spec: identity-and-authorization/sign-in-handoff#the-redeemer-keeps-what-it-earns
+  //
+  // `sessionId` names the Better Auth session the handoff was minted under,
+  // where the entrance had one to read — the HTTP routes, which authenticate a
+  // cookie. It is what redemption threads into the renewal chain below, so
+  // renewal can re-read that session rather than trusting anything the holder
+  // says. A handoff minted where no session id is readable (the
+  // `beginSignInHandoff` mutation, authenticated by `ctx.auth` alone) simply
+  // starts no chain.
   sign_in_handoffs: defineTable({
     reference: v.string(),
     userId,
     issuerId: v.string(),
     challenge: v.string(),
     expiresAt: v.number(),
+    sessionId: v.optional(v.string()),
   })
     .index("by_reference", ["reference"])
+    .index("by_expiry", ["expiresAt"]),
+
+  // One link of a renewal chain: the single-use credential a live page trades,
+  // with its working credential, for a fresh pair — background renewal under
+  // the session, never a visible round trip through sign-in.
+  //
+  // `tokenHash` rather than the token: the row is looked up by the hash of
+  // what the holder presents, so a read of this table yields nothing a caller
+  // could present. Single-use is the same read-then-delete guard as the
+  // handoff table's. `sessionId` is what the host re-reads the session by on
+  // every rotation, and `expiresAt` keeps every link inside the fifteen-minute
+  // bound — the chain outlives it only by being re-forged, and only while the
+  // session lives.
+  // spec: identity-and-authorization/token-lifetime-and-refresh#renewal-does-not-interrupt-a-live-session
+  // spec: identity-and-authorization/token-lifetime-and-refresh#renewal-re-reads-the-session
+  // spec: identity-and-authorization/token-lifetime-and-refresh#only-the-stateful-session-outlives-the-bound
+  renewal_credentials: defineTable({
+    tokenHash: v.string(),
+    userId,
+    issuerId: v.string(),
+    sessionId: v.string(),
+    expiresAt: v.number(),
+  })
+    .index("by_token_hash", ["tokenHash"])
     .index("by_expiry", ["expiresAt"]),
 
   // Presence of a row *is* the designation, and there is no team or server

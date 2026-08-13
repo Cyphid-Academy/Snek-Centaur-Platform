@@ -75,6 +75,38 @@ describe("beginning a sign-in", () => {
     expect(response.status).toBe(400);
   });
 
+  // spec: identity-and-authorization/client-credential-custody#the-session-is-the-only-thing-a-reload-recovers
+  // spec: identity-and-authorization/google-sign-in#session-survives-reload
+  // A silent attempt asks only whether a session is live. With none, the
+  // browser goes straight back marked signed-out — never to a consent screen
+  // nobody asked for, which the stubbed fetch would turn into a loud failure.
+  it("answers a silent attempt with no session by returning the browser signed-out", async () => {
+    const t = await withComponents();
+    await registerServer(t);
+
+    const response = await t.fetch(entry({ ...registered, silent: "1" }));
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe(`${RETURN_ADDRESS}?signed-out=1`);
+    const rows = await inPlatformComponent(t, (ctx) => ctx.db.query("sign_in_handoffs").collect());
+    expect(rows).toHaveLength(0);
+  });
+
+  // The silent mark exempts nothing: an unregistered issuer or address is
+  // refused before the signed-out redirect could name it, so a silent attempt
+  // cannot be used to bounce a browser to an address nobody registered.
+  // spec: identity-and-authorization/sign-in-handoff#return-address-is-registered-not-requested
+  it("refuses a silent attempt toward an address the issuer did not register", async () => {
+    const t = await withComponents();
+    await registerServer(t);
+
+    const response = await t.fetch(
+      entry({ ...registered, return: "https://attacker.example/collect", silent: "1" }),
+    );
+
+    expect(response.status).toBe(403);
+  });
+
   // A route that refused the request but wrote a reference anyway would leave a
   // redeemable row nobody asked for.
   it("writes no handoff when it refuses", async () => {
