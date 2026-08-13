@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "composite": false,
+    "incremental": false,
+    "declaration": false,
+    "declarationMap": false,
+    "types": ["node"],
+    // Node and the DOM. Fixtures and specs run in Node, but a browser spec's
+    // `page.evaluate` body runs in the page, and its types come from `lib.dom`
+    // — which Playwright's own `page.evaluate` signature expects to be present.
+    "lib": ["ES2022", "DOM"]
+  },
+  "include": ["src", "playwright.config.ts"],
+  "exclude": ["node_modules"]
+}
