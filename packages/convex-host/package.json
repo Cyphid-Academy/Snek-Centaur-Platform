@@ -13,14 +13,21 @@
   "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsc -b",
-    "typecheck": "tsc -b",
-    "test": "vitest run"
+    "typecheck": "tsc -b && pnpm typecheck:convex",
+    "typecheck:convex": "tsc -p convex",
+    "test": "vitest run",
+    "codegen": "CONVEX_SELF_HOSTED_URL=http://127.0.0.1:6790 CONVEX_SELF_HOSTED_ADMIN_KEY=fake convex codegen --typecheck disable || true"
   },
   "dependencies": {
+    "@cyphid/convex-centaur-state": "workspace:*",
     "@cyphid/convex-snek-platform": "workspace:*",
-    "@cyphid/convex-centaur-state": "workspace:*"
+    "@cyphid/snek-engine": "workspace:*",
+    "@cyphid/snek-game-configuration": "workspace:*",
+    "convex": "^1.44.0"
   },
   "devDependencies": {
+    "@edge-runtime/vm": "^5.0.0",
+    "convex-test": "^0.0.55",
     "typescript": "*",
     "vitest": "*"
   }

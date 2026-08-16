@@ -1,7 +1,9 @@
 # @cyphid/snek-convex-host
 
-Convex deployment for the Team Snek Centaur Platform.
+Convex deployment for the Team Snek Centaur Platform: the single persistent Convex app.
 
-Mounts `@cyphid/convex-snek-platform` and `@cyphid/convex-centaur-state` as Convex Components, adds auth wrappers (Google OAuth + game credentials), the platform HTTP API, and game lifecycle orchestration. No feature code exists yet; this is a typed skeleton.
+Mounts `@cyphid/convex-snek-platform` as a Convex Component and exposes the public game-configuration surface (`convex/games.ts`) as thin pass-throughs — auth wrappers arrive with the identity change, which also owns the Better Auth tables in this app's (currently empty) host schema. `@cyphid/convex-centaur-state` mounts when its stories land.
 
-**Spec modules**: 02-platform-architecture, 03-auth-and-identity, 05-convex-platform, 06-centaur-state
+Regenerate `_generated/` with `pnpm codegen` (offline recipe — no Convex account needed). See `AGENTS.md` for layout, toolchain, and the deferred auth-integration plan.
+
+**Spec**: `game-configuration` (open change `migrate-game-configuration`); modules 02, 03, 05, 06 of `legacy-spec-archive/` for the unmigrated remainder.

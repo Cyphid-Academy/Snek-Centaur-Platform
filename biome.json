@@ -45,7 +45,8 @@
       "attached_assets",
       "spec",
       "informal-spec",
-      "**/*.svelte"
+      "**/*.svelte",
+      "**/_generated"
     ]
   }
 }

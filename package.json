@@ -11,7 +11,7 @@
   },
   "scripts": {
     "build:packages": "tsc -b",
-    "typecheck": "tsc -b && pnpm --filter @cyphid/centaur-server-reference typecheck && pnpm --filter @cyphid/visual-tester typecheck",
+    "typecheck": "tsc -b && pnpm --filter @cyphid/centaur-server-reference typecheck && pnpm --filter @cyphid/visual-tester typecheck && pnpm --filter @cyphid/convex-snek-platform typecheck:convex && pnpm --filter @cyphid/snek-convex-host typecheck:convex",
     "lint": "biome check .",
     "format": "biome check --write .",
     "test": "pnpm build:packages && vitest run && pnpm --filter @cyphid/visual-tester test && pnpm --filter @cyphid/centaur-server-reference test",
