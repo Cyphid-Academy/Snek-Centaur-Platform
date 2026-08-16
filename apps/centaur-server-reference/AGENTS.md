@@ -5,6 +5,7 @@ This app is the reference implementation of the Snek Centaur Server — a Svelte
 ## Spec scope
 
 - **Module 08** (`legacy-spec-archive/spec/08-centaur-server-app.md`) — the full Snek Centaur Server Frontend specification.
+- **`application-shell`** (`openspec/specs/application-shell/spec.md`, currently landing via `openspec/changes/mint-application-shell/`) — the state binding (`src/lib/shell/binding.svelte.ts`), the surface mounting contract (`src/lib/shell/mounting.ts`), and the one board rendering (`src/lib/board/BoardView.svelte`) every surface built in this app is written against.
 
 ## Subtree mirror model
 
@@ -14,7 +15,7 @@ This directory is the **canonical** source. The `cyphid/snek-centaur-server` Git
 
 Forkers fork the mirror repository. PRs from forks come back to the mirror and are cherry-picked into `apps/centaur-server-reference/` by a maintainer before the workflow re-syncs.
 
-When the mirror workflow runs, it rewrites the `@cyphid/snek-centaur-server-lib` workspace dependency in the split output to a `github:cyphid/snek-centaur-server-lib#<latest-tag>` reference so forkers can use it without access to this monorepo.
+When the mirror workflow runs, it rewrites the `@cyphid/snek-centaur-server-lib` workspace dependency in the split output to a `github:cyphid/snek-centaur-server-lib#<latest-tag>` reference so forkers can use it without access to this monorepo. `@cyphid/snek-engine` and `@cyphid/snek-game-configuration` are workspace dependencies of this app too (the application shell's board rendering consumes the engine's domain values directly; game-configuration is needed by the game-configuration surface built on top of the shell) — the mirror workflow's dependency-rewrite step must handle both the same way it handles `snek-centaur-server-lib`.
 
 ## What goes here
 
@@ -30,6 +31,9 @@ When the mirror workflow runs, it rewrites the `@cyphid/snek-centaur-server-lib`
 
 ## Key files
 
+- `src/lib/shell/binding.svelte.ts` — the one state binding (`application-shell/one-state-binding`)
+- `src/lib/shell/mounting.ts` — the surface mounting contract (`application-shell/surface-mounting-contract`)
+- `src/lib/board/BoardView.svelte` — the one board rendering (`application-shell/one-board-rendering`)
 - `src/routes/+page.svelte` — landing page skeleton
 - `src/routes/.well-known/snek-game-invite/+server.ts` — game-start invitation endpoint
 - `src/routes/.well-known/snek-server-keys/+server.ts` — published signing keys

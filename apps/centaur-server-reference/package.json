@@ -14,16 +14,19 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@cyphid/snek-centaur-server-lib": "workspace:*"
+    "@cyphid/snek-centaur-server-lib": "workspace:*",
+    "@cyphid/snek-engine": "workspace:*",
+    "@cyphid/snek-game-configuration": "workspace:*"
   },
   "devDependencies": {
     "@sveltejs/adapter-node": "^5.2.12",
     "@sveltejs/kit": "^2.15.2",
     "@sveltejs/vite-plugin-svelte": "^5.0.0",
     "@types/node": "^25.9.0",
+    "jsdom": "^29.1.1",
     "svelte": "^5.20.2",
     "typescript": "*",
     "vite": "^6.0.6",
-    "vitest": "*"
+    "vitest": "^3.2.4"
   }
 }

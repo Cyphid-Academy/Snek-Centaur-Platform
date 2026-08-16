@@ -14,7 +14,7 @@
     "typecheck": "tsc -b && pnpm --filter @cyphid/centaur-server-reference typecheck && pnpm --filter @cyphid/visual-tester typecheck",
     "lint": "biome check .",
     "format": "biome check --write .",
-    "test": "pnpm build:packages && vitest run && pnpm --filter @cyphid/visual-tester test",
+    "test": "pnpm build:packages && vitest run && pnpm --filter @cyphid/visual-tester test && pnpm --filter @cyphid/centaur-server-reference test",
     "coverage": "vitest run --project '@cyphid/snek-engine' --coverage.enabled --coverage.provider=v8 --coverage.include='packages/engine/src/resolve/**' --coverage.reporter=text",
     "smoke": "pnpm build:packages && node scripts/smoke-app.mjs",
     "check:commit": "node scripts/check-commit.mjs",

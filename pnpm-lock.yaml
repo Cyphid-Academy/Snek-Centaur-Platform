@@ -32,6 +32,12 @@ importers:
       '@cyphid/snek-centaur-server-lib':
         specifier: workspace:*
         version: link:../../packages/centaur-server-lib
+      '@cyphid/snek-engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
+      '@cyphid/snek-game-configuration':
+        specifier: workspace:*
+        version: link:../../packages/game-configuration
     devDependencies:
       '@sveltejs/adapter-node':
         specifier: ^5.2.12
@@ -45,6 +51,9 @@ importers:
       '@types/node':
         specifier: ^25.9.0
         version: 25.9.0
+      jsdom:
+        specifier: ^29.1.1
+        version: 29.1.1(@noble/hashes@2.2.0)
       svelte:
         specifier: ^5.20.2
         version: 5.55.8
@@ -55,8 +64,8 @@ importers:
         specifier: ^6.0.6
         version: 6.4.2(@types/node@25.9.0)(yaml@2.9.0)
       vitest:
-        specifier: '*'
-        version: 2.1.9(@types/node@25.9.0)(jsdom@29.1.1(@noble/hashes@2.2.0))
+        specifier: ^3.2.4
+        version: 3.2.4(@types/node@25.9.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(yaml@2.9.0)
 
   apps/visual-tester:
     dependencies:
