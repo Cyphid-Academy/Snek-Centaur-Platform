@@ -110,6 +110,11 @@ if (needsCheckout) {
 
 const SOURCE_RE = /\.(ts|tsx|js|mjs|svelte)$/;
 const LINTABLE_RE = /\.(ts|tsx|js|mjs|jsx|json|jsonc)$/;
+// Biome processes explicitly passed paths even when `files.ignore` covers
+// them, so the lint gate must subtract the generated trees itself or it
+// lints a surface the configured lint (root `pnpm lint`, CI) deliberately
+// does not — and fails commits on generated code nobody hand-writes.
+const LINT_EXEMPT_RE = /(^|\/)_generated\//;
 
 function run(cmd, args) {
   const res = spawnSync(cmd, args, { cwd: root, encoding: "utf8" });
@@ -138,7 +143,7 @@ function changesTouched(files) {
 function gatesFor(sha, files) {
   const changes = changesTouched(files);
   const present = files.filter((f) => existsSync(join(root, f)));
-  const lintable = present.filter((f) => LINTABLE_RE.test(f));
+  const lintable = present.filter((f) => LINTABLE_RE.test(f) && !LINT_EXEMPT_RE.test(f));
   const sources = present.filter((f) => SOURCE_RE.test(f) && !f.endsWith(".d.ts"));
   // The graph is generated output; it only needs re-checking when something
   // that feeds it moved — a dependency declaration, a Purpose, or the render.
