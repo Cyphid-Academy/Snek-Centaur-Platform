@@ -80,7 +80,10 @@ export type GameRejection =
   | ConfigRejection
   | { readonly kind: "game-not-found" }
   // spec: game-configuration/config-lives-on-the-game#one-game-configured-at-a-time
-  | { readonly kind: "room-occupied"; readonly openGameId: string };
+  | { readonly kind: "room-occupied"; readonly openGameId: string }
+  // A roster-snapshot entry named a team the game's roster does not carry.
+  // spec: identity-and-authorization/roster-snapshot-binding
+  | { readonly kind: "team-not-on-roster"; readonly centaurTeamId: string };
 
 /** The uniform mutation result: the transitioned record's public view, or a structured rejection. */
 export type GameWriteResult =
@@ -112,7 +115,15 @@ export function docToRecord(doc: GameDocFields): ConfigRecordState {
   return {
     phase: doc.phase,
     config: doc.config,
-    teams: asTeamRegistrations(doc.teams),
+    // The stored roster entry may carry the roster snapshot's authorization
+    // fields (memberUserIds / coachUserIds). The pure layer — and through it
+    // every public view — sees exactly TeamRegistration: the snapshot fields
+    // are read only by the platform's own issuance path, via the unredacted
+    // getGameInternal.
+    // spec: identity-and-authorization/roster-snapshot-binding
+    teams: asTeamRegistrations(
+      doc.teams.map(({ centaurTeamId, name }) => ({ centaurTeamId, name })),
+    ),
     currentPreview:
       doc.currentPreview === null
         ? null

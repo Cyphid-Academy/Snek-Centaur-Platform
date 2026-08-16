@@ -20,13 +20,15 @@ export {
   mayMutate,
 } from "./game-subject.js";
 
-export type { Capability, CapabilityEntry } from "./capabilities.js";
+export type { Capability, CapabilityEntry, GameCredentialScope } from "./capabilities.js";
 export {
   CAPABILITIES,
   CAPABILITIES_CLAIM,
   ACTING_PRINCIPAL_CLAIM,
   GAME_CREDENTIAL_CAPABILITIES,
+  GAME_CREDENTIAL_SCOPE_CLAIM,
   readCapabilityEntries,
+  readGameCredentialScope,
   hasCapability,
 } from "./capabilities.js";
 

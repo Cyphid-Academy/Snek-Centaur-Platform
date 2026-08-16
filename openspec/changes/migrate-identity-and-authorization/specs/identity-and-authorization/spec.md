@@ -156,6 +156,10 @@ A Snek Centaur Server SHALL NOT authenticate a human itself. Where a human's ide
 - **WHEN** a handoff reference is redeemed
 - **THEN** the credential is returned in that exchange to the redeeming party and relayed onward to nobody — a party that redeems on a human's behalf holds a credential it may use, never one it may pass along
 
+#### Scenario: #a-wrong-proof-burns-nothing
+- **WHEN** a handoff reference is presented with a proof that does not match the challenge it was minted with
+- **THEN** the redemption is refused and the reference is not consumed — a party that saw the reference in transit cannot spend the legitimate holder's one redemption by guessing wrong, while the reference's own short expiry still bounds how long anyone may keep guessing
+
 ### Requirement: identity-and-authorization/capability-claim-structure
 Every credential the platform issues SHALL carry the capabilities it confers as a structured claim — a sequence of entries rather than an unstructured string — and enforcement SHALL read that structure from the first line of enforcement code written. An entry SHALL name one capability as a bare verb identifier and carry nothing else; the claim is a sequence so that constraining an entry later is a change to minting alone, and no entry carries a constraint today. Where a service principal obtained a credential to act with, the credential SHALL also name that principal.
 

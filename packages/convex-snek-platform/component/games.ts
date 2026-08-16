@@ -22,7 +22,7 @@ import {
 } from "@cyphid/snek-game-configuration";
 import type { ConfigOpResult } from "@cyphid/snek-game-configuration";
 import { v } from "convex/values";
-import type { CreateGameResult, GameWriteResult } from "../src/game-doc.js";
+import type { CreateGameResult, GameRejection, GameWriteResult } from "../src/game-doc.js";
 import { asTeamRegistrations, docToRecord, recordToFields, toPublicView } from "../src/game-doc.js";
 import { gameConfigValidator, teamValidator } from "../src/validators.js";
 import type { Id } from "./_generated/dataModel.js";
@@ -213,6 +213,86 @@ export const launchGame = mutation({
     }
     const transition = launchRecord(docToRecord(doc), freshSeed());
     return await persistTransition(ctx, args.gameId, doc.roomId, transition);
+  },
+});
+
+/**
+ * Record the roster snapshot's authorization-relevant fields on the stored
+ * roster entries: which humans may obtain operator tokens for each team, and
+ * which are its designated coaches. These fields ARE the snapshot's
+ * authorization shape — issuance is answered from them and from nothing
+ * else. Taking the snapshot (when, and from which team records) belongs to
+ * the lifecycle story's orchestration; this mutation only persists what it
+ * decided. Entries naming a team not on the roster are refused rather than
+ * ignored — a snapshot for a team the game does not know is a caller bug.
+ *
+ * Config writes cannot erase a set snapshot: they are rejected outside the
+ * "configuring" phase (launch-freeze), and the snapshot is set at launch —
+ * after the last config write that could have rewritten the roster rows.
+ * spec: identity-and-authorization/roster-snapshot-binding
+ */
+export const setRosterSnapshot = mutation({
+  args: {
+    gameId: v.id("games"),
+    entries: v.array(
+      v.object({
+        centaurTeamId: v.string(),
+        memberUserIds: v.array(v.string()),
+        coachUserIds: v.array(v.string()),
+      }),
+    ),
+  },
+  handler: async (ctx, args): Promise<{ ok: true } | { ok: false; rejection: GameRejection }> => {
+    const doc = await ctx.db.get(args.gameId);
+    if (doc === null) {
+      return notFound;
+    }
+    const byTeam = new Map(args.entries.map((entry) => [entry.centaurTeamId, entry]));
+    for (const entry of args.entries) {
+      if (!doc.teams.some((team) => team.centaurTeamId === entry.centaurTeamId)) {
+        return {
+          ok: false,
+          rejection: { kind: "team-not-on-roster", centaurTeamId: entry.centaurTeamId },
+        };
+      }
+    }
+    await ctx.db.patch(args.gameId, {
+      teams: doc.teams.map((team) => {
+        const entry = byTeam.get(team.centaurTeamId);
+        return entry === undefined
+          ? team
+          : {
+              ...team,
+              memberUserIds: [...entry.memberUserIds],
+              coachUserIds: [...entry.coachUserIds],
+            };
+      }),
+    });
+    return { ok: true };
+  },
+});
+
+/**
+ * Mark a playing game finished — the minimal lifecycle seam the identity
+ * capability needs observable: credential and token issuance re-check the
+ * game's phase per request, so the phase flip is what kills issuance the
+ * moment a game ends. The game-lifecycle story owns the real finish
+ * orchestration (instance teardown, record retrieval) and will subsume
+ * this transition; until then the host's orchestration is its only caller.
+ * spec: identity-and-authorization/live-game-issuance#credential-dead-at-finish
+ */
+export const finishGame = mutation({
+  args: { gameId: v.id("games") },
+  handler: async (ctx, args): Promise<{ ok: true } | { ok: false; rejection: GameRejection }> => {
+    const doc = await ctx.db.get(args.gameId);
+    if (doc === null) {
+      return notFound;
+    }
+    if (doc.phase !== "playing") {
+      return { ok: false, rejection: { kind: "wrong-phase", phase: doc.phase } };
+    }
+    await ctx.db.patch(args.gameId, { phase: "finished" });
+    return { ok: true };
   },
 });
 

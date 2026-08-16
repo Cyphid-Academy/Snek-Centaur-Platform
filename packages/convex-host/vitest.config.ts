@@ -7,7 +7,9 @@ export default defineConfig({
   test: {
     include: ["src/**/*.{test,spec}.ts", "tests/**/*.{test,spec}.ts"],
     environment: "edge-runtime",
-    server: { deps: { inline: ["convex-test"] } },
+    // @convex-dev/better-auth must be inlined too: its module code runs
+    // inside the simulated isolate alongside our convex/ modules.
+    server: { deps: { inline: ["convex-test", "@convex-dev/better-auth"] } },
     passWithNoTests: true,
   },
 });

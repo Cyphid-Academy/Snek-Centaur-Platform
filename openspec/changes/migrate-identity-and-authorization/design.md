@@ -602,6 +602,20 @@ reload, which is the entire observable contract. *If reversed* (specifying
 the mechanism), the spec would freeze an operational choice the legacy
 corpus explicitly left open.
 
+### A wrong proof does not consume a handoff reference (implementation, 2026-08-16)
+
+Implementation surfaced a case the handoff requirement left open: whether a
+redemption attempt with a non-matching proof consumes the reference. It
+must not. The reference travels in a URL and is assumed seen; if a wrong
+proof consumed it, whoever saw it could burn the legitimate holder's one
+redemption with a garbage guess — a denial of sign-in requiring no secret
+at all. Refusing without consuming keeps single-use meaning "redeemed
+once", while the reference's short expiry bounds how long anyone may keep
+guessing. *If reversed* — wrong proofs consume — the defence the
+PKCE-shaped challenge provides is inverted into an attack surface. Pinned
+as a scenario on the handoff requirement because the wrong behaviour is
+the naively-defensive implementation a future rewrite would reach for.
+
 ## Constraint-mining (mandatory final step)
 
 Each routed lead was judged: does a design decision's quality depend on an

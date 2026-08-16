@@ -4,8 +4,10 @@ import {
   CAPABILITIES_CLAIM,
   type Capability,
   GAME_CREDENTIAL_CAPABILITIES,
+  GAME_CREDENTIAL_SCOPE_CLAIM,
   hasCapability,
   readCapabilityEntries,
+  readGameCredentialScope,
 } from "./capabilities.js";
 
 // spec: identity-and-authorization/capability-claim-structure
@@ -108,5 +110,31 @@ describe("GAME_CREDENTIAL_CAPABILITIES", () => {
   it("parses back through readCapabilityEntries unchanged", () => {
     const claims = { [CAPABILITIES_CLAIM]: GAME_CREDENTIAL_CAPABILITIES };
     expect(readCapabilityEntries(claims)).toEqual(GAME_CREDENTIAL_CAPABILITIES);
+  });
+});
+
+// spec: identity-and-authorization/game-credential-scope
+describe("readGameCredentialScope — the game credential's one-game-one-team binding", () => {
+  it("parses a well-formed scope", () => {
+    expect(
+      readGameCredentialScope({
+        [GAME_CREDENTIAL_SCOPE_CLAIM]: { gameId: "game-1", teamId: "team-red" },
+      }),
+    ).toEqual({ gameId: "game-1", teamId: "team-red" });
+  });
+
+  it("parses to null for anything but the exact shape — no partial trust", () => {
+    for (const bad of [
+      {},
+      { [GAME_CREDENTIAL_SCOPE_CLAIM]: "game-1:team-red" },
+      { [GAME_CREDENTIAL_SCOPE_CLAIM]: ["game-1", "team-red"] },
+      { [GAME_CREDENTIAL_SCOPE_CLAIM]: null },
+      { [GAME_CREDENTIAL_SCOPE_CLAIM]: { gameId: "game-1" } },
+      { [GAME_CREDENTIAL_SCOPE_CLAIM]: { gameId: "", teamId: "team-red" } },
+      { [GAME_CREDENTIAL_SCOPE_CLAIM]: { gameId: "game-1", teamId: "" } },
+      { [GAME_CREDENTIAL_SCOPE_CLAIM]: { gameId: 1, teamId: "team-red" } },
+    ]) {
+      expect(readGameCredentialScope(bad)).toBeNull();
+    }
   });
 });

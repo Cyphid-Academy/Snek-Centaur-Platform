@@ -69,6 +69,22 @@ export const teamValidator = v.object({
   name: v.string(),
 });
 
+/**
+ * The STORED rendering of a roster entry: the registration mirror plus the
+ * roster snapshot's authorization-relevant fields — which humans may obtain
+ * operator tokens for this team, and which are its designated coaches.
+ * Optional because they are set only when the lifecycle story's snapshot is
+ * taken (at launch); the write surface (updateRoster) accepts and mirrors
+ * TeamRegistration alone, so these fields never arrive from a client.
+ * spec: identity-and-authorization/roster-snapshot-binding
+ */
+export const storedTeamValidator = v.object({
+  centaurTeamId: v.string(),
+  name: v.string(),
+  memberUserIds: v.optional(v.array(v.string())),
+  coachUserIds: v.optional(v.array(v.string())),
+});
+
 // ---------------------------------------------------------------------------
 // The generated starting state and the generator's structured failure —
 // the two arms of a preview slot's result, exactly as the one shared
@@ -168,7 +184,7 @@ export const gameFields = {
   // spec: game-configuration/launch-freeze
   phase: v.union(v.literal("configuring"), v.literal("playing"), v.literal("finished")),
   config: gameConfigValidator,
-  teams: v.array(teamValidator),
+  teams: v.array(storedTeamValidator),
   currentPreview: v.union(previewSlotValidator, v.null()),
   // spec: game-configuration/board-preview-lock-in
   boardLocked: v.boolean(),

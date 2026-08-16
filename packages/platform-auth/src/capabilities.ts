@@ -52,6 +52,39 @@ export const CAPABILITIES_CLAIM = "cyphid.capabilities";
 export const ACTING_PRINCIPAL_CLAIM = "cyphid.acting_principal";
 
 /**
+ * The game-scope claim a per-team game credential carries: the one game and
+ * one team the credential is scoped to. Namespaced like the other claims so
+ * it cannot collide with a foreign claim. The audience cannot carry this —
+ * a game credential is used AT the platform (aud = platformAudience()), so
+ * its game binding travels as its own structured claim.
+ * spec: identity-and-authorization/game-credential-scope
+ */
+export const GAME_CREDENTIAL_SCOPE_CLAIM = "cyphid.game_scope";
+
+/** The value of the game-scope claim: exactly one game and one team. */
+export interface GameCredentialScope {
+  readonly gameId: string;
+  readonly teamId: string;
+}
+
+/**
+ * Structurally parse the game-scope claim out of a decoded claim set.
+ * Total and strict like the other readers: anything but an object carrying
+ * non-empty string `gameId` and `teamId` parses to null — never a partial
+ * result a scope check could half-trust.
+ */
+export function readGameCredentialScope(
+  claims: Record<string, unknown>,
+): GameCredentialScope | null {
+  const raw = claims[GAME_CREDENTIAL_SCOPE_CLAIM];
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
+  const { gameId, teamId } = raw as { readonly gameId?: unknown; readonly teamId?: unknown };
+  if (typeof gameId !== "string" || gameId.length === 0) return null;
+  if (typeof teamId !== "string" || teamId.length === 0) return null;
+  return { gameId, teamId };
+}
+
+/**
  * Structurally parse the capabilities claim out of a decoded claim set.
  * Reads entries, never splits a string
  * (#structured-from-the-first-token): the claim value must be an array of
