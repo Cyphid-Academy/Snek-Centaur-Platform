@@ -89,7 +89,10 @@ context: |
   replay-check); depends on game-engine. visual-tester — the dedicated dev
   app for authoring board state, staging moves, engine-driven simulation,
   and running saved Test Sequences with discrepancy annotation; depends on
-  game-engine and test-sequences (leaf capability).
+  game-engine and test-sequences (leaf capability). application-shell — the
+  one web application every surface is mounted in and the infrastructure it
+  shares (the single state binding, the one board rendering, the surface
+  mounting contract); depends on game-engine and global-invariants.
 
   MIGRATION COMPLETE (2026-07-24): the legacy corpus
   (legacy-spec-archive/) is fully historical. Every numeric id is

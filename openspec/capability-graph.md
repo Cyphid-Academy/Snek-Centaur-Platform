@@ -29,7 +29,7 @@ flowchart TD
   classDef base stroke-width:2px;
 
   accounts-and-profiles["accounts-and-profiles"]:::open
-  application-shell["application-shell"]:::open
+  application-shell["application-shell"]
   bot-configuration["bot-configuration"]:::open
   bot-framework["bot-framework"]:::open
   centaur-server-runtime["centaur-server-runtime"]:::open
