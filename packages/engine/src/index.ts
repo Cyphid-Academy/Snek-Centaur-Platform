@@ -118,3 +118,9 @@ export { standingScores } from "./resolve/win.js";
 // Move pre-validation (web-client consumers of the shared build per
 // global-invariants/one-shared-engine; see validate.ts for semantics).
 export { isValidMove } from "./validate.js";
+
+// The single build-time equality check every engine-type mirror site
+// platform-wide must use — modifier-sensitive, so a mirror drifting only in
+// readonly-ness or optionality still fails the build.
+// spec: global-invariants/engine-mirrors-are-guarded#one-assertion-every-site
+export type { AssertExact } from "./type-assert.js";

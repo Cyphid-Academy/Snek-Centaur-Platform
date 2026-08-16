@@ -30,3 +30,28 @@ export { GENERATION_PARAMETER_DESCRIPTORS, generationDescriptorFor } from "./con
 // The generator itself — all-or-nothing over a bounded retry.
 export { generateBoardAndInitialState } from "./boardgen.js";
 export type { GeneratedInitialState, TeamRegistration } from "./boardgen.js";
+
+// The configuration record's pure state machine: the single declaration of
+// its rules. Convex mutations call these inside their transactions; the dev
+// harness behind the standalone configuration surface reuses them.
+// spec: game-configuration/config-lives-on-the-game
+export {
+  applyConfigEdit,
+  applyRosterChange,
+  concludeWithoutLaunch,
+  createRecord,
+  generationInputsChanged,
+  launch,
+  regeneratePreview,
+  setBoardLock,
+  validateConfig,
+} from "./record.js";
+export type {
+  ConfigOpResult,
+  ConfigRecordState,
+  ConfigRejection,
+  GamePhase,
+  GenerationInputs,
+  PreviewSlot,
+  ValidateResult,
+} from "./record.js";
