@@ -83,7 +83,12 @@ export type GameRejection =
   | { readonly kind: "room-occupied"; readonly openGameId: string }
   // A roster-snapshot entry named a team the game's roster does not carry.
   // spec: identity-and-authorization/roster-snapshot-binding
-  | { readonly kind: "team-not-on-roster"; readonly centaurTeamId: string };
+  | { readonly kind: "team-not-on-roster"; readonly centaurTeamId: string }
+  // A roster team id carried the game-subject codec separator (':'), which
+  // would make the game access token's subject encoding throw at mint time.
+  // Refused at the write surface so that throw is unreachable from stored data.
+  // spec: identity-and-authorization/game-token-contents
+  | { readonly kind: "invalid-team-id"; readonly centaurTeamId: string };
 
 /** The uniform mutation result: the transitioned record's public view, or a structured rejection. */
 export type GameWriteResult =

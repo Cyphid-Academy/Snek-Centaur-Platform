@@ -6,7 +6,7 @@
 // spec: identity-and-authorization/sign-in-handoff
 // spec: global-invariants/transactional-invariant-enforcement#concurrent-mutations-cannot-race-past-a-guard
 import { v } from "convex/values";
-import { internalMutation } from "../_generated/server.js";
+import { internalMutation, internalQuery } from "../_generated/server.js";
 
 /** A handoff reference expires on the redirect it exists to survive. */
 export const HANDOFF_REFERENCE_LIFETIME_MS = 2 * 60 * 1000;
@@ -25,6 +25,7 @@ export const createReference = internalMutation({
     userId: v.string(),
     refHash: v.string(),
     challengeS256: v.string(),
+    originatingSessionId: v.string(),
     requestedReturnAddress: v.union(v.string(), v.null()),
     nowMs: v.number(),
   },
@@ -57,6 +58,7 @@ export const createReference = internalMutation({
       refHash: args.refHash,
       issuerRowId: registration._id,
       userId: args.userId,
+      originatingSessionId: args.originatingSessionId,
       challengeS256: args.challengeS256,
       expiresAt: args.nowMs + HANDOFF_REFERENCE_LIFETIME_MS,
       used: false,
@@ -102,7 +104,71 @@ export const redeemReference = internalMutation({
       // redemption.
       return { ok: false as const, rejection: { kind: "verifier-mismatch" as const } };
     }
+    // What the reference can be exchanged for is bounded by that Server's
+    // registered ceiling — read here and carried onto the renewal credential.
+    // spec: identity-and-authorization/sign-in-handoff#server-never-holds-the-provider-exchange
+    const registration = await ctx.db.get(row.issuerRowId);
+    if (registration === null) {
+      // The Server's registration was withdrawn between create and redeem.
+      return { ok: false as const, rejection: { kind: "unregistered-server" as const } };
+    }
     await ctx.db.patch(row._id, { used: true });
-    return { ok: true as const, userId: row.userId };
+    return {
+      ok: true as const,
+      userId: row.userId,
+      ceiling: registration.ceiling,
+      originatingSessionId: row.originatingSessionId,
+    };
+  },
+});
+
+/**
+ * Record the renewal credential a redemption earns: its hash, the human it
+ * names, the redeeming Server's ceiling, and the originating session it is
+ * anchored to. Stateful and revocable — the working-credential mint path
+ * re-reads the originating session's liveness and re-applies the ceiling on
+ * every renewal.
+ * spec: identity-and-authorization/sign-in-handoff#server-never-holds-the-provider-exchange
+ * spec: identity-and-authorization/token-lifetime-and-refresh#renewal-re-reads-the-session
+ */
+export const recordRenewalCredential = internalMutation({
+  args: {
+    credentialHash: v.string(),
+    userId: v.string(),
+    ceiling: v.array(v.string()),
+    originatingSessionId: v.string(),
+    expiresAtMs: v.number(),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.insert("handoff_credentials", {
+      credentialHash: args.credentialHash,
+      userId: args.userId,
+      ceiling: args.ceiling,
+      originatingSessionId: args.originatingSessionId,
+      expiresAt: args.expiresAtMs,
+    });
+  },
+});
+
+/**
+ * Look up a renewal credential by hash, refusing an unknown or expired one.
+ * The originating-session liveness re-read and the ceiling intersection happen
+ * in the HTTP action, next to the mint (it needs the auth context regardless).
+ * spec: identity-and-authorization/token-lifetime-and-refresh#renewal-re-reads-the-session
+ */
+export const getRenewalCredential = internalQuery({
+  args: { credentialHash: v.string(), nowMs: v.number() },
+  handler: async (ctx, args) => {
+    const row = await ctx.db
+      .query("handoff_credentials")
+      .withIndex("by_credentialHash", (q) => q.eq("credentialHash", args.credentialHash))
+      .unique();
+    if (row === null) return null;
+    if (row.expiresAt <= args.nowMs) return null;
+    return {
+      userId: row.userId,
+      ceiling: row.ceiling,
+      originatingSessionId: row.originatingSessionId,
+    };
   },
 });

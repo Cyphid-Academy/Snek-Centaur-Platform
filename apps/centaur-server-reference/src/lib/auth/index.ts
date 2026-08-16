@@ -5,6 +5,7 @@
 export {
   createCredentialCustody,
   RENEWAL_AT_FRACTION_OF_LIFETIME,
+  RENEWAL_MIN_DELAY_MS,
   RETRY_INITIAL_DELAY_MS,
   RETRY_MAX_DELAY_MS,
 } from "./custody";

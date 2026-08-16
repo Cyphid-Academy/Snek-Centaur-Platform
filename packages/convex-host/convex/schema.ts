@@ -92,9 +92,48 @@ export default defineSchema({
     refHash: v.string(),
     issuerRowId: v.id("trusted_issuers"),
     userId: v.string(),
+    /**
+     * The human's ORIGINATING session (the one established at sign-in), by its
+     * Better Auth session row id — a non-secret handle, never the session
+     * token. What redemption mints is anchored to this session's liveness, so
+     * revoking it ends renewal under the handoff credential: a human's absence
+     * ends what is minted in their name.
+     * spec: identity-and-authorization/token-lifetime-and-refresh#renewal-re-reads-the-session
+     */
+    originatingSessionId: v.string(),
     /** sha256(verifier), hex — fixed by the requesting page at creation. */
     challengeS256: v.string(),
     expiresAt: v.number(),
     used: v.boolean(),
   }).index("by_refHash", ["refHash"]),
+
+  /**
+   * The renewal credential a handoff redemption earns: opaque, stateful,
+   * revocable — NOT a second independent session. It is bounded two ways:
+   *
+   *  - `ceiling` is the redeeming Server's registered ceiling; every working
+   *    credential minted under this renewal credential carries the human's
+   *    capabilities INTERSECTED with it, never the human's full set. A Server
+   *    whose ceiling excludes administer-platform cannot obtain a human-admin
+   *    working credential even when redeeming for an admin.
+   *    spec: identity-and-authorization/sign-in-handoff#server-never-holds-the-provider-exchange
+   *    spec: identity-and-authorization/peer-capability-ceiling#ceiling-sits-below-the-user
+   *
+   *  - `originatingSessionId` anchors it to the human's originating session:
+   *    every working-credential mint re-reads that session's liveness, so
+   *    revoking it stops renewal under this credential.
+   *    spec: identity-and-authorization/token-lifetime-and-refresh#renewal-re-reads-the-session
+   *
+   * Only the credential's HASH is stored — the credential itself travels to,
+   * and is held by, the redeeming party alone.
+   * spec: identity-and-authorization/client-credential-custody
+   */
+  handoff_credentials: defineTable({
+    /** sha256(renewal credential), hex. */
+    credentialHash: v.string(),
+    userId: v.string(),
+    ceiling: v.array(v.string()),
+    originatingSessionId: v.string(),
+    expiresAt: v.number(),
+  }).index("by_credentialHash", ["credentialHash"]),
 });

@@ -50,6 +50,24 @@ export interface RenewedCredential {
  */
 export interface CredentialCustodyDeps {
   readonly renew: () => Promise<RenewedCredential | null>;
+  /**
+   * The platform's origin — the only origin the credential is ever attached
+   * to (plus any in `allowedOrigins`). Custody OWNS the transport so a caller
+   * can neither supply a function that captures the header nor point an
+   * authorized request at an arbitrary origin: the credential leaves the
+   * closure only as the Authorization header of a request to a permitted origin.
+   * spec: identity-and-authorization/client-credential-custody#concealed-from-co-resident-scripts
+   * spec: identity-and-authorization/audience-bound-tokens
+   */
+  readonly platformOrigin: string;
+  /** Additional origins the credential may be attached to. Default: none. */
+  readonly allowedOrigins?: ReadonlyArray<string>;
+  /**
+   * The fetch implementation custody calls. Defaults to globalThis.fetch. A
+   * caller no longer passes a fetch per request, so no per-call function can
+   * capture the credential.
+   */
+  readonly fetchImpl?: FetchLike;
   readonly now?: () => number;
   readonly setTimer?: (fn: () => void, delayMs: number) => unknown;
   readonly clearTimer?: (handle: unknown) => void;
@@ -92,11 +110,16 @@ export interface CredentialCustody {
    */
   stop(): void;
   /**
-   * Wrap a fetch so the Authorization header is injected INSIDE the
-   * closure: the caller never touches the credential, and the credential
-   * never travels anywhere but the header of the request being made.
+   * Make a request with the credential attached as the Authorization header,
+   * INSIDE the closure. Custody owns the transport: it calls the fetch it was
+   * constructed with (default globalThis.fetch), and attaches the credential
+   * ONLY when the request target is same-origin as the platform (or an
+   * allowlisted origin) — a request to any other origin is made without it, so
+   * the credential can be neither captured by a caller-supplied function nor
+   * aimed at an arbitrary origin.
+   * spec: identity-and-authorization/client-credential-custody#concealed-from-co-resident-scripts
    */
-  authorizedFetch(fetchLike: FetchLike): FetchLike;
+  authorizedFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
   readonly status: CustodyStatus;
 }
 
@@ -116,6 +139,19 @@ export const RETRY_INITIAL_DELAY_MS = 1_000;
 export const RETRY_MAX_DELAY_MS = 30_000;
 
 /**
+ * The floor no renewal is ever scheduled sooner than, and the minimum usable
+ * life a renewed credential must carry to be adopted. Without it, an
+ * already-expired credential (remaining life 0, whether from true expiry or a
+ * platform clock skewed relative to the client) would schedule the next
+ * renewal at delay 0 and hot-loop — an unbounded setTimeout(…,0) request
+ * storm. A credential that arrives already expired or expiring within this
+ * floor is treated as a FAILED renewal (quiet backoff), never adopted and
+ * rescheduled off its non-positive remaining life.
+ * spec: identity-and-authorization/token-lifetime-and-refresh#renewal-is-proactive-never-reactive
+ */
+export const RENEWAL_MIN_DELAY_MS = 5_000;
+
+/**
  * Create a credential custody. Everything stateful lives in this call's
  * closure — deliberately a factory over locals rather than a class over
  * properties, so no enumeration of the returned object (or anything
@@ -126,6 +162,35 @@ export function createCredentialCustody(deps: CredentialCustodyDeps): Credential
   const now = deps.now ?? (() => Date.now());
   const setTimer = deps.setTimer ?? ((fn: () => void, ms: number) => setTimeout(fn, ms));
   const clearTimer = deps.clearTimer ?? ((handle: unknown) => clearTimeout(handle as number));
+  const fetchImpl: FetchLike = deps.fetchImpl ?? ((input, init) => globalThis.fetch(input, init));
+
+  // The set of origins the credential may be attached to — the platform's own,
+  // plus any explicit allowlist fixed at construction. Normalised to bare
+  // origins so a path or query can never widen the match.
+  const normalizeOrigin = (value: string): string | null => {
+    try {
+      return new URL(value).origin;
+    } catch {
+      return null;
+    }
+  };
+  const allowedOrigins = new Set<string>();
+  for (const value of [deps.platformOrigin, ...(deps.allowedOrigins ?? [])]) {
+    const origin = normalizeOrigin(value);
+    if (origin !== null) allowedOrigins.add(origin);
+  }
+  // Resolve a request target to its origin, RELATIVE to the platform origin so
+  // a same-origin relative URL ("/api/…") is attached to, an absolute foreign
+  // URL is not.
+  const targetOrigin = (input: RequestInfo | URL): string | null => {
+    const href =
+      input instanceof Request ? input.url : input instanceof URL ? input.href : String(input);
+    try {
+      return new URL(href, deps.platformOrigin).origin;
+    } catch {
+      return null;
+    }
+  };
 
   // The closure state — the ONLY residence the credential ever has.
   let credential: string | null = null;
@@ -158,7 +223,17 @@ export function createCredentialCustody(deps: CredentialCustodyDeps): Credential
 
   const scheduleProactiveRenewal = (): void => {
     const remaining = Math.max(0, expiresAtMs - now());
-    schedule(() => void attemptRenewal(), remaining * RENEWAL_AT_FRACTION_OF_LIFETIME);
+    // Floored: never sooner than RENEWAL_MIN_DELAY_MS, so no clock relationship
+    // can drive the proactive schedule to a zero-delay hot loop.
+    // spec: identity-and-authorization/token-lifetime-and-refresh#renewal-is-proactive-never-reactive
+    const delay = Math.max(RENEWAL_MIN_DELAY_MS, remaining * RENEWAL_AT_FRACTION_OF_LIFETIME);
+    schedule(() => void attemptRenewal(), delay);
+  };
+
+  /** Back off exactly like an unreachable-platform failure — quiet retry. */
+  const backOff = (): void => {
+    schedule(() => void attemptRenewal(), retryDelayMs);
+    retryDelayMs = Math.min(retryDelayMs * 2, RETRY_MAX_DELAY_MS);
   };
 
   async function attemptRenewal(): Promise<void> {
@@ -175,8 +250,7 @@ export function createCredentialCustody(deps: CredentialCustodyDeps): Credential
       // failure surfaces only when access is really lost.
       // spec: identity-and-authorization/token-lifetime-and-refresh#renewal-failure-is-quiet-until-it-bites
       if (startedGeneration !== generation) return;
-      schedule(() => void attemptRenewal(), retryDelayMs);
-      retryDelayMs = Math.min(retryDelayMs * 2, RETRY_MAX_DELAY_MS);
+      backOff();
       return;
     }
     renewInFlight = false;
@@ -187,6 +261,17 @@ export function createCredentialCustody(deps: CredentialCustodyDeps): Credential
       // retrying cannot change that, so no retry is scheduled and the
       // credential in hand simply runs out its remaining minutes.
       // spec: identity-and-authorization/token-lifetime-and-refresh#renewal-re-reads-the-session
+      return;
+    }
+    if (renewed.expiresAtMs - now() <= RENEWAL_MIN_DELAY_MS) {
+      // The platform answered with a credential already expired or expiring
+      // within the floor (a stale mint, or a client/platform clock skew).
+      // Adopting it and rescheduling off its non-positive remaining life is
+      // exactly the hot loop; instead treat it as a failed renewal — quiet
+      // backoff — leaving any still-valid held credential to keep status
+      // "active" until it truly lapses.
+      // spec: identity-and-authorization/token-lifetime-and-refresh#renewal-failure-is-quiet-until-it-bites
+      backOff();
       return;
     }
     credential = renewed.workingCredential;
@@ -217,19 +302,25 @@ export function createCredentialCustody(deps: CredentialCustodyDeps): Credential
       retryDelayMs = RETRY_INITIAL_DELAY_MS;
     },
 
-    authorizedFetch(fetchLike: FetchLike): FetchLike {
-      return async (input, init) => {
-        // Injection happens HERE, inside the closure: the caller supplied
-        // a request, never saw a credential, and gets back a response.
-        if (!holdingLiveCredential()) {
-          throw new Error(
-            `credential custody holds no live credential (status: ${statusOf()}); the caller must sign in again`,
-          );
-        }
-        const headers = new Headers(init?.headers);
-        headers.set("authorization", `Bearer ${credential}`);
-        return await fetchLike(input, { ...init, headers });
-      };
+    async authorizedFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+      // Injection happens HERE, inside the closure, onto custody's OWN
+      // transport: the caller supplied a request, never a function and never a
+      // credential, and gets back a response.
+      if (!holdingLiveCredential()) {
+        throw new Error(
+          `credential custody holds no live credential (status: ${statusOf()}); the caller must sign in again`,
+        );
+      }
+      const origin = targetOrigin(input);
+      if (origin === null || !allowedOrigins.has(origin)) {
+        // Not the platform (or an allowlisted origin): make the request WITHOUT
+        // the credential, so it can never be aimed at an arbitrary origin.
+        // spec: identity-and-authorization/client-credential-custody#concealed-from-co-resident-scripts
+        return await fetchImpl(input, init);
+      }
+      const headers = new Headers(init?.headers);
+      headers.set("authorization", `Bearer ${credential}`);
+      return await fetchImpl(input, { ...init, headers });
     },
 
     get status(): CustodyStatus {

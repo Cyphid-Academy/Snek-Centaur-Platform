@@ -240,6 +240,29 @@ describe("preview regeneration and the lock", () => {
     });
   });
 
+  it("refuses a team id carrying the game-subject separator as a structured rejection, never a thrown error", async () => {
+    // A ':' in a centaurTeamId would make the game access token's subject
+    // codec (encodeGameSubject) throw at mint time — far from the write that
+    // stored the bad id. The write surface rejects it as data instead, so
+    // that throw is unreachable from stored roster data.
+    // spec: identity-and-authorization/game-token-contents
+    const t = setup();
+    const { gameId } = await t.mutation(games.createGame, { roomId: null });
+
+    const bad = await t.mutation(games.updateRoster, {
+      gameId,
+      teams: [{ centaurTeamId: "a:b", name: "Ambiguous" }],
+    });
+    expect(bad).toEqual({
+      ok: false,
+      rejection: { kind: "invalid-team-id", centaurTeamId: "a:b" },
+    });
+
+    // Regression: a normal id still rosters successfully.
+    const good = await t.mutation(games.updateRoster, { gameId, teams: TEAMS });
+    expect(good.ok).toBe(true);
+  });
+
   it("regenerates on a generation edit, not on a gameplay-only edit", async () => {
     // spec: game-configuration/board-preview (regeneration trigger = generation inputs)
     // spec: game-configuration/board-preview-lock-in#a-dynamic-gameplay-edit-leaves-the-lock-standing

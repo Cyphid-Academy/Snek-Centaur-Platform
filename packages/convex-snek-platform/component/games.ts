@@ -45,6 +45,16 @@ function freshSeed(): Uint8Array {
 const notFound = { ok: false, rejection: { kind: "game-not-found" } } as const;
 
 /**
+ * The game-subject codec's field separator (@cyphid/snek-platform-auth's
+ * encodeGameSubject). A team id must not contain it: kept as a bare literal
+ * here rather than a cross-package import so the component stays free of an
+ * auth dependency, matching how the pure record layer validates roster shape
+ * with its own local predicates.
+ * spec: identity-and-authorization/game-token-contents
+ */
+const GAME_SUBJECT_SEPARATOR = ":";
+
+/**
  * Persist a pure-layer transition. When the transition says the generation
  * inputs changed, the preview regenerates HERE, in the same mutation (and so
  * the same transaction) as the edit that provoked it — a lock cleared in a
@@ -170,6 +180,19 @@ export const updateRoster = mutation({
     const doc = await ctx.db.get(args.gameId);
     if (doc === null) {
       return notFound;
+    }
+    // A team id containing the game-subject codec separator (':') would make
+    // encodeGameSubject throw when a bot access token is later minted for the
+    // team — an error far from the write that stored the id. Refuse it here,
+    // as data, so the codec's throw is unreachable from stored roster data.
+    // spec: identity-and-authorization/game-token-contents
+    for (const team of args.teams) {
+      if (team.centaurTeamId.includes(GAME_SUBJECT_SEPARATOR)) {
+        return {
+          ok: false,
+          rejection: { kind: "invalid-team-id", centaurTeamId: team.centaurTeamId },
+        };
+      }
     }
     const transition = applyRosterChange(docToRecord(doc), asTeamRegistrations(args.teams));
     return await persistTransition(ctx, args.gameId, doc.roomId, transition);

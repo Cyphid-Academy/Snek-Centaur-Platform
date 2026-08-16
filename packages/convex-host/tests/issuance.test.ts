@@ -20,7 +20,9 @@ import * as jose from "jose";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { WORKING_CREDENTIAL_LIFETIME_SECONDS } from "../convex/auth";
 import {
+  MATERIAL_CACHE_TTL_MS,
   __clearMaterialCacheForTests,
+  __setMaterialClockForTests,
   __setMaterialFetchForTests,
   issuanceEndpointAudience,
 } from "../convex/lib/issuance";
@@ -156,6 +158,7 @@ beforeEach(() => {
 
 afterEach(() => {
   __setMaterialFetchForTests(null);
+  __setMaterialClockForTests(null);
 });
 
 describe("assertion exchange — happy path", () => {
@@ -306,6 +309,105 @@ describe("assertion exchange — refusals", () => {
     });
   });
 
+  it("refuses to issue when the ceiling covers NEITHER game-credential verb — naming both", async () => {
+    // A game credential confers exactly write-centaur-state and
+    // request-bot-tokens by definition; a registration whose ceiling covers
+    // neither cannot confer one at all, and the refusal names both. Gating is
+    // on what would be MINTED, not merely on the request string (absent here).
+    // spec: identity-and-authorization/trusted-issuer-registry#excess-fails-loudly
+    // spec: identity-and-authorization/game-credential-scope
+    const t = setup();
+    const gameId = await playingGame(t);
+    const red = await makePrincipal("team-red");
+    serveMaterial(red);
+    await registerIssuer(t, red, { ceiling: [] });
+
+    const result = await requestCredential(t, {
+      assertion: await signAssertion(red),
+      gameId,
+      teamId: "team-red",
+    });
+    expect(result.status).toBe(403);
+    expect(result.body.rejection).toEqual({
+      kind: "capability-excess",
+      excess: ["write-centaur-state", "request-bot-tokens"],
+    });
+  });
+
+  it("refuses to issue when the ceiling covers only ONE game-credential verb — naming the missing one", async () => {
+    // A ceiling with write-centaur-state but not request-bot-tokens still
+    // cannot confer a game credential (which needs both); the request that
+    // names no capabilities is refused naming the one the ceiling lacks,
+    // never silently narrowed to the single covered verb.
+    // spec: identity-and-authorization/trusted-issuer-registry#excess-fails-loudly
+    const t = setup();
+    const gameId = await playingGame(t);
+    const red = await makePrincipal("team-red");
+    serveMaterial(red);
+    await registerIssuer(t, red, { ceiling: ["write-centaur-state"] });
+
+    const result = await requestCredential(t, {
+      assertion: await signAssertion(red),
+      gameId,
+      teamId: "team-red",
+    });
+    expect(result.status).toBe(403);
+    expect(result.body.rejection).toEqual({
+      kind: "capability-excess",
+      excess: ["request-bot-tokens"],
+    });
+  });
+
+  it("refuses even when the request names only the covered verb — gating is on the MINTED set, not the request string", async () => {
+    // The defect this pins: with a ceiling of just write-centaur-state, a
+    // request naming only write-centaur-state passes an excess check run over
+    // the REQUEST, yet the credential is minted with BOTH verbs regardless.
+    // Issuance must be gated on what a game credential confers (both), so the
+    // narrow request cannot smuggle request-bot-tokens past the ceiling.
+    // spec: identity-and-authorization/trusted-issuer-registry#excess-fails-loudly
+    // spec: identity-and-authorization/game-credential-scope
+    const t = setup();
+    const gameId = await playingGame(t);
+    const red = await makePrincipal("team-red");
+    serveMaterial(red);
+    await registerIssuer(t, red, { ceiling: ["write-centaur-state"] });
+
+    const result = await requestCredential(t, {
+      assertion: await signAssertion(red),
+      gameId,
+      teamId: "team-red",
+      requestedCapabilities: ["write-centaur-state"],
+    });
+    expect(result.status).toBe(403);
+    expect(result.body.rejection).toEqual({
+      kind: "capability-excess",
+      excess: ["request-bot-tokens"],
+    });
+  });
+
+  it("refuses malformed requestedCapabilities — naming the offending value, never filtering it away", async () => {
+    // A non-string entry is refused with the value named, not silently
+    // dropped (which would let a request name nothing and still mint both).
+    // spec: identity-and-authorization/trusted-issuer-registry#excess-fails-loudly
+    const t = setup();
+    const gameId = await playingGame(t);
+    const red = await makePrincipal("team-red");
+    serveMaterial(red);
+    await registerIssuer(t, red);
+
+    const result = await requestCredential(t, {
+      assertion: await signAssertion(red),
+      gameId,
+      teamId: "team-red",
+      requestedCapabilities: ["write-centaur-state", 42],
+    });
+    expect(result.status).toBe(400);
+    expect(result.body.rejection).toEqual({
+      kind: "malformed-requested-capability",
+      value: 42,
+    });
+  });
+
   it("issues while the game is playing, then refuses the very next request once it finishes", async () => {
     // The liveness flip: status is re-checked at the moment of each
     // request, so remaining cryptographic validity of anything the
@@ -333,6 +435,54 @@ describe("assertion exchange — refusals", () => {
     });
     expect(afterFinish.status).toBe(403);
     expect(afterFinish.body.rejection).toEqual({ kind: "game-not-playing", phase: "finished" });
+  });
+
+  it("stops verifying a key removed upstream once the material cache TTL lapses", async () => {
+    // The cache is invalidated on an unknown key (a rotation that ADDS one),
+    // but a key REMOVED upstream is not unknown — it verifies fine — so only a
+    // TTL retires it. Within the window the stale set still verifies; past it,
+    // the removed key is refused.
+    // spec: identity-and-authorization/service-principal-assertions#rotation-needs-no-coordination
+    const t = setup();
+    const gameId = await playingGame(t);
+    const red = await makePrincipal("team-red");
+    await registerIssuer(t, red);
+
+    let clockMs = 1_000_000;
+    __setMaterialClockForTests(() => clockMs);
+
+    // K1 is published and verifies, caching the set.
+    serveMaterial(red);
+    const first = await requestCredential(t, {
+      assertion: await signAssertion(red),
+      gameId,
+      teamId: "team-red",
+    });
+    expect(first.status).toBe(200);
+
+    // Upstream republishes at the SAME url with K1 removed (rotated to a fresh
+    // key under the same issuer id / location).
+    const rotated = await makePrincipal("team-red");
+    serveMaterial(rotated);
+
+    // Within the TTL the cached K1 still verifies — the stale window.
+    const within = await requestCredential(t, {
+      assertion: await signAssertion(red),
+      gameId,
+      teamId: "team-red",
+    });
+    expect(within.status).toBe(200);
+
+    // Past the TTL the location is re-read; K1 is gone, so an assertion signed
+    // by the removed key is refused.
+    clockMs += MATERIAL_CACHE_TTL_MS + 1;
+    const after = await requestCredential(t, {
+      assertion: await signAssertion(red),
+      gameId,
+      teamId: "team-red",
+    });
+    expect(after.status).toBe(403);
+    expect(after.body.rejection).toEqual({ kind: "invalid-signature" });
   });
 
   it("refuses team A's registration anything for team B — the registration is the team's own", async () => {

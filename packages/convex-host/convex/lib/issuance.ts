@@ -82,16 +82,46 @@ export function __setMaterialFetchForTests(impl: typeof fetch | null): void {
 }
 
 /**
- * Per-URL cache of published material, so the refetch-on-unknown-key path
- * is real: a rotated principal publishes new material alongside the old
- * and switches, and the platform re-reads the published location on
- * meeting a key it does not know — no registration change, no exchange.
+ * How long a fetched material set may be reused before it is re-read. Bounded
+ * by the assertion lifetime: a key REMOVED upstream (a rotation that retires
+ * the old key, or a revocation) stops verifying within this window, rather
+ * than living indefinitely because the cache is only ever invalidated on a
+ * key it does not recognise. A removed key is still a valid, unknown-to-be-bad
+ * key — nothing forces a refetch — so a plain unknown-key trigger cannot catch
+ * it; a time bound must.
  * spec: identity-and-authorization/service-principal-assertions#rotation-needs-no-coordination
  */
-const materialCache = new Map<string, jose.JSONWebKeySet>();
+export const MATERIAL_CACHE_TTL_MS = MAX_ASSERTION_LIFETIME_SECONDS * 1000;
+
+/** The clock the cache TTL reads — injectable so tests age the cache deterministically. */
+let materialClock: () => number = () => Date.now();
+
+export function __setMaterialClockForTests(fn: (() => number) | null): void {
+  materialClock = fn ?? (() => Date.now());
+}
+
+/**
+ * Per-URL cache of published material, TTL-bounded. The refetch-on-unknown-key
+ * path handles a rotation that ADDS a key (new material alongside old); the
+ * TTL additionally handles one that REMOVES a key, which no unknown-key
+ * trigger would ever provoke.
+ * spec: identity-and-authorization/service-principal-assertions#rotation-needs-no-coordination
+ */
+interface MaterialCacheEntry {
+  readonly jwks: jose.JSONWebKeySet;
+  readonly fetchedAtMs: number;
+}
+const materialCache = new Map<string, MaterialCacheEntry>();
 
 export function __clearMaterialCacheForTests(): void {
   materialCache.clear();
+}
+
+function freshCached(materialUrl: string): jose.JSONWebKeySet | undefined {
+  const entry = materialCache.get(materialUrl);
+  if (entry === undefined) return undefined;
+  if (materialClock() - entry.fetchedAtMs >= MATERIAL_CACHE_TTL_MS) return undefined;
+  return entry.jwks;
 }
 
 async function fetchMaterial(materialUrl: string): Promise<jose.JSONWebKeySet> {
@@ -103,7 +133,7 @@ async function fetchMaterial(materialUrl: string): Promise<jose.JSONWebKeySet> {
   if (!Array.isArray(jwks.keys)) {
     throw new Error(`verification material at ${materialUrl} is not a JWKS`);
   }
-  materialCache.set(materialUrl, jwks);
+  materialCache.set(materialUrl, { jwks, fetchedAtMs: materialClock() });
   return jwks;
 }
 
@@ -154,13 +184,17 @@ export async function verifyAssertion(
 
   let payload: jose.JWTPayload;
   try {
-    const cached = materialCache.get(registration.materialUrl);
+    // A cached set is used only while within the TTL; past it, the location is
+    // re-read so a removed key stops verifying within the window.
+    // spec: identity-and-authorization/service-principal-assertions#rotation-needs-no-coordination
+    const cached = freshCached(registration.materialUrl);
     try {
       const jwks = cached ?? (await fetchMaterial(registration.materialUrl));
       ({ payload } = await verifyAgainst(jwks));
     } catch (error) {
       // A key the cached material does not know: re-read the published
-      // location once and retry — rotation needs no coordination.
+      // location once and retry — rotation that ADDS a key needs no
+      // coordination.
       // spec: identity-and-authorization/service-principal-assertions#rotation-needs-no-coordination
       if (cached !== undefined && isUnknownKeyError(error)) {
         ({ payload } = await verifyAgainst(await fetchMaterial(registration.materialUrl)));

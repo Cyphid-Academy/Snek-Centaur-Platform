@@ -6,6 +6,12 @@
 // expiring on the redirect it exists to survive, and conferring nothing
 // on its own.
 // spec: identity-and-authorization/sign-in-handoff
+import {
+  CAPABILITIES_CLAIM,
+  platformAudience,
+  readCapabilityEntries,
+} from "@cyphid/snek-platform-auth";
+import * as jose from "jose";
 import { beforeAll, describe, expect, it } from "vitest";
 import { sha256Hex } from "../convex/lib/sha256";
 import { type T, makeHuman, setAuthEnv, setup, testSupport } from "./setup";
@@ -16,15 +22,20 @@ beforeAll(() => {
 
 const RETURN_ADDRESS = "https://red.example/auth/return";
 const SECOND_RETURN_ADDRESS = "https://red.example/auth/alt-return";
+const DEFAULT_CEILING = ["write-centaur-state", "request-bot-tokens"];
 
 /** Register a Server (a Centaur Team's registration) with return addresses on record. */
-async function registerServer(t: T, issuerId: string): Promise<void> {
+async function registerServer(
+  t: T,
+  issuerId: string,
+  ceiling: ReadonlyArray<string> = DEFAULT_CEILING,
+): Promise<void> {
   await t.run(async (ctx) => {
     await ctx.db.insert("trusted_issuers", {
       issuerId,
       principalKind: "centaur-team",
       materialUrl: `https://${issuerId}.example/.well-known/jwks.json`,
-      ceiling: ["write-centaur-state", "request-bot-tokens"],
+      ceiling: [...ceiling],
       // The ONLY addresses the platform will ever redirect to.
       // spec: identity-and-authorization/sign-in-handoff#return-address-is-registered-not-requested
       returnAddresses: [RETURN_ADDRESS, SECOND_RETURN_ADDRESS],
@@ -38,9 +49,13 @@ let sessionCounter = 0;
 /** A signed-in human: user row + live Better Auth session (stand-in for a completed Google round trip). */
 async function signedInHuman(
   t: T,
+  options: { readonly isAdmin?: boolean } = {},
 ): Promise<{ readonly userId: string; readonly sessionToken: string }> {
   sessionCounter += 1;
-  const { userId } = await makeHuman(t, { name: `Handoff Human ${sessionCounter}` });
+  const { userId } = await makeHuman(t, {
+    name: `Handoff Human ${sessionCounter}`,
+    ...(options.isAdmin !== undefined ? { isAdmin: options.isAdmin } : {}),
+  });
   const sessionToken = `handoff-session-${sessionCounter}`;
   await t.mutation(testSupport.createSession, {
     userId,
@@ -50,12 +65,25 @@ async function signedInHuman(
   return { userId, sessionToken };
 }
 
+/** The handoff's dedicated working-credential mint, under a renewal credential. */
+async function mintWorkingCredential(
+  t: T,
+  renewalCredential: string,
+): Promise<{ readonly status: number; readonly body: HandoffResponseBody }> {
+  const response = await t.fetch("/handoff/working-credential", {
+    method: "POST",
+    headers: { authorization: `Bearer ${renewalCredential}` },
+  });
+  return { status: response.status, body: (await response.json()) as HandoffResponseBody };
+}
+
 /** Either handoff route's response body, typed for both arms. */
 interface HandoffResponseBody {
   readonly ok?: boolean;
   readonly reference?: string;
   readonly returnAddress?: string;
   readonly renewalCredential?: string;
+  readonly workingCredential?: string;
   readonly expiresAtMs?: number;
   readonly rejection?: unknown;
 }
@@ -89,10 +117,12 @@ async function redeemHandoff(
 }
 
 describe("sign-in handoff", () => {
-  it("create→redeem happy path: the redeemer earns a renewal credential working credentials are minted under", async () => {
+  it("create→redeem happy path: the redeemer earns a renewal credential working credentials are minted under — bounded by the Server's ceiling", async () => {
     // spec: identity-and-authorization/sign-in-handoff#the-redeemer-keeps-what-it-earns
     const t = setup();
-    await registerServer(t, "team-red");
+    // A ceiling that overlaps the human's own capabilities in exactly one verb,
+    // so the intersection is visibly non-trivial.
+    await registerServer(t, "team-red", ["write-centaur-state", "configure-games"]);
     const { sessionToken } = await signedInHuman(t);
 
     const verifier = "verifier-high-entropy-value-0001";
@@ -110,17 +140,65 @@ describe("sign-in handoff", () => {
     expect(redeemed.status).toBe(200);
     const renewalCredential = redeemed.body.renewalCredential as string;
     expect(renewalCredential).toBeTypeOf("string");
-    // The reference itself conferred nothing; what redemption earned is
-    // the stateful renewal anchor, under which a working credential is
-    // now mintable without interactive re-authentication.
+
+    // The reference itself conferred nothing; what redemption earned is the
+    // stateful renewal anchor, under which a working credential is now mintable
+    // without interactive re-authentication.
     // spec: identity-and-authorization/token-lifetime-and-refresh#refresh-without-reauth
-    const tokenResponse = await t.fetch("/api/auth/convex/token", {
-      method: "GET",
-      headers: { authorization: `Bearer ${renewalCredential}` },
+    const minted = await mintWorkingCredential(t, renewalCredential);
+    expect(minted.status).toBe(200);
+    const workingCredential = minted.body.workingCredential as string;
+    expect(workingCredential).toBeTypeOf("string");
+
+    // The working credential verifies against the platform's own material and
+    // is audience-bound to the platform's functions.
+    const jwksResponse = await t.fetch("/api/auth/convex/jwks", { method: "GET" });
+    const keySet = jose.createLocalJWKSet((await jwksResponse.json()) as jose.JSONWebKeySet);
+    const { payload } = await jose.jwtVerify(workingCredential, keySet, {
+      audience: platformAudience(),
     });
-    expect(tokenResponse.status).toBe(200);
-    const { token } = (await tokenResponse.json()) as { token: string };
-    expect(token).toBeTypeOf("string");
+
+    // Capabilities are the human's set INTERSECTED with the Server's ceiling —
+    // configure-games survives (in both); write-centaur-state is not a human
+    // verb and the other human verbs are outside the ceiling, so neither leaks.
+    // spec: identity-and-authorization/sign-in-handoff#server-never-holds-the-provider-exchange
+    // spec: identity-and-authorization/peer-capability-ceiling#ceiling-sits-below-the-user
+    expect(readCapabilityEntries(payload as Record<string, unknown>)).toEqual([
+      { verb: "configure-games" },
+    ]);
+  });
+
+  it("the handed-off credential of an ADMIN carries only the intersection — never administer-platform or the human-only verbs the ceiling omits", async () => {
+    // A Server whose ceiling excludes administer-platform (and every other
+    // human verb) cannot obtain a human-admin working credential even when
+    // redeeming for an admin: the exclusion is a property of the Server.
+    // spec: identity-and-authorization/peer-capability-ceiling#ceiling-sits-below-the-user
+    // spec: identity-and-authorization/sign-in-handoff#server-never-holds-the-provider-exchange
+    const t = setup();
+    await registerServer(t, "team-red", ["write-centaur-state"]);
+    const { sessionToken } = await signedInHuman(t, { isAdmin: true });
+
+    const verifier = "verifier-high-entropy-value-admin";
+    const created = await createHandoff(t, sessionToken, {
+      serverId: "team-red",
+      challengeS256: await sha256Hex(verifier),
+    });
+    const redeemed = await redeemHandoff(t, {
+      reference: created.body.reference as string,
+      verifier,
+    });
+    const minted = await mintWorkingCredential(t, redeemed.body.renewalCredential as string);
+    expect(minted.status).toBe(200);
+
+    const claims = jose.decodeJwt(minted.body.workingCredential as string) as Record<
+      string,
+      unknown
+    >;
+    // The intersection of the admin's capabilities with a ceiling of only
+    // write-centaur-state (not a human verb) is empty — no administer-platform,
+    // no use-platform, nothing.
+    expect(readCapabilityEntries(claims)).toEqual([]);
+    expect((claims[CAPABILITIES_CLAIM] as unknown[]).length).toBe(0);
   });
 
   it("refuses a second redeem of the same reference, whatever its remaining lifetime", async () => {
@@ -225,10 +303,12 @@ describe("sign-in handoff", () => {
     expect(expired.body.rejection).toEqual({ kind: "expired-reference" });
   });
 
-  it("refuses working-credential renewal under the returned credential once its session is revoked", async () => {
-    // Renewal re-reads the session at each renewal rather than inheriting
-    // from the credential being replaced: a human's absence ends what is
-    // minted in their name.
+  it("refuses working-credential renewal once the human's ORIGINATING session is revoked", async () => {
+    // The handoff credential is anchored to the human's originating session,
+    // not to a second independent one: renewal re-reads that session's liveness
+    // each time, so revoking it ends renewal under the handoff credential —
+    // a human's absence ends what is minted in their name, whatever the
+    // Server's registration still permits.
     // spec: identity-and-authorization/token-lifetime-and-refresh#renewal-re-reads-the-session
     const t = setup();
     await registerServer(t, "team-red");
@@ -245,20 +325,15 @@ describe("sign-in handoff", () => {
     });
     const renewalCredential = redeemed.body.renewalCredential as string;
 
-    // Renewal works while the session lives…
-    const before = await t.fetch("/api/auth/convex/token", {
-      method: "GET",
-      headers: { authorization: `Bearer ${renewalCredential}` },
-    });
+    // Renewal works while the ORIGINATING session lives…
+    const before = await mintWorkingCredential(t, renewalCredential);
     expect(before.status).toBe(200);
 
-    // …and is refused the moment the underlying session is revoked,
-    // whatever the holder still holds.
-    await t.mutation(testSupport.revokeSession, { token: renewalCredential });
-    const after = await t.fetch("/api/auth/convex/token", {
-      method: "GET",
-      headers: { authorization: `Bearer ${renewalCredential}` },
-    });
+    // …and is refused the moment that ORIGINATING session is revoked — note we
+    // revoke the sign-in session (`sessionToken`), not the renewal credential.
+    await t.mutation(testSupport.revokeSession, { token: sessionToken });
+    const after = await mintWorkingCredential(t, renewalCredential);
     expect(after.status).toBe(401);
+    expect(after.body.rejection).toEqual({ kind: "renewal-refused" });
   });
 });

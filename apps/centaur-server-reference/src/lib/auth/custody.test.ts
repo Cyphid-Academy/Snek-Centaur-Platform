@@ -63,8 +63,16 @@ async function flush(): Promise<void> {
 function makeRenew(clock: ReturnType<typeof makeClock>) {
   let calls = 0;
   let serial = 0;
-  const script: Array<"ok" | "fail" | "refused"> = [];
+  // "stale": the platform answers with an already-expired credential;
+  // "near": one that expires within the renewal floor (a clock-skew artefact).
+  const script: Array<"ok" | "fail" | "refused" | "stale" | "near"> = [];
   const issued: string[] = [];
+  const issue = (expiresAtMs: number) => {
+    serial += 1;
+    const workingCredential = `credential-${serial}`;
+    issued.push(workingCredential);
+    return { workingCredential, expiresAtMs };
+  };
   return {
     script,
     issued,
@@ -74,35 +82,51 @@ function makeRenew(clock: ReturnType<typeof makeClock>) {
       const behaviour = script.shift() ?? "ok";
       if (behaviour === "fail") throw new Error("platform unreachable");
       if (behaviour === "refused") return null;
-      serial += 1;
-      const workingCredential = `credential-${serial}`;
-      issued.push(workingCredential);
-      return { workingCredential, expiresAtMs: clock.now() + LIFETIME_MS };
+      if (behaviour === "stale") return issue(clock.now());
+      if (behaviour === "near") return issue(clock.now() + 2_000);
+      return issue(clock.now() + LIFETIME_MS);
     },
   };
 }
 
-function makeCustody(clock: ReturnType<typeof makeClock>, renew: ReturnType<typeof makeRenew>) {
+const PLATFORM_ORIGIN = "https://platform.example";
+
+/** A fetch custody OWNS (constructed with), recording the headers it was handed. */
+function makeCapture() {
+  let auth: string | null = null;
+  let contentType: string | null = null;
+  const fetchImpl: FetchLike = async (_input, init) => {
+    const headers = new Headers(init?.headers);
+    auth = headers.get("authorization");
+    contentType = headers.get("content-type");
+    return new Response("ok");
+  };
+  return { fetchImpl, auth: () => auth, contentType: () => contentType };
+}
+
+function makeCustody(
+  clock: ReturnType<typeof makeClock>,
+  renew: ReturnType<typeof makeRenew>,
+  fetchImpl?: FetchLike,
+) {
   return createCredentialCustody({
     renew: renew.renew,
+    platformOrigin: PLATFORM_ORIGIN,
+    ...(fetchImpl ? { fetchImpl } : {}),
     now: clock.now,
     setTimer: clock.setTimer,
     clearTimer: clock.clearTimer,
   });
 }
 
-/** The Authorization header the custody's wrapped fetch injected, via a capturing fetch. */
+/** The Authorization header the custody's OWN transport injected on a same-origin call. */
 async function capturedAuthHeader(
   custody: CredentialCustody,
+  capture: ReturnType<typeof makeCapture>,
   init?: RequestInit,
 ): Promise<string | null> {
-  let captured: string | null = null;
-  const spy: FetchLike = async (_input, spyInit) => {
-    captured = new Headers(spyInit?.headers).get("authorization");
-    return new Response("ok");
-  };
-  await custody.authorizedFetch(spy)("https://platform.example/api", init);
-  return captured;
+  await custody.authorizedFetch(`${PLATFORM_ORIGIN}/api`, init);
+  return capture.auth();
 }
 
 describe("proactive renewal", () => {
@@ -110,10 +134,11 @@ describe("proactive renewal", () => {
     // spec: identity-and-authorization/token-lifetime-and-refresh#renewal-is-proactive-never-reactive
     const clock = makeClock();
     const renew = makeRenew(clock);
-    const custody = makeCustody(clock, renew);
+    const capture = makeCapture();
+    const custody = makeCustody(clock, renew, capture.fetchImpl);
     await custody.start();
     expect(renew.callCount()).toBe(1);
-    expect(await capturedAuthHeader(custody)).toBe("Bearer credential-1");
+    expect(await capturedAuthHeader(custody, capture)).toBe("Bearer credential-1");
 
     // Just before the two-thirds point: no renewal yet.
     await clock.advance(LIFETIME_MS * RENEWAL_AT_FRACTION_OF_LIFETIME - 1);
@@ -123,7 +148,7 @@ describe("proactive renewal", () => {
     // lifetime still remains on the credential being replaced.
     await clock.advance(1);
     expect(renew.callCount()).toBe(2);
-    expect(await capturedAuthHeader(custody)).toBe("Bearer credential-2");
+    expect(await capturedAuthHeader(custody, capture)).toBe("Bearer credential-2");
     expect(custody.status).toBe("active");
   });
 });
@@ -134,7 +159,8 @@ describe("quiet retry", () => {
     const clock = makeClock();
     const renew = makeRenew(clock);
     renew.script.push("ok", "fail", "fail", "fail", "ok");
-    const custody = makeCustody(clock, renew);
+    const capture = makeCapture();
+    const custody = makeCustody(clock, renew, capture.fetchImpl);
     await custody.start();
 
     // The proactive renewal fails; retries back off, quietly.
@@ -154,7 +180,7 @@ describe("quiet retry", () => {
     expect(renew.callCount()).toBe(5);
     expect(custody.status).toBe("active");
     // The recovered credential is the one now being spent.
-    expect(await capturedAuthHeader(custody)).toBe("Bearer credential-2");
+    expect(await capturedAuthHeader(custody, capture)).toBe("Bearer credential-2");
   });
 });
 
@@ -198,6 +224,48 @@ describe("lapse", () => {
   });
 });
 
+describe("no renewal storm under a hostile clock", () => {
+  it("does not hot-loop when renewal keeps returning an already-expired credential — bounded, backing-off calls, never hundreds at t=0", async () => {
+    // An already-expired credential yields remaining=0, so scheduling off it
+    // (delay = remaining * 2/3 = 0) would reschedule immediately and storm.
+    // A renewal that returns a non-usable (already-expired) credential is
+    // treated as a failed renewal — quiet backoff — not adopted-and-rescheduled.
+    // spec: identity-and-authorization/token-lifetime-and-refresh#renewal-is-proactive-never-reactive
+    const clock = makeClock();
+    const renew = makeRenew(clock);
+    for (let i = 0; i < 300; i += 1) renew.script.push("stale");
+    const custody = makeCustody(clock, renew);
+    await custody.start();
+
+    // start() made exactly one attempt and scheduled a single backoff timer —
+    // not an immediate zero-delay reschedule.
+    expect(renew.callCount()).toBe(1);
+    expect(clock.pendingCount()).toBe(1);
+
+    // A full minute of backoff yields a handful of calls, not the storm the
+    // zero-delay reschedule would produce (which exhausts the 300-entry script).
+    await clock.advance(60_000);
+    expect(renew.callCount()).toBeLessThanOrEqual(15);
+  });
+
+  it("does not storm when a clock skew makes freshly-minted credentials land within the renewal floor", async () => {
+    // A platform clock ~20 minutes off from the client makes a 15-minute
+    // credential arrive with almost no usable life (here: inside the floor).
+    // Scheduling off its tiny remaining life would loop tightly; the floor +
+    // treat-as-failed keeps the calls bounded and backing off under any clock
+    // relationship.
+    // spec: identity-and-authorization/token-lifetime-and-refresh#renewal-is-proactive-never-reactive
+    const clock = makeClock();
+    const renew = makeRenew(clock);
+    for (let i = 0; i < 300; i += 1) renew.script.push("near");
+    const custody = makeCustody(clock, renew);
+    await custody.start();
+
+    await clock.advance(60_000);
+    expect(renew.callCount()).toBeLessThanOrEqual(15);
+  });
+});
+
 describe("stop clears client state", () => {
   it("cancels renewal, drops the credential, and refuses to authorize anything further", async () => {
     // spec: identity-and-authorization/google-sign-in#sign-out-clears-client-state
@@ -213,10 +281,9 @@ describe("stop clears client state", () => {
     // The pending proactive-renewal timer was cleared, not abandoned.
     expect(clock.pendingCount()).toBe(0);
     expect(clock.clearedHandles.length).toBeGreaterThan(0);
-    // Nothing retained continues to authenticate: the wrapped fetch now
-    // refuses rather than sending a stale header.
-    const spy: FetchLike = async () => new Response("ok");
-    await expect(custody.authorizedFetch(spy)("https://platform.example/api")).rejects.toThrow(
+    // Nothing retained continues to authenticate: authorizedFetch now refuses
+    // rather than sending a stale header.
+    await expect(custody.authorizedFetch(`${PLATFORM_ORIGIN}/api`)).rejects.toThrow(
       /no live credential/,
     );
     // Time passing changes nothing.
@@ -229,23 +296,38 @@ describe("authorized fetch", () => {
   it("injects the Bearer header inside the closure, preserving the caller's own headers", async () => {
     const clock = makeClock();
     const renew = makeRenew(clock);
-    const custody = makeCustody(clock, renew);
+    const capture = makeCapture();
+    const custody = makeCustody(clock, renew, capture.fetchImpl);
     await custody.start();
 
-    let capturedContentType: string | null = null;
-    let capturedAuth: string | null = null;
-    const spy: FetchLike = async (_input, init) => {
-      const headers = new Headers(init?.headers);
-      capturedContentType = headers.get("content-type");
-      capturedAuth = headers.get("authorization");
-      return new Response("ok");
-    };
-    await custody.authorizedFetch(spy)("https://platform.example/api", {
+    await custody.authorizedFetch(`${PLATFORM_ORIGIN}/api`, {
       method: "POST",
       headers: { "content-type": "application/json" },
     });
-    expect(capturedAuth).toBe("Bearer credential-1");
-    expect(capturedContentType).toBe("application/json");
+    expect(capture.auth()).toBe("Bearer credential-1");
+    expect(capture.contentType()).toBe("application/json");
+  });
+
+  it("never attaches the credential to a foreign origin — custody owns the transport", async () => {
+    // A caller can neither supply a function that captures the header nor aim
+    // an authorized request at an arbitrary origin: a request to any origin but
+    // the platform's is made WITHOUT the credential.
+    // spec: identity-and-authorization/client-credential-custody#concealed-from-co-resident-scripts
+    const clock = makeClock();
+    const renew = makeRenew(clock);
+    const capture = makeCapture();
+    const custody = makeCustody(clock, renew, capture.fetchImpl);
+    await custody.start();
+
+    // A foreign absolute URL: the request is made, but carries no credential.
+    await custody.authorizedFetch("https://evil.example/collect");
+    expect(capture.auth()).toBeNull();
+
+    // A same-origin request (absolute or relative) still gets the header.
+    await custody.authorizedFetch(`${PLATFORM_ORIGIN}/api`);
+    expect(capture.auth()).toBe("Bearer credential-1");
+    await custody.authorizedFetch("/api/relative");
+    expect(capture.auth()).toBe("Bearer credential-1");
   });
 });
 
@@ -259,9 +341,10 @@ describe("concealment", () => {
 
     const clock = makeClock();
     const renew = makeRenew(clock);
-    const custody = makeCustody(clock, renew);
+    const capture = makeCapture();
+    const custody = makeCustody(clock, renew, capture.fetchImpl);
     await custody.start();
-    await capturedAuthHeader(custody);
+    await capturedAuthHeader(custody, capture);
     await clock.advance(LIFETIME_MS * RENEWAL_AT_FRACTION_OF_LIFETIME); // a renewal cycle too
 
     const globalsAfter = Object.getOwnPropertyNames(globalThis);
@@ -286,8 +369,9 @@ describe("concealment", () => {
     // …and none of them yields a string at any depth a caller can reach:
     expectTypeOf<ReturnType<CredentialCustody["start"]>>().toEqualTypeOf<Promise<void>>();
     expectTypeOf<ReturnType<CredentialCustody["stop"]>>().toEqualTypeOf<void>();
-    // authorizedFetch returns a fetch: its awaited result is a Response, never a string.
-    expectTypeOf<ReturnType<ReturnType<CredentialCustody["authorizedFetch"]>>>().toEqualTypeOf<
+    // authorizedFetch resolves to a Response, never a string — and takes a
+    // request, not a caller-supplied fetch that could capture the credential.
+    expectTypeOf<ReturnType<CredentialCustody["authorizedFetch"]>>().toEqualTypeOf<
       Promise<Response>
     >();
     // status is the closed union — a status, not a token.

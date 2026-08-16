@@ -29,6 +29,7 @@ import { httpRouter } from "convex/server";
 import * as jose from "jose";
 import { components, internal } from "./_generated/api.js";
 import { authComponent, createAuth } from "./auth.js";
+import { humanCapabilityEntries } from "./lib/grants.js";
 import { verifyAssertion } from "./lib/issuance.js";
 import { platformHttpAction } from "./lib/registry.js";
 import { sessionLifetimeSeconds } from "./lib/sessionLifetime.js";
@@ -52,6 +53,8 @@ interface IssuanceInternalApi {
 interface HandoffInternalApi {
   readonly createReference: FunctionReference<"mutation", "internal">;
   readonly redeemReference: FunctionReference<"mutation", "internal">;
+  readonly recordRenewalCredential: FunctionReference<"mutation", "internal">;
+  readonly getRenewalCredential: FunctionReference<"query", "internal">;
 }
 const internalLib = (
   internal as unknown as {
@@ -118,6 +121,27 @@ export const issueGameCredential = platformHttpAction(
       });
     }
 
+    // requestedCapabilities, when present, is a list of bare verb STRINGS.
+    // A non-string entry is refused with the offending value NAMED — never
+    // silently filtered away, which would let a request name nothing and
+    // still receive both minted verbs.
+    // spec: identity-and-authorization/trusted-issuer-registry#excess-fails-loudly
+    let requestedCapabilities: string[] | null = null;
+    if (body.requestedCapabilities !== undefined) {
+      if (!Array.isArray(body.requestedCapabilities)) {
+        return refuse(400, {
+          kind: "malformed-request",
+          reason: "requestedCapabilities must be an array of strings",
+        });
+      }
+      for (const value of body.requestedCapabilities) {
+        if (typeof value !== "string") {
+          return refuse(400, { kind: "malformed-requested-capability", value });
+        }
+      }
+      requestedCapabilities = body.requestedCapabilities as string[];
+    }
+
     // The assertion names its issuer; the registry — queried as a set —
     // decides whether that principal is known. A valid signature over a
     // well-formed assertion proves only that someone holds a key.
@@ -161,16 +185,29 @@ export const issueGameCredential = platformHttpAction(
       return refuse(403, { kind: "replayed-assertion" });
     }
 
-    // Requested capabilities against the issuer's ceiling: excess is
-    // refused WITH THE EXCESS NAMED, never quietly narrowed.
+    // Ceiling enforcement, gated on what is actually MINTED — not on the
+    // request string. A game credential confers EXACTLY the two
+    // game-credential verbs by definition (below), so a registration whose
+    // ceiling omits either cannot confer a game credential at all: issuance
+    // is refused NAMING the missing verb(s), never narrowed to the covered
+    // subset. Checking `requested` alone would let a request naming only a
+    // covered verb still receive both minted.
     // spec: identity-and-authorization/trusted-issuer-registry#excess-fails-loudly
-    const requested = Array.isArray(body.requestedCapabilities)
-      ? body.requestedCapabilities.filter((value): value is string => typeof value === "string")
-      : GAME_CREDENTIAL_CAPABILITIES.map((entry) => entry.verb);
+    // spec: identity-and-authorization/game-credential-scope
     const ceiling = new Set(registration.ceiling);
-    const excess = requested.filter((verb) => !ceiling.has(verb));
-    if (excess.length > 0) {
-      return refuse(403, { kind: "capability-excess", excess });
+    const conferred = GAME_CREDENTIAL_CAPABILITIES.map((entry) => entry.verb);
+    const missing = conferred.filter((verb) => !ceiling.has(verb));
+    if (missing.length > 0) {
+      return refuse(403, { kind: "capability-excess", excess: missing });
+    }
+    // A caller MAY name capabilities explicitly; any beyond the ceiling is
+    // still refused with the excess named, never quietly narrowed.
+    // spec: identity-and-authorization/trusted-issuer-registry#excess-fails-loudly
+    if (requestedCapabilities !== null) {
+      const excess = requestedCapabilities.filter((verb) => !ceiling.has(verb));
+      if (excess.length > 0) {
+        return refuse(403, { kind: "capability-excess", excess });
+      }
     }
 
     // Game-credential policy: only a centaur-team registration earns a
@@ -240,11 +277,19 @@ export const handoffCreate = platformHttpAction(
   },
   async (ctx, request) => {
     const auth = createAuth(ctx);
-    const session = await auth.api.getSession({ headers: request.headers });
+    const session = (await auth.api.getSession({ headers: request.headers })) as {
+      user: { id: string };
+      session: { id: string };
+    } | null;
     if (session === null) {
       // spec: identity-and-authorization/authentication-required#unauthenticated-refused
       return refuse(401, { kind: "unauthenticated" });
     }
+    // The originating session's own row id — a non-secret handle to the
+    // session established at sign-in, never its token. Carried onto the
+    // handoff so what it mints dies with this session.
+    // spec: identity-and-authorization/token-lifetime-and-refresh#renewal-re-reads-the-session
+    const originatingSessionId = session.session.id;
     let body: { serverId?: unknown; challengeS256?: unknown; returnAddress?: unknown };
     try {
       body = await request.json();
@@ -270,6 +315,7 @@ export const handoffCreate = platformHttpAction(
       userId: session.user.id,
       refHash,
       challengeS256: body.challengeS256,
+      originatingSessionId,
       requestedReturnAddress: typeof body.returnAddress === "string" ? body.returnAddress : null,
       nowMs: Date.now(),
     })) as { ok: true; returnAddress: string } | { ok: false; rejection: { kind: string } };
@@ -288,10 +334,31 @@ http.route({ path: "/handoff/create", method: "POST", handler: handoffCreate });
  * travelled in the reference's URL.
  * Body: { reference, verifier }
  *
- * Single-use, transactional. The credential returned — a Better Auth
- * session token, the stateful revocable anchor working credentials are
- * renewed under — is issued to the redeeming party in this exchange and
- * relayed onward to nobody.
+ * Single-use, transactional. The credential returned is an opaque RENEWAL
+ * credential — NOT a second independent Better Auth session. It is bounded
+ * two ways, recorded on the handoff_credentials row:
+ *
+ *   (a) by the redeeming Server's registered ceiling: every working
+ *       credential minted under it carries the human's capabilities
+ *       intersected with that ceiling, never the human's full set
+ *       (spec: identity-and-authorization/sign-in-handoff
+ *        #server-never-holds-the-provider-exchange,
+ *        peer-capability-ceiling#ceiling-sits-below-the-user);
+ *   (b) to the human's ORIGINATING session: the working-credential mint path
+ *       re-reads that session's liveness on every renewal, so revoking it
+ *       ends renewal under this credential
+ *       (spec: identity-and-authorization/token-lifetime-and-refresh
+ *        #renewal-re-reads-the-session).
+ *
+ * DESIGN CHOICE (why not a second session): a second independent session
+ * would carry the human's FULL capabilities and would survive revocation of
+ * the human's originating session — a credential outliving the human's
+ * presence. Anchoring to the originating session id, and minting working
+ * credentials through a dedicated ceiling-bounded path rather than Better
+ * Auth's /token (whose payload is global and cannot be narrowed per handoff),
+ * is what makes both bounds enforceable. The renewal credential is opaque and
+ * stateful (checked against platform state every use), so it does not violate
+ * the fifteen-minute self-contained bound.
  * spec: identity-and-authorization/sign-in-handoff#the-redeemer-keeps-what-it-earns
  * spec: global-invariants/credential-confinement ("credentials return
  *   only to the requester")
@@ -319,40 +386,120 @@ export const handoffRedeem = platformHttpAction(
       refHash: await sha256Hex(body.reference),
       verifierS256: await sha256Hex(body.verifier),
       nowMs: Date.now(),
-    })) as { ok: true; userId: string } | { ok: false; rejection: { kind: string } };
+    })) as
+      | { ok: true; userId: string; ceiling: string[]; originatingSessionId: string }
+      | { ok: false; rejection: { kind: string } };
     if (!result.ok) {
       return refuse(403, result.rejection);
     }
-    // Mint the renewal credential: a fresh Better Auth SESSION for the
-    // handed-off human — stateful, checked against platform state on
-    // every use, revocable at that same instant. Working JWTs renewed
-    // under it re-read this session each time (Better Auth's /token
-    // refuses a dead session), so a human's absence ends what is minted
-    // in their name.
-    // spec: identity-and-authorization/token-lifetime-and-refresh#renewal-re-reads-the-session
-    const auth = createAuth(ctx);
-    const authContext = await auth.$context;
-    const token = randomOpaqueValue();
+    const renewalCredential = randomOpaqueValue();
     const now = Date.now();
-    const expiresAt = new Date(now + sessionLifetimeSeconds() * 1000);
-    await authContext.adapter.create({
-      model: "session",
-      data: {
-        token,
-        userId: result.userId,
-        createdAt: new Date(now),
-        updatedAt: new Date(now),
-        expiresAt,
-      },
+    const expiresAtMs = now + sessionLifetimeSeconds() * 1000;
+    await ctx.runMutation(internalLib.handoff.recordRenewalCredential, {
+      credentialHash: await sha256Hex(renewalCredential),
+      userId: result.userId,
+      ceiling: result.ceiling,
+      originatingSessionId: result.originatingSessionId,
+      expiresAtMs,
     });
-    return json(200, {
-      ok: true,
-      renewalCredential: token,
-      expiresAtMs: expiresAt.getTime(),
-    });
+    return json(200, { ok: true, renewalCredential, expiresAtMs });
   },
 );
 
 http.route({ path: "/handoff/redeem", method: "POST", handler: handoffRedeem });
+
+// Better Auth session lookup facade (untyped-stub over the component adapter).
+interface BetterAuthAdapterApi {
+  readonly findOne: FunctionReference<"query", "internal">;
+}
+const betterAuthAdapter = (
+  components as unknown as { betterAuth: { adapter: BetterAuthAdapterApi } }
+).betterAuth.adapter;
+
+/** The bearer credential a request carries, if any. */
+function bearerOf(request: Request): string | null {
+  const header = request.headers.get("authorization");
+  if (header === null) return null;
+  const match = /^Bearer (.+)$/.exec(header);
+  return match?.[1] ?? null;
+}
+
+/**
+ * POST /handoff/working-credential — the ceiling-bounded, origin-anchored
+ * working-credential mint for a handoff renewal credential.
+ * Auth: Bearer <renewal credential> (the opaque value redemption returned).
+ *
+ * Every mint here re-reads the originating session's liveness and re-applies
+ * the Server's ceiling, so neither the human's absence nor the Server's bound
+ * can be outlived by a credential minted in the human's name.
+ * spec: identity-and-authorization/token-lifetime-and-refresh#renewal-re-reads-the-session
+ * spec: identity-and-authorization/sign-in-handoff#server-never-holds-the-provider-exchange
+ * spec: identity-and-authorization/peer-capability-ceiling#ceiling-sits-below-the-user
+ */
+export const handoffWorkingCredential = platformHttpAction(
+  {
+    authenticates: "better-auth-session",
+    rationale:
+      "The renewal credential is the stateful anchor a working credential is minted under — this endpoint plays Better Auth's /token role for the handoff, but bounded by the Server's ceiling and the originating session's liveness.",
+  },
+  async (ctx, request) => {
+    const renewalCredential = bearerOf(request);
+    if (renewalCredential === null) {
+      return refuse(401, { kind: "unauthenticated" });
+    }
+    const row = (await ctx.runQuery(internalLib.handoff.getRenewalCredential, {
+      credentialHash: await sha256Hex(renewalCredential),
+      nowMs: Date.now(),
+    })) as { userId: string; ceiling: string[]; originatingSessionId: string } | null;
+    if (row === null) {
+      return refuse(401, { kind: "renewal-refused" });
+    }
+
+    // Re-read the ORIGINATING session's liveness: a revoked (deleted) or
+    // expired session ends renewal, whatever the Server's registration still
+    // permits — a human's absence ends what is minted in their name.
+    // spec: identity-and-authorization/token-lifetime-and-refresh#renewal-re-reads-the-session
+    const originSession = (await ctx.runQuery(betterAuthAdapter.findOne, {
+      model: "session",
+      where: [{ field: "_id", value: row.originatingSessionId }],
+    })) as { expiresAt?: number } | null;
+    if (originSession === null || (originSession.expiresAt ?? 0) <= Date.now()) {
+      return refuse(401, { kind: "renewal-refused" });
+    }
+
+    // Capabilities = the human's current capabilities INTERSECTED with the
+    // redeeming Server's ceiling — re-read from the user record each renewal,
+    // never the human's full set.
+    // spec: identity-and-authorization/sign-in-handoff#server-never-holds-the-provider-exchange
+    // spec: identity-and-authorization/peer-capability-ceiling#ceiling-sits-below-the-user
+    const user = (await authComponent.getAnyUserById(ctx, row.userId)) as {
+      isAdmin?: boolean | null;
+    } | null;
+    if (user === null) {
+      return refuse(401, { kind: "renewal-refused" });
+    }
+    const ceiling = new Set(row.ceiling);
+    const capabilities = humanCapabilityEntries(user.isAdmin === true).filter((entry) =>
+      ceiling.has(entry.verb),
+    );
+
+    const minted = await mintPlatformCredential(ctx, {
+      subject: row.userId,
+      audience: platformAudience(),
+      claims: { [CAPABILITIES_CLAIM]: capabilities },
+    });
+    return json(200, {
+      ok: true,
+      workingCredential: minted.credential,
+      expiresAtMs: minted.expiresAtMs,
+    });
+  },
+);
+
+http.route({
+  path: "/handoff/working-credential",
+  method: "POST",
+  handler: handoffWorkingCredential,
+});
 
 export default http;
