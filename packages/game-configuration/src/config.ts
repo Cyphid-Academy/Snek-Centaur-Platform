@@ -13,6 +13,7 @@
 // spec: game-configuration/generation-parameters
 import type { CentaurTeamId, GameRuntimeConfig } from "@cyphid/snek-engine";
 import { DEFAULT_RUNTIME_CONFIG } from "@cyphid/snek-engine";
+import { generationDescriptorFor } from "./config-descriptors.js";
 
 /** The parameters that decide what a board looks like before its first turn. */
 // spec: game-configuration/generation-parameters
@@ -42,12 +43,19 @@ export interface GameConfig {
   readonly runtime: GameRuntimeConfig;
 }
 
-/** The generation half's defaults — this capability's own declaration. */
+/**
+ * The generation half's defaults — this capability's own declaration,
+ * DERIVED from GENERATION_PARAMETER_DESCRIPTORS so a default is written
+ * exactly once (game-configuration/parameter-bounds-sourcing).
+ */
 export const DEFAULT_GENERATION_CONFIG: BoardGenerationConfig = {
-  boardSize: 21,
-  snakesPerTeam: 5,
-  hazardPercentage: 0,
-  fertileGround: { density: 30, clustering: 10 },
+  boardSize: generationDescriptorFor("boardSize").default,
+  snakesPerTeam: generationDescriptorFor("snakesPerTeam").default,
+  hazardPercentage: generationDescriptorFor("hazardPercentage").default,
+  fertileGround: {
+    density: generationDescriptorFor("fertileGround.density").default,
+    clustering: generationDescriptorFor("fertileGround.clustering").default,
+  },
 };
 
 /**

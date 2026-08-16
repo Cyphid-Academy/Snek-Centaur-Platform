@@ -6,5 +6,6 @@
     "tsBuildInfoFile": "dist/.tsbuildinfo"
   },
   "include": ["src"],
+  "references": [{ "path": "../engine" }, { "path": "../game-configuration" }],
   "exclude": ["node_modules", "dist"]
 }

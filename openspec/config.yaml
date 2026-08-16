@@ -89,7 +89,20 @@ context: |
   replay-check); depends on game-engine. visual-tester — the dedicated dev
   app for authoring board state, staging moves, engine-driven simulation,
   and running saved Test Sequences with discrepancy annotation; depends on
-  game-engine and test-sequences (leaf capability).
+  game-engine and test-sequences (leaf capability). application-shell — the
+  one web application every surface is mounted in and the infrastructure it
+  shares (the single state binding, the one board rendering, the surface
+  mounting contract); depends on game-engine and global-invariants.
+  game-configuration — the pre-launch shaping of a game: the configuration
+  record and its closed parameter vocabulary, the one board generator and
+  the rules by which a board is built, the board-preview workflow and lock,
+  the launch freeze, and the self-contained configuration surface; depends
+  on game-engine, global-invariants, and application-shell.
+  identity-and-authorization — who someone is on the platform and what that
+  identity may reach: sign-in and identity kinds, the platform admin role,
+  the trusted issuers and their ceilings, and every credential the
+  platform's Convex deployment issues and every game instance admits on;
+  depends on global-invariants.
 
   MIGRATION COMPLETE (2026-07-24): the legacy corpus
   (legacy-spec-archive/) is fully historical. Every numeric id is

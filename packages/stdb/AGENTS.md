@@ -8,6 +8,7 @@ This package is `@cyphid/snek-stdb`: the SpacetimeDB TypeScript module. It is th
 - **Module 01 / `game-engine` capability** (`openspec/specs/game-engine/spec.md`) — consumed via `@cyphid/snek-engine`.
 - **Module 02** (`legacy-spec-archive/spec/02-platform-architecture.md`) — lifecycle and identity context.
 - **Module 03** (`legacy-spec-archive/spec/03-auth-and-identity.md`) — OIDC/JWT validation, RLS identity model.
+- **`identity-and-authorization` capability** (`openspec/changes/migrate-identity-and-authorization/specs/identity-and-authorization/spec.md` while the change is open) — admission-validation, consumed via `@cyphid/snek-platform-auth`'s game-token subject codec (see "Admission core" below).
 
 ## What goes here
 
@@ -28,7 +29,19 @@ Before implementing, read `legacy-spec-archive/spec/04-stdb-engine.md` in full. 
 
 Run `pnpm codegen` to regenerate SpacetimeDB bindings once real codegen is wired up (currently a no-op stub).
 
+## Admission core
+
+`src/admission.ts` is the **pure** admission decision core for
+`identity-and-authorization/admission-validation`: given seeded
+per-instance state and a presented token, it decides whether a connection
+is admitted and as which identity, using `@cyphid/snek-platform-auth`'s
+game-token subject codec. It imports no SpacetimeDB SDK and touches no
+reducer, table, or connection — it is wired into the actual `register`
+reducer (reading seeded tables, calling the runtime's own signature check,
+disconnecting a rejected client) by the `mint-game-runtime` change.
+
 ## Key files
 
 - `src/index.ts` — reducer and schema exports
+- `src/admission.ts` — the pure admission decision core (see above)
 - `legacy-spec-archive/spec/04-stdb-engine.md` — binding source of truth

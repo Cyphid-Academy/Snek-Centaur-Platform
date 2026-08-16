@@ -18,7 +18,8 @@
     "codegen": "echo 'no codegen yet'"
   },
   "dependencies": {
-    "@cyphid/snek-engine": "workspace:*"
+    "@cyphid/snek-engine": "workspace:*",
+    "@cyphid/snek-platform-auth": "workspace:*"
   },
   "devDependencies": {
     "typescript": "*",

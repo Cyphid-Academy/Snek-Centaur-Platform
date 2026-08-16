@@ -13,6 +13,7 @@
 // into these arbitraries. Not part of the package's public API.
 import * as fc from "fast-check";
 import { advance } from "./board.js";
+import { descriptorFor } from "./config-descriptors.js";
 import { itemsByCell } from "./items.js";
 import { SETUP_SPAWN_TURN } from "./items.js";
 import { rngFromSeed } from "./rng.js";
@@ -32,17 +33,29 @@ import type {
 } from "./types.js";
 import { ALL_DIRECTIONS, CellType, ItemType } from "./types.js";
 
-// Full documented parameter ranges. spec: game-engine/configuration-parameters
+/** A descriptor's live (non-sentinel) range, as {min, max}. */
+const rangeOf = (path: string): { min: number; max: number } => {
+  const d = descriptorFor(path);
+  return { min: d.min, max: d.max };
+};
+
+// Full documented parameter ranges, DERIVED from RUNTIME_PARAMETER_DESCRIPTORS
+// — the single declared source of these numbers
+// (game-engine/configuration-parameters, game-configuration/parameter-bounds-sourcing).
+// `potionSpawnRate` covers both `invulnPotionSpawnRate` and
+// `invisPotionSpawnRate`, which share one declared range (0-0.2).
+//
+// maxTurns: 0 is the no-limit sentinel, drawn separately from this live range.
 export const CONFIG_RANGES = {
-  maxHealth: { min: 1, max: 500 },
-  maxTurns: { min: 1, max: 1000 }, // 0 is the no-limit sentinel, drawn separately
-  hazardDamage: { min: 1, max: 100 },
-  foodSpawnRate: { min: 0, max: 5 },
-  potionSpawnRate: { min: 0, max: 0.2 },
-  initialBudgetMs: { min: 0, max: 600000 },
-  budgetIncrementMs: { min: 100, max: 5000 },
-  firstTurnTimeMs: { min: 1000, max: 300000 },
-  maxTurnTimeMs: { min: 100, max: 300000 },
+  maxHealth: rangeOf("maxHealth"),
+  maxTurns: rangeOf("maxTurns"),
+  hazardDamage: rangeOf("hazardDamage"),
+  foodSpawnRate: rangeOf("foodSpawnRate"),
+  potionSpawnRate: rangeOf("invulnPotionSpawnRate"),
+  initialBudgetMs: rangeOf("clock.initialBudgetMs"),
+  budgetIncrementMs: rangeOf("clock.budgetIncrementMs"),
+  firstTurnTimeMs: rangeOf("clock.firstTurnTimeMs"),
+  maxTurnTimeMs: rangeOf("clock.maxTurnTimeMs"),
 } as const;
 
 const int = (r: { min: number; max: number }) => fc.integer({ min: r.min, max: r.max });

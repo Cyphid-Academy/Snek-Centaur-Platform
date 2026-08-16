@@ -18,6 +18,20 @@ export type {
 export { itemsByCell } from "@cyphid/snek-engine";
 
 // ---------------------------------------------------------------------------
+// Admission — the pure decision core wired into reducers by the
+// mint-game-runtime change.
+// spec: identity-and-authorization/admission-validation
+// ---------------------------------------------------------------------------
+export type {
+  AdmissionDecision,
+  AdmissionRejection,
+  AdmittedIdentity,
+  PresentedToken,
+  SeededAdmissionContext,
+} from "./admission.js";
+export { decideAdmission, mayMutateInGame } from "./admission.js";
+
+// ---------------------------------------------------------------------------
 // SpacetimeDB reducer stubs
 // spec: game-lifecycle/instance-initialization (initialize_game),
 //       game-runtime/staged-move-log (stage_move),

@@ -15,8 +15,12 @@ const subtitle = "Reference Implementation";
     Its behaviour is specified by the <code>team-server-management</code> capability.
   </p>
   <p>
-    All feature code is pending implementation. This skeleton confirms the
-    Svelte 5 / SvelteKit app scaffolds and serves correctly.
+    This is the one application every platform surface — platform-wide and
+    team-internal alike — is reached in, per the
+    <code>application-shell</code> capability. Its shared infrastructure — the
+    state binding, the surface mounting contract, and the one board rendering
+    — lives under <code>src/lib/shell/</code> and <code>src/lib/board/</code>.
+    Individual surfaces are pending implementation.
   </p>
   <ul>
     <li><a href="/.well-known/snek-healthcheck">Healthcheck endpoint</a></li>

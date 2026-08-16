@@ -7,17 +7,26 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
-    }
+    },
+    "./convex.config": "./component/convex.config.ts"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsc -b",
-    "typecheck": "tsc -b",
+    "typecheck": "tsc -b && pnpm typecheck:convex",
+    "typecheck:convex": "tsc -p tsconfig.convex.json",
     "test": "vitest run",
-    "codegen": "echo 'no codegen yet'"
+    "codegen": "pnpm --filter @cyphid/snek-convex-host codegen"
+  },
+  "dependencies": {
+    "@cyphid/snek-engine": "workspace:*",
+    "@cyphid/snek-game-configuration": "workspace:*",
+    "convex": "^1.44.0"
   },
   "devDependencies": {
+    "@edge-runtime/vm": "^5.0.0",
+    "convex-test": "^0.0.55",
     "typescript": "*",
     "vitest": "*"
   }

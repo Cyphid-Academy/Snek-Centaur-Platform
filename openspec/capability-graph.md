@@ -29,17 +29,17 @@ flowchart TD
   classDef base stroke-width:2px;
 
   accounts-and-profiles["accounts-and-profiles"]:::open
-  application-shell["application-shell"]:::open
+  application-shell["application-shell"]
   bot-configuration["bot-configuration"]:::open
   bot-framework["bot-framework"]:::open
   centaur-server-runtime["centaur-server-runtime"]:::open
   decision-transparency["decision-transparency"]:::open
-  game-configuration["game-configuration"]:::open
+  game-configuration["game-configuration"]
   game-engine["game-engine"]
   game-lifecycle["game-lifecycle"]:::open
   game-runtime["game-runtime"]:::open
   global-invariants["global-invariants"]
-  identity-and-authorization["identity-and-authorization"]:::open
+  identity-and-authorization["identity-and-authorization"]
   live-game-observation["live-game-observation"]:::open
   operator-control["operator-control"]:::open
   platform-integrations["platform-integrations"]:::open
