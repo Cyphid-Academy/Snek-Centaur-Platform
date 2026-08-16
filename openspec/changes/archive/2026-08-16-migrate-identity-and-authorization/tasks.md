@@ -117,6 +117,6 @@ snapshot's authorization-relevant fields.
 
 ## Archive
 
-- [ ] 6.1 On explicit author instruction, `pnpm spec:fold migrate-identity-and-authorization` then `openspec archive --skip-specs -y migrate-identity-and-authorization` at the tail of the PR that completes the implementation (fold enforces capability-dependency order)
-- [ ] 6.2 Add the minted capability to `openspec/config.yaml`'s context capability list
-- [ ] 6.3 Run `pnpm spec:check` after archiving
+- [x] 6.1 On explicit author instruction, `pnpm spec:fold migrate-identity-and-authorization` then `openspec archive --skip-specs -y migrate-identity-and-authorization` at the tail of the PR that completes the implementation (fold enforces capability-dependency order)
+- [x] 6.2 Add the minted capability to `openspec/config.yaml`'s context capability list
+- [x] 6.3 Run `pnpm spec:check` after archiving
