@@ -576,6 +576,26 @@ list, and how the three affordance kinds are expressed as component props
 are all code mechanism. None carries an invariant beyond what the authored
 requirements already pin.
 
+### The record's rules are one pure state machine (implementation, 2026-08-16)
+
+The platform half was implemented with the configuration record's entire
+rule set — descriptor-sourced validation, the bounded-duration condition,
+the edit window, the preview slot, the lock's clearing trigger, launch —
+as one pure, deterministic state machine in
+`packages/game-configuration/src/record.ts`. The Convex mutations load the
+record, apply the pure transition inside their serializable transaction,
+and persist the result; the configuration surface's standalone dev harness
+applies the same transitions behind the binding. What breaks if reversed
+(rules written directly in the mutations, re-derived in any harness): two
+declarations of validation and lock semantics that drift exactly the way
+the four weakened bounds copies did — the failure mode this change's
+bounds decision exists to end — and the dev-standalone delivery of the
+surface needs a second, weaker implementation of the record to stand on.
+The Convex layer keeps for itself only what is genuinely the store's:
+transactional atomicity, the per-room exclusivity index, redaction of the
+seed and the hidden starting state from client reads, and the mirror
+guard over the stored shape.
+
 ## Constraint-mining (mandatory final step)
 
 - **Minted: game-configuration/engine-schema-fidelity.** The whole design

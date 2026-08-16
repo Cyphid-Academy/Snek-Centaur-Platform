@@ -20,11 +20,13 @@ would leave the corpus describing a package layout that does not exist.
 
 ## 2. The platform half
 
-- [ ] 2.1 Review this change's artifacts with the author immediately before the platform half begins, and refine this task breakdown then
-- [ ] 2.2 The configuration record on the game, in the single persistent deployment, with authoritative validation at the record and the mirror guard over the gameplay half (`config-lives-on-the-game`, `closed-parameter-vocabulary`, `engine-schema-fidelity`, `bounded-game-duration`)
-- [ ] 2.3 The board-preview workflow, its lock-in, the launch freeze, and the self-contained configuration surface (`board-preview`, `board-preview-lock-in`, `launch-freeze`, `self-contained-configuration-surface`, `host-selected-affordances`)
-- [ ] 2.4 Add `// spec:` citations in the code written for it, and `// design:` references where this change's design rationale warrants them
-- [ ] 2.5 Run `pnpm spec:check` and the full battery with the implementation
+- [x] 2.1 Task breakdown refined at implementation start, under the author's standing instruction for this branch to proceed without per-step review; the refined structure is tasks 2.2–2.7 below
+- [x] 2.2 Both halves of the parameter vocabulary published as one reflectable descriptor declaration each — the engine's gameplay descriptors (the export this change's design requests of the engine) and this capability's generation descriptors — with the test-suite range tables deriving from them (`parameter-bounds-sourcing`, `generation-parameters`)
+- [x] 2.3 The configuration record's rules as one pure state machine in `packages/game-configuration/src/record.ts` — descriptor-sourced validation, the bounded-duration record condition, the edit window with the never-launched ending, the one preview slot, the lock with its generation-inputs clearing trigger, and launch (`closed-parameter-vocabulary`, `bounded-game-duration`, `launch-freeze`, `conditional-parameter-semantics`, `board-generation-retry`)
+- [x] 2.4 The record in the single persistent deployment: the Convex SDK installed, `packages/convex-snek-platform` a real component holding the minimal `games` table, mutations applying the pure state machine inside the serializable transaction, the one-game-per-room exclusivity guard, the engine-schema mirror guard via the shared assertion, and seed plus hidden starting state stripped from every client read (`config-lives-on-the-game`, `engine-schema-fidelity`, `generation-parameter-boundary`, `board-preview`, `board-preview-lock-in`, `infeasibility-surfaced`)
+- [x] 2.5 The self-contained configuration surface in the one application, mounted per the shell's contract with the three independently selectable affordance kinds, widgets driven by the descriptor tables, the preview rendered through the one board rendering, and the standalone dev delivery behind a binding backed by the pure state machine (`self-contained-configuration-surface`, `host-selected-affordances`, `board-preview`)
+- [x] 2.6 `// spec:` citations across the code written for the platform half
+- [x] 2.7 `pnpm spec:check` and the full battery green with the implementation
 
 ## Archive
 
