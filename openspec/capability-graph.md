@@ -34,7 +34,7 @@ flowchart TD
   bot-framework["bot-framework"]:::open
   centaur-server-runtime["centaur-server-runtime"]:::open
   decision-transparency["decision-transparency"]:::open
-  game-configuration["game-configuration"]:::open
+  game-configuration["game-configuration"]
   game-engine["game-engine"]
   game-lifecycle["game-lifecycle"]:::open
   game-runtime["game-runtime"]:::open

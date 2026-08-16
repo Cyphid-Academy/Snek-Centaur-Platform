@@ -30,6 +30,6 @@ would leave the corpus describing a package layout that does not exist.
 
 ## Archive
 
-- [ ] 3.1 On explicit author instruction, `pnpm spec:fold migrate-game-configuration` then `openspec archive --skip-specs -y migrate-game-configuration` at the tail of the PR that completes the implementation (fold enforces capability-dependency order)
-- [ ] 3.2 Add the minted capability to `openspec/config.yaml`'s context capability list
-- [ ] 3.3 Run `pnpm spec:check` after archiving
+- [x] 3.1 On explicit author instruction, `pnpm spec:fold migrate-game-configuration` then `openspec archive --skip-specs -y migrate-game-configuration` at the tail of the PR that completes the implementation (fold enforces capability-dependency order)
+- [x] 3.2 Add the minted capability to `openspec/config.yaml`'s context capability list
+- [x] 3.3 Run `pnpm spec:check` after archiving

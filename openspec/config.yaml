@@ -93,6 +93,11 @@ context: |
   one web application every surface is mounted in and the infrastructure it
   shares (the single state binding, the one board rendering, the surface
   mounting contract); depends on game-engine and global-invariants.
+  game-configuration — the pre-launch shaping of a game: the configuration
+  record and its closed parameter vocabulary, the one board generator and
+  the rules by which a board is built, the board-preview workflow and lock,
+  the launch freeze, and the self-contained configuration surface; depends
+  on game-engine, global-invariants, and application-shell.
 
   MIGRATION COMPLETE (2026-07-24): the legacy corpus
   (legacy-spec-archive/) is fully historical. Every numeric id is
