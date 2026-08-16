@@ -8,17 +8,25 @@
 import type { GameRuntimeConfig } from "@cyphid/snek-engine";
 import { DEFAULT_RUNTIME_CONFIG } from "@cyphid/snek-engine";
 import * as fc from "fast-check";
+import { generationDescriptorFor } from "./config-descriptors.js";
 import type { BoardGenerationConfig, GameConfig } from "./config.js";
 import { tid } from "./testkit.js";
 
-// Full documented generation-parameter ranges.
-// spec: game-configuration/generation-parameters
+/** A generation descriptor's live range, as {min, max}. */
+const rangeOf = (path: string): { min: number; max: number } => {
+  const d = generationDescriptorFor(path);
+  return { min: d.min, max: d.max };
+};
+
+// Full documented generation-parameter ranges, DERIVED from
+// GENERATION_PARAMETER_DESCRIPTORS — the single declared source of these
+// numbers (game-configuration/generation-parameters, .../parameter-bounds-sourcing).
 export const GENERATION_RANGES = {
-  boardSize: { min: 7, max: 32 },
-  snakesPerTeam: { min: 1, max: 10 },
-  hazardPercentage: { min: 0, max: 30 },
-  fertileDensity: { min: 0, max: 90 },
-  fertileClustering: { min: 1, max: 20 },
+  boardSize: rangeOf("boardSize"),
+  snakesPerTeam: rangeOf("snakesPerTeam"),
+  hazardPercentage: rangeOf("hazardPercentage"),
+  fertileDensity: rangeOf("fertileGround.density"),
+  fertileClustering: rangeOf("fertileGround.clustering"),
 } as const;
 
 const int = (r: { min: number; max: number }) => fc.integer({ min: r.min, max: r.max });

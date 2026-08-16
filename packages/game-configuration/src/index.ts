@@ -22,6 +22,11 @@
 export type { BoardGenerationConfig, BoardGenerationFailure, GameConfig } from "./config.js";
 export { DEFAULT_GAME_CONFIG, DEFAULT_GENERATION_CONFIG } from "./config.js";
 
+// The generation half's parameters as a public, reflectable descriptor
+// table — the counterpart to the engine's RUNTIME_PARAMETER_DESCRIPTORS.
+// spec: game-configuration/generation-parameters, game-configuration/parameter-bounds-sourcing
+export { GENERATION_PARAMETER_DESCRIPTORS, generationDescriptorFor } from "./config-descriptors.js";
+
 // The generator itself — all-or-nothing over a bounded retry.
 export { generateBoardAndInitialState } from "./boardgen.js";
 export type { GeneratedInitialState, TeamRegistration } from "./boardgen.js";

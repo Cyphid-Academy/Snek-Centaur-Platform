@@ -72,6 +72,13 @@ export {
 // resolution reads. spec: game-engine/configuration-parameters
 export type { GameRuntimeConfig } from "./types.js";
 
+// Public, reflectable declaration of that same vocabulary as data — per
+// parameter its path, kind, range, default and any disable sentinel — so
+// consuming surfaces read bounds from here rather than restating them.
+// spec: game-engine/configuration-parameters, game-configuration/parameter-bounds-sourcing
+export { RUNTIME_PARAMETER_DESCRIPTORS, descriptorFor } from "./config-descriptors.js";
+export type { ParameterDescriptor } from "./config-descriptors.js";
+
 // Outcome, events
 export type { DeathCause, GameOutcome, TurnEvent } from "./types.js";
 
