@@ -8,6 +8,9 @@
       "path": "packages/game-configuration"
     },
     {
+      "path": "packages/platform-auth"
+    },
+    {
       "path": "packages/stdb"
     },
     {

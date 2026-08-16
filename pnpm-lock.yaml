@@ -195,11 +195,23 @@ importers:
         specifier: '*'
         version: 3.2.4(@types/node@25.9.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(yaml@2.9.0)
 
+  packages/platform-auth:
+    devDependencies:
+      typescript:
+        specifier: '*'
+        version: 5.9.3
+      vitest:
+        specifier: '*'
+        version: 3.2.4(@types/node@25.9.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(yaml@2.9.0)
+
   packages/stdb:
     dependencies:
       '@cyphid/snek-engine':
         specifier: workspace:*
         version: link:../engine
+      '@cyphid/snek-platform-auth':
+        specifier: workspace:*
+        version: link:../platform-auth
     devDependencies:
       typescript:
         specifier: '*'

@@ -6,6 +6,5 @@
     "tsBuildInfoFile": "dist/.tsbuildinfo"
   },
   "include": ["src"],
-  "references": [{ "path": "../engine" }, { "path": "../platform-auth" }],
   "exclude": ["node_modules", "dist"]
 }

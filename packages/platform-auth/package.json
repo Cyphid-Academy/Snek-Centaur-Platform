@@ -1,5 +1,5 @@
 {
-  "name": "@cyphid/snek-stdb",
+  "name": "@cyphid/snek-platform-auth",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -14,12 +14,7 @@
   "scripts": {
     "build": "tsc -b",
     "typecheck": "tsc -b",
-    "test": "vitest run",
-    "codegen": "echo 'no codegen yet'"
-  },
-  "dependencies": {
-    "@cyphid/snek-engine": "workspace:*",
-    "@cyphid/snek-platform-auth": "workspace:*"
+    "test": "vitest run"
   },
   "devDependencies": {
     "typescript": "*",
